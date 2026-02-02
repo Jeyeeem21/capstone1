@@ -1,0 +1,423 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { 
+  MapPin, 
+  Phone, 
+  Mail, 
+  Clock, 
+  Send,
+  MessageCircle,
+  User,
+  Building,
+  CheckCircle,
+  Facebook,
+  Instagram,
+  Twitter,
+  ArrowRight
+} from 'lucide-react';
+import { Button, FormInput } from '../../../components/ui';
+
+const Contact = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    company: '',
+    subject: '',
+    message: '',
+    inquiryType: 'general',
+  });
+
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    setIsSubmitting(false);
+    setIsSubmitted(true);
+  };
+
+  const contactInfo = [
+    {
+      icon: MapPin,
+      title: 'Visit Us',
+      details: ['Barangay San Pedro', 'Rosario, Batangas 4225', 'Philippines'],
+      color: 'bg-red-100 text-red-600',
+    },
+    {
+      icon: Phone,
+      title: 'Call Us',
+      details: ['+63 917 123 4567', '+63 (043) 123-4567'],
+      color: 'bg-button-100 text-button-600',
+    },
+    {
+      icon: Mail,
+      title: 'Email Us',
+      details: ['info@kjpricemill.com', 'orders@kjpricemill.com'],
+      color: 'bg-blue-100 text-blue-600',
+    },
+    {
+      icon: Clock,
+      title: 'Business Hours',
+      details: ['Monday - Saturday: 7AM - 6PM', 'Sunday: 8AM - 12PM'],
+      color: 'bg-purple-100 text-purple-600',
+    },
+  ];
+
+  const inquiryTypes = [
+    { value: 'general', label: 'General Inquiry' },
+    { value: 'wholesale', label: 'Wholesale Orders' },
+    { value: 'retail', label: 'Retail Purchase' },
+    { value: 'partnership', label: 'Business Partnership' },
+    { value: 'feedback', label: 'Feedback / Suggestions' },
+  ];
+
+  const faqs = [
+    {
+      question: 'What is the minimum order for delivery?',
+      answer: 'For deliveries within Rosario, we require a minimum of 2 sacks (50kg). For bulk orders outside Rosario, please contact us for arrangements.',
+    },
+    {
+      question: 'Do you offer wholesale pricing?',
+      answer: 'Yes! We offer competitive wholesale prices for businesses, restaurants, and resellers. Contact us for our wholesale price list.',
+    },
+    {
+      question: 'What payment methods do you accept?',
+      answer: 'We accept cash, bank transfer, GCash, Maya, and credit/debit cards for in-store purchases.',
+    },
+  ];
+
+  if (isSubmitted) {
+    return (
+      <div className="overflow-hidden">
+        <section className="min-h-screen pt-32 pb-16 bg-gradient-to-b from-white to-primary-50 flex items-center">
+          <div className="max-w-xl mx-auto px-4 text-center">
+            <div className="w-20 h-20 bg-button-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle size={48} className="text-button-600" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-4">
+              Thank You for Reaching Out!
+            </h1>
+            <p className="text-gray-600 mb-8">
+              We've received your message and will get back to you within 24 hours. 
+              For urgent inquiries, please call us directly.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link to="/">
+                <Button variant="outline" className="w-full sm:w-auto">
+                  Back to Home
+                </Button>
+              </Link>
+              <Link to="/products">
+                <Button className="w-full sm:w-auto">
+                  Browse Products
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden">
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-16 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
+          style={{ 
+            backgroundImage: 'url(https://images.unsplash.com/photo-1423666639041-f56000c27a9a?w=1920&h=600&fit=crop)',
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/50 to-gray-900" />
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <span className="inline-block px-4 py-1 bg-button-500/20 border border-button-500/30 text-button-300 rounded-full text-sm font-medium mb-6">
+            Get In Touch
+          </span>
+          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
+            Contact Us
+          </h1>
+          <p className="text-lg text-gray-300 max-w-2xl mx-auto">
+            Have questions or ready to place an order? We'd love to hear from you!
+          </p>
+        </div>
+      </section>
+
+      {/* Contact Info Cards */}
+      <section className="py-12 -mt-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {contactInfo.map((info) => (
+              <div 
+                key={info.title}
+                className="bg-white rounded-xl p-6 shadow-lg shadow-primary-100/50 border-2 border-primary-300 hover:border-button-400 hover:shadow-xl transition-all"
+              >
+                <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center mb-4`}>
+                  <info.icon size={24} />
+                </div>
+                <h3 className="font-semibold text-gray-800 mb-2">{info.title}</h3>
+                {info.details.map((detail, idx) => (
+                  <p key={idx} className="text-gray-600 text-sm">{detail}</p>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Main Content */}
+      <section className="py-16 bg-gradient-to-b from-white to-primary-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Contact Form */}
+            <div className="bg-white rounded-xl shadow-lg shadow-primary-100/50 border-2 border-primary-300 p-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Send Us a Message</h2>
+              
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Inquiry Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Type of Inquiry
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {inquiryTypes.map((type) => (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, inquiryType: type.value }))}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          formData.inquiryType === type.value
+                            ? 'bg-button-500 text-white shadow-md'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {type.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name *
+                    </label>
+                    <div className="relative">
+                      <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        name="name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        required
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        placeholder="Juan Dela Cruz"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address *
+                    </label>
+                    <div className="relative">
+                      <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        placeholder="juan@example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone Number
+                    </label>
+                    <div className="relative">
+                      <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        placeholder="+63 917 123 4567"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Company / Organization
+                    </label>
+                    <div className="relative">
+                      <Building size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        name="company"
+                        value={formData.company}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        placeholder="Your company name"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject *
+                  </label>
+                  <input
+                    type="text"
+                    name="subject"
+                    value={formData.subject}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                    placeholder="What is this about?"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message *
+                  </label>
+                  <div className="relative">
+                    <MessageCircle size={18} className="absolute left-3 top-3 text-gray-400" />
+                    <textarea
+                      name="message"
+                      value={formData.message}
+                      onChange={handleChange}
+                      required
+                      rows={5}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all resize-none"
+                      placeholder="Tell us more about your inquiry..."
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  type="submit" 
+                  size="lg" 
+                  className="w-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={18} className="mr-2" />
+                      Send Message
+                    </>
+                  )}
+                </Button>
+              </form>
+            </div>
+
+            {/* Map & FAQ */}
+            <div className="space-y-8">
+              {/* Map */}
+              <div className="bg-white rounded-xl shadow-lg shadow-primary-100/50 border-2 border-primary-300 overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                  <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <MapPin size={20} className="text-button-600" />
+                    Find Us on the Map
+                  </h3>
+                </div>
+                <div className="h-64 bg-gray-200 relative">
+                  <iframe
+                    title="KJP Rice Mill Location"
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3878.9854426739024!2d121.2092!3d13.8428!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTPCsDUwJzM0LjEiTiAxMjHCsDEyJzMzLjEiRQ!5e0!3m2!1sen!2sph!4v1234567890"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="absolute inset-0"
+                  />
+                </div>
+                <div className="p-4 bg-gray-50">
+                  <p className="text-sm text-gray-600 text-center">
+                    📍 Barangay San Pedro, Rosario, Batangas 4225
+                  </p>
+                </div>
+              </div>
+
+              {/* FAQs */}
+              <div className="bg-white rounded-xl shadow-lg shadow-primary-100/50 border-2 border-primary-300 p-6">
+                <h3 className="font-semibold text-gray-800 mb-4">Frequently Asked Questions</h3>
+                <div className="space-y-4">
+                  {faqs.map((faq, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-xl">
+                      <h4 className="font-medium text-gray-800 mb-2">{faq.question}</h4>
+                      <p className="text-sm text-gray-600">{faq.answer}</p>
+                    </div>
+                  ))}
+                </div>
+                <Link 
+                  to="/about" 
+                  className="mt-4 text-button-600 hover:text-button-700 font-medium text-sm flex items-center gap-1 group"
+                >
+                  Learn more about us
+                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+              </div>
+
+              {/* Social Links */}
+              <div className="bg-gradient-to-br from-button-600 to-button-700 rounded-xl p-6 text-white shadow-lg shadow-button-500/25">
+                <h3 className="font-semibold mb-2">Connect With Us</h3>
+                <p className="text-white/80 text-sm mb-4">
+                  Follow us on social media for updates and promotions
+                </p>
+                <div className="flex gap-3">
+                  <a 
+                    href="#" 
+                    className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
+                  >
+                    <Facebook size={20} />
+                  </a>
+                  <a 
+                    href="#" 
+                    className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
+                  >
+                    <Instagram size={20} />
+                  </a>
+                  <a 
+                    href="#" 
+                    className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-lg flex items-center justify-center transition-colors"
+                  >
+                    <Twitter size={20} />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default Contact;

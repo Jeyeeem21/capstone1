@@ -1,0 +1,194 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Product;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+class ProductController extends Controller
+{
+    /**
+     * Get all products (public API)
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $query = Product::query();
+
+        // Apply search filter
+        if ($request->has('search') && $request->search) {
+            $query->search($request->search);
+        }
+
+        // Apply category filter
+        if ($request->has('category') && $request->category !== 'all') {
+            $query->byCategory($request->category);
+        }
+
+        // Apply stock filter (default: only in-stock for public)
+        if (!$request->has('include_out_of_stock')) {
+            $query->where('in_stock', true);
+        }
+
+        // Sorting
+        $sortBy = $request->get('sort', 'popular');
+        switch ($sortBy) {
+            case 'price-low':
+                $query->orderBy('price', 'asc');
+                break;
+            case 'price-high':
+                $query->orderBy('price', 'desc');
+                break;
+            case 'rating':
+                $query->orderBy('rating', 'desc');
+                break;
+            case 'name':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'popular':
+            default:
+                $query->orderBy('reviews_count', 'desc');
+                break;
+        }
+
+        // Secondary sort by sort_order
+        $query->orderBy('sort_order', 'asc');
+
+        $products = $query->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $products,
+            'count' => $products->count(),
+        ]);
+    }
+
+    /**
+     * Get featured products for homepage
+     */
+    public function featured(): JsonResponse
+    {
+        $products = Product::featured()
+            ->public()
+            ->orderBy('sort_order', 'asc')
+            ->limit(4)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $products,
+        ]);
+    }
+
+    /**
+     * Get product categories with counts
+     */
+    public function categories(): JsonResponse
+    {
+        $categories = Product::where('in_stock', true)
+            ->selectRaw('category, COUNT(*) as count')
+            ->groupBy('category')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->category,
+                    'name' => ucfirst($item->category),
+                    'count' => $item->count,
+                ];
+            });
+
+        // Add "All Products" category
+        $total = Product::where('in_stock', true)->count();
+        $allCategories = collect([
+            ['id' => 'all', 'name' => 'All Products', 'count' => $total]
+        ])->concat($categories);
+
+        return response()->json([
+            'success' => true,
+            'data' => $allCategories,
+        ]);
+    }
+
+    /**
+     * Get single product by ID
+     */
+    public function show(Product $product): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $product,
+        ]);
+    }
+
+    /**
+     * Store new product (Admin only)
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'category' => 'required|string|max:50',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
+            'unit' => 'nullable|string|max:50',
+            'image' => 'nullable|string|url',
+            'rating' => 'nullable|numeric|min:0|max:5',
+            'reviews_count' => 'nullable|integer|min:0',
+            'tags' => 'nullable|array',
+            'in_stock' => 'nullable|boolean',
+            'is_featured' => 'nullable|boolean',
+            'sort_order' => 'nullable|integer',
+        ]);
+
+        $product = Product::create($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product created successfully',
+            'data' => $product,
+        ], 201);
+    }
+
+    /**
+     * Update product (Admin only)
+     */
+    public function update(Request $request, Product $product): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'category' => 'sometimes|string|max:50',
+            'description' => 'nullable|string',
+            'price' => 'sometimes|numeric|min:0',
+            'unit' => 'nullable|string|max:50',
+            'image' => 'nullable|string',
+            'rating' => 'nullable|numeric|min:0|max:5',
+            'reviews_count' => 'nullable|integer|min:0',
+            'tags' => 'nullable|array',
+            'in_stock' => 'nullable|boolean',
+            'is_featured' => 'nullable|boolean',
+            'sort_order' => 'nullable|integer',
+        ]);
+
+        $product->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product updated successfully',
+            'data' => $product,
+        ]);
+    }
+
+    /**
+     * Delete product (Admin only)
+     */
+    public function destroy(Product $product): JsonResponse
+    {
+        $product->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product deleted successfully',
+        ]);
+    }
+}

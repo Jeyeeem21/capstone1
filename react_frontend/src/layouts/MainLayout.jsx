@@ -1,0 +1,62 @@
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import { Sidebar } from '../components/sidebar';
+import { Footer, Header, BottomNav } from '../components/common';
+
+const MainLayout = () => {
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  return (
+    <div 
+      className="min-h-screen transition-colors duration-300 flex flex-col"
+      style={{ backgroundColor: 'var(--color-bg-body)' }}
+    >
+      {/* Mobile/Tablet Header */}
+      <Header onMenuClick={() => setIsMobileSidebarOpen(true)} />
+
+      {/* Sidebar */}
+      <Sidebar 
+        isCollapsed={isSidebarCollapsed} 
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileSidebarOpen}
+        onMobileClose={() => setIsMobileSidebarOpen(false)}
+      />
+
+      {/* Main Content */}
+      <main className={`
+        transition-all duration-300 flex-1 flex flex-col
+        /* Mobile: no left margin, add bottom padding for BottomNav */
+        ml-0 pb-20
+        /* Tablet: no left margin */
+        md:pb-0
+        /* Desktop: add left margin based on sidebar state */
+        lg:pb-0
+        ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-72'}
+      `}>
+        <div className="p-4 md:p-6 lg:p-8 flex-1">
+          <div 
+            className="rounded-2xl shadow-xl border-2 border-primary-300 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
+            style={{ 
+              backgroundColor: 'var(--color-bg-content)', 
+              color: 'var(--color-text-content)',
+              fontSize: 'var(--font-size-base)'
+            }}
+          >
+            <Outlet />
+          </div>
+        </div>
+        
+        {/* Footer - hidden on mobile */}
+        <div className="px-4 pb-4 md:px-6 md:pb-6 lg:px-8 lg:pb-8 hidden md:block">
+          <Footer />
+        </div>
+      </main>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNav />
+    </div>
+  );
+};
+
+export default MainLayout;
