@@ -27,6 +27,21 @@ class ProductService
     }
 
     /**
+     * Get featured products (active with stock).
+     */
+    public function getFeaturedProducts()
+    {
+        return Cache::remember('products_featured', self::CACHE_TTL, function () {
+            return Product::with('category')
+                ->where('status', 'active')
+                ->where('stocks', '>', 0)
+                ->orderBy('created_at', 'desc')
+                ->limit(12)
+                ->get();
+        });
+    }
+
+    /**
      * Get products with stats.
      */
     public function getProductsWithStats(): array

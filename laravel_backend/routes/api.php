@@ -20,6 +20,7 @@ Route::get('/user', function (Request $request) {
 // Product Routes (Admin CRUD)
 Route::prefix('products')->group(function () {
     Route::get('/', [ProductController::class, 'index']); // Get all products
+    Route::get('/featured', [ProductController::class, 'featured']); // Get featured products
     Route::post('/', [ProductController::class, 'store']); // Create product
     Route::get('/{id}', [ProductController::class, 'show']); // Get single product
     Route::put('/{id}', [ProductController::class, 'update']); // Update product

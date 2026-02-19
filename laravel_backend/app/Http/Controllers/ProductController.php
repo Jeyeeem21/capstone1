@@ -38,6 +38,29 @@ class ProductController extends Controller
     }
 
     /**
+     * Get featured products (active products with stock).
+     */
+    public function featured(): JsonResponse
+    {
+        try {
+            $products = $this->productService->getFeaturedProducts();
+            
+            return response()->json([
+                'success' => true,
+                'data' => ProductResource::collection(collect($products)->map(function ($item) {
+                    return (object) $item;
+                })),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch featured products',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Store a newly created product.
      */
     public function store(Request $request): JsonResponse
