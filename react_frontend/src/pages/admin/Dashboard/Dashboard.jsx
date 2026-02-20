@@ -33,16 +33,33 @@ const Dashboard = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Generate daily data for the chart
-  const generateDailyData = () => {
-    return Array.from({ length: 31 }, (_, i) => ({
-      name: `Jan ${i + 1}`,
-      input: Math.floor(Math.random() * 500) + 200,
-      output: Math.floor(Math.random() * 400) + 150,
-    }));
+  // Generate chart data based on period
+  const getChartData = () => {
+    if (chartPeriod === 'daily') {
+      return Array.from({ length: 31 }, (_, i) => ({
+        name: `Jan ${i + 1}`,
+        input: Math.floor(300 + Math.sin(i * 0.5) * 100 + i * 5),
+        output: Math.floor(250 + Math.cos(i * 0.4) * 80 + i * 4),
+      }));
+    } else if (chartPeriod === 'monthly') {
+      const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
+      return months.map((m, i) => ({
+        name: m,
+        input: Math.floor(8000 + i * 600 + Math.sin(i) * 500),
+        output: Math.floor(6500 + i * 500 + Math.cos(i) * 400),
+      }));
+    } else {
+      return [
+        { name: '2022', input: 72000, output: 58000 },
+        { name: '2023', input: 85000, output: 69000 },
+        { name: '2024', input: 96000, output: 78000 },
+        { name: '2025', input: 110000, output: 92000 },
+        { name: '2026', input: 10500, output: 8700 },
+      ];
+    }
   };
 
-  const chartData = generateDailyData();
+  const chartData = getChartData();
   const totalInput = chartData.reduce((sum, d) => sum + d.input, 0);
   const totalOutput = chartData.reduce((sum, d) => sum + d.output, 0);
 

@@ -400,32 +400,31 @@ const Products = () => {
         size="md"
         loading={saving}
       >
-        <FormInput 
-          label="Product Name" 
-          name="product_name" 
-          value={formData.product_name} 
-          onChange={handleFormChange} 
-          required 
-          placeholder="e.g. Premium Rice"
-          error={errors.product_name}
-        />
-        <FormSelect 
-          label="Category" 
-          name="category_id" 
-          value={formData.category_id} 
-          onChange={handleFormChange} 
-          options={categoryOptions} 
-          required
-          placeholder="Select a category"
-          error={errors.category_id}
-        />
-        <FormSelect 
-          label="Status" 
-          name="status" 
-          value={formData.status} 
-          onChange={handleFormChange} 
-          options={statusOptions} 
-        />
+        {({ submitted }) => (
+          <>
+            <FormInput 
+              label="Product Name" 
+              name="product_name" 
+              value={formData.product_name} 
+              onChange={handleFormChange} 
+              required 
+              placeholder="e.g. Premium Rice"
+              error={errors.product_name}
+              submitted={submitted}
+            />
+            <FormSelect 
+              label="Category" 
+              name="category_id" 
+              value={formData.category_id} 
+              onChange={handleFormChange} 
+              options={categoryOptions} 
+              required
+              placeholder="Select a category"
+              error={errors.category_id}
+              submitted={submitted}
+            />
+          </>
+        )}
       </FormModal>
 
       {/* Edit Modal */}
@@ -438,32 +437,39 @@ const Products = () => {
         size="md"
         loading={saving}
       >
-        <FormInput 
-          label="Product Name" 
-          name="product_name" 
-          value={formData.product_name} 
-          onChange={handleFormChange} 
-          required 
-          placeholder="e.g. Premium Rice"
-          error={errors.product_name}
-        />
-        <FormSelect 
-          label="Category" 
-          name="category_id" 
-          value={formData.category_id} 
-          onChange={handleFormChange} 
-          options={categoryOptions} 
-          required
-          placeholder="Select a category"
-          error={errors.category_id}
-        />
-        <FormSelect 
-          label="Status" 
-          name="status" 
-          value={formData.status} 
-          onChange={handleFormChange} 
-          options={statusOptions} 
-        />
+        {({ submitted }) => (
+          <>
+            <FormInput 
+              label="Product Name" 
+              name="product_name" 
+              value={formData.product_name} 
+              onChange={handleFormChange} 
+              required 
+              placeholder="e.g. Premium Rice"
+              error={errors.product_name}
+              submitted={submitted}
+            />
+            <FormSelect 
+              label="Category" 
+              name="category_id" 
+              value={formData.category_id} 
+              onChange={handleFormChange} 
+              options={categoryOptions} 
+              required
+              placeholder="Select a category"
+              error={errors.category_id}
+              submitted={submitted}
+            />
+            <FormSelect 
+              label="Status" 
+              name="status" 
+              value={formData.status} 
+              onChange={handleFormChange} 
+              options={statusOptions}
+              submitted={submitted}
+            />
+          </>
+        )}
       </FormModal>
 
       {/* Delete Confirmation Modal */}

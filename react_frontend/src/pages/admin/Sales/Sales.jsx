@@ -196,7 +196,7 @@ const Sales = () => {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div className="lg:col-span-2">
-          <LineChart title="Sales Trends" subtitle="Sales performance overview" data={chartData} lines={[{ dataKey: 'sales', name: 'Sales (₱)' }]} height={280} tabs={[{ label: 'Daily', value: 'daily' }, { label: 'Monthly', value: 'monthly' }, { label: 'Yearly', value: 'yearly' }]} activeTab={chartPeriod} onTabChange={setChartPeriod} summaryStats={[{ label: 'Total Revenue', value: `₱${totalSales.toLocaleString()}`, color: 'text-primary-600' }, { label: 'Avg per Day', value: `₱${avgPerDay.toLocaleString()}`, color: 'text-primary-600' }, { label: 'Orders', value: sales.length.toString(), color: 'text-green-600' }]} />
+          <LineChart title="Sales Trends" subtitle="Sales performance overview" data={chartData} lines={[{ dataKey: 'sales', name: 'Sales (₱)' }]} height={280} yAxisUnit="₱" tabs={[{ label: 'Daily', value: 'daily' }, { label: 'Monthly', value: 'monthly' }, { label: 'Yearly', value: 'yearly' }]} activeTab={chartPeriod} onTabChange={setChartPeriod} summaryStats={[{ label: 'Total Revenue', value: `₱${totalSales.toLocaleString()}`, color: 'text-primary-600' }, { label: 'Avg per Day', value: `₱${avgPerDay.toLocaleString()}`, color: 'text-primary-600' }, { label: 'Orders', value: sales.length.toString(), color: 'text-green-600' }]} />
         </div>
         <DonutChart title="Order Status" subtitle="Sales by status" data={statusBreakdown} centerValue={sales.length} centerLabel="Orders" height={180} />
       </div>

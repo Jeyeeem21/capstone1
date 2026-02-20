@@ -124,15 +124,42 @@ const Inventory = () => {
     return acc;
   }, []);
 
-  // Growth chart data
-  const growthData = [
-    { name: 'Aug', stock: 680, in: 120, out: 90 },
-    { name: 'Sep', stock: 710, in: 150, out: 120 },
-    { name: 'Oct', stock: 690, in: 100, out: 120 },
-    { name: 'Nov', stock: 720, in: 180, out: 150 },
-    { name: 'Dec', stock: 750, in: 200, out: 170 },
-    { name: 'Jan', stock: 785, in: 220, out: 185 },
-  ];
+  // Growth chart period state
+  const [chartPeriod, setChartPeriod] = useState('daily');
+
+  // Growth chart data based on period
+  const getGrowthData = () => {
+    if (chartPeriod === 'daily') {
+      return [
+        { name: 'Jan 25', stock: 740, in: 30, out: 20 },
+        { name: 'Jan 26', stock: 748, in: 28, out: 20 },
+        { name: 'Jan 27', stock: 755, in: 32, out: 25 },
+        { name: 'Jan 28', stock: 760, in: 35, out: 30 },
+        { name: 'Jan 29', stock: 765, in: 25, out: 20 },
+        { name: 'Jan 30', stock: 770, in: 30, out: 25 },
+        { name: 'Jan 31', stock: 785, in: 40, out: 25 },
+      ];
+    } else if (chartPeriod === 'monthly') {
+      return [
+        { name: 'Aug', stock: 680, in: 120, out: 90 },
+        { name: 'Sep', stock: 710, in: 150, out: 120 },
+        { name: 'Oct', stock: 690, in: 100, out: 120 },
+        { name: 'Nov', stock: 720, in: 180, out: 150 },
+        { name: 'Dec', stock: 750, in: 200, out: 170 },
+        { name: 'Jan', stock: 785, in: 220, out: 185 },
+      ];
+    } else {
+      return [
+        { name: '2022', stock: 520, in: 1800, out: 1600 },
+        { name: '2023', stock: 580, in: 2200, out: 1900 },
+        { name: '2024', stock: 650, in: 2800, out: 2500 },
+        { name: '2025', stock: 720, in: 3200, out: 2800 },
+        { name: '2026', stock: 785, in: 420, out: 355 },
+      ];
+    }
+  };
+
+  const growthData = getGrowthData();
 
   // Handlers
   const handleAdd = () => {
@@ -306,10 +333,23 @@ const Inventory = () => {
       </div>
 
       {/* Growth Chart - First */}
-      <div className="bg-white rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-6 mb-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-1">Stock Growth Trend</h3>
-        <p className="text-sm text-gray-500 mb-4">Monthly stock levels and movements over time</p>
-        <LineChart data={growthData} lines={[{ dataKey: 'stock', name: 'Total Stock' }, { dataKey: 'in', name: 'Stock In' }, { dataKey: 'out', name: 'Stock Out', color: '#ef4444' }]} height={300} showLegend={true} />
+      <div className="mb-6">
+        <LineChart 
+          title="Stock Growth Trend"
+          subtitle="Stock levels and movements over time"
+          data={growthData} 
+          lines={[{ dataKey: 'stock', name: 'Total Stock' }, { dataKey: 'in', name: 'Stock In' }, { dataKey: 'out', name: 'Stock Out', color: '#ef4444' }]} 
+          height={300} 
+          showLegend={true}
+          yAxisUnit="units"
+          tabs={[
+            { label: 'Daily', value: 'daily' },
+            { label: 'Monthly', value: 'monthly' },
+            { label: 'Yearly', value: 'yearly' },
+          ]}
+          activeTab={chartPeriod}
+          onTabChange={setChartPeriod}
+        />
       </div>
 
       {/* Product Growth Comparison Table - Second */}

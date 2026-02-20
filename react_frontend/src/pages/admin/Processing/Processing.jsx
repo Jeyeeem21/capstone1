@@ -77,8 +77,9 @@ const Processing = () => {
     const options = procurements
       .filter(p => {
         const remaining = parseFloat(p.quantity_kg) - parseFloat(p.quantity_out || 0);
+        // Exclude cancelled procurements
         // Include if has remaining OR if it's the currently selected procurement (for editing)
-        return remaining > 0 || String(p.id) === currentProcurementId;
+        return p.status !== 'Cancelled' && (remaining > 0 || String(p.id) === currentProcurementId);
       })
       .map(p => {
         let remaining = parseFloat(p.quantity_kg) - parseFloat(p.quantity_out || 0);
@@ -91,7 +92,7 @@ const Processing = () => {
           label: `#${String(p.id).padStart(4, '0')} - ${p.supplier_name} (${remaining.toLocaleString()} kg available)` 
         };
       });
-    return [{ value: '', label: 'None (Manual input)' }, ...options];
+    return options;
   }, [procurements, selectedItem, isEditModalOpen]);
 
   // Fast invalidate and parallel refetch - includes procurements for qty_out sync
@@ -717,7 +718,7 @@ const Processing = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2 outline-none [&_*]:outline-none">
+          <div className="lg:col-span-2">
             <LineChart 
               title="Processing Trends" 
               subtitle="Production performance overview" 
@@ -734,24 +735,26 @@ const Processing = () => {
               ]} 
             />
           </div>
-          <div className="flex flex-col gap-4 outline-none [&_*]:outline-none">
+          <div className="space-y-4">
             <DonutChart 
               title="Output Breakdown" 
-              subtitle="Rice vs Husk distribution" 
               data={outputBreakdown} 
               centerValue={`${stats.totalOutput.toLocaleString()} kg`} 
               centerLabel="Total Output" 
-              height={115}
+              height={175}
+              innerRadius={56}
+              outerRadius={78}
               showLegend={true}
               horizontalLegend={true}
             />
             <DonutChart 
               title="Status Distribution" 
-              subtitle="Processing status overview" 
               data={statusBreakdown} 
               centerValue={stats.totalRecords.toString()} 
               centerLabel="Total Records" 
-              height={92}
+              height={140}
+              innerRadius={45}
+              outerRadius={62}
               showLegend={true}
               horizontalLegend={true}
             />
@@ -950,41 +953,48 @@ const Processing = () => {
         size="lg"
         loading={saving}
       >
-        <FormSelect 
-          label="Procurement Source" 
-          name="procurement_id" 
-          value={formData.procurement_id} 
-          onChange={handleFormChange} 
-          options={procurementOptions} 
-          hint="Optional - Link to a procurement record or leave empty for manual input"
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput 
-            label="Input Quantity (kg)" 
-            name="input_kg" 
-            type="number" 
-            value={formData.input_kg} 
-            onChange={handleFormChange} 
-            required 
-            placeholder="0"
-            error={errors.input_kg}
-          />
-          <FormInput 
-            label="Processing Date" 
-            name="processing_date" 
-            type="date" 
-            value={formData.processing_date} 
-            onChange={handleFormChange}
-          />
-        </div>
-        <FormInput 
-          label="Operator Name" 
-          name="operator_name" 
-          value={formData.operator_name} 
-          onChange={handleFormChange} 
-          placeholder="e.g. Juan Dela Cruz"
-          hint="Person responsible for this processing batch"
-        />
+        {({ submitted }) => (
+          <>
+            <FormSelect 
+              label="Procurement Source" 
+              name="procurement_id" 
+              value={formData.procurement_id} 
+              onChange={handleFormChange} 
+              options={procurementOptions}
+              placeholder="Select procurement source"
+              submitted={submitted}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput 
+                label="Input Quantity (kg)" 
+                name="input_kg" 
+                type="number" 
+                value={formData.input_kg} 
+                onChange={handleFormChange} 
+                required 
+                placeholder="0"
+                error={errors.input_kg}
+                submitted={submitted}
+              />
+              <FormInput 
+                label="Processing Date" 
+                name="processing_date" 
+                type="date" 
+                value={formData.processing_date} 
+                onChange={handleFormChange}
+                submitted={submitted}
+              />
+            </div>
+            <FormInput 
+              label="Operator Name" 
+              name="operator_name" 
+              value={formData.operator_name} 
+              onChange={handleFormChange} 
+              placeholder="e.g. Juan Dela Cruz"
+              submitted={submitted}
+            />
+          </>
+        )}
       </FormModal>
 
       {/* Edit Modal */}
@@ -997,41 +1007,48 @@ const Processing = () => {
         size="lg"
         loading={saving}
       >
-        <FormSelect 
-          label="Procurement Source" 
-          name="procurement_id" 
-          value={formData.procurement_id} 
-          onChange={handleFormChange} 
-          options={procurementOptions} 
-          hint="Optional - Link to a procurement record or leave empty for manual input"
-        />
-        <div className="grid grid-cols-2 gap-4">
-          <FormInput 
-            label="Input Quantity (kg)" 
-            name="input_kg" 
-            type="number" 
-            value={formData.input_kg} 
-            onChange={handleFormChange} 
-            required 
-            placeholder="0"
-            error={errors.input_kg}
-          />
-          <FormInput 
-            label="Processing Date" 
-            name="processing_date" 
-            type="date" 
-            value={formData.processing_date} 
-            onChange={handleFormChange}
-          />
-        </div>
-        <FormInput 
-          label="Operator Name" 
-          name="operator_name" 
-          value={formData.operator_name} 
-          onChange={handleFormChange} 
-          placeholder="e.g. Juan Dela Cruz"
-          hint="Person responsible for this processing batch"
-        />
+        {({ submitted }) => (
+          <>
+            <FormSelect 
+              label="Procurement Source" 
+              name="procurement_id" 
+              value={formData.procurement_id} 
+              onChange={handleFormChange} 
+              options={procurementOptions}
+              placeholder="Select procurement source"
+              submitted={submitted}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput 
+                label="Input Quantity (kg)" 
+                name="input_kg" 
+                type="number" 
+                value={formData.input_kg} 
+                onChange={handleFormChange} 
+                required 
+                placeholder="0"
+                error={errors.input_kg}
+                submitted={submitted}
+              />
+              <FormInput 
+                label="Processing Date" 
+                name="processing_date" 
+                type="date" 
+                value={formData.processing_date} 
+                onChange={handleFormChange}
+                submitted={submitted}
+              />
+            </div>
+            <FormInput 
+              label="Operator Name" 
+              name="operator_name" 
+              value={formData.operator_name} 
+              onChange={handleFormChange} 
+              placeholder="e.g. Juan Dela Cruz"
+              submitted={submitted}
+            />
+          </>
+        )}
       </FormModal>
 
       {/* Delete Confirmation Modal */}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   LineChart as RechartsLineChart, 
   Line, 
@@ -6,7 +6,6 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  Legend, 
   ResponsiveContainer,
   Area,
   AreaChart
@@ -15,6 +14,71 @@ import {
 // Helper to get CSS variable value
 const getCSSVariable = (name) => {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+};
+
+// Custom Tooltip with % change from previous period
+const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxisUnit }) => {
+  if (!active || !payload || !payload.length || !data) return null;
+
+  // Find current index in data
+  const currentIndex = data.findIndex(d => String(d.name) === String(label));
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 min-w-[180px]">
+      <p className="text-sm font-semibold text-gray-800 mb-2 pb-1.5 border-b border-gray-100">{label}</p>
+      {payload.map((entry, i) => {
+        const currentValue = entry.value || 0;
+        const prevValue = currentIndex > 0 ? (data[currentIndex - 1]?.[entry.dataKey] || 0) : null;
+        
+        let changePercent = null;
+        let changeDirection = null;
+        if (prevValue !== null && prevValue !== 0) {
+          changePercent = ((currentValue - prevValue) / prevValue * 100).toFixed(1);
+          changeDirection = changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'same';
+        } else if (prevValue === 0 && currentValue > 0) {
+          changePercent = '100.0';
+          changeDirection = 'up';
+        } else if (prevValue !== null && prevValue === 0 && currentValue === 0) {
+          changePercent = '0.0';
+          changeDirection = 'same';
+        }
+
+        return (
+          <div key={entry.dataKey} className="flex flex-col gap-0.5 mb-1.5 last:mb-0">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                <span className="text-xs text-gray-500">{entry.name}</span>
+              </div>
+              <span className="text-sm font-bold text-gray-800">
+                {yAxisUnit === '₱' ? `₱${currentValue.toLocaleString()}` : `${currentValue.toLocaleString()}${yAxisUnit ? ` ${yAxisUnit}` : ''}`}
+              </span>
+            </div>
+            {changePercent !== null && (
+              <div className="flex items-center justify-end gap-1">
+                {changeDirection === 'up' && (
+                  <span className="text-[11px] font-medium text-green-600 flex items-center gap-0.5">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
+                    +{changePercent}%
+                  </span>
+                )}
+                {changeDirection === 'down' && (
+                  <span className="text-[11px] font-medium text-red-600 flex items-center gap-0.5">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 8L2 4H8L5 8Z" fill="currentColor"/></svg>
+                    {changePercent}%
+                  </span>
+                )}
+                {changeDirection === 'same' && (
+                  <span className="text-[11px] font-medium text-gray-400">0.0%</span>
+                )}
+                <span className="text-[10px] text-gray-400">vs prev</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 const LineChart = ({ 
@@ -29,7 +93,8 @@ const LineChart = ({
   activeTab = null,
   onTabChange = null,
   summaryStats = null,
-  areaChart = false
+  areaChart = false,
+  yAxisUnit = 'kg'
 }) => {
   // Get theme colors from CSS variables
   const [themeColors, setThemeColors] = useState(['#84cc16', '#eab308', '#22c55e', '#3b82f6', '#f97316']);
@@ -53,6 +118,12 @@ const LineChart = ({
   }, []);
 
   const ChartComponent = areaChart ? AreaChart : RechartsLineChart;
+
+  // Y-axis formatter
+  const formatYAxis = useCallback((value) => {
+    if (yAxisUnit === '₱') return `₱${value.toLocaleString()}`;
+    return yAxisUnit ? `${value} ${yAxisUnit}` : value.toLocaleString();
+  }, [yAxisUnit]);
 
   return (
     <div className="bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 outline-none [&_*]:outline-none p-4">
@@ -112,15 +183,10 @@ const LineChart = ({
             tick={{ fontSize: 11, fill: '#6b7280' }}
             axisLine={{ stroke: '#d1d5db' }}
             tickLine={{ stroke: '#d1d5db' }}
-            tickFormatter={(value) => `${value} kg`}
+            tickFormatter={formatYAxis}
           />
           <Tooltip 
-            contentStyle={{ 
-              backgroundColor: 'white', 
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-            }}
+            content={<CustomTooltip data={data} lines={lines} themeColors={themeColors} yAxisUnit={yAxisUnit} />}
           />
           {lines.map((line, index) => (
             areaChart ? (

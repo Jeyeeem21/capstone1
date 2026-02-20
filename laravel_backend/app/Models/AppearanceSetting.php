@@ -37,11 +37,27 @@ class AppearanceSetting extends Model
     }
 
     /**
-     * Update a setting by key
+     * Update a setting by key (creates if not exists)
      */
     public static function updateByKey(string $key, string $value): bool
     {
-        return self::where('key', $key)->update(['value' => $value]) > 0;
+        $setting = self::where('key', $key)->first();
+
+        if ($setting) {
+            return $setting->update(['value' => $value]);
+        }
+
+        // Create the setting if it doesn't exist
+        self::create([
+            'key' => $key,
+            'value' => $value,
+            'label' => ucwords(str_replace('_', ' ', $key)),
+            'description' => '',
+            'category' => 'general',
+            'sort_order' => 99,
+        ]);
+
+        return true;
     }
 
     /**

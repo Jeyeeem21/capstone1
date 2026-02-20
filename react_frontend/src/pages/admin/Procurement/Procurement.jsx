@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, memo } from 'react';
-import { ShoppingCart, Package, Truck, DollarSign, FileText, Trash2, Scale, Boxes, TrendingUp, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle } from 'lucide-react';
+import { ShoppingCart, Package, Truck, DollarSign, FileText, Trash2, Scale, Boxes, TrendingUp, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Ban, Check } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
+import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
 
@@ -10,30 +10,48 @@ const SUPPLIERS_CACHE_KEY = '/suppliers';
 
 // Supplier combobox component - DEFINED OUTSIDE to prevent re-creation on parent re-render
 const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error, submitted, supplierOptions }) => {
+  const hasValue = (value && value.toString().trim().length > 0) || (newName && newName.trim().length > 0);
+  const showRequiredError = !hasValue && submitted && !error;
+  const displayError = error || (showRequiredError ? 'Please select a supplier or add a new one' : '');
+  
   return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">
+    <div className="mb-4">
+      <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
         Supplier <span className="text-red-500">*</span>
       </label>
       
       {/* Dropdown for existing suppliers */}
-      <select
-        name="supplier_id"
-        value={value}
-        onChange={onChange}
-        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500 transition-colors ${
-          error ? 'border-red-500' : 'border-gray-300'
-        }`}
-      >
-        {supplierOptions.map(opt => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          name="supplier_id"
+          value={value}
+          onChange={onChange}
+          required
+          className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all appearance-none cursor-pointer shadow-sm pr-10 focus:outline-none focus:ring-4 ${
+            displayError 
+              ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20' 
+              : hasValue && !newName
+                ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+          } ${submitted && showRequiredError ? 'animate-shake' : ''}`}
+        >
+          {supplierOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+          {displayError && <AlertCircle size={16} className="text-red-500" />}
+          {hasValue && !newName && !displayError && <Check size={16} className="text-green-500" />}
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
 
       {/* OR divider */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 my-3">
         <div className="flex-1 h-px bg-gray-200"></div>
-        <span className="text-xs text-gray-500 uppercase">or add new</span>
+        <span className="text-xs text-gray-500 uppercase font-medium">or add new</span>
         <div className="flex-1 h-px bg-gray-200"></div>
       </div>
 
@@ -45,16 +63,23 @@ const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error,
           value={newName}
           onChange={onInputChange}
           placeholder="Type new supplier name..."
-          className={`w-full px-3 py-2 pl-10 border rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500 transition-colors ${
-            newName ? 'border-green-500 bg-green-50' : 'border-gray-300'
+          className={`w-full px-4 py-3 pl-10 text-sm border-2 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 ${
+            newName 
+              ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20' 
+              : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
           }`}
         />
         <PlusCircle size={18} className={`absolute left-3 top-1/2 -translate-y-1/2 ${newName ? 'text-green-600' : 'text-gray-400'}`} />
+        {newName && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            <Check size={18} className="text-green-500" />
+          </div>
+        )}
       </div>
 
       {/* Info message when new supplier name is entered */}
       {newName && (
-        <div className="flex items-start gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-start gap-2 p-2 mt-2 bg-green-50 border border-green-200 rounded-lg">
           <AlertCircle size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
           <p className="text-xs text-green-700">
             A new supplier "<strong>{newName}</strong>" will be created and added to your suppliers list.
@@ -62,8 +87,8 @@ const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error,
         </div>
       )}
 
-      {error && submitted && (
-        <p className="text-xs text-red-600">{error}</p>
+      {displayError && (
+        <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} />{displayError}</p>
       )}
     </div>
   );
@@ -159,12 +184,34 @@ const Procurement = () => {
       quantity_kg: String(item.quantity_kg), 
       quantity_out: String(item.quantity_out || 0), 
       price_per_kg: String(item.price_per_kg), 
-      description: item.description || '', 
-      status: item.status 
+      description: item.description || ''
     });
     setErrors({});
     setIsEditModalOpen(true);
   }, []);
+
+  const handleCancel = useCallback(async (item) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const response = await apiClient.put(`/procurements/${item.id}`, {
+        ...item,
+        status: 'Cancelled'
+      });
+      
+      if (response.success) {
+        invalidateCache(CACHE_KEY);
+        refetch().then(() => {
+          toast.success('Procurement Cancelled', 'Procurement status changed to Cancelled.');
+        });
+      }
+    } catch (error) {
+      console.error('Error cancelling procurement:', error);
+      toast.error('Error', error.response?.data?.message || 'Failed to cancel procurement');
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, refetch, toast]);
 
   const handleDelete = useCallback((item) => {
     setSelectedItem(item);
@@ -503,9 +550,50 @@ const Procurement = () => {
     },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onView={() => handleView(row)} onEdit={() => handleEdit(row)} onDelete={() => handleDelete(row)} />
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); handleView(row); }}
+          className="p-1.5 rounded-md hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
+          title="View"
+        >
+          <Eye size={15} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
+          className="p-1.5 rounded-md hover:bg-button-50 text-button-500 hover:text-button-700 transition-colors"
+          title="Edit"
+        >
+          <Edit size={15} />
+        </button>
+        {row.status !== 'Cancelled' && (
+          <button
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              if (parseFloat(row.quantity_out || 0) === 0) {
+                handleCancel(row); 
+              }
+            }}
+            disabled={parseFloat(row.quantity_out || 0) > 0}
+            className={`p-1.5 rounded-md transition-colors ${
+              parseFloat(row.quantity_out || 0) > 0 
+                ? 'text-gray-300 cursor-not-allowed' 
+                : 'hover:bg-orange-50 text-orange-500 hover:text-orange-700'
+            }`}
+            title={parseFloat(row.quantity_out || 0) > 0 ? 'Cannot cancel - already used in processing' : 'Cancel'}
+          >
+            <Ban size={15} />
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
+          className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors"
+          title="Delete"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
     )},
-  ], [handleView, handleEdit, handleDelete]);
+  ], [handleView, handleEdit, handleCancel, handleDelete]);
 
   return (
     <div>
@@ -558,6 +646,7 @@ const Procurement = () => {
               data={chartData} 
               lines={[{ dataKey: 'value', name: 'Value (₱)' }]} 
               height={280} 
+              yAxisUnit="₱"
               tabs={[
                 { label: 'Daily', value: 'daily' }, 
                 { label: 'Monthly', value: 'monthly' }, 
@@ -813,17 +902,6 @@ const Procurement = () => {
               submitted={submitted} 
               error={errors.description?.[0]}
             />
-            
-            <FormSelect 
-              label="Status" 
-              name="status" 
-              value={formData.status} 
-              onChange={handleFormChange} 
-              options={statusOptions} 
-              required 
-              submitted={submitted} 
-              error={errors.status?.[0]} 
-            />
           </>
         )}
       </FormModal>
@@ -896,17 +974,6 @@ const Procurement = () => {
               placeholder="Add notes about this procurement (optional)" 
               submitted={submitted} 
               error={errors.description?.[0]}
-            />
-            
-            <FormSelect 
-              label="Status" 
-              name="status" 
-              value={formData.status} 
-              onChange={handleFormChange} 
-              options={statusOptions} 
-              required 
-              submitted={submitted} 
-              error={errors.status?.[0]} 
             />
           </>
         )}

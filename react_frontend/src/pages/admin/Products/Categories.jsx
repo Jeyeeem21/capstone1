@@ -442,16 +442,6 @@ const Categories = () => {
               value={formData.color} 
               onChange={handleColorChange} 
             />
-            <FormSelect 
-              label="Status" 
-              name="status" 
-              value={formData.status} 
-              onChange={handleFormChange} 
-              options={statusOptions} 
-              required 
-              submitted={submitted} 
-              error={errors.status?.[0]} 
-            />
           </>
         )}
       </FormModal>
