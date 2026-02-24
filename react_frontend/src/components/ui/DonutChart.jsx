@@ -17,7 +17,8 @@ const DonutChart = ({
   outerRadius = 80,
   showLegend = true,
   compact = false,
-  horizontalLegend = false
+  horizontalLegend = false,
+  valueUnit = 'kg'
 }) => {
   // Get theme colors from CSS variables
   const [themeColors, setThemeColors] = useState(['#22c55e', '#ef4444', '#f97316', '#3b82f6', '#8b5cf6', '#ec4899']);
@@ -83,7 +84,7 @@ const DonutChart = ({
                     padding: '8px 12px',
                     fontSize: '12px'
                   }}
-                  formatter={(value, name) => [`${value.toLocaleString()} kg (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
+                  formatter={(value, name) => [`${value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -110,7 +111,7 @@ const DonutChart = ({
                 <div className="min-w-0">
                   <p className="text-xs text-gray-600 dark:text-gray-300 truncate" title={item.name}>{item.name}</p>
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                    {item.value.toLocaleString()}kg
+                    {item.value.toLocaleString()}{valueUnit}
                     <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
                       ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
                     </span>
@@ -151,7 +152,7 @@ const DonutChart = ({
                     padding: '8px 12px',
                     fontSize: '12px'
                   }}
-                  formatter={(value, name) => [`${value.toLocaleString()} kg (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
+                  formatter={(value, name) => [`${value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -178,13 +179,13 @@ const DonutChart = ({
                   />
                   <span 
                     className="text-[9px] text-gray-500 truncate max-w-[50px] cursor-help" 
-                    title={`${item.name} - ${item.value.toLocaleString()} kg (${total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)`}
+                    title={`${item.name} - ${item.value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)`}
                   >
                     {item.name.length > 8 ? item.name.substring(0, 8) + '...' : item.name}
                   </span>
                   {/* Tooltip on hover */}
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    {item.name}: {item.value.toLocaleString()} kg ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
+                    {item.name}: {item.value.toLocaleString()}{valueUnit ? ` ${valueUnit}` : ''} ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
                   </div>
                 </div>
               ))}
@@ -203,7 +204,7 @@ const DonutChart = ({
                   <div>
                     <p className="text-xs text-gray-600 dark:text-gray-300">{item.name}</p>
                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                      {item.value.toLocaleString()}kg
+                      {item.value.toLocaleString()}{valueUnit}
                       <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
                         ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
                       </span>

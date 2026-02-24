@@ -10,10 +10,9 @@ import {
   Leaf,
   Award,
   Truck,
-  RefreshCw,
-  Loader2
+  RefreshCw
 } from 'lucide-react';
-import { Button } from '../../../components/ui';
+import { Button, Skeleton } from '../../../components/ui';
 import { productsApi } from '../../../api';
 
 // Fallback products if API is unavailable
@@ -145,9 +144,9 @@ const Products = () => {
   const normalizedProducts = products.map(normalizeProduct);
 
   const filteredProducts = normalizedProducts.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+    const matchesSearch = (product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (product.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || (product.category || '') === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -301,10 +300,7 @@ const Products = () => {
           <div className="flex items-center justify-between mb-6">
             <p className="text-gray-600">
               {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={16} className="animate-spin" />
-                  Loading products...
-                </span>
+                <Skeleton variant="text" width="w-40" />
               ) : (
                 <>Showing <span className="font-semibold text-gray-800">{sortedProducts.length}</span> products</>
               )}
@@ -313,8 +309,23 @@ const Products = () => {
 
           {/* Loading State */}
           {loading && (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 size={40} className="animate-spin text-button-500" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="bg-white rounded-xl overflow-hidden shadow-lg border-2 border-primary-100">
+                  <Skeleton variant="image" className="h-48 w-full rounded-none" />
+                  <div className="p-4 space-y-3">
+                    <Skeleton variant="title" width="w-3/4" />
+                    <Skeleton variant="text" width="w-1/2" />
+                    <div className="flex gap-1">
+                      {[...Array(5)].map((_, j) => <Skeleton key={j} variant="circle" width="w-4" height="h-4" />)}
+                    </div>
+                    <div className="flex justify-between items-center pt-2">
+                      <Skeleton variant="title" width="w-20" />
+                      <Skeleton variant="button" width="w-24" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

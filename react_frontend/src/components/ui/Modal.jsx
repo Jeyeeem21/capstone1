@@ -90,7 +90,7 @@ const Modal = ({
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 max-h-[calc(90vh-180px)] overflow-y-auto">
+        <div className="px-6 py-5 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 140px)' }}>
           {children}
         </div>
 

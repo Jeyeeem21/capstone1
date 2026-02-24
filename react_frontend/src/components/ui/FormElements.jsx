@@ -20,7 +20,7 @@ const FormInput = ({
   const [touched, setTouched] = useState(false);
   const [shouldShake, setShouldShake] = useState(false);
   const hasValue = value && value.toString().trim().length > 0;
-  const showSuccess = required && hasValue && !error && !loading;
+  const showSuccess = required && hasValue && !error && !loading && touched;
   // Show error if: field has error, OR (required AND (touched OR submitted) AND empty)
   const showRequiredError = required && (touched || submitted) && !hasValue && !error;
   const displayError = error || (showRequiredError ? 'This field is required' : '');
@@ -98,7 +98,7 @@ const FormSelect = ({
   const [touched, setTouched] = useState(false);
   const [shouldShake, setShouldShake] = useState(false);
   const hasValue = value && value.toString().trim().length > 0;
-  const showSuccess = required && hasValue && !error;
+  const showSuccess = required && hasValue && !error && touched;
   const showRequiredError = required && (touched || submitted) && !hasValue && !error;
   const displayError = error || (showRequiredError ? 'Please select an option' : '');
   
@@ -180,7 +180,7 @@ const FormTextarea = ({
   const [touched, setTouched] = useState(false);
   const [shouldShake, setShouldShake] = useState(false);
   const hasValue = value && value.toString().trim().length > 0;
-  const showSuccess = required && hasValue && !error;
+  const showSuccess = required && hasValue && !error && touched;
   const showRequiredError = required && (touched || submitted) && !hasValue && !error;
   const displayError = error || (showRequiredError ? 'This field is required' : '');
   

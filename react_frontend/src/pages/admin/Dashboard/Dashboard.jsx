@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LayoutDashboard, Package, CheckCircle, TrendingUp, FileText } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart } from '../../../components/ui';
+import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, Skeleton, SkeletonStats, SkeletonTable } from '../../../components/ui';
 
 // Helper to get CSS variable value
 const getCSSVariable = (name) => {
@@ -10,6 +10,7 @@ const getCSSVariable = (name) => {
 
 const Dashboard = () => {
   const [chartPeriod, setChartPeriod] = useState('daily');
+  const [loading, setLoading] = useState(true);
   const [themeColors, setThemeColors] = useState({
     primary: '#22c55e',
     secondary: '#eab308',
@@ -31,6 +32,11 @@ const Dashboard = () => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
     
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
   }, []);
 
   // Generate chart data based on period
@@ -95,6 +101,9 @@ const Dashboard = () => {
       />
 
       {/* Stats Cards */}
+      {loading ? (
+        <SkeletonStats count={4} className="mb-6" />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatsCard 
           label="Total Input" 
@@ -125,8 +134,23 @@ const Dashboard = () => {
           iconBgColor="bg-gradient-to-br from-button-500 to-button-700"
         />
       </div>
+      )}
 
       {/* Charts */}
+      {loading ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="lg:col-span-2 p-4 bg-white rounded-xl border border-gray-100">
+            <Skeleton variant="title" width="w-32" className="mb-4" />
+            <Skeleton variant="custom" className="h-[280px] w-full rounded-lg" />
+          </div>
+          <div className="p-4 bg-white rounded-xl border border-gray-100">
+            <Skeleton variant="title" width="w-24" className="mb-4" />
+            <div className="flex items-center justify-center py-4">
+              <Skeleton variant="circle" width="w-[180px]" height="h-[180px]" />
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div className="lg:col-span-2">
           <LineChart
@@ -161,8 +185,12 @@ const Dashboard = () => {
           height={180}
         />
       </div>
+      )}
 
       {/* Recent Sales */}
+      {loading ? (
+        <SkeletonTable rows={5} columns={5} />
+      ) : (
       <div>
         <h2 className="text-lg font-bold text-gray-800 mb-4">Recent Sales</h2>
         <DataTable
@@ -174,6 +202,7 @@ const Dashboard = () => {
           filterPlaceholder="All Status"
         />
       </div>
+      )}
     </div>
   );
 };

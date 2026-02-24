@@ -8,10 +8,12 @@ use App\Http\Controllers\Api\DatabaseBackupController;
 use App\Http\Controllers\Api\WebsiteContentController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\SupplierController;
-use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\VarietyController;
 use App\Http\Controllers\ProcurementController;
+use App\Http\Controllers\DryingProcessController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProcurementBatchController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -84,13 +86,13 @@ Route::prefix('suppliers')->group(function () {
     Route::delete('/{id}', [SupplierController::class, 'destroy']); // Delete supplier
 });
 
-// Category Routes
-Route::prefix('categories')->group(function () {
-    Route::get('/', [CategoryController::class, 'index']); // Get all categories
-    Route::post('/', [CategoryController::class, 'store']); // Create category
-    Route::get('/{id}', [CategoryController::class, 'show']); // Get single category
-    Route::put('/{id}', [CategoryController::class, 'update']); // Update category
-    Route::delete('/{id}', [CategoryController::class, 'destroy']); // Delete category
+// Variety Routes
+Route::prefix('varieties')->group(function () {
+    Route::get('/', [VarietyController::class, 'index']); // Get all varieties
+    Route::post('/', [VarietyController::class, 'store']); // Create variety
+    Route::get('/{id}', [VarietyController::class, 'show']); // Get single variety
+    Route::put('/{id}', [VarietyController::class, 'update']); // Update variety
+    Route::delete('/{id}', [VarietyController::class, 'destroy']); // Delete variety
 });
 
 // Procurement Routes
@@ -101,6 +103,32 @@ Route::prefix('procurements')->group(function () {
     Route::get('/{id}', [ProcurementController::class, 'show']); // Get single procurement
     Route::put('/{id}', [ProcurementController::class, 'update']); // Update procurement
     Route::delete('/{id}', [ProcurementController::class, 'destroy']); // Delete procurement
+});
+
+// Drying Process Routes
+Route::prefix('drying-processes')->group(function () {
+    Route::get('/', [DryingProcessController::class, 'index']); // Get all drying processes
+    Route::get('/statistics', [DryingProcessController::class, 'statistics']); // Get statistics
+    Route::post('/', [DryingProcessController::class, 'store']); // Create drying process from procurement
+    Route::get('/{dryingProcess}', [DryingProcessController::class, 'show']); // Get single drying process
+    Route::put('/{dryingProcess}', [DryingProcessController::class, 'update']); // Update drying process
+    Route::post('/{dryingProcess}/increment-day', [DryingProcessController::class, 'incrementDay']); // Add a day
+    Route::post('/{dryingProcess}/mark-dried', [DryingProcessController::class, 'markAsDried']); // Mark as dried
+    Route::post('/{dryingProcess}/postpone', [DryingProcessController::class, 'postpone']); // Cancel drying
+    Route::delete('/{dryingProcess}', [DryingProcessController::class, 'destroy']); // Delete drying process
+});
+
+// Procurement Batch Routes
+Route::prefix('procurement-batches')->group(function () {
+    Route::get('/', [ProcurementBatchController::class, 'index']);                                           // Get all batches
+    Route::get('/open', [ProcurementBatchController::class, 'open']);                                        // Get open batches (for dropdowns)
+    Route::post('/', [ProcurementBatchController::class, 'store']);                                          // Create batch
+    Route::get('/{id}', [ProcurementBatchController::class, 'show']);                                        // Get single batch
+    Route::put('/{id}', [ProcurementBatchController::class, 'update']);                                      // Update batch
+    Route::delete('/{id}', [ProcurementBatchController::class, 'destroy']);                                  // Delete batch
+    Route::post('/{batchId}/assign/{procurementId}', [ProcurementBatchController::class, 'assignProcurement']);  // Assign procurement
+    Route::delete('/remove-procurement/{procurementId}', [ProcurementBatchController::class, 'removeProcurement']); // Remove procurement
+    Route::get('/{batchId}/drying-distribution', [ProcurementBatchController::class, 'dryingDistribution']); // Preview distribution
 });
 
 // Processing Routes

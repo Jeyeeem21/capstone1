@@ -134,7 +134,7 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
 // Staff Header for mobile
 const StaffHeader = ({ onMenuClick }) => {
   return (
-    <header className="lg:hidden sticky top-0 z-30 bg-white border-b-2 border-primary-300 shadow-sm">
+    <header className="lg:hidden sticky top-0 z-50 bg-white border-b-2 border-primary-300 shadow-sm">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center">

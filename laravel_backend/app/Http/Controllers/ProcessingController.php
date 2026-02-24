@@ -73,6 +73,9 @@ class ProcessingController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
+            'drying_process_id' => 'nullable|exists:drying_processes,id',
+            'drying_process_ids' => 'nullable|array',
+            'drying_process_ids.*' => 'exists:drying_processes,id',
             'procurement_id' => 'nullable|exists:procurements,id',
             'input_kg' => 'required|numeric|min:0.01',
             'operator_name' => 'nullable|string|max:255',
@@ -100,7 +103,7 @@ class ProcessingController extends Controller
      */
     public function show(Processing $processing): JsonResponse
     {
-        $processing->load(['procurement:id,supplier_id,quantity_kg,quantity_out', 'procurement.supplier:id,name']);
+        $processing->load(['procurement:id,supplier_id,quantity_kg,sacks', 'procurement.supplier:id,name']);
         
         return $this->successResponse(
             new ProcessingResource($processing),
@@ -114,6 +117,7 @@ class ProcessingController extends Controller
     public function update(Request $request, Processing $processing): JsonResponse
     {
         $validator = Validator::make($request->all(), [
+            'drying_process_id' => 'nullable|exists:drying_processes,id',
             'procurement_id' => 'nullable|exists:procurements,id',
             'input_kg' => 'sometimes|required|numeric|min:0.01',
             'operator_name' => 'nullable|string|max:255',

@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo, memo } from 'react';
-import { ShoppingCart, Package, Truck, DollarSign, FileText, Trash2, Scale, Boxes, TrendingUp, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Ban, Check } from 'lucide-react';
+import { useState, useCallback, useMemo, memo, useEffect } from 'react';
+import { ShoppingCart, Package, Truck, DollarSign, FileText, Trash2, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Ban, Check, Layers, Sun, Calendar, List } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -7,6 +7,8 @@ import { useDataFetch, invalidateCache } from '../../../hooks';
 
 const CACHE_KEY = '/procurements';
 const SUPPLIERS_CACHE_KEY = '/suppliers';
+const VARIETIES_CACHE_KEY = '/varieties';
+const BATCHES_CACHE_KEY = '/procurement-batches';
 
 // Supplier combobox component - DEFINED OUTSIDE to prevent re-creation on parent re-render
 const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error, submitted, supplierOptions }) => {
@@ -26,7 +28,6 @@ const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error,
           name="supplier_id"
           value={value}
           onChange={onChange}
-          required
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all appearance-none cursor-pointer shadow-sm pr-10 focus:outline-none focus:ring-4 ${
             displayError 
               ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20' 
@@ -99,24 +100,54 @@ SupplierCombobox.displayName = 'SupplierCombobox';
 const Procurement = () => {
   const toast = useToast();
   const [chartPeriod, setChartPeriod] = useState('daily');
+  const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [tableTab, setTableTab] = useState('records'); // 'records' | 'batches'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDescriptionOnlyEdit, setIsDescriptionOnlyEdit] = useState(false); // For dried procurements
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isNewSupplierConfirmOpen, setIsNewSupplierConfirmOpen] = useState(false);
+  const [isStandaloneConfirmOpen, setIsStandaloneConfirmOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [batchFilter, setBatchFilter] = useState('');
   const [formData, setFormData] = useState({ 
     supplier_id: '', 
     new_supplier_name: '',
     quantity_kg: '', 
-    quantity_out: '0', 
+    sacks: '', 
     price_per_kg: '', 
     description: '', 
-    status: 'Pending' 
+    status: 'Pending',
+    batch_id: '',
   });
   const [errors, setErrors] = useState({});
   const [pendingSubmit, setPendingSubmit] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Batch creation state
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
+  const [newBatchNotes, setNewBatchNotes] = useState('');
+  const [creatingBatchLoading, setCreatingBatchLoading] = useState(false);
+
+  // Send to Drying state
+  const [isSendToDryingOpen, setIsSendToDryingOpen] = useState(false);
+  const [dryingSacks, setDryingSacks] = useState('');
+  const [dryingPrice, setDryingPrice] = useState('');
+  const [dryingPreview, setDryingPreview] = useState(null);
+  const [loadingDryingPreview, setLoadingDryingPreview] = useState(false);
+  const [dryingErrors, setDryingErrors] = useState({});
+
+  // Individual send to drying state
+  const [isIndividualDryingOpen, setIsIndividualDryingOpen] = useState(false);
+  const [individualDryingItem, setIndividualDryingItem] = useState(null);
+  const [individualDryingPrice, setIndividualDryingPrice] = useState('');
+  const [individualDryingSacks, setIndividualDryingSacks] = useState('');
+  const [individualDryingErrors, setIndividualDryingErrors] = useState({});
+
+  // Batch view state
+  const [isBatchViewOpen, setIsBatchViewOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
 
   // Super-fast data fetching with cache for procurements
   const { 
@@ -138,17 +169,84 @@ const Procurement = () => {
     initialData: [],
   });
 
+  // Fetch varieties for dropdown
+  const { data: varieties } = useDataFetch('/varieties', {
+    cacheKey: VARIETIES_CACHE_KEY,
+    initialData: [],
+  });
+
+  // Fetch procurement batches (for filter dropdown + add-to-batch in modal)
+  const { data: batches, refetch: refetchBatches } = useDataFetch('/procurement-batches', {
+    cacheKey: BATCHES_CACHE_KEY,
+    initialData: [],
+  });
+
   // Convert suppliers to options for dropdown
   const supplierOptions = useMemo(() => {
     const options = suppliers.map(s => ({ value: String(s.id), label: s.name }));
     return [{ value: '', label: 'Select supplier or type new name...' }, ...options];
   }, [suppliers]);
 
+  // Convert varieties to options for dropdown
+  const varietyOptions = useMemo(() => {
+    const options = varieties
+      .filter(v => v.status === 'Active')
+      .map(v => ({ value: String(v.id), label: v.name }));
+    return [{ value: '', label: 'Select variety...' }, ...options];
+  }, [varieties]);
+
   const statusOptions = useMemo(() => [
     { value: 'Pending', label: 'Pending' },
     { value: 'Completed', label: 'Completed' },
     { value: 'Cancelled', label: 'Cancelled' },
   ], []);
+
+  // Batch options for filter bar and modal
+  const batchOptions = useMemo(() => {
+    const opts = batches.map(b => ({
+      value: String(b.id),
+      label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks}/${b.total_sacks} sacks left)`,
+    }));
+    return [{ value: '', label: 'All Batches' }, { value: 'no-batch', label: 'No Batch (Standalone)' }, ...opts];
+  }, [batches]);
+
+  // Active batches (Open + Closed) for assigning new procurements - show all, no variety filter
+  const openBatchOptions = useMemo(() => {
+    const opts = batches
+      .filter(b => b.status === 'Open' || b.status === 'Closed')
+      .map(b => ({
+        value: String(b.id),
+        label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks)`,
+      }));
+    return [{ value: '', label: 'None (standalone)' }, ...opts];
+  }, [batches]);
+
+  // Apply batch filter to procurement list
+  const filteredProcurements = useMemo(() => {
+    let list = [...procurements];
+    
+    // Apply batch filter
+    if (batchFilter === 'no-batch') {
+      list = list.filter(p => !p.batch_id);
+    } else if (batchFilter) {
+      list = list.filter(p => String(p.batch_id) === batchFilter);
+    }
+    
+    // Simple sort: Pending at top, Drying next, Dried at bottom, Cancelled/Completed last
+    const statusPriority = { Pending: 0, Drying: 1, Dried: 2, Completed: 3, Cancelled: 4 };
+    
+    list.sort((a, b) => {
+      // First by status priority
+      const statusA = statusPriority[a.status] ?? 99;
+      const statusB = statusPriority[b.status] ?? 99;
+      if (statusA !== statusB) return statusA - statusB;
+      
+      // Then by date descending
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+    
+    return list;
+  }, [procurements, batchFilter]);
 
   // Calculate total cost dynamically
   const calculatedTotal = useMemo(() => {
@@ -161,34 +259,44 @@ const Procurement = () => {
     setFormData({ 
       supplier_id: '', 
       new_supplier_name: '',
+      variety_id: '',
       quantity_kg: '', 
-      quantity_out: '0', 
+      sacks: '', 
       price_per_kg: '', 
       description: '', 
-      status: 'Pending' 
+      status: 'Pending',
+      batch_id: '',
     });
     setErrors({});
+    setIsCreatingBatch(false);
+    setNewBatchNotes('');
+    refetchBatches();
     setIsAddModalOpen(true);
-  }, []);
+  }, [refetchBatches]);
 
   const handleView = useCallback((item) => {
     setSelectedItem(item);
     setIsViewModalOpen(true);
   }, []);
 
-  const handleEdit = useCallback((item) => {
+  const handleEdit = useCallback((item, descriptionOnly = false) => {
     setSelectedItem(item);
+    setIsDescriptionOnlyEdit(descriptionOnly);
     setFormData({ 
       supplier_id: String(item.supplier_id), 
       new_supplier_name: '',
+      variety_id: String(item.variety_id || ''),
       quantity_kg: String(item.quantity_kg), 
-      quantity_out: String(item.quantity_out || 0), 
+      sacks: String(item.sacks || 0), 
       price_per_kg: String(item.price_per_kg), 
-      description: item.description || ''
+      description: item.description || '',
+      status: item.status || 'Pending',
+      batch_id: String(item.batch_id || ''),
     });
     setErrors({});
+    refetchBatches();
     setIsEditModalOpen(true);
-  }, []);
+  }, [refetchBatches]);
 
   const handleCancel = useCallback(async (item) => {
     if (saving) return;
@@ -218,6 +326,35 @@ const Procurement = () => {
     setIsDeleteModalOpen(true);
   }, []);
 
+  // ---- Batch handlers ----
+  const handleBatchView = useCallback((batch) => {
+    setSelectedBatch(batch);
+    setIsBatchViewOpen(true);
+  }, []);
+
+  const handleToggleBatchStatus = useCallback(async (batch, e) => {
+    if (e) e.stopPropagation();
+    if (saving) return;
+    const newStatus = batch.status === 'Open' ? 'Closed' : 'Open';
+    setSaving(true);
+    try {
+      const response = await apiClient.put(`/procurement-batches/${batch.id}`, {
+        status: newStatus,
+      });
+      if (response.success) {
+        invalidateCache(BATCHES_CACHE_KEY);
+        refetchBatches().then(() => {
+          toast.success('Status Updated', `Batch ${batch.batch_number} is now ${newStatus}.`);
+        });
+      }
+    } catch (error) {
+      console.error('Error toggling batch status:', error);
+      toast.error('Error', error.message || 'Failed to update batch status.');
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, refetchBatches, toast]);
+
   // Check if supplier name matches existing supplier
   const findMatchingSupplier = useCallback((name) => {
     if (!name) return null;
@@ -244,6 +381,31 @@ const Procurement = () => {
       if (name === 'supplier_id' && value) {
         newData.new_supplier_name = '';
       }
+
+      // Auto-set variety when batch is selected + auto-fill price from existing batch procurements
+      if (name === 'batch_id' && value) {
+        const selectedBatch = batches.find(b => String(b.id) === value);
+        if (selectedBatch) {
+          newData.variety_id = String(selectedBatch.variety_id);
+          // Auto-fill price from existing procurements in this batch
+          const batchProcurements = procurements.filter(p => String(p.batch_id) === value);
+          if (batchProcurements.length > 0) {
+            // Get the most recent procurement's price
+            const latestPrice = batchProcurements[0]?.price_per_kg;
+            if (latestPrice && !prev.price_per_kg) {
+              newData.price_per_kg = String(latestPrice);
+            }
+          }
+        }
+      }
+      
+      // Clear batch if variety changes and doesn't match current batch
+      if (name === 'variety_id' && prev.batch_id) {
+        const currentBatch = batches.find(b => String(b.id) === prev.batch_id);
+        if (currentBatch && String(currentBatch.variety_id) !== value) {
+          newData.batch_id = '';
+        }
+      }
       
       return newData;
     });
@@ -257,7 +419,7 @@ const Procurement = () => {
       }
       return prev;
     });
-  }, [findMatchingSupplier]);
+  }, [findMatchingSupplier, batches, procurements]);
 
   // Handle supplier input to allow both dropdown and typing
   const handleSupplierInput = useCallback((e) => {
@@ -274,11 +436,13 @@ const Procurement = () => {
       const submitData = {
         supplier_id: formData.supplier_id || null,
         new_supplier_name: formData.new_supplier_name || null,
+        variety_id: formData.variety_id ? parseInt(formData.variety_id) : null,
         quantity_kg: parseFloat(formData.quantity_kg),
-        quantity_out: parseFloat(formData.quantity_out) || 0,
+        sacks: parseInt(formData.sacks) || 0,
         price_per_kg: parseFloat(formData.price_per_kg),
-        description: formData.description || null,
+        description: formData.description,
         status: formData.status,
+        batch_id: formData.batch_id ? parseInt(formData.batch_id) : null,
       };
 
       let response;
@@ -301,7 +465,8 @@ const Procurement = () => {
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         invalidateCache(SUPPLIERS_CACHE_KEY);
-        Promise.all([refetch(), refetchSuppliers()]).then(() => {
+        invalidateCache(BATCHES_CACHE_KEY);
+        Promise.all([refetch(), refetchSuppliers(), refetchBatches()]).then(() => {
           toast.success(message, desc);
         });
         return;
@@ -325,8 +490,15 @@ const Procurement = () => {
     }
   };
 
-  // Handle add submission - check if new supplier needs confirmation
+  // Handle add submission - check if standalone or new supplier needs confirmation
   const handleAddSubmit = async () => {
+    // If no batch selected, confirm standalone first
+    if (!formData.batch_id) {
+      setPendingSubmit('add');
+      setIsStandaloneConfirmOpen(true);
+      throw new Error('PENDING_CONFIRMATION');
+    }
+
     // If there's a new supplier name, show confirmation first
     if (formData.new_supplier_name && !formData.supplier_id) {
       setPendingSubmit('add');
@@ -365,6 +537,143 @@ const Procurement = () => {
     }
   };
 
+  // Handle standalone confirmation
+  const handleStandaloneConfirm = async () => {
+    setIsStandaloneConfirmOpen(false);
+    try {
+      // Still check for new supplier confirmation after standalone is confirmed
+      if (formData.new_supplier_name && !formData.supplier_id) {
+        setPendingSubmit('add');
+        setIsNewSupplierConfirmOpen(true);
+        return;
+      }
+      await performSubmit(false);
+      setIsAddModalOpen(false);
+    } catch (error) {
+      // Errors already handled in performSubmit
+    }
+    setPendingSubmit(null);
+  };
+
+  const handleStandaloneCancel = () => {
+    setIsStandaloneConfirmOpen(false);
+    setPendingSubmit(null);
+  };
+
+  // ---- Send to Drying from Batch ----
+  const handleOpenSendToDrying = useCallback(() => {
+    setDryingSacks('');
+    setDryingPrice('');
+    setDryingPreview(null);
+    setDryingErrors({});
+    setIsSendToDryingOpen(true);
+  }, []);
+
+  // ---- Send Individual to Drying ----
+  const handleOpenIndividualDrying = useCallback((item) => {
+    const remaining = Math.max(0, parseInt(item.sacks || 0) - (item.drying_sacks || 0));
+    setIndividualDryingItem(item);
+    setIndividualDryingPrice('');
+    setIndividualDryingSacks(String(remaining));
+    setIndividualDryingErrors({});
+    setIsIndividualDryingOpen(true);
+  }, []);
+
+  const handleIndividualDryingSubmit = async () => {
+    if (saving) return;
+    // Block if there are existing real-time errors
+    if (individualDryingErrors.sacks?.length) return;
+    
+    const localErrors = {};
+    const sacks = parseInt(individualDryingSacks);
+    const remaining = Math.max(0, parseInt(individualDryingItem?.sacks || 0) - (individualDryingItem?.drying_sacks || 0));
+    if (!individualDryingSacks || sacks <= 0) localErrors.sacks = ['Enter number of sacks.'];
+    else if (sacks > remaining) localErrors.sacks = [`Only ${remaining} sacks remaining.`];
+    if (!individualDryingPrice) localErrors.price = ['Price is required.'];
+    if (Object.keys(localErrors).length) { setIndividualDryingErrors(localErrors); return; }
+
+    setSaving(true);
+    try {
+      const response = await apiClient.post('/drying-processes', {
+        procurement_id: individualDryingItem.id,
+        sacks: sacks,
+        price: parseFloat(individualDryingPrice),
+      });
+      if (response.success && response.data) {
+        setIsIndividualDryingOpen(false);
+        invalidateCache(CACHE_KEY);
+        invalidateCache('/drying-processes');
+        invalidateCache(BATCHES_CACHE_KEY);
+        Promise.all([refetch(), refetchBatches()]).then(() => {
+          toast.success('Sent to Drying', `${sacks} sacks from Procurement #${String(individualDryingItem.id).padStart(4, '0')} sent to drying.`);
+        });
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      console.error('Error sending to drying:', error);
+      if (error.response?.data?.errors || error.errors) {
+        setIndividualDryingErrors(error.response?.data?.errors || error.errors);
+      } else {
+        toast.error('Error', error.message || 'Failed to send to drying.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Auto-fetch distribution preview when sacks is entered
+  useEffect(() => {
+    if (!isSendToDryingOpen || !batchFilter || !dryingSacks) return;
+    const sacks = parseInt(dryingSacks);
+    if (!sacks || sacks <= 0) { setDryingPreview(null); return; }
+    let cancelled = false;
+    setLoadingDryingPreview(true);
+    apiClient.get(`/procurement-batches/${batchFilter}/drying-distribution?sacks=${sacks}`)
+      .then(res => { if (!cancelled && res.success) setDryingPreview(res.data); })
+      .catch(() => { if (!cancelled) setDryingPreview(null); })
+      .finally(() => { if (!cancelled) setLoadingDryingPreview(false); });
+    return () => { cancelled = true; };
+  }, [batchFilter, dryingSacks, isSendToDryingOpen]);
+
+  const handleSendToDryingSubmit = async () => {
+    if (saving) return;
+    const localErrors = {};
+    if (!dryingSacks || parseInt(dryingSacks) <= 0) localErrors.sacks = ['Enter number of sacks to dry.'];
+    if (!dryingPrice) localErrors.price = ['Price is required.'];
+    if (Object.keys(localErrors).length) { setDryingErrors(localErrors); return; }
+
+    setSaving(true);
+    try {
+      const response = await apiClient.post('/drying-processes', {
+        batch_id: parseInt(batchFilter),
+        sacks: parseInt(dryingSacks),
+        price: parseFloat(dryingPrice),
+      });
+      if (response.success && response.data) {
+        setIsSendToDryingOpen(false);
+        invalidateCache(CACHE_KEY);
+        invalidateCache(BATCHES_CACHE_KEY);
+        invalidateCache('/drying-processes');
+        Promise.all([refetch(), refetchBatches()]).then(() => {
+          toast.success('Sent to Drying', `${dryingSacks} sacks have been sent to drying.`);
+        });
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      console.error('Error sending to drying:', error);
+      if (error.response?.data?.errors || error.errors) {
+        setDryingErrors(error.response?.data?.errors || error.errors);
+        toast.error('Validation Error', 'Please fix the highlighted fields.');
+      } else {
+        toast.error('Error', error.message || 'Failed to send to drying.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (saving) return; // Prevent double submit
     setSaving(true);
@@ -398,7 +707,7 @@ const Procurement = () => {
   const pendingOrders = procurements.filter(p => p.status === 'Pending').length;
   const completedOrders = procurements.filter(p => p.status === 'Completed').length;
   const totalQuantity = procurements.reduce((sum, p) => sum + parseFloat(p.quantity_kg || 0), 0);
-  const totalQuantityOut = procurements.reduce((sum, p) => sum + parseFloat(p.quantity_out || 0), 0);
+  const totalSacks = procurements.reduce((sum, p) => sum + parseInt(p.sacks || 0), 0);
   const totalCost = procurements.reduce((sum, p) => sum + parseFloat(p.total_cost || 0), 0);
 
   // Helper function to get days in a month
@@ -486,12 +795,31 @@ const Procurement = () => {
     }
   }, [procurements, chartPeriod]);
 
-  // Supplier breakdown for donut chart - TOP 5 ONLY
+  // Supplier breakdown for donut chart - TOP 5 ONLY - filtered by chart period + active point
   const supplierBreakdown = useMemo(() => {
     const colors = ['#22c55e', '#eab308', '#3b82f6', '#f97316', '#8b5cf6'];
     const supplierTotals = {};
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
     
     procurements.forEach(p => {
+      if (!p.created_at) return;
+      const date = new Date(p.created_at);
+      // Filter by period
+      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
+      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
+      
+      // Filter by active chart point
+      if (activeChartPoint) {
+        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
+        if (chartPeriod === 'monthly') {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          if (months[date.getMonth()] !== activeChartPoint) return;
+        }
+        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
+      }
+      
       const supplierName = p.supplier_name || 'Unknown';
       if (!supplierTotals[supplierName]) {
         supplierTotals[supplierName] = 0;
@@ -508,35 +836,84 @@ const Procurement = () => {
         value: Math.round(value),
         color: colors[index % colors.length],
       }));
-  }, [procurements]);
+  }, [procurements, chartPeriod, activeChartPoint]);
 
-  // Quantity In vs Quantity Out comparison for donut chart
+  // Sacks vs Kg comparison for donut chart - filtered by chart period + active point
   const quantityComparison = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    let filteredSacks = 0;
+    let filteredKg = 0;
+    
+    procurements.forEach(p => {
+      if (!p.created_at) return;
+      const date = new Date(p.created_at);
+      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
+      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
+      
+      // Filter by active chart point
+      if (activeChartPoint) {
+        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
+        if (chartPeriod === 'monthly') {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          if (months[date.getMonth()] !== activeChartPoint) return;
+        }
+        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
+      }
+      
+      filteredSacks += parseInt(p.sacks || 0);
+      filteredKg += parseFloat(p.quantity_kg || 0);
+    });
+    
     return [
-      { name: 'Quantity In', value: Math.round(totalQuantity), color: '#22c55e' },
-      { name: 'Quantity Out', value: Math.round(totalQuantityOut), color: '#ef4444' },
+      { name: 'Total Sacks', value: filteredSacks, color: '#3b82f6' },
+      { name: 'Total Kg', value: Math.round(filteredKg), color: '#22c55e' },
     ];
-  }, [totalQuantity, totalQuantityOut]);
+  }, [procurements, chartPeriod, activeChartPoint]);
 
   // Average order value
   const avgOrderValue = totalProcurements > 0 ? Math.floor(totalCost / totalProcurements) : 0;
 
   const columns = useMemo(() => [
     { 
-      header: 'ID', 
+      header: 'ID / Batch', 
       accessor: 'id',
-      cell: (row) => <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
+          {row.batch_number && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 w-fit">
+              <Layers size={10} />{row.batch_number}
+            </span>
+          )}
+        </div>
+      )
     },
     { header: 'Supplier', accessor: 'supplier_name' },
-    { 
-      header: 'Qty In (kg)', 
-      accessor: 'quantity_kg',
-      cell: (row) => <span className="font-semibold text-green-600">{parseFloat(row.quantity_kg).toLocaleString()}</span>
+    {
+      header: 'Variety', accessor: 'variety_name',
+      cell: (row) => row.variety_name ? (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: row.variety_color || '#6b7280' }}>
+          {row.variety_name}
+        </span>
+      ) : <span className="text-gray-400 text-xs">—</span>
     },
     { 
-      header: 'Qty Out (kg)', 
-      accessor: 'quantity_out',
-      cell: (row) => <span className="font-semibold text-red-600">{parseFloat(row.quantity_out || 0).toLocaleString()}</span>
+      header: 'Quantity', 
+      accessor: 'quantity_kg',
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-green-600">{parseFloat(row.quantity_kg).toLocaleString()} kg</span>
+          <span className="text-xs text-blue-600">{parseInt(row.sacks || 0).toLocaleString()} sacks</span>
+          {(row.drying_sacks > 0 || row.drying_kg > 0) && (
+            <span className="text-[11px] text-orange-500">
+              ↗ {row.drying_sacks} sacks / {parseFloat(row.drying_kg).toLocaleString()} kg drying
+            </span>
+          )}
+        </div>
+      )
     },
     { 
       header: 'Price/kg', 
@@ -548,52 +925,148 @@ const Procurement = () => {
       accessor: 'total_cost',
       cell: (row) => <span className="font-semibold text-button-600">₱{parseFloat(row.total_cost).toLocaleString()}</span>
     },
-    { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
-    { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <div className="flex items-center gap-1">
-        <button
-          onClick={(e) => { e.stopPropagation(); handleView(row); }}
-          className="p-1.5 rounded-md hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
-          title="View"
-        >
-          <Eye size={15} />
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); handleEdit(row); }}
-          className="p-1.5 rounded-md hover:bg-button-50 text-button-500 hover:text-button-700 transition-colors"
-          title="Edit"
-        >
-          <Edit size={15} />
-        </button>
-        {row.status !== 'Cancelled' && (
+    { header: 'Status', accessor: 'status', cell: (row) => (
+      <div>
+        <StatusBadge status={row.status} />
+        {row.description && (
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[140px]" title={row.description}>{row.description}</p>
+        )}
+      </div>
+    )},
+    {
+      header: 'Date', accessor: 'created_at',
+      cell: (row) => row.created_at ? (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-gray-600">{new Date(row.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          <span className="text-[11px] text-gray-400">{new Date(row.created_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true })}</span>
+        </div>
+      ) : <span className="text-gray-300 text-xs">—</span>
+    },
+    { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => {
+      const isDried = row.status === 'Dried';
+      const isDrying = row.status === 'Drying';
+      const isCancelled = row.status === 'Cancelled' || row.status === 'Completed';
+      const hasDryingSacks = row.drying_sacks > 0;
+      // Edit disabled only for Cancelled/Completed
+      const editDisabled = isCancelled;
+      const cancelDisabled = isDried || isDrying || isCancelled;
+      const deleteDisabled = isDried || isDrying;
+      const remainingSacks = Math.max(0, parseInt(row.sacks || 0) - (row.drying_sacks || 0));
+      const canSendToDrying = (row.status === 'Pending' || row.status === 'Drying') && remainingSacks > 0;
+      // Description-only edit when dried OR has sacks in drying
+      const descriptionOnlyEdit = isDried || hasDryingSacks;
+      return (
+        <div className="flex items-center gap-1">
           <button
-            onClick={(e) => { 
-              e.stopPropagation(); 
-              if (parseFloat(row.quantity_out || 0) === 0) {
-                handleCancel(row); 
-              }
-            }}
-            disabled={parseFloat(row.quantity_out || 0) > 0}
+            onClick={(e) => { if (!editDisabled) { e.stopPropagation(); handleEdit(row, isDried); } else e.stopPropagation(); }}
+            disabled={editDisabled}
             className={`p-1.5 rounded-md transition-colors ${
-              parseFloat(row.quantity_out || 0) > 0 
-                ? 'text-gray-300 cursor-not-allowed' 
-                : 'hover:bg-orange-50 text-orange-500 hover:text-orange-700'
+              editDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-button-50 text-button-500 hover:text-button-700'
             }`}
-            title={parseFloat(row.quantity_out || 0) > 0 ? 'Cannot cancel - already used in processing' : 'Cancel'}
+            title={editDisabled ? 'Cannot edit' : descriptionOnlyEdit ? 'Edit Description' : 'Edit'}
+          >
+            <Edit size={15} />
+          </button>
+          {canSendToDrying && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleOpenIndividualDrying(row); }}
+              className="p-1.5 rounded-md hover:bg-yellow-50 text-yellow-500 hover:text-yellow-700 transition-colors"
+              title="Send to Drying"
+            >
+              <Sun size={15} />
+            </button>
+          )}
+          <button
+            onClick={(e) => { if (!cancelDisabled) { e.stopPropagation(); handleCancel(row); } else e.stopPropagation(); }}
+            disabled={cancelDisabled}
+            className={`p-1.5 rounded-md transition-colors ${
+              cancelDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-orange-50 text-orange-500 hover:text-orange-700'
+            }`}
+            title={cancelDisabled ? 'Cannot cancel' : 'Cancel'}
           >
             <Ban size={15} />
           </button>
-        )}
-        <button
-          onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
-          className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors"
-          title="Delete"
+          <button
+            onClick={(e) => { if (!deleteDisabled) { e.stopPropagation(); handleDelete(row); } else e.stopPropagation(); }}
+            disabled={deleteDisabled}
+            className={`p-1.5 rounded-md transition-colors ${
+              deleteDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-red-50 text-red-500 hover:text-red-700'
+            }`}
+            title={deleteDisabled ? 'Cannot delete' : 'Delete'}
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      );
+    }},
+  ], [handleView, handleEdit, handleCancel, handleDelete, handleOpenIndividualDrying]);
+
+  // Batch table columns
+  const batchColumns = useMemo(() => [
+    {
+      header: 'Batch #', accessor: 'batch_number',
+      cell: (row) => (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+          <Layers size={10} />{row.batch_number}
+        </span>
+      )
+    },
+    {
+      header: 'Variety', accessor: 'variety_name',
+      cell: (row) => row.variety_name ? (
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: row.variety_color || '#6b7280' }}>
+          {row.variety_name}
+        </span>
+      ) : <span className="text-gray-400 text-sm">—</span>
+    },
+    {
+      header: 'Sacks', accessor: 'total_sacks',
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-blue-600">{row.total_sacks}</span>
+          <span className="text-xs text-gray-500">{row.remaining_sacks} left</span>
+        </div>
+      )
+    },
+    {
+      header: 'Total Kg', accessor: 'total_kg',
+      cell: (row) => <span className="font-semibold text-green-600">{parseFloat(row.total_kg).toLocaleString()} kg</span>
+    },
+    {
+      header: 'Total Cost', accessor: 'total_cost',
+      cell: (row) => <span className="font-semibold text-button-600">₱{parseFloat(row.total_cost || 0).toLocaleString()}</span>
+    },
+    {
+      header: 'Items', accessor: 'procurements_count',
+      cell: (row) => <span className="text-sm text-gray-700">{row.procurements_count ?? '—'}</span>
+    },
+    { 
+      header: 'Status', accessor: 'status', 
+      cell: (row) => (
+        <button 
+          onClick={(e) => handleToggleBatchStatus(row, e)}
+          className="focus:outline-none hover:scale-105 transition-transform"
+          title={`Click to ${row.status === 'Open' ? 'close' : 're-open'} batch`}
         >
-          <Trash2 size={15} />
+          <StatusBadge status={row.status} />
         </button>
-      </div>
-    )},
-  ], [handleView, handleEdit, handleCancel, handleDelete]);
+      )
+    },
+    {
+      header: 'Notes', accessor: 'notes',
+      cell: (row) => row.notes ? (
+        <span className="text-xs text-gray-600 max-w-[200px] truncate block">{row.notes}</span>
+      ) : <span className="text-gray-400 text-xs">—</span>
+    },
+    {
+      header: 'Created', accessor: 'created_at',
+      cell: (row) => (
+        <span className="text-xs text-gray-500">
+          {row.created_at ? new Date(row.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+        </span>
+      )
+    },
+  ], [handleToggleBatchStatus]);
 
   return (
     <div>
@@ -642,7 +1115,7 @@ const Procurement = () => {
           <div className="lg:col-span-2">
             <LineChart 
               title="Procurement Trends" 
-              subtitle="Purchase order activity overview" 
+              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Purchase order activity overview"}
               data={chartData} 
               lines={[{ dataKey: 'value', name: 'Value (₱)' }]} 
               height={280} 
@@ -653,7 +1126,9 @@ const Procurement = () => {
                 { label: 'Yearly', value: 'yearly' }
               ]} 
               activeTab={chartPeriod} 
-              onTabChange={setChartPeriod} 
+              onTabChange={(val) => { setChartPeriod(val); setActiveChartPoint(null); }}
+              onDotClick={setActiveChartPoint}
+              activePoint={activeChartPoint}
               summaryStats={[
                 { label: 'Total Orders', value: totalProcurements.toString(), color: 'text-primary-600' }, 
                 { label: 'Avg Order Value', value: `₱${avgOrderValue.toLocaleString()}`, color: 'text-primary-600' }, 
@@ -674,36 +1149,127 @@ const Procurement = () => {
               horizontalLegend={true}
             />
             <DonutChart 
-              title="Qty In vs Out" 
+              title="Sacks vs Kg" 
               data={quantityComparison} 
-              centerValue={`${Math.round((totalQuantity - totalQuantityOut)).toLocaleString()}`} 
-              centerLabel="Available" 
+              centerValue={`${quantityComparison[0]?.value || 0}`} 
+              centerLabel="Sacks" 
               height={140} 
               innerRadius={45} 
               outerRadius={62} 
               showLegend={true} 
               horizontalLegend={true}
+              valueUnit=""
             />
           </div>
         </div>
       )}
 
-      {/* Table - Show data immediately, skeleton only on true first load */}
-      {loading && procurements.length === 0 ? (
-        <SkeletonTable rows={5} columns={7} />
+      {/* Table Tab Toggle */}
+      <div className="flex items-center gap-1 mb-4 bg-white dark:bg-gray-700 rounded-lg p-1 shadow-sm border border-gray-200 w-fit">
+        <button
+          onClick={() => setTableTab('records')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${
+            tableTab === 'records' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <FileText size={14} /> Records
+        </button>
+        <button
+          onClick={() => setTableTab('batches')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${
+            tableTab === 'batches' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          <List size={14} /> Batches
+        </button>
+      </div>
+
+      {tableTab === 'records' ? (
+        <>
+          {/* Batch filter bar */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Layers size={16} className="text-indigo-500" />
+              <span className="text-sm font-medium text-gray-600">Filter by Batch:</span>
+            </div>
+            <select
+              value={batchFilter}
+              onChange={e => setBatchFilter(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 min-w-[240px]"
+            >
+              {batchOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {batchFilter && (
+              <button
+                onClick={() => setBatchFilter('')}
+                className="text-xs text-gray-500 hover:text-red-500 underline transition-colors"
+              >
+                Clear filter
+              </button>
+            )}
+            {batchFilter && (() => {
+              const b = batches.find(b => String(b.id) === batchFilter);
+              return b ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <span className="text-xs font-semibold text-indigo-700">{b.batch_number}</span>
+                  <span className="text-xs text-gray-500">·</span>
+                  <span className="text-xs text-gray-600">{b.remaining_sacks}/{b.total_sacks} sacks remaining</span>
+                  <span className="text-xs text-gray-500">·</span>
+                  <span className={`text-xs font-medium ${ b.status === 'Open' ? 'text-green-600' : b.status === 'Closed' ? 'text-yellow-600' : 'text-gray-500'}`}>{b.status}</span>
+                </div>
+              ) : null;
+            })()}
+            {batchFilter && (() => {
+              const b = batches.find(b => String(b.id) === batchFilter);
+              return b && b.remaining_sacks > 0 ? (
+                <button
+                  onClick={handleOpenSendToDrying}
+                  className="ml-auto px-3 py-1.5 text-sm font-semibold text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Sun size={14} /> Send to Drying
+                </button>
+              ) : null;
+            })()}
+          </div>
+
+          {/* Table - Show data immediately, skeleton only on true first load */}
+          {loading && procurements.length === 0 ? (
+            <SkeletonTable rows={5} columns={7} />
+          ) : (
+            <DataTable 
+              title="Procurement Records" 
+              subtitle={batchFilter ? `Filtered by batch: ${batches.find(b => String(b.id) === batchFilter)?.batch_number || ''}` : 'Manage all procurement transactions'}
+              columns={columns} 
+              data={filteredProcurements} 
+              searchPlaceholder="Search procurements..." 
+              filterField="status" 
+              filterPlaceholder="All Status" 
+              dateFilterField="created_at"
+              onAdd={handleAdd} 
+              addLabel="Add Procurement"
+              onRowClick={handleView}
+            />
+          )}
+        </>
       ) : (
-        <DataTable 
-          title="Procurement Records" 
-          subtitle="Manage all procurement transactions" 
-          columns={columns} 
-          data={procurements} 
-          searchPlaceholder="Search procurements..." 
-          filterField="status" 
-          filterPlaceholder="All Status" 
-          onAdd={handleAdd} 
-          addLabel="Add Procurement"
-          onRowClick={handleView}
-        />
+        /* Batches Tab */
+        loading && batches.length === 0 ? (
+          <SkeletonTable rows={5} columns={8} />
+        ) : (
+          <DataTable
+            title="Procurement Batches"
+            subtitle="Overview of all procurement batch groups — click row to view, click status to toggle"
+            columns={batchColumns}
+            data={batches}
+            searchPlaceholder="Search batches..."
+            filterField="status"
+            filterPlaceholder="All Status"
+            dateFilterField="created_at"
+            onRowClick={handleBatchView}
+          />
+        )
       )}
 
       {/* View Modal */}
@@ -761,6 +1327,33 @@ const Procurement = () => {
                 </div>
               </div>
 
+              {/* Batch badge */}
+              {selectedItem?.batch_number && (
+                <div className="flex items-center gap-2 p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <Layers size={15} className="text-indigo-500 shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500">Batch</p>
+                    <p className="text-sm font-semibold text-indigo-700">{selectedItem.batch_number}</p>
+                  </div>
+                  <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
+                    selectedItem.batch_status === 'Open' ? 'bg-green-100 text-green-700' :
+                    selectedItem.batch_status === 'Closed' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>{selectedItem.batch_status}</span>
+                </div>
+              )}
+
+              {/* Variety */}
+              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+                  <User size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-0.5">Variety</p>
+                  <p className="font-semibold text-gray-800 text-sm">{selectedItem.variety_name || '—'}</p>
+                </div>
+              </div>
+
               {/* Total Cost */}
               <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
                 <div className="p-2 bg-button-500 text-white rounded-lg">
@@ -771,6 +1364,24 @@ const Procurement = () => {
                   <p className="text-xl font-bold text-button-600">₱{parseFloat(selectedItem.total_cost).toLocaleString()}</p>
                 </div>
               </div>
+
+              {/* Date */}
+              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
+                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                  <Calendar size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-0.5">Date Created</p>
+                  <p className="font-semibold text-gray-800 text-sm">
+                    {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                  </p>
+                  {selectedItem.created_at && (
+                    <p className="text-xs text-gray-500">
+                      {new Date(selectedItem.created_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Right Column */}
@@ -778,30 +1389,21 @@ const Procurement = () => {
               {/* Quantity Info */}
               <div className="p-3 bg-gray-50 rounded-lg space-y-2.5">
                 <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                    <Boxes size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600">Sacks/Bags</p>
+                    <p className="font-semibold text-gray-800 text-sm">{parseInt(selectedItem.sacks || 0).toLocaleString()} sacks</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
                     <Scale size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Quantity In</p>
+                    <p className="text-xs text-gray-600">Quantity</p>
                     <p className="font-semibold text-gray-800 text-sm">{parseFloat(selectedItem.quantity_kg).toLocaleString()} kg</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-orange-100 text-orange-600 rounded-lg">
-                    <Boxes size={16} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-600">Quantity Out</p>
-                    <p className="font-semibold text-gray-800 text-sm">{parseFloat(selectedItem.quantity_out || 0).toLocaleString()} kg</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
-                    <TrendingUp size={16} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-gray-600">Remaining</p>
-                    <p className="font-semibold text-purple-600 text-sm">{parseFloat(selectedItem.remaining_quantity || selectedItem.quantity_kg).toLocaleString()} kg</p>
                   </div>
                 </div>
               </div>
@@ -846,6 +1448,118 @@ const Procurement = () => {
       >
         {({ submitted }) => (
           <>
+            {/* Batch Assignment Section — TOP */}
+            <div className="pb-3 mb-3 border-b border-gray-100">
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                <Layers size={14} className="text-indigo-500" />
+                Batch Assignment <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+
+              {!isCreatingBatch ? (
+                <>
+                  <div className="flex gap-2">
+                    <select
+                      name="batch_id"
+                      value={formData.batch_id}
+                      onChange={handleFormChange}
+                      className="flex-1 px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      {openBatchOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingBatch(true)}
+                      className="px-3 py-2.5 text-sm font-medium text-indigo-600 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <PlusCircle size={14} />
+                      New Batch
+                    </button>
+                  </div>
+                  {formData.batch_id && (() => {
+                    const b = batches.find(b => String(b.id) === formData.batch_id);
+                    return b ? (
+                      <p className="mt-1.5 text-xs text-indigo-600">
+                        Batch variety: <strong>{b.variety_name}</strong> · {b.remaining_sacks} sacks remaining
+                      </p>
+                    ) : null;
+                  })()}
+                </>
+              ) : (
+                <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-indigo-700">Create New Batch</p>
+                    <button
+                      type="button"
+                      onClick={() => { setIsCreatingBatch(false); setNewBatchNotes(''); }}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Batch Variety *</label>
+                    <select
+                      name="variety_id"
+                      value={formData.variety_id}
+                      onChange={handleFormChange}
+                      className="w-full px-3 py-2 text-sm border-2 border-indigo-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+                    >
+                      {varietyOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">All procurements in this batch must be this variety.</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Notes (optional)</label>
+                    <input
+                      type="text"
+                      value={newBatchNotes}
+                      onChange={(e) => setNewBatchNotes(e.target.value)}
+                      placeholder="e.g. Season 2026 first harvest"
+                      className="w-full px-3 py-2 text-sm border-2 border-indigo-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!formData.variety_id || creatingBatchLoading}
+                    onClick={async () => {
+                      if (!formData.variety_id) return;
+                      setCreatingBatchLoading(true);
+                      try {
+                        const res = await apiClient.post('/procurement-batches', {
+                          variety_id: parseInt(formData.variety_id),
+                          notes: newBatchNotes || null,
+                        });
+                        if (res.success && res.data) {
+                          const newBatch = res.data;
+                          invalidateCache(BATCHES_CACHE_KEY);
+                          await refetchBatches();
+                          setFormData(prev => ({ ...prev, batch_id: String(newBatch.id) }));
+                          setIsCreatingBatch(false);
+                          setNewBatchNotes('');
+                          toast.success('Batch Created', `Batch ${newBatch.batch_number} created successfully.`);
+                        }
+                      } catch (err) {
+                        toast.error('Error', err.response?.data?.message || 'Failed to create batch');
+                      } finally {
+                        setCreatingBatchLoading(false);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {creatingBatchLoading ? (
+                      <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Creating...</>
+                    ) : (
+                      <><PlusCircle size={14} /> Create Batch & Assign</>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
             <SupplierCombobox 
               value={formData.supplier_id}
               newName={formData.new_supplier_name}
@@ -855,8 +1569,36 @@ const Procurement = () => {
               submitted={submitted}
               supplierOptions={supplierOptions}
             />
+
+            <div className="relative">
+              <FormSelect
+                label={formData.batch_id ? "Variety (set by batch)" : "Variety"}
+                name="variety_id"
+                value={formData.variety_id}
+                onChange={handleFormChange}
+                options={varietyOptions}
+                required
+                submitted={submitted}
+                error={errors.variety_id?.[0]}
+                disabled={!!formData.batch_id && !isCreatingBatch}
+              />
+              {formData.batch_id && !isCreatingBatch && (
+                <p className="text-xs text-indigo-500 -mt-2 mb-2">Variety is locked to match the selected batch.</p>
+              )}
+            </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormInput 
+                label="Sacks/Bags" 
+                name="sacks" 
+                type="number" 
+                value={formData.sacks} 
+                onChange={handleFormChange} 
+                required 
+                placeholder="0" 
+                submitted={submitted} 
+                error={errors.sacks?.[0]}
+              />
               <FormInput 
                 label="Quantity (kg)" 
                 name="quantity_kg" 
@@ -898,7 +1640,8 @@ const Procurement = () => {
               name="description" 
               value={formData.description} 
               onChange={handleFormChange} 
-              placeholder="Add notes about this procurement (optional)" 
+              required
+              placeholder="e.g. Paid, Not paid, COD, etc." 
               submitted={submitted} 
               error={errors.description?.[0]}
             />
@@ -909,74 +1652,164 @@ const Procurement = () => {
       {/* Edit Modal */}
       <FormModal 
         isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)} 
+        onClose={() => { setIsEditModalOpen(false); setIsDescriptionOnlyEdit(false); }} 
         onSubmit={handleEditSubmit} 
-        title="Edit Procurement" 
+        title={(isDescriptionOnlyEdit || selectedItem?.drying_sacks > 0) ? "Edit Description" : "Edit Procurement"} 
         submitText="Save Changes" 
-        size="lg"
+        size={(isDescriptionOnlyEdit || selectedItem?.drying_sacks > 0) ? "md" : "lg"}
         loading={saving}
       >
-        {({ submitted }) => (
+        {({ submitted }) => {
+          const hasItemsInDrying = selectedItem?.drying_sacks > 0;
+          const showDescriptionOnly = isDescriptionOnlyEdit || hasItemsInDrying;
+          
+          return (
           <>
-            <FormSelect 
-              label="Supplier" 
-              name="supplier_id" 
-              value={formData.supplier_id} 
-              onChange={handleFormChange} 
-              options={supplierOptions.filter(opt => opt.value !== '')} 
-              required 
-              submitted={submitted} 
-              error={errors.supplier_id?.[0]} 
-            />
-            
-            <div className="grid grid-cols-2 gap-4">
-              <FormInput 
-                label="Quantity (kg)" 
-                name="quantity_kg" 
-                type="number" 
-                value={formData.quantity_kg} 
-                onChange={handleFormChange} 
-                required 
-                placeholder="0" 
-                submitted={submitted} 
-                error={errors.quantity_kg?.[0]}
-                step="0.01"
-              />
-              <FormInput 
-                label="Price per KG (₱)" 
-                name="price_per_kg" 
-                type="number" 
-                value={formData.price_per_kg} 
-                onChange={handleFormChange} 
-                required 
-                placeholder="0.00" 
-                submitted={submitted} 
-                error={errors.price_per_kg?.[0]}
-                step="0.01"
-              />
-            </div>
-
-            {/* Calculated Total */}
-            {(formData.quantity_kg && formData.price_per_kg) && (
-              <div className="p-3 bg-button-50 border border-button-200 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Calculated Total:</span>
-                  <span className="text-lg font-bold text-button-600">₱{calculatedTotal.toLocaleString()}</span>
+            {showDescriptionOnly ? (
+              /* Description-only edit for dried/drying procurements */
+              <>
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Procurement #{String(selectedItem?.id).padStart(4, '0')}</strong> {isDescriptionOnlyEdit ? 'is already Dried' : `has ${selectedItem?.drying_sacks} sacks in drying`}. Only the description can be edited.
+                  </p>
                 </div>
-              </div>
-            )}
+                <FormInput 
+                  label="Description" 
+                  name="description" 
+                  value={formData.description} 
+                  onChange={handleFormChange} 
+                  required
+                  placeholder="e.g. Paid, Not paid, COD, etc." 
+                  submitted={submitted} 
+                  error={errors.description?.[0]}
+                />
+              </>
+            ) : (
+              /* Full edit for non-dried procurements */
+              <>
+                <FormSelect 
+                  label="Supplier" 
+                  name="supplier_id" 
+                  value={formData.supplier_id} 
+                  onChange={handleFormChange} 
+                  options={supplierOptions.filter(opt => opt.value !== '')} 
+                  required 
+                  submitted={submitted} 
+                  error={errors.supplier_id?.[0]} 
+                />
 
-            <FormInput 
-              label="Description" 
-              name="description" 
-              value={formData.description} 
-              onChange={handleFormChange} 
-              placeholder="Add notes about this procurement (optional)" 
-              submitted={submitted} 
-              error={errors.description?.[0]}
-            />
+                <FormSelect
+                  label="Variety"
+                  name="variety_id"
+                  value={formData.variety_id}
+                  onChange={handleFormChange}
+                  options={varietyOptions}
+                  required
+                  submitted={submitted}
+                  error={errors.variety_id?.[0]}
+                />
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <FormInput 
+                    label="Sacks/Bags" 
+                    name="sacks" 
+                    type="number" 
+                    value={formData.sacks} 
+                    onChange={handleFormChange} 
+                    required 
+                    placeholder="0" 
+                    submitted={submitted} 
+                    error={errors.sacks?.[0]}
+                    disabled
+                  />
+                  <FormInput 
+                    label="Quantity (kg)" 
+                    name="quantity_kg" 
+                    type="number" 
+                    value={formData.quantity_kg} 
+                    onChange={handleFormChange} 
+                    required 
+                    placeholder="0" 
+                    submitted={submitted} 
+                    error={errors.quantity_kg?.[0]}
+                    step="0.01"
+                    disabled
+                  />
+                  <FormInput 
+                    label="Price per KG (₱)" 
+                    name="price_per_kg" 
+                    type="number" 
+                    value={formData.price_per_kg} 
+                    onChange={handleFormChange} 
+                    required 
+                    placeholder="0.00" 
+                    submitted={submitted} 
+                    error={errors.price_per_kg?.[0]}
+                    step="0.01"
+                    disabled
+                  />
+                </div>
+
+                {/* Calculated Total */}
+                {(formData.quantity_kg && formData.price_per_kg) && (
+                  <div className="p-3 bg-button-50 border border-button-200 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Calculated Total:</span>
+                      <span className="text-lg font-bold text-button-600">₱{calculatedTotal.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                <FormInput 
+                  label="Description" 
+                  name="description" 
+                  value={formData.description} 
+                  onChange={handleFormChange} 
+                  required
+                  placeholder="e.g. Paid, Not paid, COD, etc." 
+                  submitted={submitted} 
+                  error={errors.description?.[0]}
+                />
+
+                {/* Batch Assignment */}
+                <div className="border-t border-gray-100 pt-3 mt-1">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                    <Layers size={14} className="text-indigo-500" />
+                    Batch Assignment <span className="text-gray-400 font-normal">(optional)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      name="batch_id"
+                      value={formData.batch_id}
+                      onChange={handleFormChange}
+                      className="flex-1 px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                    >
+                      {openBatchOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                      {/* Also show current batch if it's closed */}
+                      {formData.batch_id && !openBatchOptions.find(o => o.value === formData.batch_id) && (() => {
+                        const b = batches.find(b => String(b.id) === formData.batch_id);
+                        return b ? (
+                          <option value={formData.batch_id}>{b.batch_number} — {b.status}</option>
+                        ) : null;
+                      })()}
+                    </select>
+                  </div>
+                  {formData.batch_id && (() => {
+                    const b = batches.find(b => String(b.id) === formData.batch_id);
+                    return b ? (
+                      <p className="mt-1.5 text-xs text-indigo-600">
+                        Batch variety: <strong>{b.variety_name}</strong> · {b.remaining_sacks} sacks remaining
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+              </>
+            )}
           </>
-        )}
+          );
+        }}
       </FormModal>
 
       {/* Delete Confirmation Modal */}
@@ -989,6 +1822,20 @@ const Procurement = () => {
         confirmText="Remove" 
         variant="danger" 
         icon={Trash2}
+        loading={saving}
+      />
+
+      {/* Standalone Procurement Confirmation Modal */}
+      <ConfirmModal 
+        isOpen={isStandaloneConfirmOpen} 
+        onClose={handleStandaloneCancel} 
+        onConfirm={handleStandaloneConfirm} 
+        title="Standalone Procurement" 
+        message="This procurement is not assigned to any batch. Are you sure you want to add it as a standalone procurement?" 
+        confirmText="Yes, Add Standalone" 
+        cancelText="Go Back" 
+        variant="primary" 
+        icon={AlertCircle}
         loading={saving}
       />
 
@@ -1005,6 +1852,351 @@ const Procurement = () => {
         icon={PlusCircle}
         loading={saving}
       />
+
+      {/* Send to Drying Modal */}
+      <FormModal
+        isOpen={isSendToDryingOpen}
+        onClose={() => setIsSendToDryingOpen(false)}
+        onSubmit={handleSendToDryingSubmit}
+        title="Send Batch to Drying"
+        submitText="Start Drying"
+        size="lg"
+        loading={saving}
+      >
+        {({ submitted }) => {
+          const selectedBatch = batches.find(b => String(b.id) === batchFilter);
+          return (
+            <>
+              {/* Batch Info */}
+              {selectedBatch && (
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Layers size={16} className="text-indigo-600" />
+                    <span className="text-sm font-bold text-indigo-700">{selectedBatch.batch_number}</span>
+                    <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
+                      selectedBatch.status === 'Open' ? 'bg-green-100 text-green-700' :
+                      selectedBatch.status === 'Closed' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>{selectedBatch.status}</span>
+                  </div>
+                  <div className="flex gap-4 text-xs text-gray-600">
+                    <div><span className="font-medium">Variety:</span> {selectedBatch.variety_name}</div>
+                    <div><span className="font-medium">Available:</span> <span className="font-bold text-green-600">{selectedBatch.remaining_sacks} sacks / {parseFloat(selectedBatch.remaining_kg).toLocaleString()} kg</span></div>
+                  </div>
+                </div>
+              )}
+
+              <FormInput
+                label="Sacks to Dry"
+                name="sacks"
+                type="number"
+                value={dryingSacks}
+                onChange={(e) => { setDryingSacks(e.target.value); setDryingErrors(prev => { const n = {...prev}; delete n.sacks; return n; }); }}
+                required
+                placeholder="0"
+                submitted={submitted}
+                error={dryingErrors.sacks?.[0]}
+              />
+
+              {loadingDryingPreview && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg mb-2 animate-pulse">
+                  <p className="text-xs text-gray-400">Calculating distribution...</p>
+                </div>
+              )}
+              {dryingPreview && !loadingDryingPreview && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-2">
+                  <p className="text-xs font-semibold text-green-700 mb-1.5">Proportional distribution:</p>
+                  <div className="space-y-1">
+                    {dryingPreview.breakdown?.map((item, i) => (
+                      <div key={i} className="flex justify-between text-xs text-gray-700">
+                        <span>Procurement #{String(item.procurement_id).padStart(4,'0')}</span>
+                        <span>{item.sacks_taken} sacks → {parseFloat(item.quantity_kg).toLocaleString()} kg</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-green-200 flex justify-between text-xs font-bold text-green-700">
+                    <span>Total</span>
+                    <span>{dryingSacks} sacks → {parseFloat(dryingPreview.total_kg || 0).toLocaleString()} kg</span>
+                  </div>
+                </div>
+              )}
+
+              <FormInput
+                label="Drying Price (₱/sack)"
+                name="price"
+                type="number"
+                value={dryingPrice}
+                onChange={(e) => { setDryingPrice(e.target.value); setDryingErrors(prev => { const n = {...prev}; delete n.price; return n; }); }}
+                required
+                placeholder="0.00"
+                submitted={submitted}
+                error={dryingErrors.price?.[0]}
+                step="0.01"
+              />
+
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <p className="text-xs text-gray-600">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the Drying page to increment days. Total = (Sacks × Price) × Days.</p>
+              </div>
+            </>
+          );
+        }}
+      </FormModal>
+
+      {/* Individual Send to Drying Modal */}
+      <FormModal
+        isOpen={isIndividualDryingOpen}
+        onClose={() => setIsIndividualDryingOpen(false)}
+        title="Send to Drying"
+        onSubmit={handleIndividualDryingSubmit}
+        saving={saving}
+        saveText="Send to Drying"
+        savingText="Sending..."
+        maxWidth="md"
+      >
+        {(submitted) => {
+          if (!individualDryingItem) return null;
+          const totalSacks = parseInt(individualDryingItem.sacks || 0);
+          const alreadyDrying = individualDryingItem.drying_sacks || 0;
+          const remaining = Math.max(0, totalSacks - alreadyDrying);
+          const enteredSacks = parseInt(individualDryingSacks) || 0;
+          const proportionalKg = totalSacks > 0 ? ((enteredSacks / totalSacks) * parseFloat(individualDryingItem.quantity_kg)).toFixed(2) : 0;
+          return (
+            <>
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg space-y-1">
+                <p className="text-sm font-medium text-yellow-800">
+                  Procurement #{String(individualDryingItem.id).padStart(4, '0')}
+                </p>
+                <p className="text-xs text-yellow-700">
+                  Supplier: {individualDryingItem.supplier_name} &bull; {individualDryingItem.variety_name || 'N/A'}
+                </p>
+                <p className="text-xs text-yellow-700">
+                  {totalSacks.toLocaleString()} sacks &bull; {parseFloat(individualDryingItem.quantity_kg).toLocaleString()} kg
+                  {alreadyDrying > 0 && (
+                    <span className="text-orange-600 ml-1">({alreadyDrying} sacks already drying)</span>
+                  )}
+                </p>
+              </div>
+
+              <FormInput
+                label={`Sacks to Send (max ${remaining.toLocaleString()})`}
+                type="number"
+                value={individualDryingSacks}
+                onChange={(e) => { 
+                  const val = e.target.value;
+                  setIndividualDryingSacks(val);
+                  // Real-time validation
+                  const num = parseInt(val);
+                  if (num > remaining) {
+                    setIndividualDryingErrors(prev => ({ ...prev, sacks: [`Maximum is ${remaining} sacks.`] }));
+                  } else {
+                    setIndividualDryingErrors(prev => ({ ...prev, sacks: undefined }));
+                  }
+                }}
+                placeholder={`1 - ${remaining}`}
+                submitted={submitted}
+                error={individualDryingErrors.sacks?.[0]}
+                min="1"
+                max={remaining}
+                required
+              />
+
+              <FormInput
+                label="Drying Price (per sack per day)"
+                type="number"
+                value={individualDryingPrice}
+                onChange={(e) => { setIndividualDryingPrice(e.target.value); setIndividualDryingErrors(prev => ({ ...prev, price: undefined })); }}
+                placeholder="Enter price per sack per day"
+                submitted={submitted}
+                error={individualDryingErrors.price?.[0]}
+                step="0.01"
+                required
+              />
+
+              {enteredSacks > 0 && !(parseInt(individualDryingSacks) > remaining) && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs text-blue-700">
+                    <strong>{enteredSacks.toLocaleString()} sacks</strong> ≈ <strong>{parseFloat(proportionalKg).toLocaleString()} kg</strong> will be sent to drying. Days start at <strong>0</strong>.
+                  </p>
+                </div>
+              )}
+            </>
+          );
+        }}
+      </FormModal>
+
+      {/* Batch View Modal */}
+      <Modal
+        isOpen={isBatchViewOpen}
+        onClose={() => setIsBatchViewOpen(false)}
+        title={`Batch Details`}
+        size="xl"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => handleToggleBatchStatus(selectedBatch)}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                selectedBatch?.status === 'Open'
+                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+            >
+              {selectedBatch?.status === 'Open' ? 'Close Batch' : 'Re-open Batch'}
+            </button>
+            <button
+              onClick={() => setIsBatchViewOpen(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
+      >
+        {selectedBatch && (
+          <div className="grid grid-cols-2 gap-4">
+            {/* Left Column */}
+            <div className="space-y-3">
+              {/* Batch ID & Status */}
+              <div className="bg-gradient-to-r from-indigo-50 to-button-50 p-3 rounded-lg border-2 border-indigo-200">
+                <div className="flex items-start gap-2">
+                  <div className="p-2 bg-indigo-500 text-white rounded-lg">
+                    <Layers size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-base font-bold text-gray-800">{selectedBatch.batch_number}</h3>
+                    <p className="text-xs text-gray-600">Batch Number</p>
+                  </div>
+                  <StatusBadge status={selectedBatch.status} />
+                </div>
+              </div>
+
+              {/* Variety */}
+              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+                  <User size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-0.5">Variety</p>
+                  {selectedBatch.variety_name ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: selectedBatch.variety_color || '#6b7280' }}>
+                      {selectedBatch.variety_name}
+                    </span>
+                  ) : <span className="text-gray-400">—</span>}
+                </div>
+              </div>
+
+              {/* Total Cost */}
+              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
+                <div className="p-2 bg-button-500 text-white rounded-lg">
+                  <DollarSign size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-0.5">Total Cost</p>
+                  <p className="text-xl font-bold text-button-600">₱{parseFloat(selectedBatch.total_cost || 0).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {/* Date */}
+              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                  <Calendar size={18} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-0.5">Date Created</p>
+                  <p className="font-semibold text-gray-800 text-sm">
+                    {selectedBatch.created_at ? new Date(selectedBatch.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                  </p>
+                  {selectedBatch.created_at && (
+                    <p className="text-xs text-gray-500">
+                      {new Date(selectedBatch.created_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedBatch.notes && (
+                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
+                    <FileText size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600 mb-0.5">Notes</p>
+                    <p className="text-gray-800 text-sm">{selectedBatch.notes}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-3">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                    <Boxes size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600">Total Sacks</p>
+                    <p className="font-bold text-blue-600 text-lg">{selectedBatch.total_sacks}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                    <Scale size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600">Total Kg</p>
+                    <p className="font-bold text-green-600 text-lg">{parseFloat(selectedBatch.total_kg).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="p-1.5 bg-orange-100 text-orange-600 rounded-lg">
+                    <Boxes size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600">Sacks Left</p>
+                    <p className="font-bold text-orange-600 text-lg">{selectedBatch.remaining_sacks}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
+                    <Package size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600">Items</p>
+                    <p className="font-bold text-purple-600 text-lg">{selectedBatch.procurements_count || procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).length}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Procurements in Batch */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Procurements in this Batch</p>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).length > 0 ? (
+                    procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).map(p => (
+                      <div key={p.id} className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded-lg text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-gray-600">#{String(p.id).padStart(4, '0')}</span>
+                          <span className="text-gray-700">{p.supplier_name}</span>
+                          <StatusBadge status={p.status} />
+                        </div>
+                        <div className="text-right text-xs">
+                          <span className="text-blue-600 font-medium">{p.sacks} sacks</span>
+                          <span className="text-gray-400 mx-1">•</span>
+                          <span className="text-green-600 font-medium">{parseFloat(p.quantity_kg).toLocaleString()} kg</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-400 text-center py-2">No procurements in this batch yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

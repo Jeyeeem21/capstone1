@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardList, User, Calendar, Clock, Filter, Eye, FileText, Package, ShoppingCart, UserCog, Settings, TrendingUp, Monitor } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatsCard, FormModal, useToast } from '../../../components/ui';
+import { DataTable, StatsCard, FormModal, useToast, Skeleton, SkeletonStats, SkeletonTable } from '../../../components/ui';
 
 const AuditTrail = () => {
   const toast = useToast();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Mock audit trail data
   const auditLogs = [
@@ -134,36 +140,45 @@ const AuditTrail = () => {
       />
 
       {/* Stats */}
+      {loading ? (
+        <SkeletonStats count={4} className="mb-2" />
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          title="Today's Activities"
+          label="Today's Activities"
           value={todayLogs}
+          unit="activities today"
           icon={Calendar}
-          trend={8}
-          trendLabel="vs yesterday"
-          color="primary"
+          iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
         />
         <StatsCard
-          title="Created Records"
+          label="Created Records"
           value={createActions}
+          unit="records created"
           icon={FileText}
-          color="green"
+          iconBgColor="bg-gradient-to-br from-green-400 to-green-600"
         />
         <StatsCard
-          title="Updated Records"
+          label="Updated Records"
           value={updateActions}
+          unit="records updated"
           icon={Filter}
-          color="blue"
+          iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
         />
         <StatsCard
-          title="Deleted Records"
+          label="Deleted Records"
           value={deleteActions}
+          unit="records deleted"
           icon={ClipboardList}
-          color="red"
+          iconBgColor="bg-gradient-to-br from-red-400 to-red-600"
         />
       </div>
+      )}
 
       {/* Audit Logs Table */}
+      {loading ? (
+        <SkeletonTable rows={8} columns={7} />
+      ) : (
       <DataTable
         title="Activity Logs"
         subtitle="Complete history of system activities"
@@ -176,7 +191,9 @@ const AuditTrail = () => {
         filterField="action"
         filterOptions={['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT']}
         filterPlaceholder="All Actions"
+        dateFilterField="timestamp"
       />
+      )}
 
       {/* Detail Modal */}
       <FormModal

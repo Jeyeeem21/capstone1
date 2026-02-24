@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   LogOut,
   X,
-  ClipboardList
+  ClipboardList,
+  Sun
 } from 'lucide-react';
 import { Avatar } from '../ui';
 import SidebarMenuItem from './SidebarMenuItem';
@@ -155,6 +156,14 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             isCollapsed={isCollapsed}
           />
 
+          {/* Drying Process */}
+          <SidebarMenuItem
+            icon={Sun}
+            label="Drying"
+            to="/admin/drying"
+            isCollapsed={isCollapsed}
+          />
+
           {/* Processing */}
           <SidebarMenuItem
             icon={Settings2}
@@ -176,7 +185,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
           >
             <SidebarSubMenuItem
               icon={Tag}
-              label="Categories"
+              label="Varieties"
               to="/admin/products/categories"
             />
             <SidebarSubMenuItem
@@ -185,14 +194,6 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
               to="/admin/products/inventory"
             />
           </SidebarMenuItem>
-
-          {/* Sales */}
-          <SidebarMenuItem
-            icon={TrendingUp}
-            label="Sales"
-            to="/admin/sales"
-            isCollapsed={isCollapsed}
-          />
 
           {/* Point of Sale */}
           <SidebarMenuItem
@@ -230,6 +231,14 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             icon={UserCog}
             label="Staff Management"
             to="/admin/staff-management"
+            isCollapsed={isCollapsed}
+          />
+
+          {/* Sales */}
+          <SidebarMenuItem
+            icon={TrendingUp}
+            label="Sales"
+            to="/admin/sales"
             isCollapsed={isCollapsed}
           />
 

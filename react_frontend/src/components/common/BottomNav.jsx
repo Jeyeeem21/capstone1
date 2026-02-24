@@ -47,11 +47,10 @@ const BottomNav = () => {
       hasSubmenu: true,
       submenuId: 'products',
       submenu: [
-        { icon: Tag, label: 'Categories', to: '/admin/products/categories' },
+        { icon: Tag, label: 'Varieties', to: '/admin/products/categories' },
         { icon: Warehouse, label: 'Inventory', to: '/admin/products/inventory' },
       ]
     },
-    { icon: TrendingUp, label: 'Sales', to: '/admin/sales' },
     { icon: Monitor, label: 'POS', to: '/admin/pos' },
     { 
       icon: Users, 
@@ -65,6 +64,7 @@ const BottomNav = () => {
       ]
     },
     { icon: UserCog, label: 'Staff', to: '/admin/staff-management' },
+    { icon: TrendingUp, label: 'Sales', to: '/admin/sales' },
     { icon: ClipboardList, label: 'Audit', to: '/admin/audit-trail' },
     { icon: Settings, label: 'Settings', to: '/admin/settings' },
   ];

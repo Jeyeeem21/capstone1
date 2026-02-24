@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Procurement;
+use App\Models\ProcurementBatch;
 use App\Services\ProcurementService;
+use App\Services\ProcurementBatchService;
 use App\Http\Resources\ProcurementResource;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -14,10 +16,12 @@ class ProcurementController extends Controller
     use ApiResponse;
 
     protected ProcurementService $procurementService;
+    protected ProcurementBatchService $batchService;
 
-    public function __construct(ProcurementService $procurementService)
+    public function __construct(ProcurementService $procurementService, ProcurementBatchService $batchService)
     {
         $this->procurementService = $procurementService;
+        $this->batchService = $batchService;
     }
 
     /**
@@ -41,11 +45,13 @@ class ProcurementController extends Controller
         $validated = $request->validate([
             'supplier_id' => 'nullable|exists:suppliers,id',
             'new_supplier_name' => 'nullable|string|max:255',
+            'variety_id' => 'required|exists:varieties,id',
             'quantity_kg' => 'required|numeric|min:0',
-            'quantity_out' => 'nullable|numeric|min:0',
+            'sacks' => 'required|integer|min:0',
             'price_per_kg' => 'required|numeric|min:0',
-            'description' => 'nullable|string',
-            'status' => 'required|in:Pending,Completed,Cancelled',
+            'description' => 'required|string',
+            'status' => 'required|in:Pending,Drying,Dried,Completed,Cancelled',
+            'batch_id' => 'nullable|integer|exists:procurement_batches,id',
         ], [
             'quantity_kg.required' => 'Quantity is required.',
             'price_per_kg.required' => 'Price per kg is required.',
@@ -60,6 +66,24 @@ class ProcurementController extends Controller
         unset($validated['new_supplier_name']);
 
         $procurement = $this->procurementService->createProcurement($validated, $newSupplierName);
+
+        // If batch_id is set, validate variety match + batch status and recalculate totals
+        if (!empty($validated['batch_id'])) {
+            $batch = ProcurementBatch::findOrFail($validated['batch_id']);
+
+            if ($batch->status === ProcurementBatch::STATUS_COMPLETED) {
+                return $this->errorResponse("Batch {$batch->batch_number} is Completed. Cannot add procurements.", 422);
+            }
+
+            if ((int) $validated['variety_id'] !== (int) $batch->variety_id) {
+                // Rollback: remove batch_id from the just-created procurement
+                $procurement->update(['batch_id' => null]);
+                return $this->errorResponse('Procurement variety does not match batch variety.', 422);
+            }
+
+            $batch->recalculateTotals();
+            $this->batchService->clearCache();
+        }
 
         return $this->successResponse(
             new ProcurementResource($procurement),
@@ -94,18 +118,61 @@ class ProcurementController extends Controller
         
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
+            'variety_id' => 'required|exists:varieties,id',
             'quantity_kg' => 'required|numeric|min:0',
-            'quantity_out' => 'nullable|numeric|min:0',
+            'sacks' => 'required|integer|min:0',
             'price_per_kg' => 'required|numeric|min:0',
-            'description' => 'nullable|string',
-            'status' => 'required|in:Pending,Completed,Cancelled',
+            'description' => 'required|string',
+            'status' => 'required|in:Pending,Drying,Dried,Completed,Cancelled',
+            'batch_id' => 'nullable|integer|exists:procurement_batches,id',
         ], [
             'supplier_id.required' => 'Supplier is required.',
             'quantity_kg.required' => 'Quantity is required.',
             'price_per_kg.required' => 'Price per kg is required.',
         ]);
 
+        // Block variety change if procurement belongs to a batch
+        if ($procurement->batch_id && isset($validated['variety_id'])) {
+            $batch = ProcurementBatch::find($procurement->batch_id);
+            if ($batch && (int) $validated['variety_id'] !== (int) $batch->variety_id) {
+                return $this->errorResponse('Cannot change variety — procurement is assigned to batch ' . $batch->batch_number . ' which requires variety match.', 422);
+            }
+        }
+
+        // If batch_id is changing, validate the new batch
+        if (isset($validated['batch_id']) && $validated['batch_id'] != $procurement->batch_id) {
+            if ($validated['batch_id']) {
+                $newBatch = ProcurementBatch::findOrFail($validated['batch_id']);
+                if ($newBatch->status !== ProcurementBatch::STATUS_OPEN) {
+                    return $this->errorResponse("Batch {$newBatch->batch_number} is {$newBatch->status}. Cannot add procurements.", 422);
+                }
+                if ((int) ($validated['variety_id'] ?? $procurement->variety_id) !== (int) $newBatch->variety_id) {
+                    return $this->errorResponse('Procurement variety does not match target batch variety.', 422);
+                }
+            }
+        }
+
+        $oldBatchId = $procurement->batch_id;
+
         $procurement = $this->procurementService->updateProcurement($procurement, $validated);
+
+        // Recalculate batch totals if batch changed
+        if (isset($validated['batch_id'])) {
+            if ($oldBatchId && $oldBatchId != ($validated['batch_id'] ?? null)) {
+                $oldBatch = ProcurementBatch::find($oldBatchId);
+                $oldBatch?->recalculateTotals();
+            }
+            if ($validated['batch_id']) {
+                $newBatch = ProcurementBatch::find($validated['batch_id']);
+                $newBatch?->recalculateTotals();
+            }
+            $this->batchService->clearCache();
+        } elseif ($procurement->batch_id) {
+            // Quantity/sacks may have changed, recalculate batch
+            $batch = ProcurementBatch::find($procurement->batch_id);
+            $batch?->recalculateTotals();
+            $this->batchService->clearCache();
+        }
 
         return $this->successResponse(
             new ProcurementResource($procurement),

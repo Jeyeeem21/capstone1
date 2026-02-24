@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Processing;
 use App\Models\Procurement;
+use App\Models\DryingProcess;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Collection;
@@ -26,8 +27,20 @@ class ProcessingService
     public function getAllProcessings(): Collection
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Processing::with(['procurement:id,supplier_id,quantity_kg,quantity_out', 'procurement.supplier:id,name'])
-                ->select(['id', 'procurement_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
+            return Processing::with([
+                    'procurement:id,supplier_id,quantity_kg,sacks', 
+                    'procurement.supplier:id,name',
+                    'dryingProcess:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status',
+                    'dryingProcess.procurement:id,supplier_id',
+                    'dryingProcess.procurement.supplier:id,name',
+                    'dryingProcess.batch:id,batch_number',
+                    'dryingSources:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status',
+                    'dryingSources.procurement:id,supplier_id',
+                    'dryingSources.procurement.supplier:id,name',
+                    'dryingSources.batch:id,batch_number,variety_id',
+                    'dryingSources.batch.variety:id,name,color',
+                ])
+                ->select(['id', 'procurement_id', 'drying_process_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
                 ->orderBy('created_at', 'desc')
                 ->get();
         });
@@ -39,8 +52,20 @@ class ProcessingService
     public function getActiveProcessings(): Collection
     {
         return Cache::remember(self::CACHE_KEY_ACTIVE, self::CACHE_TTL, function () {
-            return Processing::with(['procurement:id,supplier_id,quantity_kg,quantity_out', 'procurement.supplier:id,name'])
-                ->select(['id', 'procurement_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
+            return Processing::with([
+                    'procurement:id,supplier_id,quantity_kg,sacks', 
+                    'procurement.supplier:id,name',
+                    'dryingProcess:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status',
+                    'dryingProcess.procurement:id,supplier_id',
+                    'dryingProcess.procurement.supplier:id,name',
+                    'dryingProcess.batch:id,batch_number',
+                    'dryingSources:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status',
+                    'dryingSources.procurement:id,supplier_id',
+                    'dryingSources.procurement.supplier:id,name',
+                    'dryingSources.batch:id,batch_number,variety_id',
+                    'dryingSources.batch.variety:id,name,color',
+                ])
+                ->select(['id', 'procurement_id', 'drying_process_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
                 ->active()
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -53,8 +78,20 @@ class ProcessingService
     public function getCompletedProcessings(): Collection
     {
         return Cache::remember(self::CACHE_KEY_COMPLETED, self::CACHE_TTL, function () {
-            return Processing::with(['procurement:id,supplier_id,quantity_kg,quantity_out', 'procurement.supplier:id,name'])
-                ->select(['id', 'procurement_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
+            return Processing::with([
+                    'procurement:id,supplier_id,quantity_kg,sacks', 
+                    'procurement.supplier:id,name',
+                    'dryingProcess:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status',
+                    'dryingProcess.procurement:id,supplier_id',
+                    'dryingProcess.procurement.supplier:id,name',
+                    'dryingProcess.batch:id,batch_number',
+                    'dryingSources:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status',
+                    'dryingSources.procurement:id,supplier_id',
+                    'dryingSources.procurement.supplier:id,name',
+                    'dryingSources.batch:id,batch_number,variety_id',
+                    'dryingSources.batch.variety:id,name,color',
+                ])
+                ->select(['id', 'procurement_id', 'drying_process_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
                 ->completed()
                 ->orderBy('completed_date', 'desc')
                 ->get();
@@ -71,29 +108,69 @@ class ProcessingService
 
     /**
      * Create a new processing record
-     * Also updates procurement's quantity_out to track what's been sent to processing
+     * Supports multiple drying sources via drying_process_ids array
+     * Input kg is split proportionally across sources
      */
     public function createProcessing(array $data): Processing
     {
         return DB::transaction(function () use ($data) {
+            $dryingProcessIds = $data['drying_process_ids'] ?? [];
+            $singleDryingId = $data['drying_process_id'] ?? null;
+            $procurementId = $data['procurement_id'] ?? null;
+            $inputKg = (float) $data['input_kg'];
+
+            // Legacy: if single drying_process_id provided but no array
+            if (empty($dryingProcessIds) && $singleDryingId) {
+                $dryingProcessIds = [$singleDryingId];
+            }
+
+            // Get procurement_id from first drying source
+            $primaryDryingId = $dryingProcessIds[0] ?? null;
+            if ($primaryDryingId) {
+                $drying = DryingProcess::find($primaryDryingId);
+                if ($drying) {
+                    $procurementId = $drying->procurement_id;
+                }
+            }
+
             $processing = Processing::create([
-                'procurement_id' => $data['procurement_id'] ?? null,
-                'input_kg' => $data['input_kg'],
+                'procurement_id' => $procurementId,
+                'drying_process_id' => $primaryDryingId, // Keep first source for backward compat
+                'input_kg' => $inputKg,
                 'operator_name' => $data['operator_name'] ?? null,
                 'status' => Processing::STATUS_PENDING,
                 'processing_date' => $data['processing_date'] ?? now()->toDateString(),
             ]);
-            
-            // Update procurement's quantity_out if linked to a procurement
-            if ($processing->procurement_id) {
-                $procurement = Procurement::find($processing->procurement_id);
-                if ($procurement) {
-                    $procurement->increment('quantity_out', $data['input_kg']);
+
+            // Calculate proportional split across sources and populate pivot
+            if (!empty($dryingProcessIds)) {
+                $sources = DryingProcess::whereIn('id', $dryingProcessIds)->get();
+                $totalAvailable = $sources->sum(fn($s) => (float)$s->quantity_kg - (float)$s->quantity_out);
+
+                $pivotData = [];
+                $allocatedSoFar = 0;
+
+                foreach ($sources as $i => $source) {
+                    $remaining = (float)$source->quantity_kg - (float)$source->quantity_out;
+                    
+                    // Last source gets the remainder to avoid rounding issues
+                    if ($i === $sources->count() - 1) {
+                        $share = round($inputKg - $allocatedSoFar, 2);
+                    } else {
+                        $proportion = $totalAvailable > 0 ? $remaining / $totalAvailable : 1 / $sources->count();
+                        $share = round($inputKg * $proportion, 2);
+                    }
+                    $allocatedSoFar += $share;
+
+                    $pivotData[$source->id] = ['quantity_kg' => $share];
+                    $source->increment('quantity_out', $share);
                 }
+
+                $processing->dryingSources()->attach($pivotData);
             }
-            
+
             $this->clearCache();
-            return $processing->load('procurement.supplier');
+            return $processing->load(['procurement.supplier', 'dryingProcess', 'dryingSources.batch.variety', 'dryingSources.procurement.supplier']);
         });
     }
 
@@ -106,18 +183,46 @@ class ProcessingService
             $oldInputKg = (float)$processing->input_kg;
             $newInputKg = isset($data['input_kg']) ? (float)$data['input_kg'] : $oldInputKg;
             
-            // If input_kg changed and linked to procurement, update quantity_out
-            if ($processing->procurement_id && $oldInputKg !== $newInputKg) {
-                $difference = $newInputKg - $oldInputKg;
-                $procurement = Procurement::find($processing->procurement_id);
-                if ($procurement) {
-                    $procurement->increment('quantity_out', $difference);
+            // If input_kg changed, update quantity_out on all linked drying sources
+            if ($oldInputKg !== $newInputKg) {
+                $pivotSources = $processing->dryingSources;
+                if ($pivotSources->isNotEmpty()) {
+                    // Recalculate proportional splits
+                    $totalAvailable = $pivotSources->sum(fn($s) => (float)$s->quantity_kg - (float)$s->quantity_out + (float)$s->pivot->quantity_kg);
+                    $allocatedSoFar = 0;
+                    $pivotData = [];
+
+                    foreach ($pivotSources as $i => $source) {
+                        $oldShare = (float) $source->pivot->quantity_kg;
+                        // Reverse old share
+                        $source->decrement('quantity_out', $oldShare);
+                        $remaining = (float)$source->quantity_kg - (float)$source->quantity_out;
+                        
+                        if ($i === $pivotSources->count() - 1) {
+                            $newShare = round($newInputKg - $allocatedSoFar, 2);
+                        } else {
+                            $proportion = $totalAvailable > 0 ? $remaining / $totalAvailable : 1 / $pivotSources->count();
+                            $newShare = round($newInputKg * $proportion, 2);
+                        }
+                        $allocatedSoFar += $newShare;
+
+                        $source->increment('quantity_out', $newShare);
+                        $pivotData[$source->id] = ['quantity_kg' => $newShare];
+                    }
+                    $processing->dryingSources()->sync($pivotData);
+                } elseif ($processing->drying_process_id) {
+                    // Legacy single source
+                    $difference = $newInputKg - $oldInputKg;
+                    $drying = DryingProcess::find($processing->drying_process_id);
+                    if ($drying) {
+                        $drying->increment('quantity_out', $difference);
+                    }
                 }
             }
             
             $processing->update($data);
             $this->clearCache();
-            return $processing->fresh()->load('procurement.supplier');
+            return $processing->fresh()->load(['procurement.supplier', 'dryingProcess', 'dryingSources.batch.variety', 'dryingSources.procurement.supplier']);
         });
     }
 
@@ -180,16 +285,23 @@ class ProcessingService
 
     /**
      * Delete a processing (soft delete)
-     * Returns the input_kg back to procurement's quantity_out
+     * Returns the input_kg back to all linked drying sources
      */
     public function deleteProcessing(Processing $processing): bool
     {
         return DB::transaction(function () use ($processing) {
-            // Return input_kg to procurement if linked
-            if ($processing->procurement_id) {
-                $procurement = Procurement::find($processing->procurement_id);
-                if ($procurement) {
-                    $procurement->decrement('quantity_out', (float)$processing->input_kg);
+            // Return quantity to all pivot drying sources
+            $pivotSources = $processing->dryingSources;
+            if ($pivotSources->isNotEmpty()) {
+                foreach ($pivotSources as $source) {
+                    $source->decrement('quantity_out', (float)$source->pivot->quantity_kg);
+                }
+                $processing->dryingSources()->detach();
+            } elseif ($processing->drying_process_id) {
+                // Legacy single source
+                $drying = DryingProcess::find($processing->drying_process_id);
+                if ($drying) {
+                    $drying->decrement('quantity_out', (float)$processing->input_kg);
                 }
             }
             
@@ -207,8 +319,9 @@ class ProcessingService
         Cache::forget(self::CACHE_KEY);
         Cache::forget(self::CACHE_KEY_ACTIVE);
         Cache::forget(self::CACHE_KEY_COMPLETED);
-        // Also clear procurement cache since processing affects quantity_out
+        // Also clear related caches since processing affects quantity_out
         Cache::forget('procurements_all');
+        Cache::forget('drying_processes_all');
     }
 
     /**

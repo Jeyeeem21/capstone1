@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Processing extends Model
 {
@@ -12,6 +13,7 @@ class Processing extends Model
 
     protected $fillable = [
         'procurement_id',
+        'drying_process_id',
         'input_kg',
         'output_kg',
         'stock_out',
@@ -46,6 +48,25 @@ class Processing extends Model
     public function procurement(): BelongsTo
     {
         return $this->belongsTo(Procurement::class);
+    }
+
+    /**
+     * Get the drying process that this processing is from (legacy single source)
+     */
+    public function dryingProcess(): BelongsTo
+    {
+        return $this->belongsTo(DryingProcess::class);
+    }
+
+    /**
+     * Get all drying sources for this processing (multi-source support)
+     * Each pivot row stores quantity_kg taken from that source
+     */
+    public function dryingSources(): BelongsToMany
+    {
+        return $this->belongsToMany(DryingProcess::class, 'processing_drying_sources')
+            ->withPivot('quantity_kg')
+            ->withTimestamps();
     }
 
     /**

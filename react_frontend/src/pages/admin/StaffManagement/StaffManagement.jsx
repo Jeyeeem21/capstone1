@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { UserCog, Shield, Users, CheckCircle, XCircle, Briefcase, Trash2 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, useToast } from '../../../components/ui';
+import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 
 const StaffManagement = () => {
   const toast = useToast();
@@ -10,6 +10,12 @@ const StaffManagement = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({ name: '', role: '', email: '', phone: '', dateHired: '', status: 'Active' });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   const staff = [
     { id: 1, name: 'John Smith', role: 'Manager', email: 'john@kjp.com', phone: '+63 912 123 4567', dateHired: '2023-01-15', status: 'Active' },
@@ -109,14 +115,22 @@ const StaffManagement = () => {
       <PageHeader title="Staff Management" description="Manage your team members and their access levels" icon={UserCog} />
 
       {/* Stats Cards */}
+      {loading ? (
+        <SkeletonStats count={4} className="mb-6" />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatsCard label="Total Staff" value={totalStaff} unit="employees" icon={Users} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
         <StatsCard label="Active" value={activeStaff} unit="employees" icon={CheckCircle} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
         <StatsCard label="Inactive" value={inactiveStaff} unit="employees" icon={XCircle} iconBgColor="bg-gradient-to-br from-red-400 to-red-600" />
         <StatsCard label="Roles" value={totalRoles} unit="positions" icon={Briefcase} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
       </div>
+      )}
 
-      <DataTable title="Staff Records" subtitle="Manage all staff members" columns={columns} data={staff} searchPlaceholder="Search staff..." filterField="role" filterPlaceholder="All Roles" onAdd={handleAdd} addLabel="Add Staff" />
+      {loading ? (
+        <SkeletonTable rows={8} columns={7} />
+      ) : (
+      <DataTable title="Staff Records" subtitle="Manage all staff members" columns={columns} data={staff} searchPlaceholder="Search staff..." filterField="role" filterPlaceholder="All Roles" dateFilterField="dateHired" onAdd={handleAdd} addLabel="Add Staff" />
+      )}
 
       {/* Modals */}
       <FormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSubmit} title="Add New Staff Member" submitText="Add Staff" size="lg">

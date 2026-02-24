@@ -32,7 +32,7 @@ export const ENDPOINTS = {
   PRODUCTS: {
     BASE: '/products',
     FEATURED: '/products/featured',
-    CATEGORIES: '/products/categories',
+    CATEGORIES: '/varieties',
     BY_ID: (id) => `/products/${id}`,
   },
   

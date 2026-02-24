@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Settings2, Package, CheckCircle, TrendingUp, FileText, Trash2, Eye, Calendar, Hash, Scale, Activity, Play, User, Percent, Layers, RotateCcw, ArrowDown } from 'lucide-react';
+import { Settings2, Package, CheckCircle, TrendingUp, FileText, Trash2, Eye, Calendar, Hash, Scale, Activity, Play, User, Percent, Layers, RotateCcw, ArrowDown, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, useToast, Modal, Button, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -8,7 +8,7 @@ import { useDataFetch, invalidateCache } from '../../../hooks';
 const CACHE_KEY = '/processings';
 const ACTIVE_CACHE_KEY = '/processings/active';
 const COMPLETED_CACHE_KEY = '/processings/completed';
-const PROCUREMENTS_CACHE_KEY = '/procurements';
+const DRYING_CACHE_KEY = '/drying-processes';
 
 const Processing = () => {
   const toast = useToast();
@@ -21,11 +21,12 @@ const Processing = () => {
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({ 
-    procurement_id: '', 
+    drying_process_id: '', 
     input_kg: '', 
     operator_name: '', 
     processing_date: new Date().toISOString().split('T')[0]
   });
+  const [selectedDryingIds, setSelectedDryingIds] = useState([]); // Multi-select drying sources
   const [completeFormData, setCompleteFormData] = useState({
     output_kg: '',
     husk_kg: 0,
@@ -55,9 +56,9 @@ const Processing = () => {
     initialData: [],
   });
 
-  // Fetch procurements for dropdown (lightweight)
-  const { data: procurements, refetch: refetchProcurements } = useDataFetch('/procurements', {
-    cacheKey: PROCUREMENTS_CACHE_KEY,
+  // Fetch drying processes for dropdown
+  const { data: dryingProcesses, refetch: refetchDrying } = useDataFetch('/drying-processes', {
+    cacheKey: DRYING_CACHE_KEY,
     initialData: [],
   });
 
@@ -68,41 +69,120 @@ const Processing = () => {
   // Combine all records for stats - memoized
   const allProcessings = useMemo(() => [...activeProcessings, ...completedProcessings], [activeProcessings, completedProcessings]);
 
-  // Convert procurements to options - memoized
-  // When editing, include the current procurement even if remaining is 0
-  const procurementOptions = useMemo(() => {
-    const currentProcurementId = selectedItem?.procurement_id ? String(selectedItem.procurement_id) : null;
+  // Convert drying processes to options - memoized
+  // Only show Dried items with remaining quantity
+  // State for dropdown selection in Add modal
+  const [pendingDryingId, setPendingDryingId] = useState('');
+
+  const dryingOptions = useMemo(() => {
+    const currentDryingId = selectedItem?.drying_process_id ? String(selectedItem.drying_process_id) : null;
     const currentInputKg = selectedItem?.input_kg ? parseFloat(selectedItem.input_kg) : 0;
     
-    const options = procurements
-      .filter(p => {
-        const remaining = parseFloat(p.quantity_kg) - parseFloat(p.quantity_out || 0);
-        // Exclude cancelled procurements
-        // Include if has remaining OR if it's the currently selected procurement (for editing)
-        return p.status !== 'Cancelled' && (remaining > 0 || String(p.id) === currentProcurementId);
+    const options = dryingProcesses
+      .filter(d => {
+        const remaining = parseFloat(d.quantity_kg) - parseFloat(d.quantity_out || 0);
+        return d.status === 'Dried' && (remaining > 0 || String(d.id) === currentDryingId);
       })
-      .map(p => {
-        let remaining = parseFloat(p.quantity_kg) - parseFloat(p.quantity_out || 0);
-        // If editing and this is the current procurement, add back the input_kg to show correct available
-        if (String(p.id) === currentProcurementId && isEditModalOpen) {
+      .map(d => {
+        let remaining = parseFloat(d.quantity_kg) - parseFloat(d.quantity_out || 0);
+        if (String(d.id) === currentDryingId && isEditModalOpen) {
           remaining += currentInputKg;
         }
+        // Get variety name from batch or procurement - use Drying ID as fallback
+        const varietyName = d.batch_variety_name || d.procurement_info?.variety_name || `Drying #${String(d.id).padStart(4, '0')}`;
+        const batchNumber = d.batch_number || null;
         return { 
-          value: String(p.id), 
-          label: `#${String(p.id).padStart(4, '0')} - ${p.supplier_name} (${remaining.toLocaleString()} kg available)` 
+          value: String(d.id), 
+          label: batchNumber ? `${varietyName} (${batchNumber}) — ${remaining.toLocaleString()} kg` : `${varietyName} — ${remaining.toLocaleString()} kg`,
+          remaining: remaining,
+          varietyName: varietyName,
+          batchNumber: batchNumber,
         };
       });
     return options;
-  }, [procurements, selectedItem, isEditModalOpen]);
+  }, [dryingProcesses, selectedItem, isEditModalOpen]);
+
+  // Grouped drying options for Add modal — combines same-batch items into one option
+  const groupedDryingOptions = useMemo(() => {
+    const driedItems = dryingProcesses
+      .filter(d => {
+        const remaining = parseFloat(d.quantity_kg) - parseFloat(d.quantity_out || 0);
+        return d.status === 'Dried' && remaining > 0;
+      })
+      .map(d => {
+        const remaining = parseFloat(d.quantity_kg) - parseFloat(d.quantity_out || 0);
+        const varietyName = d.batch_variety_name || d.procurement_info?.variety_name || `Drying #${String(d.id).padStart(4, '0')}`;
+        const batchNumber = d.batch_number || null;
+        const batchId = d.batch_id || null;
+        const driedAt = d.dried_at ? new Date(d.dried_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+        return { id: String(d.id), remaining, varietyName, batchNumber, batchId, driedAt };
+      });
+
+    // Group by batch_id (non-null batch items get combined)
+    const batchGroups = {};
+    const standaloneItems = [];
+
+    driedItems.forEach(item => {
+      if (item.batchId) {
+        if (!batchGroups[item.batchId]) {
+          batchGroups[item.batchId] = {
+            batchId: item.batchId,
+            batchNumber: item.batchNumber,
+            varietyName: item.varietyName,
+            dryingIds: [],
+            totalRemaining: 0,
+            sourceCount: 0,
+          };
+        }
+        batchGroups[item.batchId].dryingIds.push(item.id);
+        batchGroups[item.batchId].totalRemaining += item.remaining;
+        batchGroups[item.batchId].sourceCount += 1;
+      } else {
+        standaloneItems.push(item);
+      }
+    });
+
+    const options = [];
+
+    // Add batch groups as single options
+    Object.values(batchGroups).forEach(group => {
+      options.push({
+        value: `batch-${group.batchId}`,
+        label: `${group.varietyName} (${group.batchNumber}) — ${group.totalRemaining.toLocaleString()} kg`,
+        remaining: group.totalRemaining,
+        varietyName: group.varietyName,
+        batchNumber: group.batchNumber,
+        dryingIds: group.dryingIds,
+        sourceCount: group.sourceCount,
+      });
+    });
+
+    // Add standalone items individually (with dried date for distinction)
+    standaloneItems.forEach(item => {
+      const dateStr = item.driedAt ? ` · Dried ${item.driedAt}` : '';
+      options.push({
+        value: `single-${item.id}`,
+        label: `${item.varietyName} — ${item.remaining.toLocaleString()} kg${dateStr}`,
+        remaining: item.remaining,
+        varietyName: item.varietyName,
+        batchNumber: null,
+        dryingIds: [item.id],
+        driedAt: item.driedAt,
+        sourceCount: 1,
+      });
+    });
+
+    return options;
+  }, [dryingProcesses]);
 
   // Fast invalidate and parallel refetch - includes procurements for qty_out sync
   const invalidateAndRefetch = useCallback(async () => {
     invalidateCache(CACHE_KEY);
     invalidateCache(ACTIVE_CACHE_KEY);
     invalidateCache(COMPLETED_CACHE_KEY);
-    invalidateCache(PROCUREMENTS_CACHE_KEY);
-    await Promise.all([refetchActive(), refetchCompleted(), refetchProcurements()]);
-  }, [refetchActive, refetchCompleted, refetchProcurements]);
+    invalidateCache(DRYING_CACHE_KEY);
+    await Promise.all([refetchActive(), refetchCompleted(), refetchDrying()]);
+  }, [refetchActive, refetchCompleted, refetchDrying]);
 
   const handleView = useCallback((item) => {
     setSelectedItem(item);
@@ -111,15 +191,17 @@ const Processing = () => {
 
   const handleAdd = useCallback(() => {
     setFormData({ 
-      procurement_id: '', 
+      drying_process_id: '', 
       input_kg: '', 
       operator_name: '', 
       processing_date: new Date().toISOString().split('T')[0]
     });
+    setSelectedDryingIds([]);
+    setPendingDryingId('');
     setErrors({});
-    refetchProcurements(); // Refresh procurement list
+    refetchDrying();
     setIsAddModalOpen(true);
-  }, [refetchProcurements]);
+  }, [refetchDrying]);
 
   const handleEdit = useCallback((item) => {
     // Only allow editing Pending items
@@ -129,15 +211,15 @@ const Processing = () => {
     }
     setSelectedItem(item);
     setFormData({ 
-      procurement_id: item.procurement_id ? String(item.procurement_id) : '', 
+      drying_process_id: item.drying_process_id ? String(item.drying_process_id) : '', 
       input_kg: String(item.input_kg), 
       operator_name: item.operator_name || '', 
       processing_date: item.processing_date || new Date().toISOString().split('T')[0]
     });
     setErrors({});
-    refetchProcurements(); // Refresh procurement list for edit
+    refetchDrying();
     setIsEditModalOpen(true);
-  }, [toast, refetchProcurements]);
+  }, [toast, refetchDrying]);
 
   const handleDelete = useCallback((item) => {
     // Only allow deleting Pending items
@@ -266,24 +348,35 @@ const Processing = () => {
   // Submit add form - close modal first, then refetch and toast together
   const handleAddSubmit = async () => {
     if (saving) return; // Prevent double submit
+    
+    // Validation
+    if (selectedDryingIds.length === 0) {
+      toast.error('Required', 'Please select at least one drying source.');
+      throw new Error('No drying source selected');
+    }
+    if (!formData.processing_date) {
+      toast.error('Required', 'Please select a processing date.');
+      throw new Error('Processing date required');
+    }
+    
     setSaving(true);
     try {
       setErrors({});
+      
+      // Send all drying sources in ONE request — backend creates ONE record
       const submitData = {
-        procurement_id: formData.procurement_id || null,
+        drying_process_ids: selectedDryingIds,
         input_kg: parseFloat(formData.input_kg),
         operator_name: formData.operator_name || null,
-        processing_date: formData.processing_date || null,
+        processing_date: formData.processing_date,
       };
 
       const response = await apiClient.post('/processings', submitData);
       
       if (response.success && response.data) {
-        // Close modal first
         setIsAddModalOpen(false);
-        // Refetch and toast together
         invalidateAndRefetch().then(() => {
-          toast.success('Processing Created', 'New processing record has been created.');
+          toast.success('Processing Created', 'Processing record has been created.');
         });
         return;
       } else {
@@ -312,7 +405,7 @@ const Processing = () => {
     try {
       setErrors({});
       const submitData = {
-        procurement_id: formData.procurement_id || null,
+        drying_process_id: formData.drying_process_id || null,
         input_kg: parseFloat(formData.input_kg),
         operator_name: formData.operator_name || null,
         processing_date: formData.processing_date || null,
@@ -550,13 +643,46 @@ const Processing = () => {
       cell: (row) => <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
     },
     { 
-      header: 'Procurement', 
-      accessor: 'procurement_info',
-      cell: (row) => row.procurement_info ? (
-        <span className="text-sm">
-          #{String(row.procurement_id).padStart(4, '0')} - {row.procurement_info.supplier_name}
-        </span>
-      ) : <span className="text-gray-400 text-sm">Manual input</span>
+      header: 'Drying Source', 
+      accessor: 'drying_process_info',
+      cell: (row) => {
+        const sources = row.drying_sources;
+        if (sources && sources.length > 0) {
+          return (
+            <div className="text-sm">
+              {sources.length === 1 ? (
+                <>
+                  <span>{sources[0].variety_name || sources[0].supplier_name}</span>
+                  {sources[0].batch_number && (
+                    <span className="block text-xs text-indigo-600 font-medium">{sources[0].batch_number}</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="font-medium">{sources.length} sources</span>
+                  {sources.map((s, i) => (
+                    <span key={i} className="block text-xs text-indigo-600">
+                      {s.variety_name || s.supplier_name}{s.batch_number ? ` (${s.batch_number})` : ''} — {s.quantity_kg_taken.toLocaleString()} kg
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        }
+        if (row.drying_process_info) return (
+          <div className="text-sm">
+            <span>Drying #{String(row.drying_process_id).padStart(4, '0')} - {row.drying_process_info.supplier_name}</span>
+            {row.drying_process_info.batch_number && (
+              <span className="block text-xs text-indigo-600 font-medium">{row.drying_process_info.batch_number}</span>
+            )}
+          </div>
+        );
+        if (row.procurement_info) return (
+          <span className="text-sm">Proc #{String(row.procurement_id).padStart(4, '0')} - {row.procurement_info.supplier_name}</span>
+        );
+        return <span className="text-gray-400 text-sm">Manual input</span>;
+      }
     },
     { 
       header: 'Input (kg)', 
@@ -564,8 +690,8 @@ const Processing = () => {
       cell: (row) => <span className="font-semibold text-blue-600">{parseFloat(row.input_kg).toLocaleString()}</span>
     },
     { header: 'Operator', accessor: 'operator_name', cell: (row) => row.operator_name || '-' },
-    { header: 'Date', accessor: 'processing_date', cell: (row) => row.processing_date || '-' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
+    { header: 'Date', accessor: 'processing_date', cell: (row) => row.processing_date || '-' },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
       <div className="flex items-center gap-1">
         {row.status === 'Pending' && (
@@ -605,13 +731,46 @@ const Processing = () => {
       cell: (row) => <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
     },
     { 
-      header: 'Procurement', 
-      accessor: 'procurement_info',
-      cell: (row) => row.procurement_info ? (
-        <span className="text-sm">
-          #{String(row.procurement_id).padStart(4, '0')} - {row.procurement_info.supplier_name}
-        </span>
-      ) : <span className="text-gray-400 text-sm">Manual input</span>
+      header: 'Drying Source', 
+      accessor: 'drying_process_info',
+      cell: (row) => {
+        const sources = row.drying_sources;
+        if (sources && sources.length > 0) {
+          return (
+            <div className="text-sm">
+              {sources.length === 1 ? (
+                <>
+                  <span>{sources[0].variety_name || sources[0].supplier_name}</span>
+                  {sources[0].batch_number && (
+                    <span className="block text-xs text-indigo-600 font-medium">{sources[0].batch_number}</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="font-medium">{sources.length} sources</span>
+                  {sources.map((s, i) => (
+                    <span key={i} className="block text-xs text-indigo-600">
+                      {s.variety_name || s.supplier_name}{s.batch_number ? ` (${s.batch_number})` : ''} — {s.quantity_kg_taken.toLocaleString()} kg
+                    </span>
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        }
+        if (row.drying_process_info) return (
+          <div className="text-sm">
+            <span>Drying #{String(row.drying_process_id).padStart(4, '0')} - {row.drying_process_info.supplier_name}</span>
+            {row.drying_process_info.batch_number && (
+              <span className="block text-xs text-indigo-600 font-medium">{row.drying_process_info.batch_number}</span>
+            )}
+          </div>
+        );
+        if (row.procurement_info) return (
+          <span className="text-sm">Proc #{String(row.procurement_id).padStart(4, '0')} - {row.procurement_info.supplier_name}</span>
+        );
+        return <span className="text-gray-400 text-sm">Manual input</span>;
+      }
     },
     { 
       header: 'Input (kg)', 
@@ -757,6 +916,7 @@ const Processing = () => {
               outerRadius={62}
               showLegend={true}
               horizontalLegend={true}
+              valueUnit=""
             />
           </div>
         </div>
@@ -775,6 +935,7 @@ const Processing = () => {
             searchPlaceholder="Search records..." 
             filterField="status" 
             filterPlaceholder="All Status"
+            dateFilterField="processing_date"
             onAdd={handleAdd}
             addLabel="New Processing"
             onRowDoubleClick={handleView}
@@ -792,6 +953,7 @@ const Processing = () => {
           columns={completedColumns} 
           data={completedProcessings} 
           searchPlaceholder="Search completed..." 
+          dateFilterField="completed_date"
           onRowDoubleClick={handleView}
         />
       )}
@@ -805,9 +967,19 @@ const Processing = () => {
               <div>
                 <h3 className="text-lg font-bold text-gray-800">Processing #{String(selectedItem.id).padStart(4, '0')}</h3>
                 <p className="text-xs text-gray-500">
-                  {selectedItem.procurement_info 
-                    ? `Linked to Procurement #${String(selectedItem.procurement_id).padStart(4, '0')}` 
-                    : 'Manual input record'}
+                  {selectedItem.drying_sources && selectedItem.drying_sources.length > 1
+                    ? `From ${selectedItem.drying_sources.length} drying sources`
+                    : selectedItem.drying_sources && selectedItem.drying_sources.length === 1
+                      ? selectedItem.drying_sources[0].batch_number
+                        ? `From ${selectedItem.drying_sources[0].batch_number} — ${selectedItem.drying_sources[0].variety_name || selectedItem.drying_sources[0].supplier_name}`
+                        : `From ${selectedItem.drying_sources[0].variety_name || selectedItem.drying_sources[0].supplier_name}`
+                    : selectedItem.drying_process_info 
+                      ? selectedItem.drying_process_info.batch_number
+                        ? `From ${selectedItem.drying_process_info.batch_number} (Drying #${String(selectedItem.drying_process_id).padStart(4, '0')})`
+                        : `From Drying #${String(selectedItem.drying_process_id).padStart(4, '0')} - ${selectedItem.drying_process_info.supplier_name}`
+                      : selectedItem.procurement_info
+                        ? `Linked to Procurement #${String(selectedItem.procurement_id).padStart(4, '0')}`
+                        : 'Manual input record'}
                 </p>
               </div>
               <StatusBadge status={selectedItem.status} />
@@ -819,11 +991,32 @@ const Processing = () => {
               <ViewDetailItem icon={Calendar} label="Processing Date" value={selectedItem.processing_date || 'Not set'} iconColor="text-blue-500" compact />
               <ViewDetailItem icon={Scale} label="Input (kg)" value={`${parseFloat(selectedItem.input_kg).toLocaleString()} kg`} iconColor="text-blue-500" compact />
               <ViewDetailItem icon={User} label="Operator" value={selectedItem.operator_name || 'Not assigned'} iconColor="text-purple-500" compact />
+
+              {/* Multi-source drying info */}
+              {selectedItem.drying_sources && selectedItem.drying_sources.length > 0 && (
+                <div className="col-span-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1"><Layers className="w-3 h-3" /> Drying Sources ({selectedItem.drying_sources.length})</p>
+                  {selectedItem.drying_sources.map((s, i) => (
+                    <p key={i} className="text-xs text-gray-700">
+                      {s.variety_name || s.supplier_name}
+                      {s.batch_number && <span className="text-indigo-600"> ({s.batch_number})</span>}
+                      <span className="text-green-600 font-medium"> — {s.quantity_kg_taken.toLocaleString()} kg</span>
+                    </p>
+                  ))}
+                </div>
+              )}
               
-              {selectedItem.procurement_info && (
+              {/* Legacy single source display */}
+              {(!selectedItem.drying_sources || selectedItem.drying_sources.length === 0) && selectedItem.drying_process_info && (
+                <>
+                  <ViewDetailItem icon={Package} label="Supplier" value={selectedItem.drying_process_info.supplier_name} iconColor="text-orange-500" compact />
+                  <ViewDetailItem icon={Layers} label="Drying Remaining" value={`${parseFloat(selectedItem.drying_process_info.remaining_kg).toLocaleString()} kg`} iconColor="text-gray-500" compact />
+                </>
+              )}
+              {(!selectedItem.drying_sources || selectedItem.drying_sources.length === 0) && !selectedItem.drying_process_info && selectedItem.procurement_info && (
                 <>
                   <ViewDetailItem icon={Package} label="Supplier" value={selectedItem.procurement_info.supplier_name} iconColor="text-orange-500" compact />
-                  <ViewDetailItem icon={Layers} label="Proc. Remaining" value={`${parseFloat(selectedItem.procurement_info.remaining_kg).toLocaleString()} kg`} iconColor="text-gray-500" compact />
+                  <ViewDetailItem icon={Layers} label="Sacks/Bags" value={`${parseInt(selectedItem.procurement_info.sacks || 0)} sacks (${parseFloat(selectedItem.procurement_info.quantity_kg).toLocaleString()} kg)`} iconColor="text-gray-500" compact />
                 </>
               )}
               
@@ -890,7 +1083,11 @@ const Processing = () => {
             <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
               <p className="text-sm text-blue-700">
                 <strong>Processing #{String(selectedItem.id).padStart(4, '0')}</strong>
-                {selectedItem.procurement_info && (
+                {selectedItem.drying_sources && selectedItem.drying_sources.length > 0 ? (
+                  <span> — {selectedItem.drying_sources.map(s => s.variety_name || s.supplier_name).join(', ')}</span>
+                ) : selectedItem.drying_process_info ? (
+                  <span> - From Drying #{String(selectedItem.drying_process_id).padStart(4, '0')} ({selectedItem.drying_process_info.supplier_name})</span>
+                ) : selectedItem.procurement_info && (
                   <span> - From {selectedItem.procurement_info.supplier_name}</span>
                 )}
               </p>
@@ -953,17 +1150,112 @@ const Processing = () => {
         size="lg"
         loading={saving}
       >
-        {({ submitted }) => (
+        {({ submitted }) => {
+          // Get selected option groups (each group may contain multiple drying IDs)
+          const selectedGroups = groupedDryingOptions.filter(opt => 
+            opt.dryingIds.some(id => selectedDryingIds.includes(id))
+          );
+          
+          // Calculate total kg from all selected groups
+          const totalAvailableKg = selectedGroups.reduce((sum, opt) => sum + opt.remaining, 0);
+          
+          // Filter out options where any of their dryingIds are already selected
+          const availableOptions = groupedDryingOptions.filter(opt => 
+            !opt.dryingIds.some(id => selectedDryingIds.includes(id))
+          );
+          
+          return (
           <>
-            <FormSelect 
-              label="Procurement Source" 
-              name="procurement_id" 
-              value={formData.procurement_id} 
-              onChange={handleFormChange} 
-              options={procurementOptions}
-              placeholder="Select procurement source"
-              submitted={submitted}
-            />
+            {/* Drying Sources with Add button */}
+            <div className="mb-4">
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                Drying Sources <span className="text-red-500">*</span>
+              </label>
+              
+              {/* Dropdown + Add button */}
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <FormSelect
+                    name="pending_drying"
+                    value={pendingDryingId}
+                    onChange={(e) => setPendingDryingId(e.target.value)}
+                    options={availableOptions}
+                    placeholder="Select dried source..."
+                    className="!mb-0"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pendingDryingId) return;
+                    const opt = groupedDryingOptions.find(o => o.value === pendingDryingId);
+                    if (!opt) return;
+                    // Add ALL drying IDs from this option group
+                    const newIds = [...selectedDryingIds, ...opt.dryingIds];
+                    setSelectedDryingIds(newIds);
+                    setPendingDryingId('');
+                    // Auto-fill input_kg with total available from all selected groups
+                    const allSelectedGroups = groupedDryingOptions.filter(g => 
+                      g.dryingIds.some(id => newIds.includes(id))
+                    );
+                    const total = allSelectedGroups.reduce((sum, g) => sum + g.remaining, 0);
+                    setFormData(prev => ({ ...prev, input_kg: String(Math.round(total * 100) / 100) }));
+                  }}
+                  disabled={!pendingDryingId}
+                  className="px-5 py-3 border-2 border-green-600 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 hover:border-green-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
+                >
+                  Add
+                </button>
+              </div>
+              
+              {/* Selected sources list — grouped by option */}
+              {selectedGroups.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {selectedGroups.map(opt => (
+                    <div key={opt.value} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-800">{opt.varietyName}</span>
+                        {opt.batchNumber && (
+                          <span className="text-xs text-indigo-600">({opt.batchNumber})</span>
+                        )}
+                        {opt.driedAt && !opt.batchNumber && (
+                          <span className="text-xs text-gray-400">· Dried {opt.driedAt}</span>
+                        )}
+                        <span className="text-sm text-green-600 font-semibold">— {opt.remaining.toLocaleString()} kg</span>
+                        {opt.sourceCount > 1 && (
+                          <span className="text-xs text-gray-400">({opt.sourceCount} sources)</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Remove ALL drying IDs from this option group
+                          const newIds = selectedDryingIds.filter(id => !opt.dryingIds.includes(id));
+                          setSelectedDryingIds(newIds);
+                          // Recalculate total and update input_kg
+                          const remainingGroups = groupedDryingOptions.filter(g => 
+                            g.dryingIds.some(id => newIds.includes(id))
+                          );
+                          const total = remainingGroups.reduce((sum, g) => sum + g.remaining, 0);
+                          setFormData(prev => ({ ...prev, input_kg: newIds.length > 0 ? String(Math.round(total * 100) / 100) : '' }));
+                        }}
+                        className="text-red-500 hover:text-red-700 p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <p className="text-xs text-green-600 mt-1">
+                    {selectedGroups.length} source(s) — Total: <strong>{totalAvailableKg.toLocaleString()} kg</strong>
+                  </p>
+                </div>
+              )}
+              
+              {submitted && selectedDryingIds.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">Please add at least one drying source</p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <FormInput 
                 label="Input Quantity (kg)" 
@@ -982,6 +1274,7 @@ const Processing = () => {
                 type="date" 
                 value={formData.processing_date} 
                 onChange={handleFormChange}
+                required
                 submitted={submitted}
               />
             </div>
@@ -994,7 +1287,8 @@ const Processing = () => {
               submitted={submitted}
             />
           </>
-        )}
+          );
+        }}
       </FormModal>
 
       {/* Edit Modal */}
@@ -1010,12 +1304,12 @@ const Processing = () => {
         {({ submitted }) => (
           <>
             <FormSelect 
-              label="Procurement Source" 
-              name="procurement_id" 
-              value={formData.procurement_id} 
+              label="Drying Source" 
+              name="drying_process_id" 
+              value={formData.drying_process_id} 
               onChange={handleFormChange} 
-              options={procurementOptions}
-              placeholder="Select procurement source"
+              options={dryingOptions}
+              placeholder="Select dried batch..."
               submitted={submitted}
             />
             <div className="grid grid-cols-2 gap-4">

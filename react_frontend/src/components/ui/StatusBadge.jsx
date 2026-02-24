@@ -12,13 +12,13 @@ const StatusBadge = ({ status, variant }) => {
     if (variant) return variants[variant] || variants.default;
     
     const statusLower = status?.toLowerCase() || '';
-    if (['active', 'completed', 'in stock', 'paid', 'approved'].includes(statusLower)) {
+    if (['active', 'completed', 'dried', 'in stock', 'paid', 'approved'].includes(statusLower)) {
       return variants.success;
     }
-    if (['pending', 'low stock', 'processing', 'warning'].includes(statusLower)) {
+    if (['pending', 'low stock', 'processing', 'drying', 'warning', 'postponed'].includes(statusLower)) {
       return variants.warning;
     }
-    if (['inactive', 'cancelled', 'out of stock', 'rejected', 'failed'].includes(statusLower)) {
+    if (['inactive', 'cancelled', 'voided', 'out of stock', 'rejected', 'failed'].includes(statusLower)) {
       return variants.danger;
     }
     if (['info', 'new', 'draft'].includes(statusLower)) {

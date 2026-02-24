@@ -94,7 +94,9 @@ const LineChart = ({
   onTabChange = null,
   summaryStats = null,
   areaChart = false,
-  yAxisUnit = 'kg'
+  yAxisUnit = 'kg',
+  onDotClick = null,
+  activePoint = null,
 }) => {
   // Get theme colors from CSS variables
   const [themeColors, setThemeColors] = useState(['#84cc16', '#eab308', '#22c55e', '#3b82f6', '#f97316']);
@@ -171,7 +173,14 @@ const LineChart = ({
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={height}>
-        <ChartComponent data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+        <ChartComponent data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+          onClick={onDotClick ? (e) => {
+            if (e && e.activeLabel) {
+              onDotClick(activePoint === e.activeLabel ? null : e.activeLabel);
+            }
+          } : undefined}
+          style={onDotClick ? { cursor: 'pointer' } : undefined}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis 
             dataKey={xAxisKey} 
@@ -188,31 +197,41 @@ const LineChart = ({
           <Tooltip 
             content={<CustomTooltip data={data} lines={lines} themeColors={themeColors} yAxisUnit={yAxisUnit} />}
           />
-          {lines.map((line, index) => (
-            areaChart ? (
+          {lines.map((line, index) => {
+            const color = line.color || themeColors[index % themeColors.length];
+            const renderDot = activePoint ? (props) => {
+              const { cx, cy, payload } = props;
+              const isActive = payload[xAxisKey] === activePoint;
+              return (
+                <circle key={`dot-${props.index}`} cx={cx} cy={cy} r={isActive ? 6 : 3} fill={isActive ? color : color} stroke={isActive ? '#fff' : 'none'} strokeWidth={isActive ? 2 : 0} opacity={isActive ? 1 : 0.4} />
+              );
+            } : { fill: color, strokeWidth: 0, r: 3 };
+            return areaChart ? (
               <Area
                 key={line.dataKey}
                 type="monotone"
                 dataKey={line.dataKey}
-                stroke={line.color || themeColors[index % themeColors.length]}
-                fill={line.color || themeColors[index % themeColors.length]}
+                stroke={color}
+                fill={color}
                 fillOpacity={0.1}
                 strokeWidth={2}
                 strokeDasharray={line.dashed ? '5 5' : undefined}
+                dot={renderDot}
+                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
               />
             ) : (
               <Line
                 key={line.dataKey}
                 type="monotone"
                 dataKey={line.dataKey}
-                stroke={line.color || themeColors[index % themeColors.length]}
+                stroke={color}
                 strokeWidth={2}
                 strokeDasharray={line.dashed ? '5 5' : undefined}
-                dot={{ fill: line.color || themeColors[index % themeColors.length], strokeWidth: 0, r: 3 }}
-                activeDot={{ r: 5, strokeWidth: 0 }}
+                dot={renderDot}
+                activeDot={{ r: 6, strokeWidth: 2, stroke: '#fff' }}
               />
-            )
-          ))}
+            );
+          })}
         </ChartComponent>
       </ResponsiveContainer>
 

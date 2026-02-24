@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Procurement extends Model
 {
@@ -12,8 +13,10 @@ class Procurement extends Model
 
     protected $fillable = [
         'supplier_id',
+        'variety_id',
+        'batch_id',
         'quantity_kg',
-        'quantity_out',
+        'sacks',
         'price_per_kg',
         'description',
         'total_cost',
@@ -22,18 +25,26 @@ class Procurement extends Model
 
     protected $casts = [
         'quantity_kg' => 'decimal:2',
-        'quantity_out' => 'decimal:2',
+        'sacks' => 'integer',
         'price_per_kg' => 'decimal:2',
         'total_cost' => 'decimal:2',
     ];
 
     protected $attributes = [
         'quantity_kg' => 0,
-        'quantity_out' => 0,
+        'sacks' => 0,
         'price_per_kg' => 0,
         'total_cost' => 0,
         'status' => 'Pending',
     ];
+
+    /**
+     * Get the batch this procurement belongs to (if any).
+     */
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(ProcurementBatch::class, 'batch_id');
+    }
 
     /**
      * Get the supplier that owns the procurement.
@@ -41,6 +52,32 @@ class Procurement extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * Get the variety for this procurement.
+     */
+    public function variety(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Variety::class);
+    }
+
+    /**
+     * Get the drying processes for this procurement.
+     */
+    public function dryingProcesses(): HasMany
+    {
+        return $this->hasMany(DryingProcess::class);
+    }
+
+    /**
+     * Get the batch-drying allocations for this procurement.
+     * These are created when a batch is sent to drying and sacks are proportionally
+     * distributed across the batch's procurements.
+     */
+    public function dryingBatchAllocations(): HasMany
+    {
+        return $this->hasMany(DryingBatchProcurement::class);
     }
 
     /**
@@ -55,11 +92,5 @@ class Procurement extends Model
         });
     }
 
-    /**
-     * Get remaining quantity (quantity_kg - quantity_out)
-     */
-    public function getRemainingQuantityAttribute(): float
-    {
-        return $this->quantity_kg - $this->quantity_out;
-    }
+
 }

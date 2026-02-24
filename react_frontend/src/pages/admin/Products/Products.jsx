@@ -6,7 +6,7 @@ import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
 
 const CACHE_KEY = '/products';
-const CATEGORIES_CACHE_KEY = '/categories';
+const CATEGORIES_CACHE_KEY = '/varieties';
 
 const Products = () => {
   const toast = useToast();
@@ -38,7 +38,7 @@ const Products = () => {
   const { 
     data: categories, 
     refetch: refetchCategories 
-  } = useDataFetch('/categories', {
+  } = useDataFetch('/varieties', {
     cacheKey: CATEGORIES_CACHE_KEY,
     initialData: [],
   });

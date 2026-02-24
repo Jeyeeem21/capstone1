@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, Filter, Check, Plus, MoreVertical } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, Filter, Check, Plus, MoreVertical, Calendar, RotateCcw } from 'lucide-react';
 import SearchInput from './SearchInput';
 import Pagination from './Pagination';
 import Button from './Button';
@@ -23,6 +23,7 @@ const DataTable = ({
   filterOptions = [],
   filterPlaceholder = 'All Categories',
   cardConfig = null, // { titleField, subtitleField, badgeField, fields: [{accessor, label}] }
+  dateFilterField = null, // accessor for date field to enable date range filter
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -30,6 +31,8 @@ const DataTable = ({
   const [itemsPerPage, setItemsPerPage] = useState(defaultItemsPerPage);
   const [filterValue, setFilterValue] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Generate filter options from data if not provided
   const computedFilterOptions = useMemo(() => {
@@ -48,6 +51,24 @@ const DataTable = ({
       result = result.filter(row => row[filterField] === filterValue);
     }
     
+    // Apply date range filter
+    if (dateFilterField && (startDate || endDate)) {
+      result = result.filter(row => {
+        const dateStr = row[dateFilterField];
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
+        if (startDate) {
+          const start = new Date(startDate + 'T00:00:00+08:00');
+          if (date < start) return false;
+        }
+        if (endDate) {
+          const end = new Date(endDate + 'T23:59:59+08:00');
+          if (date > end) return false;
+        }
+        return true;
+      });
+    }
+
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -61,7 +82,7 @@ const DataTable = ({
     }
     
     return result;
-  }, [data, searchQuery, columns, filterField, filterValue]);
+  }, [data, searchQuery, columns, filterField, filterValue, dateFilterField, startDate, endDate]);
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -120,6 +141,23 @@ const DataTable = ({
   // Reset to first page when search changes
   const handleSearch = (value) => {
     setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
+  // Handle date filter changes
+  const handleStartDateChange = (value) => {
+    setStartDate(value);
+    setCurrentPage(1);
+  };
+
+  const handleEndDateChange = (value) => {
+    setEndDate(value);
+    setCurrentPage(1);
+  };
+
+  const handleResetDates = () => {
+    setStartDate('');
+    setEndDate('');
     setCurrentPage(1);
   };
 
@@ -185,10 +223,10 @@ const DataTable = ({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 overflow-hidden shadow-lg shadow-primary-100/50">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-400 overflow-hidden shadow-lg shadow-primary-100/50">
       {/* Title Header */}
       {(title || onAdd) && (
-        <div className="p-4 border-b-2 border-primary-200 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
+        <div className="p-4 border-b-2 border-primary-300 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
           <div className="flex items-center justify-between">
             <div>
               {title && <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{title}</h3>}
@@ -205,9 +243,9 @@ const DataTable = ({
       )}
 
       {/* Search and Filter */}
-      {(searchable || filterField) && (
-        <div className="p-4 border-b-2 border-primary-100 bg-gray-50 dark:bg-gray-700">
-          <div className="flex flex-col sm:flex-row gap-3">
+      {(searchable || filterField || dateFilterField) && (
+        <div className="p-4 border-b-2 border-primary-200 bg-gray-50 dark:bg-gray-700">
+          <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
             {searchable && (
               <SearchInput
                 value={searchQuery}
@@ -232,6 +270,34 @@ const DataTable = ({
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none" />
               </div>
             )}
+            {dateFilterField && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Calendar size={14} className="text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => handleStartDateChange(e.target.value)}
+                  className="px-3 py-2 text-sm border-2 border-primary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-600 dark:text-white font-medium"
+                />
+                <span className="text-xs text-gray-400 font-medium">to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => handleEndDateChange(e.target.value)}
+                  className="px-3 py-2 text-sm border-2 border-primary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-600 dark:text-white font-medium"
+                />
+                {(startDate || endDate) && (
+                  <button
+                    onClick={handleResetDates}
+                    className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 bg-white border-2 border-primary-200 rounded-xl hover:border-red-300 transition-colors"
+                    title="Reset date filter"
+                  >
+                    <RotateCcw size={13} />
+                    Reset
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -240,7 +306,7 @@ const DataTable = ({
       <div className="overflow-x-auto hidden lg:block">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-primary-50 dark:bg-gray-700 border-b-2 border-primary-200">
+            <tr className="bg-primary-100 dark:bg-gray-700 border-b-2 border-primary-300">
               {selectable && (
                 <th className="px-4 py-3.5 text-center w-12">
                   <button
@@ -277,7 +343,7 @@ const DataTable = ({
               paginatedData.map((row, rowIndex) => (
                 <tr
                   key={row.id || rowIndex}
-                  className={`border-b border-primary-100 dark:border-gray-700 transition-all cursor-pointer table-row-hover
+                  className={`border-b border-primary-200 dark:border-gray-700 transition-all cursor-pointer table-row-hover
                     ${isRowSelected(row) ? 'table-row-selected' : 'bg-white dark:bg-gray-800'}`}
                   onClick={(e) => handleRowClick(row, e)}
                   onDoubleClick={() => handleRowDoubleClick(row)}
@@ -326,7 +392,7 @@ const DataTable = ({
               const displayColumns = columns.filter(col => col.accessor && !col.header?.toLowerCase().includes('action'));
               const titleCol = displayColumns[0];
               const subtitleCol = displayColumns[1];
-              const otherCols = displayColumns.slice(2, 5); // Show up to 3 more fields
+              const otherCols = displayColumns.slice(2); // Show all remaining fields
               
               return (
                 <div

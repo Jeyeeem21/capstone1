@@ -100,7 +100,7 @@ export const ToastProvider = ({ children }) => {
       {children}
       
       {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-[200] flex flex-col gap-3">
+      <div className="fixed top-4 right-4 z-[99999] flex flex-col gap-3">
         {toasts.map((toast) => (
           <Toast key={toast.id} {...toast} onClose={removeToast} />
         ))}

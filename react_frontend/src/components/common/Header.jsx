@@ -18,7 +18,7 @@ const Header = ({ onMenuClick, businessName = 'KJP Rice Mill' }) => {
 
   return (
     <header 
-      className="border-b-2 border-primary-300 px-4 py-3 flex items-center justify-between shadow-sm lg:hidden"
+      className="sticky top-0 border-b-2 border-primary-300 px-4 py-3 flex items-center justify-between shadow-sm lg:hidden z-50"
       style={{ backgroundColor: 'var(--color-bg-sidebar)' }}
     >
       {/* Left: Hamburger (tablet only) + Logo */}

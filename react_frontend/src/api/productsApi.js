@@ -44,7 +44,7 @@ export const productsApi = {
   getCategories: async () => {
     return apiClient.get(ENDPOINTS.PRODUCTS.CATEGORIES, {
       useCache: true,
-      cacheKey: 'products-categories',
+      cacheKey: 'varieties',
     });
   },
   
@@ -98,7 +98,7 @@ export const productsApi = {
       // Clear product cache
       apiClient.cache.remove(`product-${id}`);
       apiClient.cache.remove('products-featured');
-      apiClient.cache.remove('products-categories');
+      apiClient.cache.remove('varieties');
     }
     return response;
   },

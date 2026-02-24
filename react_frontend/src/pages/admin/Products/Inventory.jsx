@@ -316,7 +316,7 @@ const Inventory = () => {
         <StatsCard label="Net Change" value={totalIn - totalOut} unit="units" icon={TrendingUp} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
         <StatsCard label="Movements" value={stockMovements.length} unit="transactions" icon={BarChart3} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
       </div>
-      <DataTable title="Stock Movements" subtitle="Track all inventory in/out transactions" columns={movementColumns} data={stockMovements} searchPlaceholder="Search movements..." filterField="type" filterOptions={['In', 'Out']} filterPlaceholder="All Types" />
+      <DataTable title="Stock Movements" subtitle="Track all inventory in/out transactions" columns={movementColumns} data={stockMovements} searchPlaceholder="Search movements..." filterField="type" filterOptions={['In', 'Out']} filterPlaceholder="All Types" dateFilterField="date" />
     </>
   );
 

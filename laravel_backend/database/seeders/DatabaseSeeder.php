@@ -23,6 +23,9 @@ class DatabaseSeeder extends Seeder
         // Seed appearance settings with defaults
         $this->call(AppearanceSettingSeeder::class);
         
+        // Seed varieties (rice types)
+        $this->call(VarietySeeder::class);
+
         // Seed products
         $this->call(ProductSeeder::class);
     }

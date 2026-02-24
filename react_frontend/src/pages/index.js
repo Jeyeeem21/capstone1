@@ -2,9 +2,10 @@
 export { 
   Dashboard, 
   Procurement, 
+  DryingProcess,
   Processing, 
   Products, 
-  Categories, 
+  Varieties, 
   Inventory,
   Sales, 
   Partners, 
@@ -21,7 +22,11 @@ export { PointOfSale } from './shared';
 // Staff pages (from staff folder)
 export { StaffDashboard, StaffProfile } from './staff';
 
+// Client pages (from client folder)
+export { ClientDashboard, Shop, Orders, Cart, Profile, ClientSettings } from './client';
+
 // Re-export organized by role
 export * as AdminPages from './admin';
 export * as StaffPages from './staff';
 export * as SharedPages from './shared';
+export * as ClientPages from './client';

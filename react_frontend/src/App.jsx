@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { MainLayout, StaffLayout, PublicLayout } from './layouts';
+import { MainLayout, StaffLayout, PublicLayout, ClientLayout } from './layouts';
 import { ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BusinessSettingsProvider } from './context/BusinessSettingsContext';
@@ -7,9 +7,10 @@ import {
   // Admin pages
   Dashboard,
   Procurement,
+  DryingProcess,
   Processing,
   Products,
-  Categories,
+  Varieties,
   Inventory,
   Sales,
   Partners,
@@ -23,6 +24,13 @@ import {
   // Staff pages
   StaffDashboard,
   StaffProfile,
+  // Client pages
+  ClientDashboard,
+  Shop,
+  Orders,
+  Cart,
+  Profile,
+  ClientSettings,
 } from './pages';
 // Public pages
 import { 
@@ -68,11 +76,12 @@ function AppRoutes() {
         {/* Main Admin Routes */}
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="procurement" element={<Procurement />} />
+        <Route path="drying" element={<DryingProcess />} />
         <Route path="processing" element={<Processing />} />
         
         {/* Products Routes */}
         <Route path="products" element={<Products />} />
-        <Route path="products/categories" element={<Categories />} />
+        <Route path="products/categories" element={<Varieties />} />
         <Route path="products/inventory" element={<Inventory />} />
         
         {/* Sales Routes */}
@@ -98,6 +107,17 @@ function AppRoutes() {
         <Route path="dashboard" element={<StaffDashboard />} />
         <Route path="profile" element={<StaffProfile />} />
         <Route path="pos" element={<PointOfSale />} />
+      </Route>
+
+      {/* Client Routes */}
+      <Route path="/client" element={<ClientLayout />}>
+        <Route index element={<Navigate to="/client/dashboard" replace />} />
+        <Route path="dashboard" element={<ClientDashboard />} />
+        <Route path="shop" element={<Shop />} />
+        <Route path="orders" element={<Orders />} />
+        <Route path="cart" element={<Cart />} />
+        <Route path="profile" element={<Profile />} />
+        <Route path="settings" element={<ClientSettings />} />
       </Route>
     </Routes>
   );
