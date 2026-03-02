@@ -5,41 +5,32 @@ import { Card, CardContent, StatusBadge } from '../../../components/ui';
 import { Avatar } from '../../../components/ui';
 
 const StaffProfile = () => {
-  // Mock staff data - in real app, this would come from auth context or API
+  // Staff data — will connect to auth context or API
   const staffData = {
-    id: 'STF-001',
-    firstName: 'John',
-    lastName: 'Smith',
-    email: 'john.smith@kjpricemill.com',
-    phone: '+63 912 345 6789',
-    role: 'Cashier',
-    department: 'Sales',
+    id: '',
+    firstName: '—',
+    lastName: '',
+    email: '—',
+    phone: '—',
+    role: '—',
+    department: '—',
     status: 'Active',
-    hireDate: '2024-06-15',
-    address: 'Barangay San Jose, Manila, Philippines',
-    employeeId: 'EMP-2024-0156',
+    hireDate: '',
+    address: '—',
+    employeeId: '—',
   };
 
-  // Mock login history
-  const loginHistory = [
-    { id: 1, action: 'Login', timestamp: '2026-02-01 08:30:15', ipAddress: '192.168.1.100', device: 'Desktop - Chrome', status: 'Success' },
-    { id: 2, action: 'Logout', timestamp: '2026-01-31 17:45:22', ipAddress: '192.168.1.100', device: 'Desktop - Chrome', status: 'Success' },
-    { id: 3, action: 'Login', timestamp: '2026-01-31 08:28:45', ipAddress: '192.168.1.100', device: 'Desktop - Chrome', status: 'Success' },
-    { id: 4, action: 'Logout', timestamp: '2026-01-30 18:02:10', ipAddress: '192.168.1.105', device: 'Mobile - Safari', status: 'Success' },
-    { id: 5, action: 'Login', timestamp: '2026-01-30 13:15:33', ipAddress: '192.168.1.105', device: 'Mobile - Safari', status: 'Success' },
-    { id: 6, action: 'Login Failed', timestamp: '2026-01-30 13:14:55', ipAddress: '192.168.1.105', device: 'Mobile - Safari', status: 'Failed' },
-    { id: 7, action: 'Logout', timestamp: '2026-01-30 12:30:00', ipAddress: '192.168.1.100', device: 'Desktop - Chrome', status: 'Success' },
-    { id: 8, action: 'Login', timestamp: '2026-01-30 08:25:18', ipAddress: '192.168.1.100', device: 'Desktop - Chrome', status: 'Success' },
-  ];
+  // Login history — will connect to real API
+  const loginHistory = [];
 
-  // Current session info
+  // Current session — will connect to real API
   const currentSession = {
-    loginTime: '2026-02-01 08:30:15',
-    duration: '2h 45m',
-    ipAddress: '192.168.1.100',
-    device: 'Desktop - Chrome',
-    browser: 'Chrome 121.0',
-    os: 'Windows 11',
+    loginTime: '—',
+    duration: '—',
+    ipAddress: '—',
+    device: '—',
+    browser: '—',
+    os: '—',
   };
 
   const InfoRow = ({ icon: Icon, label, value }) => (
@@ -100,7 +91,7 @@ const StaffProfile = () => {
               <div className="space-y-1">
                 <InfoRow icon={User} label="Employee ID" value={staffData.employeeId} />
                 <InfoRow icon={Shield} label="Department" value={staffData.department} />
-                <InfoRow icon={Calendar} label="Hire Date" value={new Date(staffData.hireDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
+                <InfoRow icon={Calendar} label="Hire Date" value={new Date(staffData.hireDate).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'long', day: 'numeric' })} />
               </div>
 
               {/* Read-only Notice */}

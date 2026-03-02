@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Services\CustomerService;
 use App\Http\Resources\CustomerResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use App\Traits\HasCaching;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -13,7 +14,7 @@ use Illuminate\Validation\Rule;
 
 class CustomerController extends Controller
 {
-    use ApiResponse, HasCaching;
+    use ApiResponse, AuditLogger, HasCaching;
 
     protected CustomerService $customerService;
 
@@ -65,6 +66,11 @@ class CustomerController extends Controller
         ]);
 
         $customer = $this->customerService->createCustomer($validated);
+
+        $this->logAudit('CREATE', 'Customer', "Created customer: {$customer->name}", [
+            'customer_id' => $customer->id,
+            'name' => $customer->name,
+        ]);
 
         return $this->successResponse(
             new CustomerResource($customer),
@@ -127,6 +133,11 @@ class CustomerController extends Controller
 
         $customer = $this->customerService->updateCustomer($customer, $validated);
 
+        $this->logAudit('UPDATE', 'Customer', "Updated customer: {$customer->name}", [
+            'customer_id' => $customer->id,
+            'changes' => $validated,
+        ]);
+
         return $this->successResponse(
             new CustomerResource($customer),
             'Customer updated successfully'
@@ -147,9 +158,13 @@ class CustomerController extends Controller
         // Now soft delete (sets deleted_at)
         $this->customerService->deleteCustomer($customer);
 
+        $this->logAudit('DELETE', 'Customer', "Archived customer: {$customer->name}", [
+            'customer_id' => $customer->id,
+        ]);
+
         return $this->successResponse(
             null,
-            'Customer deleted successfully'
+            'Customer archived successfully'
         );
     }
 

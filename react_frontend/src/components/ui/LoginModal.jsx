@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { LogIn, User, Lock, Eye, EyeOff, Loader2, Check, AlertCircle } from 'lucide-react';
 import { Modal } from './Modal';
 import Button from './Button';
-import { authApi } from '../../api';
+import { useAuth } from '../../context/AuthContext';
 
 const LoginModal = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [touched, setTouched] = useState({ email: false, password: false });
   const [showPassword, setShowPassword] = useState(false);
@@ -77,21 +78,17 @@ const LoginModal = ({ isOpen, onClose }) => {
     setError('');
 
     try {
-      // Use the authApi for login
-      const response = await authApi.login({
-        email: formData.email,
-        password: formData.password,
-        remember: false,
-      });
-      
-      if (response.success) {
-        onClose();
-        navigate('/admin/dashboard');
+      const response = await login(formData.email, formData.password);
+      onClose();
+      if (response?.user?.role === 'staff') {
+        navigate('/staff/dashboard');
+      } else if (response?.user?.role === 'super_admin') {
+        navigate('/superadmin/dashboard');
       } else {
-        setError(response.error || 'Invalid email or password');
+        navigate('/admin/dashboard');
       }
     } catch (err) {
-      setError('Login failed. Please try again.');
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

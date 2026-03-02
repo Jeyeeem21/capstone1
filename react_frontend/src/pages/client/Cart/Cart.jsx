@@ -7,42 +7,8 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useToast, Skeleton } from '../../../components/ui';
 
-// Mock cart items
-const initialCartItems = [
-  {
-    id: 1,
-    name: 'Premium Jasmine Rice',
-    category: 'Premium',
-    price: 850,
-    unit: '25kg',
-    quantity: 2,
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop',
-    inStock: true,
-    stocks: 45,
-  },
-  {
-    id: 5,
-    name: 'IR64 Rice',
-    category: 'Standard',
-    price: 520,
-    unit: '25kg',
-    quantity: 1,
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop',
-    inStock: true,
-    stocks: 200,
-  },
-  {
-    id: 3,
-    name: 'Brown Rice',
-    category: 'Specialty',
-    price: 750,
-    unit: '25kg',
-    quantity: 1,
-    image: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?w=200&h=200&fit=crop',
-    inStock: true,
-    stocks: 30,
-  },
-];
+// Cart items — will connect to real state management
+const initialCartItems = [];
 
 const Cart = () => {
   const { theme } = useTheme();
@@ -218,7 +184,7 @@ const Cart = () => {
                     <div>
                       <h3 className="font-semibold text-sm" style={{ color: theme.text_primary }}>{item.name}</h3>
                       <p className="text-xs mt-0.5" style={{ color: theme.text_secondary }}>
-                        {item.category} · {item.unit}
+                        {item.variety} · {item.unit}
                       </p>
                     </div>
                     <button

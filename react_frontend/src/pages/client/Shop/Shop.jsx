@@ -7,129 +7,8 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { Skeleton } from '../../../components/ui';
 
-// Mock products
-const mockProducts = [
-  {
-    id: 1,
-    name: 'Premium Jasmine Rice',
-    category: 'Premium',
-    categoryColor: '#22c55e',
-    description: 'Aromatic, long-grain rice with a subtle floral fragrance. Perfect for everyday meals and special occasions.',
-    price: 850,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=300&fit=crop',
-    rating: 4.9,
-    reviewsCount: 128,
-    inStock: true,
-    stocks: 45,
-  },
-  {
-    id: 2,
-    name: 'Long Grain White Rice',
-    category: 'Standard',
-    categoryColor: '#3b82f6',
-    description: 'Classic, fluffy rice that stays separate when cooked. A household favorite for daily cooking.',
-    price: 650,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400&h=300&fit=crop',
-    rating: 4.7,
-    reviewsCount: 95,
-    inStock: true,
-    stocks: 120,
-  },
-  {
-    id: 3,
-    name: 'Brown Rice',
-    category: 'Specialty',
-    categoryColor: '#8b5cf6',
-    description: 'Nutritious whole grain rice with a nutty flavor. Rich in fiber and essential nutrients.',
-    price: 750,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?w=400&h=300&fit=crop',
-    rating: 4.8,
-    reviewsCount: 67,
-    inStock: true,
-    stocks: 30,
-  },
-  {
-    id: 4,
-    name: 'Glutinous Rice',
-    category: 'Specialty',
-    categoryColor: '#8b5cf6',
-    description: 'Sticky rice perfect for traditional Filipino desserts and kakanin.',
-    price: 900,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=400&h=300&fit=crop',
-    rating: 4.6,
-    reviewsCount: 54,
-    inStock: true,
-    stocks: 18,
-  },
-  {
-    id: 5,
-    name: 'IR64 Rice',
-    category: 'Standard',
-    categoryColor: '#3b82f6',
-    description: 'Affordable and reliable rice variety. Perfect for everyday meals and bulk purchasing.',
-    price: 520,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=300&fit=crop',
-    rating: 4.4,
-    reviewsCount: 210,
-    inStock: true,
-    stocks: 200,
-  },
-  {
-    id: 6,
-    name: 'Sinandomeng Rice',
-    category: 'Premium',
-    categoryColor: '#22c55e',
-    description: 'A well-loved Filipino rice variety known for its soft texture and slightly sweet taste.',
-    price: 780,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400&h=300&fit=crop',
-    rating: 4.8,
-    reviewsCount: 89,
-    inStock: true,
-    stocks: 55,
-  },
-  {
-    id: 7,
-    name: 'Dinorado Rice',
-    category: 'Premium',
-    categoryColor: '#22c55e',
-    description: 'Premium aromatic rice with exceptional flavor. The gold standard of Filipino rice.',
-    price: 1200,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?w=400&h=300&fit=crop',
-    rating: 5.0,
-    reviewsCount: 42,
-    inStock: false,
-    stocks: 0,
-  },
-  {
-    id: 8,
-    name: 'Red Rice',
-    category: 'Specialty',
-    categoryColor: '#8b5cf6',
-    description: 'Nutrient-rich red rice with high antioxidant content. A healthy alternative.',
-    price: 950,
-    unit: '25kg',
-    weight: 25,
-    image: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=400&h=300&fit=crop',
-    rating: 4.5,
-    reviewsCount: 30,
-    inStock: true,
-    stocks: 12,
-  },
-];
+// Products — will connect to real API
+const mockProducts = [];
 
 const varieties = ['All', 'Premium', 'Standard', 'Specialty'];
 const sortOptions = [
@@ -167,7 +46,7 @@ const Shop = () => {
     let result = mockProducts.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             p.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesVariety = selectedVariety === 'All' || p.category === selectedVariety;
+      const matchesVariety = selectedVariety === 'All' || p.variety === selectedVariety;
       return matchesSearch && matchesVariety;
     });
 
@@ -302,7 +181,7 @@ const Shop = () => {
             </div>
           )}
           <span className="absolute top-2 left-2 px-2 py-0.5 text-xs font-medium rounded-full text-white"
-            style={{ backgroundColor: product.categoryColor }}>{product.category}</span>
+            style={{ backgroundColor: product.varietyColor }}>{product.variety}</span>
         </div>
         <div className="p-3">
           <h3 className="font-semibold text-sm truncate" style={{ color: theme.text_primary }}>{product.name}</h3>
@@ -354,7 +233,7 @@ const Shop = () => {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-sm truncate" style={{ color: theme.text_primary }}>{product.name}</h3>
-                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full text-white flex-shrink-0" style={{ backgroundColor: product.categoryColor }}>{product.category}</span>
+                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full text-white flex-shrink-0" style={{ backgroundColor: product.varietyColor }}>{product.variety}</span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <Star size={11} className="fill-yellow-400 text-yellow-400" />

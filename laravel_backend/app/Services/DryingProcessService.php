@@ -34,6 +34,7 @@ class DryingProcessService
                     'batch:id,batch_number,variety_id,status',
                     'batch.variety:id,name,color',
                 ])
+                ->orderByRaw("FIELD(status, 'Drying', 'Postponed', 'Dried')")
                 ->orderBy('created_at', 'desc')
                 ->get();
         });
@@ -96,6 +97,7 @@ class DryingProcessService
                 $this->batchService->decrementRemaining($batch, $sacks, $dist['total_kg']);
 
                 $this->clearCache();
+                $this->batchService->clearCache();
                 return $drying->load(['batch', 'batchProcurements.procurement.supplier']);
             }
 
@@ -168,6 +170,7 @@ class DryingProcessService
             $drying->save();
 
             $this->clearCache();
+            $this->batchService->clearCache();
             return $drying->fresh()->load('procurement.supplier');
         });
     }
@@ -208,6 +211,7 @@ class DryingProcessService
             }
 
             $this->clearCache();
+            $this->batchService->clearCache();
             return $drying->fresh()->load('procurement.supplier');
         });
     }
@@ -230,6 +234,7 @@ class DryingProcessService
             $drying->save();
 
             $this->clearCache();
+            $this->batchService->clearCache();
             return $drying->fresh()->load('procurement.supplier');
         });
     }
@@ -248,6 +253,7 @@ class DryingProcessService
 
         $drying->update(['status' => DryingProcess::STATUS_POSTPONED]);
         $this->clearCache();
+        $this->batchService->clearCache();
         return $drying->fresh()->load('procurement.supplier');
     }
 

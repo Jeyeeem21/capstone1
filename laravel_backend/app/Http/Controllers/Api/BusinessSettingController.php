@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Services\BusinessSettingService;
 use App\Http\Resources\BusinessSettingResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class BusinessSettingController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     protected BusinessSettingService $settingService;
 
@@ -62,6 +63,10 @@ class BusinessSettingController extends Controller
             $settings = $this->settingService->updateSettings($validated);
             $settings['business_hours_formatted'] = $this->settingService->getFormattedBusinessHours();
 
+            $this->logAudit('UPDATE', 'Business Settings', 'Updated business settings', [
+                'updated_fields' => array_keys($validated),
+            ]);
+
             return $this->successResponse($settings, 'Business settings updated successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {
             return $this->validationErrorResponse($e->errors());
@@ -77,7 +82,7 @@ class BusinessSettingController extends Controller
     {
         try {
             $request->validate([
-                'logo' => 'required|file|mimes:png,jpg,jpeg,svg,webp|max:2048',
+                'logo' => 'required|file|mimes:png,jpg,jpeg,svg,webp|max:10240',
             ]);
 
             if (!$request->hasFile('logo')) {
@@ -85,6 +90,10 @@ class BusinessSettingController extends Controller
             }
 
             $logoUrl = $this->settingService->uploadLogo($request->file('logo'));
+
+            $this->logAudit('UPDATE', 'Business Settings', 'Uploaded new business logo', [
+                'logo_url' => $logoUrl,
+            ]);
 
             return $this->successResponse(['logo_url' => $logoUrl], 'Logo uploaded successfully');
         } catch (\Illuminate\Validation\ValidationException $e) {

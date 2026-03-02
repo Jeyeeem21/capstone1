@@ -8,11 +8,13 @@ export {
   Varieties, 
   Inventory,
   Sales, 
+  AdminOrders,
   Partners, 
   Supplier, 
   Customer,
   StaffManagement, 
   AuditTrail, 
+  Archives,
   Settings 
 } from './admin';
 
@@ -25,8 +27,12 @@ export { StaffDashboard, StaffProfile } from './staff';
 // Client pages (from client folder)
 export { ClientDashboard, Shop, Orders, Cart, Profile, ClientSettings } from './client';
 
+// Driver pages (from driver folder)
+export { DriverDashboard, Deliveries, DriverProfile, DriverSettings } from './driver';
+
 // Re-export organized by role
 export * as AdminPages from './admin';
 export * as StaffPages from './staff';
 export * as SharedPages from './shared';
 export * as ClientPages from './client';
+export * as DriverPages from './driver';

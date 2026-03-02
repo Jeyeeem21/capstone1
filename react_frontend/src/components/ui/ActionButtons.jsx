@@ -1,6 +1,6 @@
-import { Eye, Edit, Trash2, MoreHorizontal } from 'lucide-react';
+import { Eye, Edit, Trash2, Archive, MoreHorizontal } from 'lucide-react';
 
-const ActionButtons = ({ onView, onEdit, onDelete, size = 'sm' }) => {
+const ActionButtons = ({ onView, onEdit, onDelete, onArchive, size = 'sm' }) => {
   const iconSize = size === 'sm' ? 15 : 18;
   const btnClass = size === 'sm' ? 'p-1.5' : 'p-2';
 
@@ -22,6 +22,15 @@ const ActionButtons = ({ onView, onEdit, onDelete, size = 'sm' }) => {
           title="Edit"
         >
           <Edit size={iconSize} />
+        </button>
+      )}
+      {onArchive && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onArchive(); }}
+          className={`${btnClass} rounded-md hover:bg-amber-50 text-amber-500 hover:text-amber-700 transition-colors`}
+          title="Archive"
+        >
+          <Archive size={iconSize} />
         </button>
       )}
       {onDelete && (

@@ -61,6 +61,31 @@ export const salesApi = {
     }
     return response;
   },
+
+  /**
+   * Get predictive analysis data
+   * @param {string} period - 'daily' | 'monthly' | 'yearly'
+   */
+  getPredictions: async (period = 'daily') => {
+    return apiClient.get('/sales-predictions', {
+      params: { period },
+      useCache: true,
+      cacheKey: `sales-predictions-${period}`,
+    });
+  },
+
+  /**
+   * Refresh prediction cache
+   */
+  refreshPredictions: async () => {
+    const response = await apiClient.post('/sales-predictions/refresh');
+    if (response.success) {
+      apiClient.cache.remove('sales-predictions-daily');
+      apiClient.cache.remove('sales-predictions-monthly');
+      apiClient.cache.remove('sales-predictions-yearly');
+    }
+    return response;
+  },
 };
 
 export default salesApi;

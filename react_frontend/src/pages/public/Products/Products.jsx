@@ -15,76 +15,19 @@ import {
 import { Button, Skeleton } from '../../../components/ui';
 import { productsApi } from '../../../api';
 
-// Fallback products if API is unavailable
-const fallbackProducts = [
-  {
-    id: 1,
-    name: 'Premium Jasmine Rice',
-    category: 'premium',
-    description: 'Aromatic, long-grain rice with a subtle floral fragrance.',
-    price: 850,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=300&fit=crop',
-    rating: 4.9,
-    reviews_count: 128,
-    tags: ['Best Seller', 'Aromatic'],
-    in_stock: true,
-  },
-  {
-    id: 2,
-    name: 'Long Grain White Rice',
-    category: 'standard',
-    description: 'Classic, fluffy rice that stays separate when cooked.',
-    price: 650,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400&h=300&fit=crop',
-    rating: 4.7,
-    reviews_count: 95,
-    tags: ['Popular'],
-    in_stock: true,
-  },
-  {
-    id: 3,
-    name: 'Brown Rice',
-    category: 'specialty',
-    description: 'Nutritious whole grain rice with a nutty flavor.',
-    price: 750,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?w=400&h=300&fit=crop',
-    rating: 4.8,
-    reviews_count: 67,
-    tags: ['Healthy Choice', 'Whole Grain'],
-    in_stock: true,
-  },
-  {
-    id: 4,
-    name: 'Glutinous Rice',
-    category: 'specialty',
-    description: 'Sticky rice perfect for traditional Filipino desserts.',
-    price: 900,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=400&h=300&fit=crop',
-    rating: 4.6,
-    reviews_count: 54,
-    tags: ['For Desserts'],
-    in_stock: true,
-  },
-];
+// Fallback products — empty until real products loaded from API
+const fallbackProducts = [];
 
-const fallbackCategories = [
-  { id: 'all', name: 'All Products', count: 12 },
-  { id: 'premium', name: 'Premium', count: 4 },
-  { id: 'standard', name: 'Standard', count: 3 },
-  { id: 'specialty', name: 'Specialty', count: 3 },
-  { id: 'organic', name: 'Organic', count: 2 },
+const fallbackVarieties = [
+  { id: 'all', name: 'All Products', count: 0 },
 ];
 
 const Products = () => {
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState(fallbackCategories);
+  const [varieties, setVarieties] = useState(fallbackVarieties);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedVariety, setSelectedVariety] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
   const [sortBy, setSortBy] = useState('popular');
   const [isFromCache, setIsFromCache] = useState(false);
@@ -96,7 +39,7 @@ const Products = () => {
       
       const result = await productsApi.getAll({
         search: searchTerm,
-        category: selectedCategory,
+        variety: selectedVariety,
         sort: sortBy,
       });
 
@@ -113,24 +56,24 @@ const Products = () => {
 
     const timeoutId = setTimeout(fetchProducts, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, selectedCategory, sortBy]);
+  }, [searchTerm, selectedVariety, sortBy]);
 
-  // Fetch categories
+  // Fetch varieties
   useEffect(() => {
-    const fetchCategories = async () => {
-      const result = await productsApi.getCategories();
+    const fetchVarieties = async () => {
+      const result = await productsApi.getVarieties();
       if (result.success && result.data.length > 0) {
-        setCategories(result.data);
+        setVarieties(result.data);
       }
     };
-    fetchCategories();
+    fetchVarieties();
   }, []);
 
   // Normalize product data
   const normalizeProduct = (product) => ({
     id: product.id,
     name: product.name,
-    category: product.category,
+    variety: product.variety,
     description: product.description,
     price: parseFloat(product.price),
     unit: product.unit,
@@ -146,8 +89,8 @@ const Products = () => {
   const filteredProducts = normalizedProducts.filter(product => {
     const matchesSearch = (product.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (product.description || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || (product.category || '') === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesVariety = selectedVariety === 'all' || (product.variety || '') === selectedVariety;
+    return matchesSearch && matchesVariety;
   });
 
   const sortedProducts = [...filteredProducts].sort((a, b) => {
@@ -241,21 +184,21 @@ const Products = () => {
                 </div>
               </div>
 
-              {/* Category Filter */}
+              {/* Variety Filter */}
               <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0">
-                {categories.map((category) => (
+                {varieties.map((variety) => (
                   <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
+                    key={variety.id}
+                    onClick={() => setSelectedVariety(variety.id)}
                     className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
-                      selectedCategory === category.id
+                      selectedVariety === variety.id
                         ? 'bg-button-500 text-white shadow-md'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {category.name}
-                    <span className={`ml-1 ${selectedCategory === category.id ? 'text-white/70' : 'text-gray-400'}`}>
-                      ({category.count})
+                    {variety.name}
+                    <span className={`ml-1 ${selectedVariety === variety.id ? 'text-white/70' : 'text-gray-400'}`}>
+                      ({variety.count})
                     </span>
                   </button>
                 ))}
@@ -449,7 +392,7 @@ const Products = () => {
               <Package size={64} className="mx-auto text-gray-300 mb-4" />
               <h3 className="text-xl font-semibold text-gray-800 mb-2">No products found</h3>
               <p className="text-gray-500 mb-6">Try adjusting your search or filter criteria</p>
-              <Button onClick={() => { setSearchTerm(''); setSelectedCategory('all'); }} className="!bg-button-500 hover:!bg-button-600 text-white">
+              <Button onClick={() => { setSearchTerm(''); setSelectedVariety('all'); }} className="!bg-button-500 hover:!bg-button-600 text-white">
                 Clear Filters
               </Button>
             </div>

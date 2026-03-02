@@ -10,7 +10,6 @@ import {
   Users, 
   UserCog, 
   Settings,
-  ClipboardList,
   Tag,
   Warehouse,
   Truck,
@@ -18,18 +17,20 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { basePath } = useAuth();
   const scrollRef = useRef(null);
   const [expandedMenu, setExpandedMenu] = useState(null);
 
   // Auto-expand submenu when on Products or Partners page
   useEffect(() => {
-    if (location.pathname.startsWith('/admin/products')) {
+    if (location.pathname.includes('/products')) {
       setExpandedMenu('products');
-    } else if (location.pathname.startsWith('/admin/partners')) {
+    } else if (location.pathname.includes('/partners')) {
       setExpandedMenu('partners');
     } else {
       setExpandedMenu(null);
@@ -37,36 +38,35 @@ const BottomNav = () => {
   }, [location.pathname]);
 
   const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', to: '/admin/dashboard' },
-    { icon: ShoppingCart, label: 'Procurement', to: '/admin/procurement' },
-    { icon: Settings2, label: 'Processing', to: '/admin/processing' },
+    { icon: LayoutDashboard, label: 'Dashboard', to: `${basePath}/dashboard` },
+    { icon: ShoppingCart, label: 'Procurement', to: `${basePath}/procurement` },
+    { icon: Settings2, label: 'Processing', to: `${basePath}/processing` },
     { 
       icon: Package, 
       label: 'Products', 
-      to: '/admin/products',
+      to: `${basePath}/products`,
       hasSubmenu: true,
       submenuId: 'products',
       submenu: [
-        { icon: Tag, label: 'Varieties', to: '/admin/products/categories' },
-        { icon: Warehouse, label: 'Inventory', to: '/admin/products/inventory' },
+        { icon: Tag, label: 'Varieties', to: `${basePath}/products/varieties` },
+        { icon: Warehouse, label: 'Inventory', to: `${basePath}/products/inventory` },
       ]
     },
-    { icon: Monitor, label: 'POS', to: '/admin/pos' },
+    { icon: Monitor, label: 'POS', to: `${basePath}/pos` },
     { 
       icon: Users, 
       label: 'Partners', 
-      to: '/admin/partners',
+      to: `${basePath}/partners`,
       hasSubmenu: true,
       submenuId: 'partners',
       submenu: [
-        { icon: Truck, label: 'Supplier', to: '/admin/partners/supplier' },
-        { icon: UserCheck, label: 'Customer', to: '/admin/partners/customer' },
+        { icon: Truck, label: 'Supplier', to: `${basePath}/partners/supplier` },
+        { icon: UserCheck, label: 'Customer', to: `${basePath}/partners/customer` },
       ]
     },
-    { icon: UserCog, label: 'Staff', to: '/admin/staff-management' },
-    { icon: TrendingUp, label: 'Sales', to: '/admin/sales' },
-    { icon: ClipboardList, label: 'Audit', to: '/admin/audit-trail' },
-    { icon: Settings, label: 'Settings', to: '/admin/settings' },
+    { icon: UserCog, label: 'Staff', to: `${basePath}/staff-management` },
+    { icon: TrendingUp, label: 'Sales', to: `${basePath}/sales` },
+    { icon: Settings, label: 'Settings', to: `${basePath}/settings` },
   ];
 
   const handleMenuItemClick = (item) => {

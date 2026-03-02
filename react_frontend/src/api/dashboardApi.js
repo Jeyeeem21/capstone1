@@ -10,39 +10,38 @@ import { ENDPOINTS } from './config';
 export const dashboardApi = {
   /**
    * Get dashboard statistics
+   * @param {string} period - 'daily' | 'monthly' | 'yearly'
    */
-  getStats: async () => {
-    return apiClient.get(ENDPOINTS.DASHBOARD.STATS, {
+  getStats: async (period = 'monthly') => {
+    return apiClient.get(`${ENDPOINTS.DASHBOARD.STATS}?period=${period}`, {
       useCache: true,
-      cacheKey: 'dashboard-stats',
+      cacheKey: `dashboard-stats-${period}`,
     });
   },
-  
+
   /**
    * Get recent activity
    * @param {number} limit - Number of activities to fetch
    */
-  getRecentActivity: async (limit = 10) => {
-    return apiClient.get(ENDPOINTS.DASHBOARD.RECENT_ACTIVITY, {
-      params: { limit },
+  getRecentActivity: async (limit = 15) => {
+    return apiClient.get(`${ENDPOINTS.DASHBOARD.RECENT_ACTIVITY}?limit=${limit}`, {
       useCache: true,
       cacheKey: `dashboard-activity-${limit}`,
     });
   },
-  
+
   /**
    * Refresh dashboard data (clears cache and fetches fresh)
    */
   refresh: async () => {
-    apiClient.cache.remove('dashboard-stats');
-    apiClient.cache.remove('dashboard-activity-10');
-    
-    const [stats, activity] = await Promise.all([
-      dashboardApi.getStats(),
-      dashboardApi.getRecentActivity(),
-    ]);
-    
-    return { stats, activity };
+    // Clear frontend cache
+    apiClient.cache.remove('dashboard-stats-daily');
+    apiClient.cache.remove('dashboard-stats-monthly');
+    apiClient.cache.remove('dashboard-stats-yearly');
+    apiClient.cache.remove('dashboard-activity-15');
+
+    // Clear backend cache
+    await apiClient.post(ENDPOINTS.DASHBOARD.REFRESH);
   },
 };
 

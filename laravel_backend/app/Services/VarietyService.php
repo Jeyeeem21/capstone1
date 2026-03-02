@@ -22,7 +22,7 @@ class VarietyService
     public function getAllVarieties(): Collection
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Variety::orderBy('name')->get();
+            return Variety::withCount('products')->orderBy('name')->get();
         });
     }
 

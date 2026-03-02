@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\DryingProcess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,6 +10,32 @@ class ProcurementBatchResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // Calculate total drying cost: batch-level drying + individual procurement-level drying
+        $batchDryingCost = (float) ($this->drying_processes_sum_total_price ?? $this->dryingProcesses?->sum('total_price') ?? 0);
+
+        // Also sum individual drying processes for procurements within this batch
+        $individualDryingCost = 0;
+        if ($this->relationLoaded('procurements')) {
+            $procIds = $this->procurements->pluck('id')->toArray();
+            if (!empty($procIds)) {
+                $individualDryingCost = (float) DryingProcess::whereIn('procurement_id', $procIds)
+                    ->whereNull('batch_id')
+                    ->whereNull('deleted_at')
+                    ->sum('total_price');
+            }
+        } else {
+            // Fallback: query via procurement IDs from the batch
+            $procIds = $this->procurements()->pluck('id')->toArray();
+            if (!empty($procIds)) {
+                $individualDryingCost = (float) DryingProcess::whereIn('procurement_id', $procIds)
+                    ->whereNull('batch_id')
+                    ->whereNull('deleted_at')
+                    ->sum('total_price');
+            }
+        }
+
+        $totalDryingCost = $batchDryingCost + $individualDryingCost;
+
         return [
             'id'               => $this->id,
             'batch_number'     => $this->batch_number,
@@ -23,6 +50,7 @@ class ProcurementBatchResource extends JsonResource
             'used_sacks'       => (int) $this->total_sacks - (int) $this->remaining_sacks,
             'used_kg'          => (float) $this->total_kg - (float) $this->remaining_kg,
             'total_cost'       => (float) ($this->procurements_sum_total_cost ?? $this->procurements->sum('total_cost')),
+            'total_drying_cost' => $totalDryingCost,
             'status'           => $this->status,
             'notes'            => $this->notes,
             'procurements_count' => $this->whenCounted('procurements'),

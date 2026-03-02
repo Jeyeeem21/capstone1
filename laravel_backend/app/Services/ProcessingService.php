@@ -144,14 +144,22 @@ class ProcessingService
 
             // Calculate proportional split across sources and populate pivot
             if (!empty($dryingProcessIds)) {
-                $sources = DryingProcess::whereIn('id', $dryingProcessIds)->get();
-                $totalAvailable = $sources->sum(fn($s) => (float)$s->quantity_kg - (float)$s->quantity_out);
+                $sources = DryingProcess::whereIn('id', $dryingProcessIds)->lockForUpdate()->get();
+                $totalAvailable = $sources->sum(fn($s) => max(0, (float)$s->quantity_kg - (float)$s->quantity_out));
+
+                // VALIDATE: input_kg must not exceed total available from selected drying sources
+                if ($inputKg > $totalAvailable) {
+                    throw new \Exception(
+                        "Input quantity ({$inputKg} kg) exceeds total available from selected drying sources ({$totalAvailable} kg). "
+                        . "Please reduce the input quantity."
+                    );
+                }
 
                 $pivotData = [];
                 $allocatedSoFar = 0;
 
                 foreach ($sources as $i => $source) {
-                    $remaining = (float)$source->quantity_kg - (float)$source->quantity_out;
+                    $remaining = max(0, (float)$source->quantity_kg - (float)$source->quantity_out);
                     
                     // Last source gets the remainder to avoid rounding issues
                     if ($i === $sources->count() - 1) {
@@ -160,6 +168,9 @@ class ProcessingService
                         $proportion = $totalAvailable > 0 ? $remaining / $totalAvailable : 1 / $sources->count();
                         $share = round($inputKg * $proportion, 2);
                     }
+
+                    // Clamp share to source's remaining — never exceed what's available
+                    $share = min($share, $remaining);
                     $allocatedSoFar += $share;
 
                     $pivotData[$source->id] = ['quantity_kg' => $share];
@@ -189,6 +200,14 @@ class ProcessingService
                 if ($pivotSources->isNotEmpty()) {
                     // Recalculate proportional splits
                     $totalAvailable = $pivotSources->sum(fn($s) => (float)$s->quantity_kg - (float)$s->quantity_out + (float)$s->pivot->quantity_kg);
+
+                    // VALIDATE: new input_kg must not exceed total available
+                    if ($newInputKg > $totalAvailable) {
+                        throw new \Exception(
+                            "Input quantity ({$newInputKg} kg) exceeds total available from drying sources ({$totalAvailable} kg)."
+                        );
+                    }
+
                     $allocatedSoFar = 0;
                     $pivotData = [];
 
@@ -204,6 +223,8 @@ class ProcessingService
                             $proportion = $totalAvailable > 0 ? $remaining / $totalAvailable : 1 / $pivotSources->count();
                             $newShare = round($newInputKg * $proportion, 2);
                         }
+                        // Clamp share to source's remaining
+                        $newShare = min($newShare, $remaining);
                         $allocatedSoFar += $newShare;
 
                         $source->increment('quantity_out', $newShare);
@@ -215,6 +236,12 @@ class ProcessingService
                     $difference = $newInputKg - $oldInputKg;
                     $drying = DryingProcess::find($processing->drying_process_id);
                     if ($drying) {
+                        $availableForLegacy = (float)$drying->quantity_kg - (float)$drying->quantity_out + $oldInputKg;
+                        if ($newInputKg > $availableForLegacy) {
+                            throw new \Exception(
+                                "Input quantity ({$newInputKg} kg) exceeds available from drying source ({$availableForLegacy} kg)."
+                            );
+                        }
                         $drying->increment('quantity_out', $difference);
                     }
                 }

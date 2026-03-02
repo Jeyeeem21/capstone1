@@ -15,14 +15,14 @@ const defaultTheme = {
   primary_color: '#22c55e',
   
   // Button colors
-  button_primary: '#22c55e',
+  button_primary: '#7f0518',
   button_secondary: '#eab308',
   
   // Border color
-  border_color: '#86efac',
+  border_color: '#da2b2b',
   
   // Hover color for tables, buttons, interactive elements
-  hover_color: '#dcfce7',
+  hover_color: '#b22e5c',
   
   // Background colors
   bg_primary: '#ffffff',
@@ -33,7 +33,7 @@ const defaultTheme = {
   bg_footer: '#111827',
   
   // Pagination colors
-  pagination_bg: '#22c55e',
+  pagination_bg: '#7f0518',
   pagination_text: '#ffffff',
   
   // Text colors
@@ -43,8 +43,8 @@ const defaultTheme = {
   text_content: '#1f2937',
   
   // Font sizes
-  font_size_base: '16',
-  font_size_sidebar: '15',
+  font_size_base: '12',
+  font_size_sidebar: '12',
 };
 
 // Dark mode default colors - better contrast
@@ -283,11 +283,13 @@ export const ThemeProvider = ({ children }) => {
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       const settings = Object.entries(theme).map(([key, value]) => ({ key, value: String(value) }));
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${API_BASE_URL}/appearance`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify({ settings }),
         signal: controller.signal
@@ -329,10 +331,12 @@ export const ThemeProvider = ({ children }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${API_BASE_URL}/appearance/reset`, {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         signal: controller.signal
       });

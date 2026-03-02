@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Settings2, Package, CheckCircle, TrendingUp, FileText, Trash2, Eye, Calendar, Hash, Scale, Activity, Play, User, Percent, Layers, RotateCcw, ArrowDown, X } from 'lucide-react';
+import { Settings2, Package, CheckCircle, TrendingUp, FileText, Archive, Eye, Calendar, Hash, Scale, Activity, Play, User, Percent, Layers, RotateCcw, ArrowDown, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, useToast, Modal, Button, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -114,7 +114,7 @@ const Processing = () => {
         const varietyName = d.batch_variety_name || d.procurement_info?.variety_name || `Drying #${String(d.id).padStart(4, '0')}`;
         const batchNumber = d.batch_number || null;
         const batchId = d.batch_id || null;
-        const driedAt = d.dried_at ? new Date(d.dried_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+        const driedAt = d.dried_at ? new Date(d.dried_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : null;
         return { id: String(d.id), remaining, varietyName, batchNumber, batchId, driedAt };
       });
 
@@ -222,9 +222,9 @@ const Processing = () => {
   }, [toast, refetchDrying]);
 
   const handleDelete = useCallback((item) => {
-    // Only allow deleting Pending items
+    // Only allow archiving Pending items
     if (item.status !== 'Pending') {
-      toast.warning('Cannot Delete', 'Only pending records can be deleted.');
+      toast.warning('Cannot Archive', 'Only pending records can be archived.');
       return;
     }
     setSelectedItem(item);
@@ -358,6 +358,20 @@ const Processing = () => {
       toast.error('Required', 'Please select a processing date.');
       throw new Error('Processing date required');
     }
+    // Validate input_kg doesn't exceed available kg from selected drying sources
+    const selectedGroups = groupedDryingOptions.filter(opt => 
+      opt.dryingIds.some(id => selectedDryingIds.includes(id))
+    );
+    const totalAvailableKg = selectedGroups.reduce((sum, opt) => sum + opt.remaining, 0);
+    const inputKg = parseFloat(formData.input_kg) || 0;
+    if (inputKg <= 0) {
+      toast.error('Invalid', 'Input quantity must be greater than 0.');
+      throw new Error('Input kg must be > 0');
+    }
+    if (inputKg > totalAvailableKg) {
+      toast.error('Exceeds Available', `Input (${inputKg.toLocaleString()} kg) exceeds available stock (${totalAvailableKg.toLocaleString()} kg) from selected drying sources.`);
+      throw new Error('Input kg exceeds available');
+    }
     
     setSaving(true);
     try {
@@ -443,10 +457,24 @@ const Processing = () => {
   // Submit complete form - close modal first, then refetch and toast together
   const handleCompleteSubmit = async () => {
     if (saving) return; // Prevent double submit
+    
+    const outputKg = parseFloat(completeFormData.output_kg) || 0;
+    const inputKg = parseFloat(selectedItem?.input_kg) || 0;
+    
+    if (outputKg <= 0) {
+      toast.error('Invalid Output', 'Output quantity must be greater than 0.');
+      return;
+    }
+    
+    if (outputKg > inputKg) {
+      toast.error('Exceeds Input', `Output quantity (${outputKg.toLocaleString()} kg) cannot exceed the input quantity (${inputKg.toLocaleString()} kg).`);
+      return;
+    }
+    
     setSaving(true);
     try {
       const response = await apiClient.post(`/processings/${selectedItem.id}/complete`, {
-        output_kg: parseFloat(completeFormData.output_kg)
+        output_kg: outputKg
       });
       
       if (response.success && response.data) {
@@ -482,15 +510,15 @@ const Processing = () => {
         setIsDeleteModalOpen(false);
         // Refetch and toast together
         invalidateAndRefetch().then(() => {
-          toast.success('Processing Deleted', 'Processing record has been removed.');
+          toast.success('Processing Archived', 'Processing record has been archived.');
         });
         return;
       } else {
-        throw new Error(response.message || 'Failed to delete');
+        throw new Error(response.message || 'Failed to archive');
       }
     } catch (error) {
-      console.error('Error deleting processing:', error);
-      toast.error('Error', 'Failed to delete processing');
+      console.error('Error archiving processing:', error);
+      toast.error('Error', 'Failed to archive processing');
     } finally {
       setSaving(false);
     }
@@ -715,9 +743,8 @@ const Processing = () => {
           </button>
         )}
         <ActionButtons 
-          onView={() => handleView(row)} 
           onEdit={row.status === 'Pending' ? () => handleEdit(row) : null} 
-          onDelete={row.status === 'Pending' ? () => handleDelete(row) : null} 
+          onArchive={row.status === 'Pending' ? () => handleDelete(row) : null} 
         />
       </div>
     )},
@@ -815,7 +842,7 @@ const Processing = () => {
             <RotateCcw size={16} />
           </button>
         )}
-        <ActionButtons onView={() => handleView(row)} />
+        <ActionButtons />
       </div>
     )},
   ], [handleView, handleReturnToProcessing, saving]);
@@ -1105,8 +1132,12 @@ const Processing = () => {
               onChange={handleCompleteFormChange} 
               required 
               placeholder="Enter milled rice output"
-              hint="Enter the amount of milled rice produced"
+              hint={`Maximum: ${parseFloat(selectedItem.input_kg).toLocaleString()} kg (cannot exceed input)`}
+              max={parseFloat(selectedItem.input_kg)}
             />
+            {parseFloat(completeFormData.output_kg) > parseFloat(selectedItem.input_kg) && (
+              <p className="text-xs text-red-500 -mt-2">Output cannot exceed input ({parseFloat(selectedItem.input_kg).toLocaleString()} kg)</p>
+            )}
 
             {/* Auto-calculated fields */}
             {completeFormData.output_kg && (
@@ -1130,7 +1161,7 @@ const Processing = () => {
               <Button 
                 onClick={handleCompleteSubmit} 
                 className="flex-1" 
-                disabled={saving || !completeFormData.output_kg}
+                disabled={saving || !completeFormData.output_kg || parseFloat(completeFormData.output_kg) > parseFloat(selectedItem?.input_kg || 0) || parseFloat(completeFormData.output_kg) <= 0}
                 loading={saving}
               >
                 Complete Processing
@@ -1257,17 +1288,29 @@ const Processing = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <FormInput 
-                label="Input Quantity (kg)" 
-                name="input_kg" 
-                type="number" 
-                value={formData.input_kg} 
-                onChange={handleFormChange} 
-                required 
-                placeholder="0"
-                error={errors.input_kg}
-                submitted={submitted}
-              />
+              <div>
+                <FormInput 
+                  label="Input Quantity (kg)" 
+                  name="input_kg" 
+                  type="number" 
+                  value={formData.input_kg} 
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    if (val > totalAvailableKg && totalAvailableKg > 0) {
+                      setFormData(prev => ({ ...prev, input_kg: String(Math.round(totalAvailableKg * 100) / 100) }));
+                      return;
+                    }
+                    handleFormChange(e);
+                  }}
+                  required 
+                  placeholder="0"
+                  error={errors.input_kg || (formData.input_kg && parseFloat(formData.input_kg) > totalAvailableKg && totalAvailableKg > 0 ? `Max: ${totalAvailableKg.toLocaleString()} kg` : undefined)}
+                  submitted={submitted}
+                />
+                {totalAvailableKg > 0 && (
+                  <p className="text-[11px] text-gray-400 -mt-2 ml-1">Available: <strong>{totalAvailableKg.toLocaleString()} kg</strong> from selected sources</p>
+                )}
+              </div>
               <FormInput 
                 label="Processing Date" 
                 name="processing_date" 
@@ -1301,7 +1344,12 @@ const Processing = () => {
         size="lg"
         loading={saving}
       >
-        {({ submitted }) => (
+        {({ submitted }) => {
+          // Get selected drying source remaining kg for edit validation
+          const editDryingOption = dryingOptions.find(o => String(o.value) === String(formData.drying_process_id));
+          const editMaxKg = editDryingOption?.remaining || 0;
+          
+          return (
           <>
             <FormSelect 
               label="Drying Source" 
@@ -1313,17 +1361,29 @@ const Processing = () => {
               submitted={submitted}
             />
             <div className="grid grid-cols-2 gap-4">
-              <FormInput 
-                label="Input Quantity (kg)" 
-                name="input_kg" 
-                type="number" 
-                value={formData.input_kg} 
-                onChange={handleFormChange} 
-                required 
-                placeholder="0"
-                error={errors.input_kg}
-                submitted={submitted}
-              />
+              <div>
+                <FormInput 
+                  label="Input Quantity (kg)" 
+                  name="input_kg" 
+                  type="number" 
+                  value={formData.input_kg} 
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    if (editMaxKg > 0 && val > editMaxKg) {
+                      setFormData(prev => ({ ...prev, input_kg: String(Math.round(editMaxKg * 100) / 100) }));
+                      return;
+                    }
+                    handleFormChange(e);
+                  }}
+                  required 
+                  placeholder="0"
+                  error={errors.input_kg || (editMaxKg > 0 && formData.input_kg && parseFloat(formData.input_kg) > editMaxKg ? `Max: ${editMaxKg.toLocaleString()} kg` : undefined)}
+                  submitted={submitted}
+                />
+                {editMaxKg > 0 && (
+                  <p className="text-[11px] text-gray-400 -mt-2 ml-1">Available: <strong>{editMaxKg.toLocaleString()} kg</strong></p>
+                )}
+              </div>
               <FormInput 
                 label="Processing Date" 
                 name="processing_date" 
@@ -1342,19 +1402,20 @@ const Processing = () => {
               submitted={submitted}
             />
           </>
-        )}
+          );
+        }}
       </FormModal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Archive Confirmation Modal */}
       <ConfirmModal 
         isOpen={isDeleteModalOpen} 
         onClose={() => setIsDeleteModalOpen(false)} 
         onConfirm={handleDeleteConfirm} 
-        title="Delete Processing Record" 
-        message={`Are you sure you want to delete Processing #${String(selectedItem?.id || 0).padStart(4, '0')}? This action cannot be undone.`} 
-        confirmText="Delete" 
-        variant="danger" 
-        icon={Trash2}
+        title="Archive Processing Record" 
+        message={`Are you sure you want to archive Processing #${String(selectedItem?.id || 0).padStart(4, '0')}? It will be moved to the archives and can be restored later.`} 
+        confirmText="Archive" 
+        variant="warning" 
+        icon={Archive}
         loading={saving}
       />
       

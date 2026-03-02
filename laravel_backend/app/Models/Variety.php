@@ -30,6 +30,14 @@ class Variety extends Model
     ];
 
     /**
+     * Get the products that belong to this variety.
+     */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'variety_id');
+    }
+
+    /**
      * Get the procurements that use this variety.
      */
     public function procurements(): HasMany

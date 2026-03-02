@@ -26,45 +26,8 @@ const iconMap = {
   'Best Prices': Award,
 };
 
-// Fallback products in case API is unavailable
-const fallbackProducts = [
-  {
-    id: 1,
-    name: 'Premium Jasmine Rice',
-    description: 'Aromatic, long-grain rice with a subtle floral fragrance',
-    price: 850,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=300&fit=crop',
-    tags: ['Best Seller'],
-  },
-  {
-    id: 2,
-    name: 'Long Grain White Rice',
-    description: 'Classic, fluffy rice perfect for everyday meals',
-    price: 650,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400&h=300&fit=crop',
-    tags: [],
-  },
-  {
-    id: 3,
-    name: 'Brown Rice',
-    description: 'Nutritious whole grain rice with a nutty flavor',
-    price: 750,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1551462147-37885acc36f1?w=400&h=300&fit=crop',
-    tags: ['Healthy Choice'],
-  },
-  {
-    id: 4,
-    name: 'Glutinous Rice',
-    description: 'Sticky rice ideal for traditional Filipino desserts',
-    price: 900,
-    unit: '25kg',
-    image: 'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=400&h=300&fit=crop',
-    tags: [],
-  },
-];
+// Fallback products — empty until real products loaded from API
+const fallbackProducts = [];
 
 // Default content fallback
 const defaultContent = {
@@ -299,9 +262,9 @@ const Home = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products.map((product) => (
+            {products.map((product, index) => (
               <div 
-                key={product.name}
+                key={product.id || index}
                 className="group bg-white rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 hover:shadow-xl transition-all duration-300 border-2 border-primary-300 hover:border-button-400"
               >
                 <div className="relative h-48 overflow-hidden">

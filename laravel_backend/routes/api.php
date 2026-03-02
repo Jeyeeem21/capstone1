@@ -2,146 +2,264 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\AppearanceSettingController;
 use App\Http\Controllers\Api\BusinessSettingController;
 use App\Http\Controllers\Api\DatabaseBackupController;
 use App\Http\Controllers\Api\WebsiteContentController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\DriverController;
+use App\Http\Controllers\DeliveryAssignmentController;
 use App\Http\Controllers\VarietyController;
 use App\Http\Controllers\ProcurementController;
 use App\Http\Controllers\DryingProcessController;
 use App\Http\Controllers\ProcessingController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProcurementBatchController;
+use App\Http\Controllers\SaleController;
+use App\Http\Controllers\SalesPredictionController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ArchiveController;
+use App\Http\Controllers\AuditTrailController;
+use App\Http\Controllers\UserController;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+// ========================================
+// Public Routes (no auth required)
+// ========================================
 
-// Product Routes (Admin CRUD)
-Route::prefix('products')->group(function () {
-    Route::get('/', [ProductController::class, 'index']); // Get all products
-    Route::get('/featured', [ProductController::class, 'featured']); // Get featured products
-    Route::post('/', [ProductController::class, 'store']); // Create product
-    Route::get('/{id}', [ProductController::class, 'show']); // Get single product
-    Route::put('/{id}', [ProductController::class, 'update']); // Update product
-    Route::delete('/{id}', [ProductController::class, 'destroy']); // Delete product (soft)
-    Route::post('/{id}/restore', [ProductController::class, 'restore']); // Restore deleted product
-    Route::post('/{id}/stock', [ProductController::class, 'updateStock']); // Update stock
-    Route::post('/{id}/toggle-status', [ProductController::class, 'toggleStatus']); // Toggle status
+// Auth Routes
+Route::prefix('auth')->group(function () {
+    Route::post('/login', [AuthController::class, 'login']);
 });
 
-// Appearance Settings Routes (public - no auth required for reading)
+// Public-facing data (for the public website)
+Route::get('/products/featured', [ProductController::class, 'featured']);
+
 Route::prefix('appearance')->group(function () {
-    Route::get('/', [AppearanceSettingController::class, 'index']); // Get key-value pairs
-    Route::get('/all', [AppearanceSettingController::class, 'getAll']); // Get all with details
-    Route::get('/grouped', [AppearanceSettingController::class, 'getGrouped']); // Get grouped by category
-    Route::put('/', [AppearanceSettingController::class, 'update']); // Update multiple
-    Route::put('/{key}', [AppearanceSettingController::class, 'updateSingle']); // Update single
-    Route::post('/reset', [AppearanceSettingController::class, 'reset']); // Reset to defaults
+    Route::get('/', [AppearanceSettingController::class, 'index']);
+    Route::get('/all', [AppearanceSettingController::class, 'getAll']);
+    Route::get('/grouped', [AppearanceSettingController::class, 'getGrouped']);
 });
 
-// Website Content Routes (public pages content)
 Route::prefix('website-content')->group(function () {
-    Route::get('/', [WebsiteContentController::class, 'getAllContent']); // Get all content
-    Route::get('/home', [WebsiteContentController::class, 'getHomeContent']); // Get home page content
-    Route::get('/about', [WebsiteContentController::class, 'getAboutContent']); // Get about page content
-    Route::post('/home', [WebsiteContentController::class, 'saveHomeContent']); // Save home page content
-    Route::post('/about', [WebsiteContentController::class, 'saveAboutContent']); // Save about page content
-    Route::post('/hero-image', [WebsiteContentController::class, 'uploadHeroImage']); // Upload hero image
-    Route::post('/seed', [WebsiteContentController::class, 'seedDefaults']); // Seed default content
+    Route::get('/', [WebsiteContentController::class, 'getAllContent']);
+    Route::get('/home', [WebsiteContentController::class, 'getHomeContent']);
+    Route::get('/about', [WebsiteContentController::class, 'getAboutContent']);
 });
 
-// Business Settings Routes
 Route::prefix('business-settings')->group(function () {
-    Route::get('/', [BusinessSettingController::class, 'index']); // Get all business settings
-    Route::put('/', [BusinessSettingController::class, 'update']); // Update business settings
-    Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']); // Upload business logo
+    Route::get('/', [BusinessSettingController::class, 'index']);
 });
 
-// Database Backup Routes
-Route::prefix('database')->group(function () {
-    Route::get('/export', [DatabaseBackupController::class, 'export']); // Export database as SQL
-    Route::get('/info', [DatabaseBackupController::class, 'info']); // Get database info
-});
+// ========================================
+// Authenticated Routes (require auth:sanctum)
+// ========================================
+Route::middleware('auth:sanctum')->group(function () {
 
-// Customer Routes
-Route::prefix('customers')->group(function () {
-    Route::get('/', [CustomerController::class, 'index']); // Get all customers
-    Route::post('/', [CustomerController::class, 'store']); // Create customer
-    Route::post('/check-email', [CustomerController::class, 'checkEmail']); // Check email availability
-    Route::get('/{id}', [CustomerController::class, 'show']); // Get single customer
-    Route::put('/{id}', [CustomerController::class, 'update']); // Update customer
-    Route::delete('/{id}', [CustomerController::class, 'destroy']); // Delete customer
-});
+    // Dashboard Routes
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/stats', [DashboardController::class, 'stats']);
+        Route::get('/recent-activity', [DashboardController::class, 'recentActivity']);
+        Route::post('/refresh', [DashboardController::class, 'refresh']);
+    });
 
-// Supplier Routes
-Route::prefix('suppliers')->group(function () {
-    Route::get('/', [SupplierController::class, 'index']); // Get all suppliers
-    Route::post('/', [SupplierController::class, 'store']); // Create supplier
-    Route::post('/check-email', [SupplierController::class, 'checkEmail']); // Check email availability
-    Route::get('/{id}', [SupplierController::class, 'show']); // Get single supplier
-    Route::put('/{id}', [SupplierController::class, 'update']); // Update supplier
-    Route::delete('/{id}', [SupplierController::class, 'destroy']); // Delete supplier
-});
+    // Auth - authenticated user actions
+    Route::prefix('auth')->group(function () {
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/me', [AuthController::class, 'me']);
+    });
 
-// Variety Routes
-Route::prefix('varieties')->group(function () {
-    Route::get('/', [VarietyController::class, 'index']); // Get all varieties
-    Route::post('/', [VarietyController::class, 'store']); // Create variety
-    Route::get('/{id}', [VarietyController::class, 'show']); // Get single variety
-    Route::put('/{id}', [VarietyController::class, 'update']); // Update variety
-    Route::delete('/{id}', [VarietyController::class, 'destroy']); // Delete variety
-});
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
 
-// Procurement Routes
-Route::prefix('procurements')->group(function () {
-    Route::get('/', [ProcurementController::class, 'index']); // Get all procurements
-    Route::get('/statistics', [ProcurementController::class, 'statistics']); // Get statistics
-    Route::post('/', [ProcurementController::class, 'store']); // Create procurement
-    Route::get('/{id}', [ProcurementController::class, 'show']); // Get single procurement
-    Route::put('/{id}', [ProcurementController::class, 'update']); // Update procurement
-    Route::delete('/{id}', [ProcurementController::class, 'destroy']); // Delete procurement
-});
+    // Product Routes
+    Route::prefix('products')->group(function () {
+        Route::get('/', [ProductController::class, 'index']);
+        Route::post('/', [ProductController::class, 'store']);
+        Route::get('/{id}', [ProductController::class, 'show']);
+        Route::put('/{id}', [ProductController::class, 'update']);
+        Route::delete('/{id}', [ProductController::class, 'destroy']);
+        Route::post('/{id}/restore', [ProductController::class, 'restore']);
+        Route::post('/{id}/stock', [ProductController::class, 'updateStock']);
+        Route::get('/{id}/completed-processings', [ProductController::class, 'completedProcessingsByVariety']);
+        Route::post('/{id}/distribute-stock', [ProductController::class, 'distributeStock']);
+        Route::get('/{id}/cost-analysis', [ProductController::class, 'costAnalysis']);
+        Route::post('/{id}/toggle-status', [ProductController::class, 'toggleStatus']);
+    });
 
-// Drying Process Routes
-Route::prefix('drying-processes')->group(function () {
-    Route::get('/', [DryingProcessController::class, 'index']); // Get all drying processes
-    Route::get('/statistics', [DryingProcessController::class, 'statistics']); // Get statistics
-    Route::post('/', [DryingProcessController::class, 'store']); // Create drying process from procurement
-    Route::get('/{dryingProcess}', [DryingProcessController::class, 'show']); // Get single drying process
-    Route::put('/{dryingProcess}', [DryingProcessController::class, 'update']); // Update drying process
-    Route::post('/{dryingProcess}/increment-day', [DryingProcessController::class, 'incrementDay']); // Add a day
-    Route::post('/{dryingProcess}/mark-dried', [DryingProcessController::class, 'markAsDried']); // Mark as dried
-    Route::post('/{dryingProcess}/postpone', [DryingProcessController::class, 'postpone']); // Cancel drying
-    Route::delete('/{dryingProcess}', [DryingProcessController::class, 'destroy']); // Delete drying process
-});
+    Route::get('/stock-logs', [ProductController::class, 'stockLogs']);
 
-// Procurement Batch Routes
-Route::prefix('procurement-batches')->group(function () {
-    Route::get('/', [ProcurementBatchController::class, 'index']);                                           // Get all batches
-    Route::get('/open', [ProcurementBatchController::class, 'open']);                                        // Get open batches (for dropdowns)
-    Route::post('/', [ProcurementBatchController::class, 'store']);                                          // Create batch
-    Route::get('/{id}', [ProcurementBatchController::class, 'show']);                                        // Get single batch
-    Route::put('/{id}', [ProcurementBatchController::class, 'update']);                                      // Update batch
-    Route::delete('/{id}', [ProcurementBatchController::class, 'destroy']);                                  // Delete batch
-    Route::post('/{batchId}/assign/{procurementId}', [ProcurementBatchController::class, 'assignProcurement']);  // Assign procurement
-    Route::delete('/remove-procurement/{procurementId}', [ProcurementBatchController::class, 'removeProcurement']); // Remove procurement
-    Route::get('/{batchId}/drying-distribution', [ProcurementBatchController::class, 'dryingDistribution']); // Preview distribution
-});
+    // Sales / POS / Orders Routes
+    Route::prefix('sales')->group(function () {
+        Route::get('/', [SaleController::class, 'index']);
+        Route::post('/order', [SaleController::class, 'storeOrder']);
+        Route::get('/stats', [SaleController::class, 'stats']);
+        Route::get('/product-growth', [SaleController::class, 'productGrowth']);
+        Route::get('/{id}', [SaleController::class, 'show']);
+        Route::post('/{id}/void', [SaleController::class, 'void']);
+        Route::put('/{id}/status', [SaleController::class, 'updateStatus']);
+        Route::post('/{id}/return', [SaleController::class, 'processReturn']);
+    });
 
-// Processing Routes
-Route::prefix('processings')->group(function () {
-    Route::get('/', [ProcessingController::class, 'index']); // Get all processings
-    Route::get('/active', [ProcessingController::class, 'active']); // Get active (Pending + Processing)
-    Route::get('/completed', [ProcessingController::class, 'completed']); // Get completed
-    Route::get('/statistics', [ProcessingController::class, 'statistics']); // Get statistics
-    Route::post('/', [ProcessingController::class, 'store']); // Create processing
-    Route::get('/{processing}', [ProcessingController::class, 'show']); // Get single processing
-    Route::put('/{processing}', [ProcessingController::class, 'update']); // Update processing
-    Route::post('/{processing}/process', [ProcessingController::class, 'process']); // Start processing
-    Route::post('/{processing}/complete', [ProcessingController::class, 'complete']); // Complete processing
-    Route::post('/{processing}/return-to-processing', [ProcessingController::class, 'returnToProcessing']); // Return completed to processing
-    Route::delete('/{processing}', [ProcessingController::class, 'destroy']); // Delete processing
+    // Sales Predictive Analysis Routes
+    Route::prefix('sales-predictions')->group(function () {
+        Route::get('/', [SalesPredictionController::class, 'predictions']);
+        Route::post('/refresh', [SalesPredictionController::class, 'refresh']);
+    });
+
+    // Appearance Settings (write operations)
+    Route::prefix('appearance')->group(function () {
+        Route::put('/', [AppearanceSettingController::class, 'update']);
+        Route::put('/{key}', [AppearanceSettingController::class, 'updateSingle']);
+        Route::post('/reset', [AppearanceSettingController::class, 'reset']);
+    });
+
+    // Website Content (write operations)
+    Route::prefix('website-content')->group(function () {
+        Route::post('/home', [WebsiteContentController::class, 'saveHomeContent']);
+        Route::post('/about', [WebsiteContentController::class, 'saveAboutContent']);
+        Route::post('/hero-image', [WebsiteContentController::class, 'uploadHeroImage']);
+        Route::post('/seed', [WebsiteContentController::class, 'seedDefaults']);
+    });
+
+    // Business Settings (write operations)
+    Route::prefix('business-settings')->group(function () {
+        Route::put('/', [BusinessSettingController::class, 'update']);
+        Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']);
+    });
+
+    // Database Backup Routes
+    Route::prefix('database')->group(function () {
+        Route::get('/export', [DatabaseBackupController::class, 'export']);
+        Route::get('/info', [DatabaseBackupController::class, 'info']);
+    });
+
+    // Customer Routes
+    Route::prefix('customers')->group(function () {
+        Route::get('/', [CustomerController::class, 'index']);
+        Route::post('/', [CustomerController::class, 'store']);
+        Route::post('/check-email', [CustomerController::class, 'checkEmail']);
+        Route::get('/{id}', [CustomerController::class, 'show']);
+        Route::put('/{id}', [CustomerController::class, 'update']);
+        Route::delete('/{id}', [CustomerController::class, 'destroy']);
+    });
+
+    // Supplier Routes
+    Route::prefix('suppliers')->group(function () {
+        Route::get('/', [SupplierController::class, 'index']);
+        Route::post('/', [SupplierController::class, 'store']);
+        Route::post('/check-email', [SupplierController::class, 'checkEmail']);
+        Route::get('/{id}', [SupplierController::class, 'show']);
+        Route::put('/{id}', [SupplierController::class, 'update']);
+        Route::delete('/{id}', [SupplierController::class, 'destroy']);
+    });
+
+    // Variety Routes
+    Route::prefix('varieties')->group(function () {
+        Route::get('/', [VarietyController::class, 'index']);
+        Route::post('/', [VarietyController::class, 'store']);
+        Route::get('/{id}', [VarietyController::class, 'show']);
+        Route::put('/{id}', [VarietyController::class, 'update']);
+        Route::delete('/{id}', [VarietyController::class, 'destroy']);
+    });
+
+    // Procurement Routes
+    Route::prefix('procurements')->group(function () {
+        Route::get('/', [ProcurementController::class, 'index']);
+        Route::get('/statistics', [ProcurementController::class, 'statistics']);
+        Route::post('/', [ProcurementController::class, 'store']);
+        Route::get('/{id}', [ProcurementController::class, 'show']);
+        Route::put('/{id}', [ProcurementController::class, 'update']);
+        Route::delete('/{id}', [ProcurementController::class, 'destroy']);
+    });
+
+    // Drying Process Routes
+    Route::prefix('drying-processes')->group(function () {
+        Route::get('/', [DryingProcessController::class, 'index']);
+        Route::get('/statistics', [DryingProcessController::class, 'statistics']);
+        Route::post('/', [DryingProcessController::class, 'store']);
+        Route::get('/{dryingProcess}', [DryingProcessController::class, 'show']);
+        Route::put('/{dryingProcess}', [DryingProcessController::class, 'update']);
+        Route::post('/{dryingProcess}/increment-day', [DryingProcessController::class, 'incrementDay']);
+        Route::post('/{dryingProcess}/mark-dried', [DryingProcessController::class, 'markAsDried']);
+        Route::post('/{dryingProcess}/postpone', [DryingProcessController::class, 'postpone']);
+        Route::delete('/{dryingProcess}', [DryingProcessController::class, 'destroy']);
+    });
+
+    // Procurement Batch Routes
+    Route::prefix('procurement-batches')->group(function () {
+        Route::get('/', [ProcurementBatchController::class, 'index']);
+        Route::get('/open', [ProcurementBatchController::class, 'open']);
+        Route::post('/', [ProcurementBatchController::class, 'store']);
+        Route::get('/{id}', [ProcurementBatchController::class, 'show']);
+        Route::put('/{id}', [ProcurementBatchController::class, 'update']);
+        Route::delete('/{id}', [ProcurementBatchController::class, 'destroy']);
+        Route::post('/{batchId}/assign/{procurementId}', [ProcurementBatchController::class, 'assignProcurement']);
+        Route::delete('/remove-procurement/{procurementId}', [ProcurementBatchController::class, 'removeProcurement']);
+        Route::get('/{batchId}/drying-distribution', [ProcurementBatchController::class, 'dryingDistribution']);
+    });
+
+    // Processing Routes
+    Route::prefix('processings')->group(function () {
+        Route::get('/', [ProcessingController::class, 'index']);
+        Route::get('/active', [ProcessingController::class, 'active']);
+        Route::get('/completed', [ProcessingController::class, 'completed']);
+        Route::get('/statistics', [ProcessingController::class, 'statistics']);
+        Route::post('/', [ProcessingController::class, 'store']);
+        Route::get('/{processing}', [ProcessingController::class, 'show']);
+        Route::put('/{processing}', [ProcessingController::class, 'update']);
+        Route::post('/{processing}/process', [ProcessingController::class, 'process']);
+        Route::post('/{processing}/complete', [ProcessingController::class, 'complete']);
+        Route::post('/{processing}/return-to-processing', [ProcessingController::class, 'returnToProcessing']);
+        Route::delete('/{processing}', [ProcessingController::class, 'destroy']);
+    });
+
+    // Driver Routes
+    Route::prefix('drivers')->group(function () {
+        Route::get('/', [DriverController::class, 'index']);
+        Route::get('/statistics', [DriverController::class, 'statistics']);
+        Route::post('/', [DriverController::class, 'store']);
+        Route::get('/{id}', [DriverController::class, 'show']);
+        Route::put('/{id}', [DriverController::class, 'update']);
+        Route::delete('/{id}', [DriverController::class, 'destroy']);
+    });
+
+    // Delivery Assignment Routes
+    Route::prefix('deliveries')->group(function () {
+        Route::get('/', [DeliveryAssignmentController::class, 'index']);
+        Route::get('/statistics', [DeliveryAssignmentController::class, 'statistics']);
+        Route::post('/', [DeliveryAssignmentController::class, 'store']);
+        Route::get('/driver/{driverId}', [DeliveryAssignmentController::class, 'byDriver']);
+        Route::get('/{id}', [DeliveryAssignmentController::class, 'show']);
+        Route::put('/{id}', [DeliveryAssignmentController::class, 'update']);
+        Route::post('/{id}/status', [DeliveryAssignmentController::class, 'updateStatus']);
+        Route::delete('/{id}', [DeliveryAssignmentController::class, 'destroy']);
+    });
+
+    // User Management Routes
+    Route::prefix('users')->group(function () {
+        Route::get('/', [UserController::class, 'index']);
+        Route::get('/statistics', [UserController::class, 'statistics']);
+        Route::post('/', [UserController::class, 'store']);
+        Route::get('/{id}', [UserController::class, 'show']);
+        Route::put('/{id}', [UserController::class, 'update']);
+        Route::delete('/{id}', [UserController::class, 'destroy']);
+    });
+
+    // Archive Routes (Super Admin)
+    Route::prefix('archives')->group(function () {
+        Route::get('/', [ArchiveController::class, 'index']);
+        Route::get('/statistics', [ArchiveController::class, 'statistics']);
+        Route::post('/{module}/{id}/restore', [ArchiveController::class, 'restore']);
+        Route::delete('/{module}/{id}', [ArchiveController::class, 'permanentDelete']);
+    });
+
+    // Audit Trail Routes
+    Route::prefix('audit-trails')->group(function () {
+        Route::get('/', [AuditTrailController::class, 'index']);
+        Route::get('/statistics', [AuditTrailController::class, 'statistics']);
+        Route::get('/{auditTrail}', [AuditTrailController::class, 'show']);
+    });
 });

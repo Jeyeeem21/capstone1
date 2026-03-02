@@ -32,7 +32,7 @@ export const ENDPOINTS = {
   PRODUCTS: {
     BASE: '/products',
     FEATURED: '/products/featured',
-    CATEGORIES: '/varieties',
+    VARIETIES: '/varieties',
     BY_ID: (id) => `/products/${id}`,
   },
   
@@ -67,6 +67,7 @@ export const ENDPOINTS = {
   DASHBOARD: {
     STATS: '/dashboard/stats',
     RECENT_ACTIVITY: '/dashboard/recent-activity',
+    REFRESH: '/dashboard/refresh',
   },
   
   // Settings
@@ -86,6 +87,22 @@ export const ENDPOINTS = {
     HOME: '/website-content/home',
     ABOUT: '/website-content/about',
     SEED: '/website-content/seed',
+  },
+
+  // Drivers
+  DRIVERS: {
+    BASE: '/drivers',
+    STATISTICS: '/drivers/statistics',
+    BY_ID: (id) => `/drivers/${id}`,
+  },
+
+  // Deliveries
+  DELIVERIES: {
+    BASE: '/deliveries',
+    STATISTICS: '/deliveries/statistics',
+    BY_DRIVER: (driverId) => `/deliveries/driver/${driverId}`,
+    BY_ID: (id) => `/deliveries/${id}`,
+    UPDATE_STATUS: (id) => `/deliveries/${id}/status`,
   },
 };
 

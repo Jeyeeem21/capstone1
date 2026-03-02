@@ -1,7 +1,17 @@
-import { useState, useEffect } from 'react';
-import { LayoutDashboard, Package, CheckCircle, TrendingUp, FileText } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  LayoutDashboard, DollarSign, ShoppingCart, Users, Package,
+  TrendingUp, AlertTriangle, RefreshCw, Activity,
+  Truck, Settings2, Droplets, ArrowRight, Clock,
+  ShoppingBag, Layers
+} from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, Skeleton, SkeletonStats, SkeletonTable } from '../../../components/ui';
+import {
+  StatsCard, LineChart, DonutChart, BarChart, DataTable, StatusBadge,
+  Skeleton, SkeletonStats, SkeletonTable
+} from '../../../components/ui';
+import { dashboardApi } from '../../../api';
+import { useAuth } from '../../../context/AuthContext';
 
 // Helper to get CSS variable value
 const getCSSVariable = (name) => {
@@ -9,8 +19,12 @@ const getCSSVariable = (name) => {
 };
 
 const Dashboard = () => {
-  const [chartPeriod, setChartPeriod] = useState('daily');
+  const { basePath } = useAuth();
+  const [period, setPeriod] = useState('monthly');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [activity, setActivity] = useState([]);
   const [themeColors, setThemeColors] = useState({
     primary: '#22c55e',
     secondary: '#eab308',
@@ -26,117 +40,224 @@ const Dashboard = () => {
         button: getCSSVariable('--color-button-500') || '#22c55e'
       });
     };
-    
     updateColors();
     const observer = new MutationObserver(updateColors);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-    
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
+  // Fetch dashboard data
+  const fetchData = useCallback(async (selectedPeriod) => {
+    try {
+      const [statsRes, activityRes] = await Promise.all([
+        dashboardApi.getStats(selectedPeriod),
+        dashboardApi.getRecentActivity(15),
+      ]);
+      setStats(statsRes?.data || statsRes);
+      setActivity(activityRes?.data || activityRes || []);
+    } catch (err) {
+      console.error('Failed to fetch dashboard data:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  // Generate chart data based on period
-  const getChartData = () => {
-    if (chartPeriod === 'daily') {
-      return Array.from({ length: 31 }, (_, i) => ({
-        name: `Jan ${i + 1}`,
-        input: Math.floor(300 + Math.sin(i * 0.5) * 100 + i * 5),
-        output: Math.floor(250 + Math.cos(i * 0.4) * 80 + i * 4),
-      }));
-    } else if (chartPeriod === 'monthly') {
-      const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
-      return months.map((m, i) => ({
-        name: m,
-        input: Math.floor(8000 + i * 600 + Math.sin(i) * 500),
-        output: Math.floor(6500 + i * 500 + Math.cos(i) * 400),
-      }));
-    } else {
-      return [
-        { name: '2022', input: 72000, output: 58000 },
-        { name: '2023', input: 85000, output: 69000 },
-        { name: '2024', input: 96000, output: 78000 },
-        { name: '2025', input: 110000, output: 92000 },
-        { name: '2026', input: 10500, output: 8700 },
-      ];
-    }
+  useEffect(() => {
+    if (!stats) setLoading(true); // Only show skeletons on first load
+    fetchData(period);
+  }, [period, fetchData]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await dashboardApi.refresh();
+    } catch (_) { /* ignore */ }
+    fetchData(period);
   };
 
-  const chartData = getChartData();
-  const totalInput = chartData.reduce((sum, d) => sum + d.input, 0);
-  const totalOutput = chartData.reduce((sum, d) => sum + d.output, 0);
+  // Derived data
+  const overview = stats?.overview || {};
+  const revenueChart = stats?.revenue || [];
+  const processingData = stats?.processing || {};
+  const processingChart = processingData?.chart || [];
+  const procurement = stats?.procurement || {};
+  const inventory = stats?.inventory || {};
+  const topProducts = stats?.top_products || [];
+  const recentSales = stats?.recent_sales || [];
+  const lowStock = stats?.low_stock || [];
+  const paymentBreakdown = stats?.payment_breakdown || [];
+  const statusBreakdown = stats?.status_breakdown || [];
+  const pipeline = stats?.pipeline || {};
 
-  // Use theme colors for breakdown data - will update when themeColors changes
-  const breakdownData = [
-    { name: 'Milled Rice', value: Math.floor(totalOutput * 0.85), color: themeColors.button },
-    { name: 'Husk', value: Math.floor(totalOutput * 0.10), color: '#ef4444' },
-    { name: 'Other Waste', value: Math.floor(totalOutput * 0.05), color: '#f97316' },
-  ];
+  // Format currency
+  const fmt = (val) => `₱${Number(val || 0).toLocaleString()}`;
 
-  const recentSales = [
-    { id: 1, invoice: 'INV-001', customer: 'Juan Dela Cruz', date: '2026-01-31', amount: '₱12,500', status: 'Completed' },
-    { id: 2, invoice: 'INV-002', customer: 'Maria Santos', date: '2026-01-30', amount: '₱8,750', status: 'Pending' },
-    { id: 3, invoice: 'INV-003', customer: 'Pedro Garcia', date: '2026-01-29', amount: '₱15,200', status: 'Completed' },
-    { id: 4, invoice: 'INV-004', customer: 'Ana Reyes', date: '2026-01-28', amount: '₱6,300', status: 'Cancelled' },
-    { id: 5, invoice: 'INV-005', customer: 'Jose Rizal', date: '2026-01-27', amount: '₱9,800', status: 'Completed' },
-  ];
+  // Pipeline items for the flow bar
+  const pipelineItems = useMemo(() => [
+    { label: 'Procurement', count: pipeline.procurement_pending || 0, icon: ShoppingCart, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-500/10', path: `${basePath}/procurement` },
+    { label: 'Drying', count: pipeline.drying_active || 0, icon: Droplets, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-500/10', path: `${basePath}/drying` },
+    { label: 'Processing', count: pipeline.processing_active || 0, icon: Settings2, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-500/10', path: `${basePath}/processing` },
+    { label: 'Orders', count: pipeline.orders_pending || 0, icon: ShoppingBag, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-500/10', path: `${basePath}/orders` },
+    { label: 'Deliveries', count: pipeline.deliveries_active || 0, icon: Truck, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-500/10', path: `${basePath}/orders` },
+  ], [pipeline, basePath]);
 
-  const columns = [
-    { header: 'Invoice', accessor: 'invoice' },
+  // Top products bar chart data
+  const topProductsBarData = useMemo(() =>
+    topProducts.map(p => ({
+      name: p.product_name?.length > 12 ? p.product_name.slice(0, 12) + '…' : p.product_name,
+      revenue: p.total_revenue,
+      quantity: p.total_qty,
+    })),
+    [topProducts]
+  );
+
+  // Inventory health donut
+  const inventoryDonut = useMemo(() => [
+    { name: 'Healthy', value: inventory.healthy || 0, color: '#22c55e' },
+    { name: 'Low Stock', value: inventory.low_stock || 0, color: '#f59e0b' },
+    { name: 'Out of Stock', value: inventory.out_of_stock || 0, color: '#ef4444' },
+  ], [inventory]);
+
+  // Recent sales columns
+  const recentSalesColumns = [
+    { header: 'Transaction', accessor: 'transaction_id' },
     { header: 'Customer', accessor: 'customer' },
+    { header: 'Amount', accessor: 'total', cell: (row) => fmt(row.total) },
+    { header: 'Payment', accessor: 'payment_method' },
     { header: 'Date', accessor: 'date' },
-    { header: 'Amount', accessor: 'amount' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
   ];
 
+  // Low stock columns
+  const lowStockColumns = [
+    {
+      header: 'Product', accessor: 'product_name', cell: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: row.variety_color }} />
+          <span>{row.product_name}</span>
+        </div>
+      )
+    },
+    { header: 'Variety', accessor: 'variety' },
+    { header: 'Stock', accessor: 'stocks', cell: (row) => (
+      <span className={`font-bold ${row.stocks <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
+        {row.stocks}
+      </span>
+    )},
+    { header: 'Floor', accessor: 'stock_floor' },
+    { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
+  ];
+
+  // Activity icon map
+  const getActivityIcon = (action) => {
+    switch (action) {
+      case 'CREATE': return <div className="w-7 h-7 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center"><TrendingUp size={13} className="text-green-600 dark:text-green-400" /></div>;
+      case 'UPDATE': return <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center"><Activity size={13} className="text-blue-600 dark:text-blue-400" /></div>;
+      case 'DELETE': return <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-red-600 dark:text-red-400" /></div>;
+      default: return <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center"><Clock size={13} className="text-gray-600 dark:text-gray-400" /></div>;
+    }
+  };
+
   return (
     <div>
-      <PageHeader 
-        title="Dashboard" 
+      <PageHeader
+        title="Dashboard"
         description="Overview of your business performance"
         icon={LayoutDashboard}
       />
 
-      {/* Stats Cards */}
+      {/* Refresh Button */}
+      <div className="flex justify-end mb-4 -mt-2">
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-button-600 bg-white border border-gray-200 rounded-lg hover:border-button-300 transition-all disabled:opacity-50"
+        >
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* ==================== STATS CARDS ==================== */}
       {loading ? (
         <SkeletonStats count={4} className="mb-6" />
       ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatsCard 
-          label="Total Input" 
-          value={totalInput.toLocaleString()} 
-          unit="kg palay" 
-          icon={Package}
-          iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
-        />
-        <StatsCard 
-          label="Total Output" 
-          value={totalOutput.toLocaleString()} 
-          unit="kg rice" 
-          icon={CheckCircle}
-          iconBgColor="bg-gradient-to-br from-button-500 to-button-600"
-        />
-        <StatsCard 
-          label="Average Yield" 
-          value={((totalOutput / totalInput) * 100).toFixed(2)} 
-          unit="%" 
-          icon={TrendingUp}
-          iconBgColor="bg-gradient-to-br from-button-400 to-button-500"
-        />
-        <StatsCard 
-          label="Total Records" 
-          value={recentSales.length} 
-          unit="entries" 
-          icon={FileText}
-          iconBgColor="bg-gradient-to-br from-button-500 to-button-700"
-        />
-      </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <StatsCard
+            label="Total Revenue"
+            value={fmt(overview.total_revenue)}
+            unit="all time"
+            icon={DollarSign}
+            iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
+            trend={overview.revenue_trend}
+            trendLabel="vs last month"
+          />
+          <StatsCard
+            label="Total Orders"
+            value={overview.total_orders || 0}
+            unit="completed"
+            icon={ShoppingBag}
+            iconBgColor="bg-gradient-to-br from-green-400 to-green-600"
+            trend={overview.orders_trend}
+            trendLabel="vs last month"
+          />
+          <StatsCard
+            label="Customers"
+            value={overview.total_customers || 0}
+            unit={`+${overview.new_customers_this_month || 0} this month`}
+            icon={Users}
+            iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
+            trend={overview.customers_trend}
+            trendLabel="vs last month"
+          />
+          <StatsCard
+            label="Products"
+            value={overview.active_products || 0}
+            unit={`${overview.total_stock?.toLocaleString() || 0} units in stock`}
+            icon={Package}
+            iconBgColor="bg-gradient-to-br from-purple-400 to-purple-600"
+          />
+        </div>
       )}
 
-      {/* Charts */}
+      {/* ==================== PIPELINE FLOW ==================== */}
+      {loading ? (
+        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-100">
+          <Skeleton variant="title" width="w-40" className="mb-4" />
+          <div className="flex items-center gap-3">
+            {[1,2,3,4,5].map(i => <Skeleton key={i} variant="custom" className="h-16 flex-1 rounded-lg" />)}
+          </div>
+        </div>
+      ) : (
+        <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50">
+          <h3 className="text-sm font-bold text-content mb-3 flex items-center gap-2">
+            <Layers size={15} className="text-button-500" />
+            Active Pipeline
+          </h3>
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {pipelineItems.map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="flex items-center flex-1 min-w-0">
+                  <a href={item.path} className={`flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-lg ${item.bg} hover:shadow-sm transition-all group`}>
+                    <Icon size={16} className={item.color} />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium text-secondary truncate">{item.label}</p>
+                      <p className={`text-lg font-bold ${item.color} leading-tight`}>{item.count}</p>
+                    </div>
+                  </a>
+                  {idx < pipelineItems.length - 1 && (
+                    <ArrowRight size={14} className="text-gray-300 mx-1 flex-shrink-0" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== REVENUE & PAYMENT CHARTS ==================== */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="lg:col-span-2 p-4 bg-white rounded-xl border border-gray-100">
@@ -151,57 +272,242 @@ const Dashboard = () => {
           </div>
         </div>
       ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <div className="lg:col-span-2">
-          <LineChart
-            title="Processing Trends"
-            subtitle="Production performance overview"
-            data={chartData}
-            lines={[
-              { dataKey: 'input', name: 'Input (kg)', color: themeColors.secondary, dashed: true },
-              { dataKey: 'output', name: 'Output (kg)', color: themeColors.button },
-            ]}
-            height={280}
-            tabs={[
-              { label: 'Daily', value: 'daily' },
-              { label: 'Monthly', value: 'monthly' },
-              { label: 'Yearly', value: 'yearly' },
-            ]}
-            activeTab={chartPeriod}
-            onTabChange={setChartPeriod}
-            summaryStats={[
-              { label: 'Total Output', value: `${totalOutput.toLocaleString()} kg`, color: 'text-primary-600' },
-              { label: 'Avg per Day', value: `${Math.floor(totalOutput / 31).toLocaleString()} kg`, color: 'text-primary-600' },
-              { label: 'Growth', value: '+12%', color: 'text-green-600' },
-            ]}
-          />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="lg:col-span-2">
+            <LineChart
+              title="Revenue Trends"
+              subtitle="Sales revenue from completed orders"
+              data={revenueChart}
+              lines={[
+                { dataKey: 'revenue', name: 'Revenue (₱)' },
+                { dataKey: 'orders', name: 'Orders', color: themeColors.secondary, dashed: true },
+              ]}
+              height={280}
+              yAxisUnit="₱"
+              tabs={[
+                { label: 'Daily', value: 'daily' },
+                { label: 'Monthly', value: 'monthly' },
+                { label: 'Yearly', value: 'yearly' },
+              ]}
+              activeTab={period}
+              onTabChange={setPeriod}
+              summaryStats={[
+                { label: 'This Month', value: fmt(overview.current_month_revenue), color: 'text-primary-600' },
+                { label: 'Avg Order', value: fmt(overview.avg_order_value), color: 'text-primary-600' },
+                { label: 'Items Sold', value: (overview.total_items_sold || 0).toLocaleString(), color: 'text-green-600' },
+              ]}
+            />
+          </div>
+          <div className="space-y-4">
+            <DonutChart
+              title="Payment Methods"
+              subtitle="Breakdown by type"
+              data={paymentBreakdown}
+              centerValue={paymentBreakdown.reduce((s, p) => s + p.value, 0)}
+              centerLabel="Orders"
+              height={160}
+              innerRadius={50}
+              outerRadius={72}
+              valueUnit=""
+              horizontalLegend={true}
+              compactLegend={true}
+            />
+            <DonutChart
+              title="Order Status"
+              subtitle="All order outcomes"
+              data={statusBreakdown}
+              centerValue={statusBreakdown.reduce((s, p) => s + p.value, 0)}
+              centerLabel="Total"
+              height={140}
+              innerRadius={45}
+              outerRadius={62}
+              valueUnit=""
+              horizontalLegend={true}
+              compactLegend={true}
+            />
+          </div>
         </div>
-        <DonutChart
-          title="Processing Breakdown"
-          subtitle="Output vs waste distribution"
-          data={breakdownData}
-          centerValue={`${totalOutput.toLocaleString()} kg`}
-          centerLabel="Total Output"
-          height={180}
-        />
-      </div>
       )}
 
-      {/* Recent Sales */}
+      {/* ==================== PROCESSING & INVENTORY ==================== */}
       {loading ? (
-        <SkeletonTable rows={5} columns={5} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="lg:col-span-2 p-4 bg-white rounded-xl border border-gray-100">
+            <Skeleton variant="title" width="w-32" className="mb-4" />
+            <Skeleton variant="custom" className="h-[260px] w-full rounded-lg" />
+          </div>
+          <div className="p-4 bg-white rounded-xl border border-gray-100">
+            <Skeleton variant="title" width="w-24" className="mb-4" />
+            <div className="flex items-center justify-center py-4">
+              <Skeleton variant="circle" width="w-[160px]" height="h-[160px]" />
+            </div>
+          </div>
+        </div>
       ) : (
-      <div>
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Recent Sales</h2>
-        <DataTable
-          columns={columns}
-          data={recentSales}
-          searchPlaceholder="Search sales..."
-          defaultItemsPerPage={5}
-          filterField="status"
-          filterPlaceholder="All Status"
-        />
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div className="lg:col-span-2">
+            <LineChart
+              title="Processing Trends"
+              subtitle="Milling input vs output performance"
+              data={processingChart}
+              lines={[
+                { dataKey: 'input', name: 'Input (kg)', color: themeColors.secondary, dashed: true },
+                { dataKey: 'output', name: 'Output (kg)', color: themeColors.button },
+              ]}
+              height={260}
+              yAxisUnit="kg"
+              summaryStats={[
+                { label: 'Total Input', value: `${(processingData.total_input || 0).toLocaleString()} kg`, color: 'text-yellow-600' },
+                { label: 'Total Output', value: `${(processingData.total_output || 0).toLocaleString()} kg`, color: 'text-primary-600' },
+                { label: 'Avg Yield', value: `${processingData.avg_yield || 0}%`, color: 'text-green-600' },
+              ]}
+            />
+          </div>
+          <div className="space-y-4">
+            <DonutChart
+              title="Inventory Health"
+              subtitle="Stock level distribution"
+              data={inventoryDonut}
+              centerValue={inventory.total_products || 0}
+              centerLabel="Products"
+              height={160}
+              innerRadius={50}
+              outerRadius={72}
+              valueUnit=""
+              horizontalLegend={true}
+              compactLegend={true}
+            />
+            {/* Procurement summary card */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4">
+              <h3 className="text-sm font-bold text-content mb-3 flex items-center gap-2">
+                <ShoppingCart size={15} className="text-button-500" />
+                Procurement
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-secondary">Total Sacks</span>
+                  <span className="text-sm font-bold text-content">{(procurement.total_sacks || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-secondary">Total Quantity</span>
+                  <span className="text-sm font-bold text-content">{(procurement.total_kg || 0).toLocaleString()} kg</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-secondary">Total Cost</span>
+                  <span className="text-sm font-bold text-content">{fmt(procurement.total_cost)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-secondary">Active Suppliers</span>
+                  <span className="text-sm font-bold text-green-600">{procurement.active_suppliers || 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-secondary">Pending</span>
+                  <span className="text-sm font-bold text-yellow-600">{procurement.pending || 0}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== TOP PRODUCTS BAR CHART ==================== */}
+      {!loading && topProducts.length > 0 && (
+        <div className="mb-6">
+          <BarChart
+            title="Top Selling Products"
+            subtitle="Best performers by revenue"
+            data={topProductsBarData}
+            bars={[
+              { dataKey: 'revenue', name: 'Revenue (₱)', color: themeColors.button },
+              { dataKey: 'quantity', name: 'Qty Sold', color: themeColors.secondary },
+            ]}
+            height={280}
+          />
+        </div>
+      )}
+
+      {/* ==================== TABLES: RECENT SALES + LOW STOCK ==================== */}
+      {loading ? (
+        <SkeletonTable rows={5} columns={6} />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Recent Sales */}
+          <div>
+            <DataTable
+              title="Recent Sales"
+              subtitle="Latest transactions"
+              columns={recentSalesColumns}
+              data={recentSales}
+              searchable={false}
+              pagination={false}
+              defaultItemsPerPage={8}
+            />
+          </div>
+
+          {/* Low Stock Alerts */}
+          <div>
+            {lowStock.length > 0 ? (
+              <DataTable
+                title="Low Stock Alerts"
+                subtitle="Products needing restocking"
+                columns={lowStockColumns}
+                data={lowStock}
+                searchable={false}
+                pagination={false}
+                defaultItemsPerPage={5}
+              />
+            ) : (
+              <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-6">
+                <h3 className="text-sm font-bold text-content mb-2 flex items-center gap-2">
+                  <AlertTriangle size={15} className="text-button-500" />
+                  Low Stock Alerts
+                </h3>
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center mb-3">
+                    <Package size={20} className="text-green-600 dark:text-green-400" />
+                  </div>
+                  <p className="text-sm font-medium text-content">All products are well-stocked!</p>
+                  <p className="text-xs text-secondary mt-1">No products below their stock floor</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ==================== RECENT ACTIVITY ==================== */}
+      {!loading && activity.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4 mb-6">
+          <h3 className="text-sm font-bold text-content mb-4 flex items-center gap-2">
+            <Activity size={15} className="text-button-500" />
+            Recent Activity
+          </h3>
+          <div className="space-y-0 max-h-[340px] overflow-y-auto pr-1">
+            {activity.map((item, idx) => (
+              <div key={item.id || idx} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                {getActivityIcon(item.action)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-content truncate">{item.description}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-secondary">{item.user}</span>
+                    <span className="text-[10px] text-gray-300">•</span>
+                    <span className="text-[10px] text-secondary">{item.module}</span>
+                    <span className="text-[10px] text-gray-300">•</span>
+                    <span className="text-[10px] text-secondary">{item.time}</span>
+                  </div>
+                </div>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  item.action === 'CREATE' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                  item.action === 'UPDATE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
+                  item.action === 'DELETE' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                  'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                }`}>
+                  {item.action}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

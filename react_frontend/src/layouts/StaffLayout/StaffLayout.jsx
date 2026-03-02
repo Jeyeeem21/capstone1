@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Monitor, 
@@ -10,11 +10,24 @@ import {
 } from 'lucide-react';
 import { Footer } from '../../components/common';
 import { Avatar } from '../../components/ui';
+import { ConfirmModal } from '../../components/ui/Modal';
 import { useAuth } from '../../context/AuthContext';
 
 const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLogoutModalOpen(false);
+    await logout();
+    navigate('/?login=true');
+  };
+
+  const staffName = user?.first_name && user?.last_name 
+    ? `${user.first_name} ${user.last_name}` 
+    : user?.name || 'Staff User';
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -106,19 +119,19 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
         {/* User Profile Section */}
         <div className="p-3 border-t-2 border-primary-200">
           <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'gap-3'} p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl`}>
-            <Avatar name={user ? `${user.firstName} ${user.lastName}` : 'Staff User'} size="md" />
+            <Avatar name={staffName} size="md" />
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">
-                  {user ? `${user.firstName} ${user.lastName}` : 'Staff User'}
+                  {staffName}
                 </p>
-                <p className="text-xs text-gray-500 truncate">{user?.role || 'Staff'}</p>
+                <p className="text-xs text-gray-500 truncate">Staff</p>
               </div>
             )}
           </div>
           
           <button 
-            onClick={logout}
+            onClick={() => setIsLogoutModalOpen(true)}
             className={`w-full mt-2 flex items-center ${isCollapsed ? 'lg:justify-center' : 'justify-center gap-2'} px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors`}
             title={isCollapsed ? 'Logout' : ''}
           >
@@ -126,6 +139,19 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
             {!isCollapsed && <span>Logout</span>}
           </button>
         </div>
+
+        {/* Logout Confirmation Modal */}
+        <ConfirmModal
+          isOpen={isLogoutModalOpen}
+          onClose={() => setIsLogoutModalOpen(false)}
+          onConfirm={handleLogout}
+          title="Confirm Logout"
+          message="Are you sure you want to logout? You will need to login again to access the system."
+          confirmText="Logout"
+          cancelText="Cancel"
+          variant="danger"
+          icon={LogOut}
+        />
       </aside>
     </>
   );

@@ -8,13 +8,13 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 
-// Mock customer data (will be replaced with real auth later)
+// Customer data — will connect to real auth
 const mockCustomer = {
-  id: 1,
-  name: 'Maria Santos',
-  email: 'maria@example.com',
-  phone: '+63 917 123 4567',
-  address: 'Calapan City, Oriental Mindoro',
+  id: 0,
+  name: 'Customer',
+  email: '',
+  phone: '',
+  address: '',
 };
 
 // Mobile Bottom Navigation (matches admin pattern)
@@ -309,8 +309,8 @@ const ClientFooter = () => {
 
 // Main Client Layout
 const ClientLayout = () => {
-  // Mock cart count (will be state managed later)
-  const [cartCount] = useState(3);
+  // Cart count — will be state managed later
+  const [cartCount] = useState(0);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

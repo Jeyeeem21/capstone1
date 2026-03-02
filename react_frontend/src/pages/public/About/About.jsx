@@ -122,12 +122,7 @@ const About = () => {
     image: teamImages[index % teamImages.length],
   }));
 
-  const stats = [
-    { icon: Calendar, value: '15+', label: 'Years of Experience' },
-    { icon: Users, value: '500+', label: 'Happy Customers' },
-    { icon: Truck, value: '50K+', label: 'Bags Delivered' },
-    { icon: Award, value: '10+', label: 'Rice Varieties' },
-  ];
+  const stats = [];
 
   // Default hero image if none set
   const heroImage = content.heroImage || 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=1920&h=800&fit=crop';

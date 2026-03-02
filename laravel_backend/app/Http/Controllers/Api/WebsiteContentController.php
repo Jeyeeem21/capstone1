@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\WebsiteContent;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 
 class WebsiteContentController extends Controller
 {
+    use AuditLogger;
+
     /**
      * Get Home page content
      */
@@ -107,7 +110,11 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveHomeContent($validated);
-            
+
+            $this->logAudit('UPDATE', 'Website Content', 'Updated home page content', [
+                'updated_sections' => array_keys($validated),
+            ]);
+
             // Return updated content
             $content = WebsiteContent::getHomeContent();
 
@@ -163,7 +170,11 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveAboutContent($validated);
-            
+
+            $this->logAudit('UPDATE', 'Website Content', 'Updated about page content', [
+                'updated_sections' => array_keys($validated),
+            ]);
+
             // Return updated content
             $content = WebsiteContent::getAboutContent();
 
@@ -194,7 +205,7 @@ class WebsiteContentController extends Controller
     {
         try {
             $request->validate([
-                'image' => 'required|image|mimes:png,jpg,jpeg,webp|max:5120', // 5MB max
+                'image' => 'required|image|mimes:png,jpg,jpeg,svg,webp|max:10240', // 10MB max
                 'page' => 'required|in:home,about',
             ]);
 
@@ -222,6 +233,11 @@ class WebsiteContentController extends Controller
                     ['page' => $page, 'section' => 'hero', 'key' => 'image'],
                     ['value' => $imageUrl, 'is_active' => true]
                 );
+
+                $this->logAudit('UPDATE', 'Website Content', "Uploaded {$page} hero image", [
+                    'page' => $page,
+                    'image_url' => $imageUrl,
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -258,6 +274,8 @@ class WebsiteContentController extends Controller
     {
         try {
             WebsiteContent::seedDefaults();
+
+            $this->logAudit('UPDATE', 'Website Content', 'Re-seeded default website content');
 
             return response()->json([
                 'success' => true,

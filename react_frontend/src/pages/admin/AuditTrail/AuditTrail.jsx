@@ -1,43 +1,34 @@
-import { useState, useEffect } from 'react';
-import { ClipboardList, User, Calendar, Clock, Filter, Eye, FileText, Package, ShoppingCart, UserCog, Settings, TrendingUp, Monitor } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ClipboardList, User, Calendar, Clock, Filter, FileText, Package, ShoppingCart, UserCog, Settings, TrendingUp, Monitor } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatsCard, FormModal, useToast, Skeleton, SkeletonStats, SkeletonTable } from '../../../components/ui';
+import { apiClient } from '../../../api';
+import { useDataFetch } from '../../../hooks';
+
+const CACHE_KEY = '/audit-trails';
 
 const AuditTrail = () => {
   const toast = useToast();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Mock audit trail data
-  const auditLogs = [
-    { id: 1, action: 'CREATE', module: 'Products', description: 'Added new product "Premium Rice 25kg"', user: 'John Smith', role: 'Manager', ipAddress: '192.168.1.100', timestamp: '2026-02-01 14:32:15', details: { productName: 'Premium Rice 25kg', price: 1250, category: 'Rice' } },
-    { id: 2, action: 'UPDATE', module: 'Inventory', description: 'Updated stock quantity for "Jasmine Rice 5kg"', user: 'Mike Wilson', role: 'Inventory Staff', ipAddress: '192.168.1.102', timestamp: '2026-02-01 14:15:42', details: { productName: 'Jasmine Rice 5kg', oldQty: 150, newQty: 200 } },
-    { id: 3, action: 'DELETE', module: 'Partners', description: 'Removed supplier "ABC Trading"', user: 'Amanda Reyes', role: 'Manager', ipAddress: '192.168.1.101', timestamp: '2026-02-01 13:58:20', details: { supplierName: 'ABC Trading', reason: 'Business closed' } },
-    { id: 4, action: 'LOGIN', module: 'Authentication', description: 'User logged in successfully', user: 'Sarah Johnson', role: 'Cashier', ipAddress: '192.168.1.105', timestamp: '2026-02-01 13:45:00', details: { browser: 'Chrome 120', os: 'Windows 11' } },
-    { id: 5, action: 'CREATE', module: 'Sales', description: 'Created new sale transaction #INV-2026-0215', user: 'Sarah Johnson', role: 'Cashier', ipAddress: '192.168.1.105', timestamp: '2026-02-01 13:30:55', details: { invoiceNo: 'INV-2026-0215', total: 3500, items: 5 } },
-    { id: 6, action: 'UPDATE', module: 'Staff', description: 'Updated staff status to "Active"', user: 'John Smith', role: 'Manager', ipAddress: '192.168.1.100', timestamp: '2026-02-01 12:22:18', details: { staffName: 'Emily Brown', oldStatus: 'Inactive', newStatus: 'Active' } },
-    { id: 7, action: 'CREATE', module: 'Procurement', description: 'Created purchase order PO-2026-0089', user: 'Jennifer Martinez', role: 'Procurement Staff', ipAddress: '192.168.1.108', timestamp: '2026-02-01 11:48:33', details: { poNumber: 'PO-2026-0089', supplier: 'Rice Traders Inc.', total: 125000 } },
-    { id: 8, action: 'UPDATE', module: 'Settings', description: 'Changed theme primary color', user: 'Amanda Reyes', role: 'Manager', ipAddress: '192.168.1.101', timestamp: '2026-02-01 11:15:09', details: { setting: 'primary_color', oldValue: '#22c55e', newValue: '#3b82f6' } },
-    { id: 9, action: 'LOGOUT', module: 'Authentication', description: 'User logged out', user: 'Grace Chen', role: 'Cashier', ipAddress: '192.168.1.106', timestamp: '2026-02-01 10:55:00', details: { sessionDuration: '4h 32m' } },
-    { id: 10, action: 'CREATE', module: 'Processing', description: 'Started milling batch #MB-2026-0045', user: 'David Lee', role: 'Processing Staff', ipAddress: '192.168.1.103', timestamp: '2026-02-01 10:30:22', details: { batchNo: 'MB-2026-0045', inputQty: '500kg', expectedOutput: '450kg' } },
-    { id: 11, action: 'UPDATE', module: 'Products', description: 'Updated price for "Brown Rice 10kg"', user: 'John Smith', role: 'Manager', ipAddress: '192.168.1.100', timestamp: '2026-02-01 09:45:17', details: { productName: 'Brown Rice 10kg', oldPrice: 520, newPrice: 550 } },
-    { id: 12, action: 'DELETE', module: 'Inventory', description: 'Removed expired stock batch', user: 'Mike Wilson', role: 'Inventory Staff', ipAddress: '192.168.1.102', timestamp: '2026-02-01 09:22:08', details: { batchNo: 'STK-2025-0892', qty: 25, reason: 'Expired' } },
-    { id: 13, action: 'LOGIN', module: 'Authentication', description: 'User logged in successfully', user: 'John Smith', role: 'Manager', ipAddress: '192.168.1.100', timestamp: '2026-02-01 08:00:05', details: { browser: 'Firefox 122', os: 'macOS Sonoma' } },
-    { id: 14, action: 'CREATE', module: 'Partners', description: 'Added new customer "Metro Supermarket"', user: 'Amanda Reyes', role: 'Manager', ipAddress: '192.168.1.101', timestamp: '2026-01-31 16:42:30', details: { customerName: 'Metro Supermarket', type: 'Wholesaler', creditLimit: 100000 } },
-    { id: 15, action: 'UPDATE', module: 'Sales', description: 'Voided transaction #INV-2026-0198', user: 'Sarah Johnson', role: 'Cashier', ipAddress: '192.168.1.105', timestamp: '2026-01-31 15:18:45', details: { invoiceNo: 'INV-2026-0198', reason: 'Customer request', amount: 1850 } },
-  ];
+  // Fetch audit trail data from API
+  const {
+    data: auditLogs,
+    loading,
+    isRefreshing,
+    refetch,
+  } = useDataFetch('/audit-trails', {
+    cacheKey: CACHE_KEY,
+    initialData: [],
+  });
 
   // Stats calculations
-  const todayLogs = auditLogs.filter(log => log.timestamp.startsWith('2026-02-01')).length;
-  const createActions = auditLogs.filter(log => log.action === 'CREATE').length;
-  const updateActions = auditLogs.filter(log => log.action === 'UPDATE').length;
-  const deleteActions = auditLogs.filter(log => log.action === 'DELETE').length;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayLogs = useMemo(() => auditLogs.filter(log => log.timestamp?.startsWith(todayStr)).length, [auditLogs, todayStr]);
+  const createActions = useMemo(() => auditLogs.filter(log => log.action === 'CREATE').length, [auditLogs]);
+  const updateActions = useMemo(() => auditLogs.filter(log => log.action === 'UPDATE').length, [auditLogs]);
+  const deleteActions = useMemo(() => auditLogs.filter(log => log.action === 'DELETE').length, [auditLogs]);
 
   const handleViewDetails = (log) => {
     setSelectedLog(log);
@@ -77,7 +68,7 @@ const AuditTrail = () => {
       cell: (row) => (
         <div className="flex items-center gap-2">
           <Clock size={14} className="text-gray-400" />
-          <span className="text-sm">{row.timestamp}</span>
+          <span className="text-sm">{row.timestamp ? new Date(row.timestamp).toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
         </div>
       )
     },
@@ -114,21 +105,7 @@ const AuditTrail = () => {
         </div>
       )
     },
-    { header: 'IP Address', accessor: 'ipAddress' },
-    { 
-      header: 'Actions', 
-      accessor: 'actions',
-      sortable: false,
-      cell: (row) => (
-        <button
-          onClick={() => handleViewDetails(row)}
-          className="p-2 rounded-lg hover:bg-primary-100 text-primary-600 transition-colors"
-          title="View Details"
-        >
-          <Eye size={18} />
-        </button>
-      )
-    },
+    { header: 'IP Address', accessor: 'ip_address' },
   ];
 
   return (
@@ -192,6 +169,7 @@ const AuditTrail = () => {
         filterOptions={['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT']}
         filterPlaceholder="All Actions"
         dateFilterField="timestamp"
+        onRowDoubleClick={handleViewDetails}
       />
       )}
 
@@ -222,7 +200,7 @@ const AuditTrail = () => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">IP Address</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedLog.ipAddress}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedLog.ip_address}</p>
                 </div>
               </div>
             </div>

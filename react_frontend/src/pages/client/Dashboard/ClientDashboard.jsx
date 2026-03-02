@@ -9,47 +9,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useTheme } from '../../../context/ThemeContext';
 import { Skeleton } from '../../../components/ui';
 
-// Mock data
-const mockRecentOrders = [
-  { id: 'ORD-20260220-001', date: '2026-02-20', status: 'Delivered', total: 2550, items: 3 },
-  { id: 'ORD-20260218-002', date: '2026-02-18', status: 'Processing', total: 1700, items: 2 },
-  { id: 'ORD-20260215-003', date: '2026-02-15', status: 'Shipped', total: 850, items: 1 },
-  { id: 'ORD-20260210-004', date: '2026-02-10', status: 'Delivered', total: 2850, items: 4 },
-  { id: 'ORD-20260205-005', date: '2026-02-05', status: 'Cancelled', total: 2500, items: 2 },
-];
+// Recent orders — will connect to real API
+const mockRecentOrders = [];
 
-// Generate daily spending for current month (all days 1..N)
-const generateDailySpending = () => {
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const data = [];
-  for (let d = 1; d <= daysInMonth; d++) {
-    // Mock: random amount for past days, 0 for future
-    const isPast = d <= now.getDate();
-    data.push({ label: String(d), amount: isPast ? Math.floor(Math.random() * 2500) + 200 : 0 });
-  }
-  return data;
-};
-
-// Generate monthly spending for current year (Jan..Dec)
-const generateMonthlySpending = () => {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const now = new Date();
-  return months.map((m, i) => ({
-    label: m,
-    amount: i <= now.getMonth() ? Math.floor(Math.random() * 8000) + 1000 : 0,
-  }));
-};
-
-// Generate yearly spending for past 4 years + current
-const generateYearlySpending = () => {
-  const now = new Date();
-  const data = [];
-  for (let y = now.getFullYear() - 4; y <= now.getFullYear(); y++) {
-    data.push({ label: String(y), amount: Math.floor(Math.random() * 50000) + 10000 });
-  }
-  return data;
-};
+// Chart data generators — return empty until API connected
+const generateDailySpending = () => [];
+const generateMonthlySpending = () => [];
+const generateYearlySpending = () => [];
 
 const spendingLabels = {
   daily: 'Daily Spending',
@@ -63,12 +29,7 @@ const spendingDesc = {
   yearly: 'Annual spending overview',
 };
 
-const mockOrderStatusData = [
-  { name: 'Delivered', value: 8, color: '#22c55e' },
-  { name: 'Processing', value: 2, color: '#3b82f6' },
-  { name: 'Shipped', value: 1, color: '#8b5cf6' },
-  { name: 'Cancelled', value: 1, color: '#ef4444' },
-];
+const mockOrderStatusData = [];
 
 const statusConfig = {
   'Pending': { icon: Clock, color: '#eab308', bg: '#fefce8' },
@@ -90,9 +51,9 @@ const ClientDashboard = () => {
   }, []);
 
   const summaryCards = [
-    { label: 'Total Orders', value: '12', icon: ClipboardList, description: 'All time orders' },
-    { label: 'Active Orders', value: '2', icon: Truck, description: 'In progress' },
-    { label: 'Total Spent', value: '₱15,300', icon: TrendingUp, description: 'Lifetime value' },
+    { label: 'Total Orders', value: '0', icon: ClipboardList, description: 'All time orders' },
+    { label: 'Active Orders', value: '0', icon: Truck, description: 'In progress' },
+    { label: 'Total Spent', value: '₱0', icon: TrendingUp, description: 'Lifetime value' },
   ];
 
   const currentSpendingData = useMemo(() => {
@@ -375,7 +336,7 @@ const ClientDashboard = () => {
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="text-xs" style={{ color: theme.text_secondary }}>
-                        {new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(order.date).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-center">
@@ -415,7 +376,7 @@ const ClientDashboard = () => {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold truncate" style={{ color: theme.text_primary }}>{order.id}</p>
                   <p className="text-[10px]" style={{ color: theme.text_secondary }}>
-                    {new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · {order.items} item(s)
+                    {new Date(order.date).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })} · {order.items} item(s)
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Tag, Layers, Package, CheckCircle, XCircle, Trash2, Palette } from 'lucide-react';
+import { Tag, Layers, Package, CheckCircle, XCircle, Archive, Palette } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, FormTextarea, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -115,8 +115,8 @@ const Varieties = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to add variety');
@@ -150,8 +150,8 @@ const Varieties = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to update variety');
@@ -173,15 +173,15 @@ const Varieties = () => {
         setIsDeleteModalOpen(false);
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Variety Removed', `${varietyName} has been removed.`);
+          toast.success('Variety Archived', `${varietyName} has been archived.`);
         });
         return;
       } else {
-        throw new Error(response.error || 'Failed to delete');
+        throw new Error(response.error || 'Failed to archive');
       }
     } catch (error) {
-      console.error('Error deleting variety:', error);
-      toast.error('Error', 'Failed to delete variety');
+      console.error('Error archiving variety:', error);
+      toast.error('Error', 'Failed to archive variety');
       refetch();
     } finally {
       setSaving(false);
@@ -276,7 +276,7 @@ const Varieties = () => {
     { header: 'Products', accessor: 'products_count', cell: (row) => row.products_count || 0 },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onView={() => handleView(row)} onEdit={() => handleEdit(row)} onDelete={() => handleDelete(row)} />
+      <ActionButtons onEdit={() => handleEdit(row)} onArchive={() => handleDelete(row)} />
     )},
   ], [handleView, handleEdit, handleDelete]);
 
@@ -317,7 +317,7 @@ const Varieties = () => {
           filterPlaceholder="All Status" 
           onAdd={handleAdd} 
           addLabel="Add Variety"
-          onRowClick={handleView}
+          onRowDoubleClick={handleView}
         />
       )}
 
@@ -482,11 +482,11 @@ const Varieties = () => {
         isOpen={isDeleteModalOpen} 
         onClose={() => setIsDeleteModalOpen(false)} 
         onConfirm={handleDeleteConfirm} 
-        title="Remove Variety" 
-        message={`Are you sure you want to remove "${selectedItem?.name}"? The variety will be soft deleted and hidden from the list, but remains in the database.`} 
-        confirmText="Remove" 
-        variant="danger" 
-        icon={Trash2} 
+        title="Archive Variety" 
+        message={`Are you sure you want to archive "${selectedItem?.name}"? It will be moved to the archives and can be restored later.`} 
+        confirmText="Archive" 
+        variant="warning" 
+        icon={Archive} 
         loading={saving}
       />
     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Menu, X, Phone, Mail, MapPin, Facebook, Instagram, Twitter, ChevronUp } from 'lucide-react';
 import { Button, LoginModal } from '../../components/ui';
 
@@ -9,6 +9,16 @@ const PublicHeader = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Auto-open login modal when redirected with ?login=true
+  useEffect(() => {
+    if (searchParams.get('login') === 'true') {
+      setIsLoginModalOpen(true);
+      searchParams.delete('login');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const handleScroll = () => {

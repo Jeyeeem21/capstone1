@@ -37,10 +37,10 @@ const FormInput = ({
   return (
     <div className={`mb-4 ${className}`}>
       {label && (
-        <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+        <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {label}
           {required && <span className="text-red-500">*</span>}
-          {!required && <span className="text-gray-400 text-xs font-normal">(Optional)</span>}
+          {!required && <span className="text-gray-400 dark:text-gray-500 text-xs font-normal">(Optional)</span>}
         </label>
       )}
       <div className="relative">
@@ -56,9 +56,9 @@ const FormInput = ({
           disabled={disabled}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all shadow-sm
             ${displayError 
-              ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50/50 dark:bg-red-500/10 focus:border-red-500 focus:ring-red-500/20' 
               : showSuccess
-                ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
+                ? 'border-green-400 bg-green-50/30 dark:bg-green-500/10 focus:border-green-500 focus:ring-green-500/20'
                 : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
             }
             ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}
@@ -114,10 +114,10 @@ const FormSelect = ({
   return (
     <div className={`mb-4 ${className}`}>
       {label && (
-        <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+        <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {label}
           {required && <span className="text-red-500">*</span>}
-          {!required && <span className="text-gray-400 text-xs font-normal">(Optional)</span>}
+          {!required && <span className="text-gray-400 dark:text-gray-500 text-xs font-normal">(Optional)</span>}
         </label>
       )}
       <div className="relative">
@@ -131,9 +131,9 @@ const FormSelect = ({
           disabled={disabled}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all appearance-none cursor-pointer shadow-sm pr-10
             ${displayError 
-              ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50/50 dark:bg-red-500/10 focus:border-red-500 focus:ring-red-500/20' 
               : showSuccess
-                ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
+                ? 'border-green-400 bg-green-50/30 dark:bg-green-500/10 focus:border-green-500 focus:ring-green-500/20'
                 : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
             }
             ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}
@@ -196,10 +196,10 @@ const FormTextarea = ({
   return (
     <div className={`mb-4 ${className}`}>
       {label && (
-        <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+        <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {label}
           {required && <span className="text-red-500">*</span>}
-          {!required && <span className="text-gray-400 text-xs font-normal">(Optional)</span>}
+          {!required && <span className="text-gray-400 dark:text-gray-500 text-xs font-normal">(Optional)</span>}
         </label>
       )}
       <div className="relative">
@@ -215,9 +215,9 @@ const FormTextarea = ({
           rows={rows}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all resize-none shadow-sm
             ${displayError 
-              ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50/50 dark:bg-red-500/10 focus:border-red-500 focus:ring-red-500/20' 
               : showSuccess
-                ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
+                ? 'border-green-400 bg-green-50/30 dark:bg-green-500/10 focus:border-green-500 focus:ring-green-500/20'
                 : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
             }
             ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}

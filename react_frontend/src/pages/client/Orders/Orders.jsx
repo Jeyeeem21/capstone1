@@ -1,142 +1,75 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Clock, CheckCircle, Truck, XCircle, Package, 
   Search, Eye, ChevronDown, ChevronUp, RotateCcw,
-  Calendar, MapPin, CreditCard, FileText, ClipboardList
+  Calendar, MapPin, CreditCard, FileText, ClipboardList, AlertTriangle
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { Skeleton } from '../../../components/ui';
 
-// Mock orders data
-const mockOrders = [
-  {
-    id: 'ORD-20260220-001',
-    date: '2026-02-20',
-    status: 'Delivered',
-    paymentMethod: 'Cash on Delivery',
-    paymentStatus: 'Paid',
-    deliveryAddress: '123 Main St, Calapan City, Oriental Mindoro',
-    items: [
-      { id: 1, name: 'Premium Jasmine Rice', quantity: 2, price: 850, unit: '25kg' },
-      { id: 5, name: 'IR64 Rice', quantity: 1, price: 520, unit: '25kg' },
-    ],
-    subtotal: 2220,
-    discount: 0,
-    deliveryFee: 100,
-    total: 2320,
-    deliveredAt: '2026-02-22',
-    notes: '',
-  },
-  {
-    id: 'ORD-20260218-002',
-    date: '2026-02-18',
-    status: 'Processing',
-    paymentMethod: 'GCash',
-    paymentStatus: 'Paid',
-    deliveryAddress: '123 Main St, Calapan City, Oriental Mindoro',
-    items: [
-      { id: 6, name: 'Sinandomeng Rice', quantity: 1, price: 780, unit: '25kg' },
-      { id: 3, name: 'Brown Rice', quantity: 1, price: 750, unit: '25kg' },
-    ],
-    subtotal: 1530,
-    discount: 50,
-    deliveryFee: 100,
-    total: 1580,
-    deliveredAt: null,
-    notes: 'Please deliver before noon.',
-  },
-  {
-    id: 'ORD-20260215-003',
-    date: '2026-02-15',
-    status: 'Shipped',
-    paymentMethod: 'Bank Transfer',
-    paymentStatus: 'Paid',
-    deliveryAddress: '456 Rizal Ave, Calapan City, Oriental Mindoro',
-    items: [
-      { id: 1, name: 'Premium Jasmine Rice', quantity: 1, price: 850, unit: '25kg' },
-    ],
-    subtotal: 850,
-    discount: 0,
-    deliveryFee: 0,
-    total: 850,
-    deliveredAt: null,
-    notes: '',
-  },
-  {
-    id: 'ORD-20260210-004',
-    date: '2026-02-10',
-    status: 'Delivered',
-    paymentMethod: 'Cash on Delivery',
-    paymentStatus: 'Paid',
-    deliveryAddress: '123 Main St, Calapan City, Oriental Mindoro',
-    items: [
-      { id: 2, name: 'Long Grain White Rice', quantity: 3, price: 650, unit: '25kg' },
-      { id: 4, name: 'Glutinous Rice', quantity: 1, price: 900, unit: '25kg' },
-    ],
-    subtotal: 2850,
-    discount: 100,
-    deliveryFee: 100,
-    total: 2850,
-    deliveredAt: '2026-02-13',
-    notes: '',
-  },
-  {
-    id: 'ORD-20260205-005',
-    date: '2026-02-05',
-    status: 'Cancelled',
-    paymentMethod: 'GCash',
-    paymentStatus: 'Refunded',
-    deliveryAddress: '123 Main St, Calapan City, Oriental Mindoro',
-    items: [
-      { id: 7, name: 'Dinorado Rice', quantity: 2, price: 1200, unit: '25kg' },
-    ],
-    subtotal: 2400,
-    discount: 0,
-    deliveryFee: 100,
-    total: 2500,
-    deliveredAt: null,
-    notes: 'Product was out of stock.',
-  },
-  {
-    id: 'ORD-20260130-006',
-    date: '2026-01-30',
-    status: 'Delivered',
-    paymentMethod: 'Cash on Delivery',
-    paymentStatus: 'Paid',
-    deliveryAddress: '123 Main St, Calapan City, Oriental Mindoro',
-    items: [
-      { id: 1, name: 'Premium Jasmine Rice', quantity: 4, price: 850, unit: '25kg' },
-    ],
-    subtotal: 3400,
-    discount: 200,
-    deliveryFee: 0,
-    total: 3200,
-    deliveredAt: '2026-02-02',
-    notes: '',
-  },
-];
+// Orders — will connect to real API
+const mockOrders = [];
 
 const statusConfig = {
   'Pending': { icon: Clock, color: '#eab308', bg: '#fefce8', label: 'Pending' },
   'Processing': { icon: Package, color: '#3b82f6', bg: '#eff6ff', label: 'Processing' },
   'Shipped': { icon: Truck, color: '#8b5cf6', bg: '#f5f3ff', label: 'Shipped' },
   'Delivered': { icon: CheckCircle, color: '#22c55e', bg: '#f0fdf4', label: 'Delivered' },
+  'Return Requested': { icon: RotateCcw, color: '#f97316', bg: '#fff7ed', label: 'Return Requested' },
+  'Returned': { icon: RotateCcw, color: '#ef4444', bg: '#fef2f2', label: 'Returned' },
   'Cancelled': { icon: XCircle, color: '#ef4444', bg: '#fef2f2', label: 'Cancelled' },
 };
 
-const statusTabs = ['All', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+const statusTabs = ['All', 'Processing', 'Shipped', 'Delivered', 'Return Requested', 'Cancelled'];
+
+const returnReasons = [
+  'Damaged Product',
+  'Wrong Item Received',
+  'Quality Issue',
+  'Excess Order / Overstock',
+  'Changed My Mind',
+  'Other',
+];
 
 const Orders = () => {
   const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState('All');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => {
+    const tabFromUrl = searchParams.get('tab');
+    return tabFromUrl && statusTabs.includes(tabFromUrl) ? tabFromUrl : 'All';
+  });
+
+  // Sync active tab to URL
+  useEffect(() => {
+    setSearchParams({ tab: activeTab }, { replace: true });
+  }, [activeTab]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnOrder, setReturnOrder] = useState(null);
+  const [returnReason, setReturnReason] = useState('');
+  const [returnNotes, setReturnNotes] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 300);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleReturnRequest = (order) => {
+    setReturnOrder(order);
+    setReturnReason('');
+    setReturnNotes('');
+    setIsReturnModalOpen(true);
+  };
+
+  const handleReturnSubmit = () => {
+    if (!returnReason) return;
+    // Mock: would POST to API
+    setIsReturnModalOpen(false);
+    setReturnOrder(null);
+  };
 
   const filteredOrders = useMemo(() => {
     return mockOrders.filter(order => {
@@ -245,9 +178,9 @@ const Orders = () => {
 
       {/* Orders List - 2 per row */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="columns-1 sm:columns-2 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white rounded-xl p-5 mb-4 break-inside-avoid" style={{ border: `1px solid ${theme.border_color}` }}>
               <div className="flex items-center justify-between mb-3">
                 <Skeleton variant="text" width="w-36" />
                 <Skeleton variant="button" width="w-20" />
@@ -272,7 +205,7 @@ const Orders = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+        <div className="columns-1 sm:columns-2 gap-4">
           {filteredOrders.map(order => {
             const config = statusConfig[order.status];
             const StatusIcon = config.icon;
@@ -281,7 +214,7 @@ const Orders = () => {
             return (
               <div 
                 key={order.id} 
-                className="bg-white rounded-xl overflow-hidden transition-all"
+                className="bg-white rounded-xl overflow-hidden transition-all mb-4 break-inside-avoid"
                 style={{ border: `1px solid ${theme.border_color}` }}
               >
                 {/* Order Header - compact */}
@@ -299,7 +232,7 @@ const Orders = () => {
                     <div className="text-left">
                       <p className="text-xs font-semibold" style={{ color: theme.text_primary }}>{order.id}</p>
                       <p className="text-[10px]" style={{ color: theme.text_secondary }}>
-                        {new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(order.date).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}
                         {' · '}{order.items.length} item(s)
                       </p>
                     </div>
@@ -383,7 +316,7 @@ const Orders = () => {
                             {order.deliveredAt ? 'Delivered' : 'Placed'}
                           </p>
                           <p className="text-[11px] font-semibold" style={{ color: theme.text_primary }}>
-                            {new Date(order.deliveredAt || order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {new Date(order.deliveredAt || order.date).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })}
                           </p>
                         </div>
                       </div>
@@ -442,13 +375,31 @@ const Orders = () => {
 
                     {/* Actions */}
                     {order.status === 'Delivered' && (
-                      <div className="mt-2">
+                      <div className="mt-2 flex items-center gap-2">
                         <button
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all hover:opacity-90"
                           style={{ backgroundColor: theme.button_primary }}
                         >
                           <RotateCcw size={12} /> Reorder
                         </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleReturnRequest(order); }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 transition-all hover:bg-orange-100"
+                        >
+                          <RotateCcw size={12} /> Return Item
+                        </button>
+                      </div>
+                    )}
+                    {order.status === 'Return Requested' && (
+                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                        <AlertTriangle size={12} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-[10px] text-orange-800">Return request submitted. Waiting for admin approval.</p>
+                      </div>
+                    )}
+                    {order.status === 'Returned' && (
+                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-green-50 border border-green-200 rounded-lg">
+                        <CheckCircle size={12} className="text-green-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-[10px] text-green-800">Return has been processed. Refund will be credited to your account.</p>
                       </div>
                     )}
                   </div>
@@ -456,6 +407,93 @@ const Orders = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Return Request Modal */}
+      {isReturnModalOpen && returnOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setIsReturnModalOpen(false)} />
+          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-xl" style={{ border: `2px solid ${theme.border_color}` }}>
+            <div className="p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-orange-50">
+                  <RotateCcw size={18} className="text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold" style={{ color: theme.text_primary }}>Request Return</h3>
+                  <p className="text-[11px]" style={{ color: theme.text_secondary }}>Order {returnOrder.id}</p>
+                </div>
+              </div>
+
+              {/* Items being returned */}
+              <div className="mb-4 rounded-lg border overflow-hidden" style={{ borderColor: theme.border_color }}>
+                <div className="bg-gray-50 px-3 py-1.5">
+                  <p className="text-[9px] font-semibold" style={{ color: theme.text_secondary }}>ITEMS TO RETURN</p>
+                </div>
+                <div className="divide-y" style={{ borderColor: theme.border_color }}>
+                  {returnOrder.items.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between px-3 py-2">
+                      <p className="text-xs font-medium" style={{ color: theme.text_primary }}>{item.name}</p>
+                      <p className="text-xs" style={{ color: theme.text_secondary }}>×{item.quantity}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div className="mb-3">
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.text_primary }}>Reason for Return *</label>
+                <select
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border-2 rounded-xl focus:outline-none transition-all"
+                  style={{ borderColor: theme.border_color, color: theme.text_primary }}
+                  onFocus={(e) => e.target.style.borderColor = theme.button_primary}
+                  onBlur={(e) => e.target.style.borderColor = theme.border_color}
+                >
+                  <option value="">Select a reason...</option>
+                  {returnReasons.map(reason => (
+                    <option key={reason} value={reason}>{reason}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Notes */}
+              <div className="mb-4">
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: theme.text_primary }}>Additional Notes (Optional)</label>
+                <textarea
+                  value={returnNotes}
+                  onChange={(e) => setReturnNotes(e.target.value)}
+                  placeholder="Describe the issue..."
+                  rows={3}
+                  className="w-full px-3 py-2.5 text-sm border-2 rounded-xl focus:outline-none transition-all resize-none"
+                  style={{ borderColor: theme.border_color, color: theme.text_primary }}
+                  onFocus={(e) => e.target.style.borderColor = theme.button_primary}
+                  onBlur={(e) => e.target.style.borderColor = theme.border_color}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsReturnModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium border-2 transition-all hover:bg-gray-50"
+                  style={{ borderColor: theme.border_color, color: theme.text_primary }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReturnSubmit}
+                  disabled={!returnReason}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#f97316' }}
+                >
+                  Submit Return Request
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

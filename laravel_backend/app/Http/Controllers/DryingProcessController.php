@@ -6,13 +6,14 @@ use App\Models\DryingProcess;
 use App\Services\DryingProcessService;
 use App\Http\Resources\DryingProcessResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
 class DryingProcessController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     public function __construct(
         private DryingProcessService $dryingProcessService
@@ -50,10 +51,14 @@ class DryingProcessController extends Controller
         $isBatch = $request->filled('batch_id');
 
         if ($isBatch) {
+            $batch = \App\Models\ProcurementBatch::find($request->input('batch_id'));
+            $maxSacks = $batch ? $batch->remaining_sacks : 99999;
             $validator = Validator::make($request->all(), [
                 'batch_id' => 'required|integer|exists:procurement_batches,id',
-                'sacks'    => 'required|integer|min:1',
+                'sacks'    => "required|integer|min:1|max:{$maxSacks}",
                 'price'    => 'required|numeric|min:0',
+            ], [
+                'sacks.max' => "Cannot exceed {$maxSacks} available sacks in this batch.",
             ]);
         } else {
             $validator = Validator::make($request->all(), [
@@ -69,6 +74,14 @@ class DryingProcessController extends Controller
 
         try {
             $drying = $this->dryingProcessService->createDryingProcess($validator->validated());
+
+            $this->logAudit('CREATE', 'Drying', "Created drying process #{$drying->id} — {$drying->sacks} sacks / {$drying->quantity_kg} kg", [
+                'drying_id' => $drying->id,
+                'procurement_id' => $drying->procurement_id,
+                'batch_id' => $drying->batch_id,
+                'sacks' => $drying->sacks,
+                'quantity_kg' => $drying->quantity_kg,
+            ]);
 
             return $this->createdResponse(
                 new DryingProcessResource($drying),
@@ -130,6 +143,11 @@ class DryingProcessController extends Controller
         try {
             $drying = $this->dryingProcessService->incrementDay($dryingProcess);
 
+            $this->logAudit('UPDATE', 'Drying', "Incremented day on drying #{$drying->id} to day {$drying->days}", [
+                'drying_id' => $drying->id,
+                'days' => $drying->days,
+            ]);
+
             return $this->successResponse(
                 new DryingProcessResource($drying),
                 'Day incremented successfully'
@@ -146,6 +164,11 @@ class DryingProcessController extends Controller
     {
         try {
             $drying = $this->dryingProcessService->markAsDried($dryingProcess);
+
+            $this->logAudit('UPDATE', 'Drying', "Marked drying #{$drying->id} as dried — {$drying->sacks} sacks", [
+                'drying_id' => $drying->id,
+                'status' => 'Dried',
+            ]);
 
             return $this->successResponse(
                 new DryingProcessResource($drying),
@@ -164,6 +187,11 @@ class DryingProcessController extends Controller
         try {
             $drying = $this->dryingProcessService->postponeDryingProcess($dryingProcess);
 
+            $this->logAudit('UPDATE', 'Drying', "Postponed drying #{$drying->id}", [
+                'drying_id' => $drying->id,
+                'status' => 'Postponed',
+            ]);
+
             return $this->successResponse(
                 new DryingProcessResource($drying),
                 'Drying process postponed successfully'
@@ -179,11 +207,21 @@ class DryingProcessController extends Controller
     public function destroy(DryingProcess $dryingProcess): JsonResponse
     {
         try {
+            $dryingId = $dryingProcess->id;
+            $dryingSacks = $dryingProcess->sacks;
+            $dryingKg = $dryingProcess->quantity_kg;
+
             $this->dryingProcessService->deleteDryingProcess($dryingProcess);
 
-            return $this->successResponse(null, 'Drying process removed successfully');
+            $this->logAudit('RETURN', 'Drying', "Returned drying #{$dryingId} to procurement — {$dryingSacks} sacks / {$dryingKg} kg", [
+                'drying_id' => $dryingId,
+                'sacks' => $dryingSacks,
+                'quantity_kg' => $dryingKg,
+            ]);
+
+            return $this->successResponse(null, 'Drying process returned to procurement successfully');
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to remove drying process: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to return drying process: ' . $e->getMessage(), 500);
         }
     }
 }

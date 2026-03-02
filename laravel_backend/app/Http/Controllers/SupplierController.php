@@ -6,13 +6,14 @@ use App\Models\Supplier;
 use App\Services\SupplierService;
 use App\Http\Resources\SupplierResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
 
 class SupplierController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     protected SupplierService $supplierService;
 
@@ -64,6 +65,11 @@ class SupplierController extends Controller
         ]);
 
         $supplier = $this->supplierService->createSupplier($validated);
+
+        $this->logAudit('CREATE', 'Supplier', "Created supplier: {$supplier->name}", [
+            'supplier_id' => $supplier->id,
+            'name' => $supplier->name,
+        ]);
 
         return $this->successResponse(
             new SupplierResource($supplier),
@@ -126,6 +132,11 @@ class SupplierController extends Controller
 
         $supplier = $this->supplierService->updateSupplier($supplier, $validated);
 
+        $this->logAudit('UPDATE', 'Supplier', "Updated supplier: {$supplier->name}", [
+            'supplier_id' => $supplier->id,
+            'changes' => $validated,
+        ]);
+
         return $this->successResponse(
             new SupplierResource($supplier),
             'Supplier updated successfully'
@@ -146,9 +157,13 @@ class SupplierController extends Controller
         // Now soft delete (sets deleted_at)
         $this->supplierService->deleteSupplier($supplier);
 
+        $this->logAudit('DELETE', 'Supplier', "Archived supplier: {$supplier->name}", [
+            'supplier_id' => $supplier->id,
+        ]);
+
         return $this->successResponse(
             null,
-            'Supplier deleted successfully'
+            'Supplier archived successfully'
         );
     }
 

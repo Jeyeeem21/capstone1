@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -10,6 +11,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DatabaseBackupController extends Controller
 {
+    use AuditLogger;
+
     /**
      * Export database as SQL file
      */
@@ -19,7 +22,12 @@ class DatabaseBackupController extends Controller
         $tables = $this->getTables();
         
         $filename = 'KjpRicemill_backup_' . date('Y-m-d_His') . '.sql';
-        
+
+        $this->logAudit('EXPORT', 'Database', "Exported database backup: {$filename}", [
+            'filename' => $filename,
+            'tables_count' => count($tables),
+        ]);
+
         return new StreamedResponse(function () use ($tables, $database) {
             $handle = fopen('php://output', 'w');
             

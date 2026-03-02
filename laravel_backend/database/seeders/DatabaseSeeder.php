@@ -13,20 +13,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // Seed default user accounts (Super Admin, Admin, Staff)
+        $this->call(SuperAdminSeeder::class);
 
         // Seed appearance settings with defaults
         $this->call(AppearanceSettingSeeder::class);
         
         // Seed varieties (rice types)
         $this->call(VarietySeeder::class);
-
-        // Seed products
-        $this->call(ProductSeeder::class);
     }
 }

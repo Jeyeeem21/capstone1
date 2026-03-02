@@ -1,10 +1,10 @@
 const StatusBadge = ({ status, variant }) => {
   const variants = {
-    success: 'bg-green-50 text-green-600',
-    warning: 'bg-yellow-50 text-yellow-600',
-    danger: 'bg-red-50 text-red-600',
-    info: 'bg-blue-50 text-blue-600',
-    default: 'bg-gray-50 text-gray-600',
+    success: 'bg-green-50 text-green-600 dark:bg-green-500/15 dark:text-green-400',
+    warning: 'bg-yellow-50 text-yellow-600 dark:bg-yellow-500/15 dark:text-yellow-400',
+    danger: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-400',
+    info: 'bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-400',
+    default: 'bg-gray-50 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
   };
 
   // Auto-detect variant based on status if not provided
@@ -12,16 +12,16 @@ const StatusBadge = ({ status, variant }) => {
     if (variant) return variants[variant] || variants.default;
     
     const statusLower = status?.toLowerCase() || '';
-    if (['active', 'completed', 'dried', 'in stock', 'paid', 'approved'].includes(statusLower)) {
+    if (['active', 'completed', 'dried', 'in stock', 'paid', 'approved', 'delivered'].includes(statusLower)) {
       return variants.success;
     }
-    if (['pending', 'low stock', 'processing', 'drying', 'warning', 'postponed'].includes(statusLower)) {
+    if (['pending', 'low stock', 'drying', 'warning', 'postponed', 'return requested'].includes(statusLower)) {
       return variants.warning;
     }
-    if (['inactive', 'cancelled', 'voided', 'out of stock', 'rejected', 'failed'].includes(statusLower)) {
+    if (['inactive', 'cancelled', 'voided', 'out of stock', 'rejected', 'failed', 'returned'].includes(statusLower)) {
       return variants.danger;
     }
-    if (['info', 'new', 'draft'].includes(statusLower)) {
+    if (['info', 'new', 'draft', 'shipped', 'processing'].includes(statusLower)) {
       return variants.info;
     }
     return variants.default;

@@ -1,52 +1,42 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../../context/ThemeContext';
 import { Skeleton } from '../../../components/ui';
 
-// Mock customer data
+// Customer data — will connect to real auth/API
 const mockCustomer = {
-    id: 1,
-    name: 'Maria Santos',
-    email: 'maria.santos@example.com',
-    phone: '+63 917 123 4567',
+    id: 0,
+    name: '',
+    email: '',
+    phone: '',
     address: {
-        street: '123 Rizal Street',
-        barangay: 'Brgy. San Miguel',
-        city: 'San Fernando',
-        province: 'Pampanga',
-        zip: '2000',
+        street: '',
+        barangay: '',
+        city: '',
+        province: '',
+        zip: '',
     },
     avatar: null,
-    memberSince: '2024-03-15',
-    totalOrders: 12,
-    totalSpent: 15300,
+    memberSince: '',
+    totalOrders: 0,
+    totalSpent: 0,
 };
 
-const mockAddresses = [
-    {
-        id: 1,
-        label: 'Home',
-        street: '123 Rizal Street',
-        barangay: 'Brgy. San Miguel',
-        city: 'San Fernando',
-        province: 'Pampanga',
-        zip: '2000',
-        isDefault: true,
-    },
-    {
-        id: 2,
-        label: 'Office',
-        street: '456 Mabini Avenue',
-        barangay: 'Brgy. Sto. Rosario',
-        city: 'Angeles City',
-        province: 'Pampanga',
-        zip: '2009',
-        isDefault: false,
-    },
-];
+const mockAddresses = [];
 
 export default function Profile() {
     const { theme } = useTheme();
-    const [activeTab, setActiveTab] = useState('profile');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [activeTab, setActiveTab] = useState(() => {
+        const tabFromUrl = searchParams.get('tab');
+        const validTabs = ['profile', 'addresses', 'security'];
+        return tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'profile';
+    });
+
+    // Sync active tab to URL
+    useEffect(() => {
+        setSearchParams({ tab: activeTab }, { replace: true });
+    }, [activeTab]);
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState({
@@ -102,6 +92,7 @@ export default function Profile() {
 
     const formatDate = (dateStr) => {
         return new Date(dateStr).toLocaleDateString('en-PH', {
+            timeZone: 'Asia/Manila',
             year: 'numeric',
             month: 'long',
             day: 'numeric',

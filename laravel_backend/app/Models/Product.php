@@ -20,9 +20,10 @@ class Product extends Model
      */
     protected $fillable = [
         'product_name',
-        'category_id',
+        'variety_id',
         'price',
         'stocks',
+        'stock_floor',
         'unit',
         'weight',
         'status',
@@ -36,6 +37,7 @@ class Product extends Model
         'price' => 'decimal:2',
         'weight' => 'decimal:2',
         'stocks' => 'integer',
+        'stock_floor' => 'integer',
         'is_deleted' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -48,6 +50,7 @@ class Product extends Model
         'status' => 'active',
         'is_deleted' => false,
         'stocks' => 0,
+        'stock_floor' => 0,
         'unit' => 'kg',
     ];
 
@@ -97,11 +100,11 @@ class Product extends Model
     }
 
     /**
-     * Relationship with Category.
+     * Relationship with Variety.
      */
-    public function category()
+    public function variety()
     {
-        return $this->belongsTo(\App\Models\Variety::class, 'category_id');
+        return $this->belongsTo(\App\Models\Variety::class, 'variety_id');
     }
 
     /**

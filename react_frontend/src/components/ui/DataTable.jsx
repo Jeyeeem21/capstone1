@@ -21,7 +21,7 @@ const DataTable = ({
   selectable = false,
   filterField = null,
   filterOptions = [],
-  filterPlaceholder = 'All Categories',
+  filterPlaceholder = 'All',
   cardConfig = null, // { titleField, subtitleField, badgeField, fields: [{accessor, label}] }
   dateFilterField = null, // accessor for date field to enable date range filter
 }) => {
@@ -42,11 +42,11 @@ const DataTable = ({
     return uniqueValues.sort();
   }, [data, filterField, filterOptions]);
 
-  // Filter data based on search query and category filter
+  // Filter data based on search query and selected filter
   const filteredData = useMemo(() => {
     let result = data;
     
-    // Apply category filter
+    // Apply filter
     if (filterField && filterValue) {
       result = result.filter(row => row[filterField] === filterValue);
     }

@@ -168,6 +168,33 @@ export const useDataFetch = (endpoint, options = {}) => {
         }
         
         onSuccess?.(transformedData);
+        
+        // Stale-while-revalidate: if data came from cache and is stale,
+        // do a background network fetch to update with fresh data
+        if (response.fromCache && response.isStale && !forceNetwork) {
+          fetchInProgress.current = false; // allow the background fetch
+          try {
+            const freshResponse = await apiClient.get(endpoint, {
+              useCache: false,
+              cacheKey: cacheKey,
+            });
+            if (isMounted.current && freshResponse.success && freshResponse.data) {
+              const freshTransformed = transformData(freshResponse.data);
+              setData(freshTransformed);
+              setToMemoryCache(cacheKey, freshResponse.data);
+              try {
+                localStorage.setItem(`kjp-${cacheKey}`, JSON.stringify({
+                  data: freshResponse.data,
+                  timestamp: Date.now()
+                }));
+              } catch (e) {
+                // Storage full, ignore
+              }
+            }
+          } catch {
+            // Background refresh failed, keep cached data
+          }
+        }
       } else if (response.success === false) {
         // Only set error if we have no cached data
         const memCached = getFromMemoryCache(cacheKey);

@@ -184,6 +184,22 @@ const cache = {
 };
 
 /**
+ * Handle 401 Unauthenticated responses
+ */
+const handle401 = (response) => {
+  if (response.status === 401) {
+    // Clear token and redirect to login
+    localStorage.removeItem('auth_token');
+    cache.clear();
+    // Only redirect if not already on login page
+    if (window.location.pathname !== '/') {
+      window.location.href = '/?login=true';
+    }
+  }
+  return response;
+};
+
+/**
  * Main API client
  */
 const apiClient = {
@@ -234,6 +250,7 @@ const apiClient = {
         },
       });
       
+      handle401(response);
       const data = await response.json();
       
       if (!response.ok) {
@@ -286,6 +303,10 @@ const apiClient = {
         body: isFormData ? body : JSON.stringify(body),
       });
       
+      // Don't handle 401 for login endpoint
+      if (!endpoint.includes('/auth/login')) {
+        handle401(response);
+      }
       const data = await response.json();
       
       if (!response.ok) {
@@ -320,6 +341,7 @@ const apiClient = {
         body: JSON.stringify(body),
       });
       
+      handle401(response);
       const data = await response.json();
       
       if (!response.ok) {
@@ -354,6 +376,7 @@ const apiClient = {
         body: JSON.stringify(body),
       });
       
+      handle401(response);
       const data = await response.json();
       
       if (!response.ok) {
@@ -387,6 +410,7 @@ const apiClient = {
         },
       });
       
+      handle401(response);
       const data = await response.json();
       
       if (!response.ok) {
@@ -421,6 +445,7 @@ const apiClient = {
         body: formData,
       });
       
+      handle401(response);
       const data = await response.json();
       
       if (!response.ok) {

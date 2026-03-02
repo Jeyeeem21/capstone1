@@ -16,16 +16,29 @@ const getCSSVariable = (name) => {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 };
 
+// Helper to detect dark mode
+const useIsDarkMode = () => {
+  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.body.classList.contains('dark-mode'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+};
+
 // Custom Tooltip with % change from previous period
-const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxisUnit }) => {
+const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxisUnit, isDark }) => {
   if (!active || !payload || !payload.length || !data) return null;
 
   // Find current index in data
   const currentIndex = data.findIndex(d => String(d.name) === String(label));
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-3 min-w-[180px]">
-      <p className="text-sm font-semibold text-gray-800 mb-2 pb-1.5 border-b border-gray-100">{label}</p>
+    <div className={`rounded-xl shadow-lg p-3 min-w-[180px] border ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
+      <p className={`text-sm font-semibold mb-2 pb-1.5 border-b ${isDark ? 'text-gray-100 border-gray-600' : 'text-gray-800 border-gray-100'}`}>{label}</p>
       {payload.map((entry, i) => {
         const currentValue = entry.value || 0;
         const prevValue = currentIndex > 0 ? (data[currentIndex - 1]?.[entry.dataKey] || 0) : null;
@@ -48,9 +61,9 @@ const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxis
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span className="text-xs text-gray-500">{entry.name}</span>
+                <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{entry.name}</span>
               </div>
-              <span className="text-sm font-bold text-gray-800">
+              <span className={`text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
                 {yAxisUnit === '₱' ? `₱${currentValue.toLocaleString()}` : `${currentValue.toLocaleString()}${yAxisUnit ? ` ${yAxisUnit}` : ''}`}
               </span>
             </div>
@@ -71,7 +84,7 @@ const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxis
                 {changeDirection === 'same' && (
                   <span className="text-[11px] font-medium text-gray-400">0.0%</span>
                 )}
-                <span className="text-[10px] text-gray-400">vs prev</span>
+                <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>vs prev</span>
               </div>
             )}
           </div>
@@ -100,6 +113,8 @@ const LineChart = ({
 }) => {
   // Get theme colors from CSS variables
   const [themeColors, setThemeColors] = useState(['#84cc16', '#eab308', '#22c55e', '#3b82f6', '#f97316']);
+  const [hiddenLines, setHiddenLines] = useState([]);
+  const isDark = useIsDarkMode();
   
   useEffect(() => {
     const updateColors = () => {
@@ -156,18 +171,29 @@ const LineChart = ({
         )}
       </div>
 
-      {/* Legend */}
+      {/* Legend - clickable to toggle visibility */}
       {showLegend && lines.length > 0 && (
         <div className="flex items-center justify-center gap-6 mb-4">
-          {lines.map((line, index) => (
-            <div key={line.dataKey} className="flex items-center gap-2">
-              <div 
-                className="w-8 h-3 rounded"
-                style={{ backgroundColor: line.color || themeColors[index % themeColors.length] }}
-              />
-              <span className="text-sm text-gray-600 dark:text-gray-300">{line.name}</span>
-            </div>
-          ))}
+          {lines.map((line, index) => {
+            const isHidden = hiddenLines.includes(line.dataKey);
+            return (
+              <button
+                key={line.dataKey}
+                onClick={() => setHiddenLines(prev => 
+                  prev.includes(line.dataKey) 
+                    ? prev.filter(k => k !== line.dataKey) 
+                    : prev.length >= lines.length - 1 ? prev : [...prev, line.dataKey]
+                )}
+                className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer select-none ${isHidden ? 'opacity-40' : ''}`}
+              >
+                <div 
+                  className="w-8 h-3 rounded"
+                  style={{ backgroundColor: line.color || themeColors[index % themeColors.length], opacity: isHidden ? 0.3 : 1 }}
+                />
+                <span className={`text-sm ${isHidden ? 'text-gray-400 line-through' : 'text-gray-600 dark:text-gray-300'}`}>{line.name}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -181,23 +207,24 @@ const LineChart = ({
           } : undefined}
           style={onDotClick ? { cursor: 'pointer' } : undefined}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#475569' : '#e5e7eb'} />
           <XAxis 
             dataKey={xAxisKey} 
-            tick={{ fontSize: 11, fill: '#6b7280' }}
-            axisLine={{ stroke: '#d1d5db' }}
-            tickLine={{ stroke: '#d1d5db' }}
+            tick={{ fontSize: 11, fill: isDark ? '#94a3b8' : '#6b7280' }}
+            axisLine={{ stroke: isDark ? '#64748b' : '#d1d5db' }}
+            tickLine={{ stroke: isDark ? '#64748b' : '#d1d5db' }}
           />
           <YAxis 
-            tick={{ fontSize: 11, fill: '#6b7280' }}
-            axisLine={{ stroke: '#d1d5db' }}
-            tickLine={{ stroke: '#d1d5db' }}
+            tick={{ fontSize: 11, fill: isDark ? '#94a3b8' : '#6b7280' }}
+            axisLine={{ stroke: isDark ? '#64748b' : '#d1d5db' }}
+            tickLine={{ stroke: isDark ? '#64748b' : '#d1d5db' }}
             tickFormatter={formatYAxis}
           />
           <Tooltip 
-            content={<CustomTooltip data={data} lines={lines} themeColors={themeColors} yAxisUnit={yAxisUnit} />}
+            content={<CustomTooltip data={data} lines={lines.filter(l => !hiddenLines.includes(l.dataKey))} themeColors={themeColors} yAxisUnit={yAxisUnit} isDark={isDark} />}
           />
           {lines.map((line, index) => {
+            if (hiddenLines.includes(line.dataKey)) return null;
             const color = line.color || themeColors[index % themeColors.length];
             const renderDot = activePoint ? (props) => {
               const { cx, cy, payload } = props;

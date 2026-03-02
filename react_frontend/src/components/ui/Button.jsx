@@ -13,9 +13,9 @@ const Button = forwardRef(({
   
   const variants = {
     default: 'bg-button-500 text-white hover:bg-button-600 focus:ring-button-500 shadow-sm hover:shadow-md',
-    secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500',
-    outline: 'border-2 border-primary-300 bg-transparent text-gray-700 hover:bg-primary-50 focus:ring-primary-500',
-    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
+    secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600',
+    outline: 'border-2 border-primary-300 bg-transparent text-gray-700 hover:bg-primary-50 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-primary-500/10',
+    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500 dark:text-gray-200 dark:hover:bg-gray-700',
     danger: 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500 shadow-sm hover:shadow-md',
     success: 'bg-button-500 text-white hover:bg-button-600 focus:ring-button-500 shadow-sm hover:shadow-md',
     warning: 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500 shadow-sm hover:shadow-md',

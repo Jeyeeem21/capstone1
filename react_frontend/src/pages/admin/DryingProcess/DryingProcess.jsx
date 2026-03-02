@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Sun, Package, Clock, CheckCircle, DollarSign, Trash2, Check, PlusCircle, Calendar, Scale, Layers, Filter } from 'lucide-react';
+import { Sun, Package, Clock, CheckCircle, DollarSign, Undo2, Check, PlusCircle, Calendar, Scale, Layers, Filter } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -133,7 +133,11 @@ const DryingProcess = () => {
 
   const handleDelete = useCallback((item) => {
     if (item.status !== 'Drying' && item.status !== 'Postponed') {
-      toast.warning('Cannot Delete', 'Only records with Drying or Postponed status can be deleted.');
+      toast.warning('Cannot Return', 'Only records with Drying or Postponed status can be returned.');
+      return;
+    }
+    if ((item.days || 0) >= 1) {
+      toast.warning('Cannot Return', 'Drying processes that have started (1+ days) cannot be returned.');
       return;
     }
     setSelectedItem(item);
@@ -241,6 +245,12 @@ const DryingProcess = () => {
         const localErrors = {};
         if (!batchFormData.batch_id) localErrors.batch_id = ['Please select a batch.'];
         if (!batchFormData.sacks || parseInt(batchFormData.sacks) <= 0) localErrors.sacks = ['Enter number of sacks to dry.'];
+        else {
+          const selBatch = allBatches.find(b => String(b.id) === batchFormData.batch_id);
+          if (selBatch && parseInt(batchFormData.sacks) > selBatch.remaining_sacks) {
+            localErrors.sacks = [`Cannot exceed ${selBatch.remaining_sacks} available sacks.`];
+          }
+        }
         if (!batchFormData.price) localErrors.price = ['Price is required.'];
         if (Object.keys(localErrors).length) { setBatchErrors(localErrors); setSaving(false); throw new Error('Validation'); }
         submitData = {
@@ -291,15 +301,15 @@ const DryingProcess = () => {
       if (response.success) {
         setIsDeleteModalOpen(false);
         invalidateAndRefetch().then(() => {
-          toast.success('Removed', 'Drying process has been removed.');
+          toast.success('Returned', 'Drying process has been returned to procurement.');
         });
         return;
       } else {
-        throw new Error(response.message || 'Failed to delete');
+        throw new Error(response.message || 'Failed to return');
       }
     } catch (error) {
-      console.error('Error deleting drying process:', error);
-      toast.error('Error', 'Failed to delete drying process');
+      console.error('Error returning drying process:', error);
+      toast.error('Error', 'Failed to return drying process to procurement');
     } finally {
       setSaving(false);
     }
@@ -540,16 +550,16 @@ const DryingProcess = () => {
             >
               <Check size={15} />
             </button>
-            {/* Delete button */}
+            {/* Return button */}
             <button
               onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
-              disabled={deleteDisabled}
+              disabled={deleteDisabled || (row.days || 0) >= 1}
               className={`p-1.5 rounded-md transition-colors ${
-                deleteDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-red-50 text-red-500 hover:text-red-700'
+                deleteDisabled || (row.days || 0) >= 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-amber-50 text-amber-500 hover:text-amber-700'
               }`}
-              title={deleteDisabled ? 'Cannot delete' : 'Delete (returns qty to procurement)'}
+              title={deleteDisabled ? 'Cannot return' : (row.days || 0) >= 1 ? 'Cannot return — drying has started' : 'Return to Procurement'}
             >
-              <Trash2 size={15} />
+              <Undo2 size={15} />
             </button>
           </div>
         );
@@ -712,7 +722,7 @@ const DryingProcess = () => {
             dateFilterField="created_at"
             onAdd={handleAdd}
             addLabel="Add Drying"
-            onRowClick={handleView}
+            onRowDoubleClick={handleView}
           />
         </>
       )}
@@ -930,7 +940,15 @@ const DryingProcess = () => {
                 <FormInput label="Sacks to Dry" name="sacks" type="number"
                   value={batchFormData.sacks} onChange={handleBatchFormChange}
                   required placeholder="0" submitted={submitted} error={batchErrors.sacks?.[0]}
+                  min={1} max={(() => { const b = allBatches.find(b => String(b.id) === batchFormData.batch_id); return b ? b.remaining_sacks : undefined; })()}
                 />
+                {batchFormData.batch_id && batchFormData.sacks && (() => {
+                  const b = allBatches.find(b => String(b.id) === batchFormData.batch_id);
+                  if (b && parseInt(batchFormData.sacks) > b.remaining_sacks) {
+                    return <p className="text-xs text-red-500 mt-1">Cannot exceed {b.remaining_sacks} available sacks</p>;
+                  }
+                  return null;
+                })()}
 
                 {loadingPreview && (
                   <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg mb-2 animate-pulse">
@@ -965,16 +983,16 @@ const DryingProcess = () => {
         )}
       </FormModal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Return Confirmation Modal */}
       <ConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Remove Drying Process"
-        message={`Are you sure you want to remove Drying #${String(selectedItem?.id || 0).padStart(4, '0')}? The quantity will be returned to procurement.`}
-        confirmText="Remove"
-        variant="danger"
-        icon={Trash2}
+        title="Return to Procurement"
+        message={`Are you sure you want to return Drying #${String(selectedItem?.id || 0).padStart(4, '0')}? The quantity will be returned to its procurement.`}
+        confirmText="Return"
+        variant="warning"
+        icon={Undo2}
         loading={saving}
       />
     </div>

@@ -1,0 +1,430 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
+use App\Models\Product;
+use App\Models\Supplier;
+use App\Models\Customer;
+use App\Models\Procurement;
+use App\Models\Processing;
+use App\Models\DryingProcess;
+use App\Models\Variety;
+use App\Models\Driver;
+use App\Models\DeliveryAssignment;
+use App\Models\ProcurementBatch;
+use App\Models\AuditTrail;
+use Illuminate\Support\Facades\Cache;
+
+class ArchiveController extends Controller
+{
+    use ApiResponse, AuditLogger;
+
+    /**
+     * Map of module names to their model classes and display configuration.
+     */
+    private function getModuleConfig(): array
+    {
+        return [
+            'products' => [
+                'model' => Product::class,
+                'label' => 'Product',
+                'nameField' => 'product_name',
+                'idField' => 'product_id',
+                'usesCustomSoftDelete' => true,
+                'auditModule' => 'Products',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'product_id',
+            ],
+            'varieties' => [
+                'model' => Variety::class,
+                'label' => 'Variety',
+                'nameField' => 'name',
+                'idField' => 'id',
+                'auditModule' => 'Varieties',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'variety_id',
+            ],
+            'suppliers' => [
+                'model' => Supplier::class,
+                'label' => 'Supplier',
+                'nameField' => 'name',
+                'idField' => 'id',
+                'auditModule' => 'Supplier',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'supplier_id',
+            ],
+            'customers' => [
+                'model' => Customer::class,
+                'label' => 'Customer',
+                'nameField' => 'name',
+                'idField' => 'id',
+                'auditModule' => 'Customer',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'customer_id',
+            ],
+            'procurements' => [
+                'model' => Procurement::class,
+                'label' => 'Procurement',
+                'nameField' => 'supplier_name',
+                'idField' => 'id',
+                'auditModule' => 'Procurement',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'procurement_id',
+            ],
+            'drying_processes' => [
+                'model' => DryingProcess::class,
+                'label' => 'Drying Process',
+                'nameField' => null,
+                'idField' => 'id',
+                'auditModule' => 'Drying',
+                'auditAction' => 'RETURN',
+                'auditDetailKey' => 'drying_id',
+            ],
+            'processings' => [
+                'model' => Processing::class,
+                'label' => 'Processing',
+                'nameField' => null,
+                'idField' => 'id',
+                'auditModule' => 'Processing',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'processing_id',
+            ],
+            'drivers' => [
+                'model' => Driver::class,
+                'label' => 'Driver',
+                'nameField' => 'name',
+                'idField' => 'id',
+                'auditModule' => 'Drivers',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'driver_id',
+            ],
+            'deliveries' => [
+                'model' => DeliveryAssignment::class,
+                'label' => 'Delivery',
+                'nameField' => null,
+                'idField' => 'id',
+                'auditModule' => 'Deliveries',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'delivery_id',
+            ],
+        ];
+    }
+
+    /**
+     * Get all archived (soft-deleted) records across all modules.
+     */
+    public function index(): JsonResponse
+    {
+        try {
+        $modules = $this->getModuleConfig();
+        $archives = [];
+
+        // Relations to eager-load per module for the detailed view
+        $moduleRelations = [
+            'procurements' => ['supplier', 'variety', 'batch'],
+            'products' => ['variety'],
+            'processings' => ['procurement', 'dryingProcess', 'dryingSources'],
+            'drying_processes' => ['procurement', 'batch'],
+            'deliveries' => ['driver', 'customer', 'items'],
+        ];
+
+        foreach ($modules as $key => $config) {
+            try {
+                $modelClass = $config['model'];
+                $usesCustom = $config['usesCustomSoftDelete'] ?? false;
+
+            $query = $usesCustom
+                ? $modelClass::onlyDeleted()
+                : $modelClass::onlyTrashed();
+
+            // Eager-load relations if configured
+            if (isset($moduleRelations[$key])) {
+                $query->with($moduleRelations[$key]);
+            }
+
+            $records = $query->get();
+
+            foreach ($records as $record) {
+                $idField = $config['idField'];
+                $nameField = $config['nameField'];
+                $name = $nameField ? ($record->{$nameField} ?? null) : null;
+
+                // Generate a display name for records without a name field
+                if (!$name) {
+                    $name = $config['label'] . ' #' . str_pad($record->{$idField}, 4, '0', STR_PAD_LEFT);
+                }
+
+                $deletedAt = $usesCustom
+                    ? $record->updated_at
+                    : $record->deleted_at;
+
+                // Build record data with relationship names resolved
+                $recordData = $record->toArray();
+                // Add resolved names for related models
+                if ($key === 'procurements') {
+                    $recordData['supplier_name'] = $record->supplier?->name ?? '—';
+                    $recordData['variety_name'] = $record->variety?->name ?? '—';
+                    $recordData['batch_number'] = $record->batch?->batch_number ?? null;
+                    $recordData['batch_status'] = $record->batch?->status ?? null;
+                } elseif ($key === 'products') {
+                    $recordData['variety_name'] = $record->variety?->name ?? '—';
+                    $recordData['price_formatted'] = '₱' . number_format((float)$record->price, 2);
+                    $recordData['weight_formatted'] = $record->weight ? $record->weight . ' kg' : '—';
+                } elseif ($key === 'processings') {
+                    $recordData['supplier_name'] = $record->procurement?->supplier?->name ?? '—';
+                    $recordData['procurement_batch'] = $record->procurement?->batch?->batch_number ?? null;
+                } elseif ($key === 'drying_processes') {
+                    $recordData['supplier_name'] = $record->procurement?->supplier?->name ?? '—';
+                    $recordData['batch_number'] = $record->batch?->batch_number ?? null;
+                } elseif ($key === 'deliveries') {
+                    $recordData['driver_name'] = $record->driver?->name ?? '—';
+                    $recordData['customer_name'] = $record->customer?->name ?? '—';
+                    $recordData['items_count'] = $record->items?->count() ?? 0;
+                }
+
+                $archives[] = [
+                    'id' => $record->{$idField},
+                    'module' => $key,
+                    'module_label' => $config['label'],
+                    'name' => $name,
+                    'deleted_at' => $deletedAt?->format('M d, Y h:i A'),
+                    'deleted_at_raw' => $deletedAt?->toISOString(),
+                    'archived_by' => null, // Filled from audit trail below
+                    'record_data' => $recordData,
+                ];
+            }
+            } catch (\Exception $e) {
+                // Skip modules that error (e.g. missing table)
+                continue;
+            }
+        }
+
+        // Attach "archived by" from audit trail
+        $archivedByLookup = $this->buildArchivedByLookup($modules);
+        foreach ($archives as &$archive) {
+            $lookupKey = $archive['module'] . ':' . $archive['id'];
+            $archive['archived_by'] = $archivedByLookup[$lookupKey] ?? null;
+        }
+        unset($archive);
+
+        // Sort by deleted_at descending (most recent first)
+        usort($archives, function ($a, $b) {
+            return strcmp($b['deleted_at_raw'] ?? '', $a['deleted_at_raw'] ?? '');
+        });
+
+        return $this->successResponse($archives, 'Archives retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to fetch archives: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get archive statistics (count per module).
+     */
+    public function statistics(): JsonResponse
+    {
+        try {
+        $modules = $this->getModuleConfig();
+        $stats = [];
+        $total = 0;
+
+        foreach ($modules as $key => $config) {
+            try {
+            $modelClass = $config['model'];
+            $usesCustom = $config['usesCustomSoftDelete'] ?? false;
+
+            $count = $usesCustom
+                ? $modelClass::onlyDeleted()->count()
+                : $modelClass::onlyTrashed()->count();
+
+            if ($count > 0) {
+                $stats[] = [
+                    'module' => $key,
+                    'label' => $config['label'],
+                    'count' => $count,
+                ];
+            }
+
+            $total += $count;
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+
+        return $this->successResponse([
+            'total' => $total,
+            'by_module' => $stats,
+        ], 'Archive statistics retrieved successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to fetch archive statistics: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Restore an archived record.
+     */
+    public function restore(string $module, string $id): JsonResponse
+    {
+        $modules = $this->getModuleConfig();
+
+        if (!isset($modules[$module])) {
+            return $this->errorResponse('Invalid module', 404);
+        }
+
+        $config = $modules[$module];
+        $modelClass = $config['model'];
+        $usesCustom = $config['usesCustomSoftDelete'] ?? false;
+        $idField = $config['idField'];
+
+        try {
+            if ($usesCustom) {
+                $record = $modelClass::onlyDeleted()->where($idField, $id)->firstOrFail();
+                $record->restore(); // Uses Product's custom restore method
+            } else {
+                $record = $modelClass::onlyTrashed()->where($idField, $id)->firstOrFail();
+                
+                // Restore status to Active for models that set it to Inactive on archive
+                if (in_array($module, ['varieties', 'suppliers', 'customers'])) {
+                    $record->status = 'Active';
+                }
+                if ($module === 'procurements') {
+                    $record->status = 'Pending';
+                }
+                
+                $record->restore();
+            }
+
+            // Clear relevant caches
+            $this->clearModuleCache($module);
+
+            $nameField = $config['nameField'];
+            $name = $nameField ? ($record->{$nameField} ?? $config['label']) : $config['label'] . ' #' . str_pad($id, 4, '0', STR_PAD_LEFT);
+
+            $this->logAudit('RESTORE', 'Archives', "Restored {$config['label']}: {$name}", [
+                'module' => $module,
+                'record_id' => $id,
+            ]);
+
+            return $this->successResponse(null, "{$name} has been restored successfully");
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->errorResponse('Archived record not found', 404);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to restore: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Permanently delete an archived record (force delete from database).
+     */
+    public function permanentDelete(string $module, string $id): JsonResponse
+    {
+        $modules = $this->getModuleConfig();
+
+        if (!isset($modules[$module])) {
+            return $this->errorResponse('Invalid module', 404);
+        }
+
+        $config = $modules[$module];
+        $modelClass = $config['model'];
+        $usesCustom = $config['usesCustomSoftDelete'] ?? false;
+        $idField = $config['idField'];
+
+        try {
+            if ($usesCustom) {
+                $record = $modelClass::onlyDeleted()->where($idField, $id)->firstOrFail();
+                $record->forceDelete();
+            } else {
+                $record = $modelClass::onlyTrashed()->where($idField, $id)->firstOrFail();
+                $nameField = $config['nameField'];
+                $name = $nameField ? ($record->{$nameField} ?? $config['label']) : $config['label'] . ' #' . str_pad($id, 4, '0', STR_PAD_LEFT);
+                $record->forceDelete();
+            }
+
+            // Clear relevant caches
+            $this->clearModuleCache($module);
+
+            $this->logAudit('PERMANENT_DELETE', 'Archives', "Permanently deleted {$config['label']}: " . ($name ?? 'record'), [
+                'module' => $module,
+                'record_id' => $id,
+            ]);
+
+            return $this->successResponse(null, 'Record permanently deleted');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->errorResponse('Archived record not found', 404);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to permanently delete: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Build a lookup of "archived by" user names from the audit trail.
+     * Returns an array keyed by "moduleKey:recordId" => userName.
+     */
+    private function buildArchivedByLookup(array $modules): array
+    {
+        // Map audit module names to archive module keys and detail keys
+        $auditModuleMap = [];
+        $auditActions = [];
+
+        foreach ($modules as $key => $config) {
+            $auditModule = $config['auditModule'] ?? null;
+            if ($auditModule) {
+                $auditModuleMap[$auditModule] = [
+                    'moduleKey' => $key,
+                    'detailKey' => $config['auditDetailKey'],
+                ];
+                $auditActions[] = $config['auditAction'];
+            }
+        }
+
+        // Single query: get all relevant audit entries with user
+        $entries = AuditTrail::with('user:id,name')
+            ->whereIn('module', array_keys($auditModuleMap))
+            ->whereIn('action', array_unique($auditActions))
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $lookup = [];
+        foreach ($entries as $entry) {
+            $mapping = $auditModuleMap[$entry->module] ?? null;
+            if (!$mapping || !$entry->details) continue;
+
+            $recordId = $entry->details[$mapping['detailKey']] ?? null;
+            if (!$recordId) continue;
+
+            $lookupKey = $mapping['moduleKey'] . ':' . $recordId;
+            // Only keep the most recent (first encountered due to desc order)
+            if (!isset($lookup[$lookupKey])) {
+                $lookup[$lookupKey] = $entry->user?->name ?? 'Unknown';
+            }
+        }
+
+        return $lookup;
+    }
+
+    /**
+     * Clear cache for a specific module.
+     */
+    private function clearModuleCache(string $module): void
+    {
+        $cacheKeys = [
+            'products' => 'products_all',
+            'varieties' => 'varieties_all',
+            'suppliers' => 'suppliers_all',
+            'customers' => 'customers_all',
+            'procurements' => 'procurements_all',
+            'drying_processes' => 'drying_processes_all',
+            'processings' => 'processings_all',
+            'drivers' => 'drivers_all',
+            'deliveries' => 'delivery_assignments_all',
+        ];
+
+        if (isset($cacheKeys[$module])) {
+            Cache::forget($cacheKeys[$module]);
+        }
+    }
+}

@@ -37,7 +37,7 @@ class AppearanceSettingSeeder extends Seeder
             // Button Colors
             [
                 'key' => 'button_primary',
-                'value' => '#22c55e',
+                'value' => '#7f0518',
                 'label' => 'Primary Button',
                 'description' => 'Add, Save, Submit buttons',
                 'category' => 'buttons',
@@ -55,7 +55,7 @@ class AppearanceSettingSeeder extends Seeder
             // Border Color
             [
                 'key' => 'border_color',
-                'value' => '#86efac',
+                'value' => '#da2b2b',
                 'label' => 'Border Color',
                 'description' => 'Cards, tables, inputs, and divider lines',
                 'category' => 'borders',
@@ -65,7 +65,7 @@ class AppearanceSettingSeeder extends Seeder
             // Hover Color
             [
                 'key' => 'hover_color',
-                'value' => '#dcfce7',
+                'value' => '#b22e5c',
                 'label' => 'Hover Color',
                 'description' => 'Table rows, buttons, and interactive elements hover background',
                 'category' => 'interactions',
@@ -75,7 +75,7 @@ class AppearanceSettingSeeder extends Seeder
             // Pagination Colors
             [
                 'key' => 'pagination_bg',
-                'value' => '#22c55e',
+                'value' => '#7f0518',
                 'label' => 'Pagination Background',
                 'description' => 'Active page button background',
                 'category' => 'pagination',
@@ -177,7 +177,7 @@ class AppearanceSettingSeeder extends Seeder
             // Font Sizes
             [
                 'key' => 'font_size_base',
-                'value' => '16',
+                'value' => '12',
                 'label' => 'Base Font Size',
                 'description' => 'Base font size for content (in pixels)',
                 'category' => 'typography',
@@ -185,7 +185,7 @@ class AppearanceSettingSeeder extends Seeder
             ],
             [
                 'key' => 'font_size_sidebar',
-                'value' => '15',
+                'value' => '12',
                 'label' => 'Sidebar Font Size',
                 'description' => 'Font size for sidebar menu (in pixels)',
                 'category' => 'typography',

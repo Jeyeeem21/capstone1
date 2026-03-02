@@ -12,19 +12,19 @@ export const productsApi = {
    * Get all products with optional filters
    * @param {Object} options - Filter options
    * @param {string} options.search - Search query
-   * @param {string} options.category - Category filter
+   * @param {string} options.variety - Variety filter
    * @param {string} options.sort - Sort option (popular, price-low, price-high, newest)
    */
-  getAll: async ({ search = '', category = 'all', sort = 'popular' } = {}) => {
+  getAll: async ({ search = '', variety = 'all', sort = 'popular' } = {}) => {
     const params = {};
     if (search) params.search = search;
-    if (category && category !== 'all') params.category = category;
+    if (variety && variety !== 'all') params.variety = variety;
     if (sort) params.sort = sort;
     
     return apiClient.get(ENDPOINTS.PRODUCTS.BASE, {
       params,
       useCache: true,
-      cacheKey: `products-${search}-${category}-${sort}`,
+      cacheKey: `products-${search}-${variety}-${sort}`,
     });
   },
   
@@ -39,10 +39,10 @@ export const productsApi = {
   },
   
   /**
-   * Get product categories with counts
+   * Get product varieties with counts
    */
-  getCategories: async () => {
-    return apiClient.get(ENDPOINTS.PRODUCTS.CATEGORIES, {
+  getVarieties: async () => {
+    return apiClient.get(ENDPOINTS.PRODUCTS.VARIETIES, {
       useCache: true,
       cacheKey: 'varieties',
     });
@@ -68,7 +68,7 @@ export const productsApi = {
     if (response.success) {
       // Clear products cache
       apiClient.cache.remove('products-featured');
-      apiClient.cache.remove('products-categories');
+      apiClient.cache.remove('products-varieties');
     }
     return response;
   },

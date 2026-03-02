@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Protected Route - requires authentication
 export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -15,8 +15,7 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   if (!isAuthenticated) {
-    // Redirect to login page, preserving the intended destination
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/?login=true" state={{ from: location }} replace />;
   }
 
   // If roles are specified, check if user has the required role
@@ -25,16 +24,28 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     if (user?.role === 'staff') {
       return <Navigate to="/staff/dashboard" replace />;
     }
-    return <Navigate to="/dashboard" replace />;
+    if (user?.role === 'super_admin') {
+      return <Navigate to="/superadmin/dashboard" replace />;
+    }
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   return children;
 };
 
-// Admin Only Route
+// Super Admin + Admin Route
 export const AdminRoute = ({ children }) => {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <ProtectedRoute allowedRoles={['super_admin', 'admin']}>
+      {children}
+    </ProtectedRoute>
+  );
+};
+
+// Super Admin Only Route
+export const SuperAdminRoute = ({ children }) => {
+  return (
+    <ProtectedRoute allowedRoles={['super_admin']}>
       {children}
     </ProtectedRoute>
   );
@@ -52,7 +63,7 @@ export const StaffRoute = ({ children }) => {
 // Shared Route (Admin and Staff)
 export const SharedRoute = ({ children }) => {
   return (
-    <ProtectedRoute allowedRoles={['admin', 'staff']}>
+    <ProtectedRoute allowedRoles={['super_admin', 'admin', 'staff']}>
       {children}
     </ProtectedRoute>
   );

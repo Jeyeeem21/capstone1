@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo, memo, useEffect } from 'react';
-import { ShoppingCart, Package, Truck, DollarSign, FileText, Trash2, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Ban, Check, Layers, Sun, Calendar, List } from 'lucide-react';
+import { ShoppingCart, Package, Truck, DollarSign, FileText, Archive, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Check, Layers, Sun, Calendar, List, Phone, Mail, MapPin } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
+import { useAuth } from '../../../context/AuthContext';
 
 const CACHE_KEY = '/procurements';
 const SUPPLIERS_CACHE_KEY = '/suppliers';
@@ -11,7 +12,7 @@ const VARIETIES_CACHE_KEY = '/varieties';
 const BATCHES_CACHE_KEY = '/procurement-batches';
 
 // Supplier combobox component - DEFINED OUTSIDE to prevent re-creation on parent re-render
-const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error, submitted, supplierOptions }) => {
+const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail, newAddress, onChange, onInputChange, onFieldChange, error, submitted, supplierOptions }) => {
   const hasValue = (value && value.toString().trim().length > 0) || (newName && newName.trim().length > 0);
   const showRequiredError = !hasValue && submitted && !error;
   const displayError = error || (showRequiredError ? 'Please select a supplier or add a new one' : '');
@@ -78,6 +79,53 @@ const SupplierCombobox = memo(({ value, newName, onChange, onInputChange, error,
         )}
       </div>
 
+      {/* Contact details fields — shown when adding new supplier */}
+      {newName && (
+        <div className="mt-2 space-y-2">
+          <div className="relative">
+            <input
+              type="text"
+              value={newContact || ''}
+              onChange={(e) => onFieldChange('new_supplier_contact', e.target.value)}
+              placeholder="Contact person name"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+            />
+            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={newPhone || ''}
+              onChange={(e) => onFieldChange('new_supplier_phone', e.target.value)}
+              placeholder="Contact number (e.g. 09171234567)"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+            />
+            <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
+          <div className="relative">
+            <input
+              type="email"
+              value={newEmail || ''}
+              onChange={(e) => onFieldChange('new_supplier_email', e.target.value)}
+              placeholder="Email address (optional)"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+            />
+            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={newAddress || ''}
+              onChange={(e) => onFieldChange('new_supplier_address', e.target.value)}
+              placeholder="Address (optional)"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+            />
+            <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
+          <p className="text-[11px] text-gray-500 pl-1">Provide supplier contact details for your records.</p>
+        </div>
+      )}
+
       {/* Info message when new supplier name is entered */}
       {newName && (
         <div className="flex items-start gap-2 p-2 mt-2 bg-green-50 border border-green-200 rounded-lg">
@@ -99,12 +147,13 @@ SupplierCombobox.displayName = 'SupplierCombobox';
 
 const Procurement = () => {
   const toast = useToast();
+  const { isSuperAdmin } = useAuth();
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
   const [tableTab, setTableTab] = useState('records'); // 'records' | 'batches'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDescriptionOnlyEdit, setIsDescriptionOnlyEdit] = useState(false); // For dried procurements
+  const [isRemarksOnlyEdit, setIsRemarksOnlyEdit] = useState(false); // For dried procurements
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isNewSupplierConfirmOpen, setIsNewSupplierConfirmOpen] = useState(false);
@@ -114,6 +163,10 @@ const Procurement = () => {
   const [formData, setFormData] = useState({ 
     supplier_id: '', 
     new_supplier_name: '',
+    new_supplier_contact: '',
+    new_supplier_phone: '',
+    new_supplier_email: '',
+    new_supplier_address: '',
     quantity_kg: '', 
     sacks: '', 
     price_per_kg: '', 
@@ -210,10 +263,10 @@ const Procurement = () => {
     return [{ value: '', label: 'All Batches' }, { value: 'no-batch', label: 'No Batch (Standalone)' }, ...opts];
   }, [batches]);
 
-  // Active batches (Open + Closed) for assigning new procurements - show all, no variety filter
+  // Only Open batches for assigning new procurements - Closed/Completed not selectable
   const openBatchOptions = useMemo(() => {
     const opts = batches
-      .filter(b => b.status === 'Open' || b.status === 'Closed')
+      .filter(b => b.status === 'Open')
       .map(b => ({
         value: String(b.id),
         label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks)`,
@@ -221,9 +274,42 @@ const Procurement = () => {
     return [{ value: '', label: 'None (standalone)' }, ...opts];
   }, [batches]);
 
+  // Helper: checks if a procurement matches the active chart point filter
+  const matchesChartPoint = useCallback((p) => {
+    if (!activeChartPoint || !p.created_at) return true;
+    const date = new Date(p.created_at);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    if (chartPeriod === 'daily') {
+      return date.getFullYear() === currentYear && date.getMonth() === currentMonth && String(date.getDate()) === activeChartPoint;
+    }
+    if (chartPeriod === 'monthly') {
+      return date.getFullYear() === currentYear && months[date.getMonth()] === activeChartPoint;
+    }
+    if (chartPeriod === 'yearly') {
+      return String(date.getFullYear()) === activeChartPoint;
+    }
+    return true;
+  }, [activeChartPoint, chartPeriod]);
+
+  // Chart-filtered procurements — used for stats, cards, table
+  const chartFilteredProcurements = useMemo(() => {
+    if (!activeChartPoint) return procurements;
+    return procurements.filter(matchesChartPoint);
+  }, [procurements, activeChartPoint, matchesChartPoint]);
+
+  // Chart-filtered batches — used for batches tab
+  const chartFilteredBatches = useMemo(() => {
+    if (!activeChartPoint) return batches;
+    return batches.filter(matchesChartPoint);
+  }, [batches, activeChartPoint, matchesChartPoint]);
+
   // Apply batch filter to procurement list
   const filteredProcurements = useMemo(() => {
-    let list = [...procurements];
+    let list = [...chartFilteredProcurements];
     
     // Apply batch filter
     if (batchFilter === 'no-batch') {
@@ -246,7 +332,7 @@ const Procurement = () => {
     });
     
     return list;
-  }, [procurements, batchFilter]);
+  }, [chartFilteredProcurements, batchFilter]);
 
   // Calculate total cost dynamically
   const calculatedTotal = useMemo(() => {
@@ -259,6 +345,10 @@ const Procurement = () => {
     setFormData({ 
       supplier_id: '', 
       new_supplier_name: '',
+      new_supplier_contact: '',
+      new_supplier_phone: '',
+      new_supplier_email: '',
+      new_supplier_address: '',
       variety_id: '',
       quantity_kg: '', 
       sacks: '', 
@@ -279,12 +369,16 @@ const Procurement = () => {
     setIsViewModalOpen(true);
   }, []);
 
-  const handleEdit = useCallback((item, descriptionOnly = false) => {
+  const handleEdit = useCallback((item, remarksOnly = false) => {
     setSelectedItem(item);
-    setIsDescriptionOnlyEdit(descriptionOnly);
+    setIsRemarksOnlyEdit(remarksOnly);
     setFormData({ 
       supplier_id: String(item.supplier_id), 
       new_supplier_name: '',
+      new_supplier_contact: '',
+      new_supplier_phone: '',
+      new_supplier_email: '',
+      new_supplier_address: '',
       variety_id: String(item.variety_id || ''),
       quantity_kg: String(item.quantity_kg), 
       sacks: String(item.sacks || 0), 
@@ -370,16 +464,20 @@ const Procurement = () => {
       if (name === 'new_supplier_name' && value) {
         const match = findMatchingSupplier(value);
         if (match) {
-          // Auto-select existing supplier and clear new_supplier_name
-          return { ...newData, supplier_id: String(match.id), new_supplier_name: '' };
+          // Auto-select existing supplier and clear new supplier fields
+          return { ...newData, supplier_id: String(match.id), new_supplier_name: '', new_supplier_contact: '', new_supplier_phone: '', new_supplier_email: '', new_supplier_address: '' };
         }
         // Clear supplier_id if typing a new name
         newData.supplier_id = '';
       }
       
-      // If selecting from dropdown, clear new_supplier_name
+      // If selecting from dropdown, clear new supplier fields
       if (name === 'supplier_id' && value) {
         newData.new_supplier_name = '';
+        newData.new_supplier_contact = '';
+        newData.new_supplier_phone = '';
+        newData.new_supplier_email = '';
+        newData.new_supplier_address = '';
       }
 
       // Auto-set variety when batch is selected + auto-fill price from existing batch procurements
@@ -427,6 +525,11 @@ const Procurement = () => {
     handleFormChange({ target: { name: 'new_supplier_name', value } });
   }, [handleFormChange]);
 
+  // Handle new supplier detail fields (contact, phone, email, address)
+  const handleSupplierFieldChange = useCallback((fieldName, value) => {
+    setFormData(prev => ({ ...prev, [fieldName]: value }));
+  }, []);
+
   // Actual submission after confirmation (if needed) - close modal first, then refetch and toast together
   const performSubmit = async (isEdit = false) => {
     if (saving) return; // Prevent double submit
@@ -436,6 +539,10 @@ const Procurement = () => {
       const submitData = {
         supplier_id: formData.supplier_id || null,
         new_supplier_name: formData.new_supplier_name || null,
+        new_supplier_contact: formData.new_supplier_contact || null,
+        new_supplier_phone: formData.new_supplier_phone || null,
+        new_supplier_email: formData.new_supplier_email || null,
+        new_supplier_address: formData.new_supplier_address || null,
         variety_id: formData.variety_id ? parseInt(formData.variety_id) : null,
         quantity_kg: parseFloat(formData.quantity_kg),
         sacks: parseInt(formData.sacks) || 0,
@@ -478,8 +585,8 @@ const Procurement = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/^new_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to save procurement');
@@ -687,31 +794,31 @@ const Procurement = () => {
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Procurement Removed', 'Procurement record has been removed.');
+          toast.success('Procurement Archived', 'Procurement record has been archived.');
         });
         return;
       } else {
-        throw new Error(response.error || 'Failed to delete');
+        throw new Error(response.error || 'Failed to archive');
       }
     } catch (error) {
-      console.error('Error deleting procurement:', error);
-      toast.error('Error', 'Failed to delete procurement');
+      console.error('Error archiving procurement:', error);
+      toast.error('Error', 'Failed to archive procurement');
       refetch();
     } finally {
       setSaving(false);
     }
   };
 
-  // Stats
-  const totalProcurements = procurements.length;
-  const pendingOrders = procurements.filter(p => p.status === 'Pending').length;
-  const completedOrders = procurements.filter(p => p.status === 'Completed').length;
-  const totalQuantity = procurements.reduce((sum, p) => sum + parseFloat(p.quantity_kg || 0), 0);
-  const totalSacks = procurements.reduce((sum, p) => sum + parseInt(p.sacks || 0), 0);
-  const totalCost = procurements.reduce((sum, p) => sum + parseFloat(p.total_cost || 0), 0);
-
   // Helper function to get days in a month
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+
+  // Stats — react to chart point filter
+  const totalProcurements = chartFilteredProcurements.length;
+  const pendingOrders = chartFilteredProcurements.filter(p => p.status === 'Pending').length;
+  const completedOrders = chartFilteredProcurements.filter(p => p.status === 'Completed').length;
+  const totalQuantity = chartFilteredProcurements.reduce((sum, p) => sum + parseFloat(p.quantity_kg || 0), 0);
+  const totalSacks = chartFilteredProcurements.reduce((sum, p) => sum + parseInt(p.sacks || 0), 0);
+  const totalCost = chartFilteredProcurements.reduce((sum, p) => sum + parseFloat(p.total_cost || 0), 0);
 
   // Chart Data - Based on chartPeriod (daily, monthly, yearly)
   const chartData = useMemo(() => {
@@ -929,7 +1036,7 @@ const Procurement = () => {
       <div>
         <StatusBadge status={row.status} />
         {row.description && (
-          <p className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[140px]" title={row.description}>{row.description}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[140px]" title={row.description}><span className="text-gray-500">Remarks:</span> {row.description}</p>
         )}
       </div>
     )},
@@ -949,21 +1056,20 @@ const Procurement = () => {
       const hasDryingSacks = row.drying_sacks > 0;
       // Edit disabled only for Cancelled/Completed
       const editDisabled = isCancelled;
-      const cancelDisabled = isDried || isDrying || isCancelled;
       const deleteDisabled = isDried || isDrying;
       const remainingSacks = Math.max(0, parseInt(row.sacks || 0) - (row.drying_sacks || 0));
       const canSendToDrying = (row.status === 'Pending' || row.status === 'Drying') && remainingSacks > 0;
-      // Description-only edit when dried OR has sacks in drying
-      const descriptionOnlyEdit = isDried || hasDryingSacks;
+      // Remarks-only edit when dried OR has sacks in drying
+      const remarksOnlyEdit = isDried || hasDryingSacks;
       return (
         <div className="flex items-center gap-1">
           <button
-            onClick={(e) => { if (!editDisabled) { e.stopPropagation(); handleEdit(row, isDried); } else e.stopPropagation(); }}
+            onClick={(e) => { if (!editDisabled) { e.stopPropagation(); handleEdit(row, remarksOnlyEdit); } else e.stopPropagation(); }}
             disabled={editDisabled}
             className={`p-1.5 rounded-md transition-colors ${
               editDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-button-50 text-button-500 hover:text-button-700'
             }`}
-            title={editDisabled ? 'Cannot edit' : descriptionOnlyEdit ? 'Edit Description' : 'Edit'}
+            title={editDisabled ? 'Cannot edit' : remarksOnlyEdit ? 'Edit Remarks' : 'Edit'}
           >
             <Edit size={15} />
           </button>
@@ -976,30 +1082,23 @@ const Procurement = () => {
               <Sun size={15} />
             </button>
           )}
-          <button
-            onClick={(e) => { if (!cancelDisabled) { e.stopPropagation(); handleCancel(row); } else e.stopPropagation(); }}
-            disabled={cancelDisabled}
-            className={`p-1.5 rounded-md transition-colors ${
-              cancelDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-orange-50 text-orange-500 hover:text-orange-700'
-            }`}
-            title={cancelDisabled ? 'Cannot cancel' : 'Cancel'}
-          >
-            <Ban size={15} />
-          </button>
+
+          {isSuperAdmin() && (
           <button
             onClick={(e) => { if (!deleteDisabled) { e.stopPropagation(); handleDelete(row); } else e.stopPropagation(); }}
             disabled={deleteDisabled}
             className={`p-1.5 rounded-md transition-colors ${
-              deleteDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-red-50 text-red-500 hover:text-red-700'
+              deleteDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-amber-50 text-amber-500 hover:text-amber-700'
             }`}
-            title={deleteDisabled ? 'Cannot delete' : 'Delete'}
+            title={deleteDisabled ? 'Cannot archive' : 'Archive'}
           >
-            <Trash2 size={15} />
+            <Archive size={15} />
           </button>
+          )}
         </div>
       );
     }},
-  ], [handleView, handleEdit, handleCancel, handleDelete, handleOpenIndividualDrying]);
+  ], [handleView, handleEdit, handleDelete, handleOpenIndividualDrying]);
 
   // Batch table columns
   const batchColumns = useMemo(() => [
@@ -1033,8 +1132,25 @@ const Procurement = () => {
       cell: (row) => <span className="font-semibold text-green-600">{parseFloat(row.total_kg).toLocaleString()} kg</span>
     },
     {
-      header: 'Total Cost', accessor: 'total_cost',
+      header: 'Procurement Cost', accessor: 'total_cost',
       cell: (row) => <span className="font-semibold text-button-600">₱{parseFloat(row.total_cost || 0).toLocaleString()}</span>
+    },
+    {
+      header: 'Drying Cost', accessor: 'total_drying_cost',
+      cell: (row) => {
+        const cost = parseFloat(row.total_drying_cost || 0);
+        return cost > 0 
+          ? <span className="font-semibold text-orange-600">₱{cost.toLocaleString()}</span>
+          : <span className="text-gray-400 text-xs">—</span>;
+      }
+    },
+    {
+      header: 'Total Expenses', accessor: 'total_expenses',
+      cell: (row) => {
+        const procurement = parseFloat(row.total_cost || 0);
+        const drying = parseFloat(row.total_drying_cost || 0);
+        return <span className="font-bold text-purple-600">₱{(procurement + drying).toLocaleString()}</span>;
+      }
     },
     {
       header: 'Items', accessor: 'procurements_count',
@@ -1240,7 +1356,7 @@ const Procurement = () => {
           ) : (
             <DataTable 
               title="Procurement Records" 
-              subtitle={batchFilter ? `Filtered by batch: ${batches.find(b => String(b.id) === batchFilter)?.batch_number || ''}` : 'Manage all procurement transactions'}
+              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint}${batchFilter ? ` · Batch: ${batches.find(b => String(b.id) === batchFilter)?.batch_number || ''}` : ''}` : batchFilter ? `Filtered by batch: ${batches.find(b => String(b.id) === batchFilter)?.batch_number || ''}` : 'Manage all procurement transactions'}
               columns={columns} 
               data={filteredProcurements} 
               searchPlaceholder="Search procurements..." 
@@ -1249,7 +1365,7 @@ const Procurement = () => {
               dateFilterField="created_at"
               onAdd={handleAdd} 
               addLabel="Add Procurement"
-              onRowClick={handleView}
+              onRowDoubleClick={handleView}
             />
           )}
         </>
@@ -1260,14 +1376,14 @@ const Procurement = () => {
         ) : (
           <DataTable
             title="Procurement Batches"
-            subtitle="Overview of all procurement batch groups — click row to view, click status to toggle"
+            subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click chart dot to clear` : "Overview of all procurement batch groups — click row to view, click status to toggle"}
             columns={batchColumns}
-            data={batches}
+            data={chartFilteredBatches}
             searchPlaceholder="Search batches..."
             filterField="status"
             filterPlaceholder="All Status"
             dateFilterField="created_at"
-            onRowClick={handleBatchView}
+            onRowDoubleClick={handleBatchView}
           />
         )
       )}
@@ -1419,14 +1535,14 @@ const Procurement = () => {
                 </div>
               </div>
 
-              {/* Description */}
+              {/* Remarks */}
               {selectedItem.description && (
                 <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
                   <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
                     <FileText size={18} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 mb-0.5">Description</p>
+                    <p className="text-xs text-gray-600 mb-0.5">Remarks</p>
                     <p className="text-gray-800 text-sm">{selectedItem.description}</p>
                   </div>
                 </div>
@@ -1563,8 +1679,13 @@ const Procurement = () => {
             <SupplierCombobox 
               value={formData.supplier_id}
               newName={formData.new_supplier_name}
+              newContact={formData.new_supplier_contact}
+              newPhone={formData.new_supplier_phone}
+              newEmail={formData.new_supplier_email}
+              newAddress={formData.new_supplier_address}
               onChange={handleFormChange}
               onInputChange={(e) => handleSupplierInput(e)}
+              onFieldChange={handleSupplierFieldChange}
               error={errors.supplier_id?.[0] || errors.new_supplier_name?.[0]}
               submitted={submitted}
               supplierOptions={supplierOptions}
@@ -1636,7 +1757,7 @@ const Procurement = () => {
             )}
 
             <FormInput 
-              label="Description" 
+              label="Remarks" 
               name="description" 
               value={formData.description} 
               onChange={handleFormChange} 
@@ -1652,29 +1773,29 @@ const Procurement = () => {
       {/* Edit Modal */}
       <FormModal 
         isOpen={isEditModalOpen} 
-        onClose={() => { setIsEditModalOpen(false); setIsDescriptionOnlyEdit(false); }} 
+        onClose={() => { setIsEditModalOpen(false); setIsRemarksOnlyEdit(false); }} 
         onSubmit={handleEditSubmit} 
-        title={(isDescriptionOnlyEdit || selectedItem?.drying_sacks > 0) ? "Edit Description" : "Edit Procurement"} 
+        title={(isRemarksOnlyEdit || selectedItem?.drying_sacks > 0) ? "Edit Remarks" : "Edit Procurement"} 
         submitText="Save Changes" 
-        size={(isDescriptionOnlyEdit || selectedItem?.drying_sacks > 0) ? "md" : "lg"}
+        size={(isRemarksOnlyEdit || selectedItem?.drying_sacks > 0) ? "md" : "lg"}
         loading={saving}
       >
         {({ submitted }) => {
           const hasItemsInDrying = selectedItem?.drying_sacks > 0;
-          const showDescriptionOnly = isDescriptionOnlyEdit || hasItemsInDrying;
+          const showRemarksOnly = isRemarksOnlyEdit || hasItemsInDrying;
           
           return (
           <>
-            {showDescriptionOnly ? (
-              /* Description-only edit for dried/drying procurements */
+            {showRemarksOnly ? (
+              /* Remarks-only edit for dried/drying procurements */
               <>
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
                   <p className="text-sm text-yellow-800">
-                    <strong>Procurement #{String(selectedItem?.id).padStart(4, '0')}</strong> {isDescriptionOnlyEdit ? 'is already Dried' : `has ${selectedItem?.drying_sacks} sacks in drying`}. Only the description can be edited.
+                    <strong>Procurement #{String(selectedItem?.id).padStart(4, '0')}</strong> {isRemarksOnlyEdit ? 'is already Dried' : `has ${selectedItem?.drying_sacks} sacks in drying`}. Only the remarks can be edited.
                   </p>
                 </div>
                 <FormInput 
-                  label="Description" 
+                  label="Remarks" 
                   name="description" 
                   value={formData.description} 
                   onChange={handleFormChange} 
@@ -1719,8 +1840,8 @@ const Procurement = () => {
                     required 
                     placeholder="0" 
                     submitted={submitted} 
-                    error={errors.sacks?.[0]}
-                    disabled
+                    error={errors.sacks?.[0] || ((selectedItem?.drying_sacks > 0 && parseInt(formData.sacks) < selectedItem.drying_sacks) ? `Min ${selectedItem.drying_sacks} sacks (in drying)` : undefined)}
+                    min={selectedItem?.drying_sacks || 0}
                   />
                   <FormInput 
                     label="Quantity (kg)" 
@@ -1731,9 +1852,9 @@ const Procurement = () => {
                     required 
                     placeholder="0" 
                     submitted={submitted} 
-                    error={errors.quantity_kg?.[0]}
+                    error={errors.quantity_kg?.[0] || ((selectedItem?.drying_kg > 0 && parseFloat(formData.quantity_kg) < parseFloat(selectedItem.drying_kg)) ? `Min ${parseFloat(selectedItem.drying_kg).toLocaleString()} kg (in drying)` : undefined)}
                     step="0.01"
-                    disabled
+                    min={selectedItem?.drying_kg || 0}
                   />
                   <FormInput 
                     label="Price per KG (₱)" 
@@ -1746,9 +1867,17 @@ const Procurement = () => {
                     submitted={submitted} 
                     error={errors.price_per_kg?.[0]}
                     step="0.01"
-                    disabled
                   />
                 </div>
+
+                {/* Drying info banner */}
+                {selectedItem?.drying_sacks > 0 && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      <strong>{selectedItem.drying_sacks} sacks</strong> / <strong>{parseFloat(selectedItem.drying_kg).toLocaleString()} kg</strong> are committed to drying. Values cannot be set below these amounts.
+                    </p>
+                  </div>
+                )}
 
                 {/* Calculated Total */}
                 {(formData.quantity_kg && formData.price_per_kg) && (
@@ -1761,7 +1890,7 @@ const Procurement = () => {
                 )}
 
                 <FormInput 
-                  label="Description" 
+                  label="Remarks" 
                   name="description" 
                   value={formData.description} 
                   onChange={handleFormChange} 
@@ -1812,16 +1941,16 @@ const Procurement = () => {
         }}
       </FormModal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Archive Confirmation Modal */}
       <ConfirmModal 
         isOpen={isDeleteModalOpen} 
         onClose={() => setIsDeleteModalOpen(false)} 
         onConfirm={handleDeleteConfirm} 
-        title="Remove Procurement" 
-        message={`Are you sure you want to remove this procurement record from ${selectedItem?.supplier_name}? The record will be soft deleted and hidden from the list.`} 
-        confirmText="Remove" 
-        variant="danger" 
-        icon={Trash2}
+        title="Archive Procurement" 
+        message={`Are you sure you want to archive this procurement record from ${selectedItem?.supplier_name}? It will be moved to the archives and can be restored later.`} 
+        confirmText="Archive" 
+        variant="warning" 
+        icon={Archive}
         loading={saving}
       />
 
@@ -2084,14 +2213,27 @@ const Procurement = () => {
                 </div>
               </div>
 
-              {/* Total Cost */}
+              {/* Cost Breakdown */}
               <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
                 <div className="p-2 bg-button-500 text-white rounded-lg">
                   <DollarSign size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Total Cost</p>
-                  <p className="text-xl font-bold text-button-600">₱{parseFloat(selectedBatch.total_cost || 0).toLocaleString()}</p>
+                  <p className="text-xs text-gray-600 mb-1">Cost Breakdown</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">Procurement</span>
+                      <span className="text-sm font-semibold text-button-600">₱{parseFloat(selectedBatch.total_cost || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-500">Drying</span>
+                      <span className="text-sm font-semibold text-orange-600">₱{parseFloat(selectedBatch.total_drying_cost || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="border-t border-gray-200 pt-1 flex justify-between items-center">
+                      <span className="text-xs font-medium text-gray-700">Total Expenses</span>
+                      <span className="text-lg font-bold text-purple-600">₱{(parseFloat(selectedBatch.total_cost || 0) + parseFloat(selectedBatch.total_drying_cost || 0)).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

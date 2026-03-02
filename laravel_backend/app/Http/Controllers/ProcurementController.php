@@ -8,12 +8,13 @@ use App\Services\ProcurementService;
 use App\Services\ProcurementBatchService;
 use App\Http\Resources\ProcurementResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class ProcurementController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     protected ProcurementService $procurementService;
     protected ProcurementBatchService $batchService;
@@ -45,6 +46,10 @@ class ProcurementController extends Controller
         $validated = $request->validate([
             'supplier_id' => 'nullable|exists:suppliers,id',
             'new_supplier_name' => 'nullable|string|max:255',
+            'new_supplier_contact' => 'nullable|string|max:255',
+            'new_supplier_phone' => 'nullable|string|max:255',
+            'new_supplier_email' => 'nullable|email|max:255',
+            'new_supplier_address' => 'nullable|string|max:500',
             'variety_id' => 'required|exists:varieties,id',
             'quantity_kg' => 'required|numeric|min:0',
             'sacks' => 'required|integer|min:0',
@@ -63,9 +68,15 @@ class ProcurementController extends Controller
         }
 
         $newSupplierName = $validated['new_supplier_name'] ?? null;
-        unset($validated['new_supplier_name']);
+        $newSupplierData = [
+            'contact' => $validated['new_supplier_contact'] ?? null,
+            'phone' => $validated['new_supplier_phone'] ?? null,
+            'email' => $validated['new_supplier_email'] ?? null,
+            'address' => $validated['new_supplier_address'] ?? null,
+        ];
+        unset($validated['new_supplier_name'], $validated['new_supplier_contact'], $validated['new_supplier_phone'], $validated['new_supplier_email'], $validated['new_supplier_address']);
 
-        $procurement = $this->procurementService->createProcurement($validated, $newSupplierName);
+        $procurement = $this->procurementService->createProcurement($validated, $newSupplierName, $newSupplierData);
 
         // If batch_id is set, validate variety match + batch status and recalculate totals
         if (!empty($validated['batch_id'])) {
@@ -84,6 +95,13 @@ class ProcurementController extends Controller
             $batch->recalculateTotals();
             $this->batchService->clearCache();
         }
+
+        $this->logAudit('CREATE', 'Procurement', "Created procurement #{$procurement->id} — {$procurement->sacks} sacks / {$procurement->quantity_kg} kg", [
+            'procurement_id' => $procurement->id,
+            'supplier_id' => $procurement->supplier_id,
+            'quantity_kg' => $procurement->quantity_kg,
+            'sacks' => $procurement->sacks,
+        ]);
 
         return $this->successResponse(
             new ProcurementResource($procurement),
@@ -131,6 +149,21 @@ class ProcurementController extends Controller
             'price_per_kg.required' => 'Price per kg is required.',
         ]);
 
+        // Prevent reducing quantity_kg / sacks below what's committed to drying
+        $dryingSacks = $procurement->dryingProcesses()->whereIn('status', ['Drying', 'Dried', 'Postponed'])->sum('sacks')
+            + $procurement->dryingBatchAllocations()->sum('sacks_taken');
+        $dryingKg = $procurement->dryingProcesses()->whereIn('status', ['Drying', 'Dried', 'Postponed'])->sum('quantity_kg')
+            + $procurement->dryingBatchAllocations()->sum('quantity_kg');
+
+        if ($dryingSacks > 0) {
+            if (isset($validated['sacks']) && (int) $validated['sacks'] < $dryingSacks) {
+                return $this->validationErrorResponse(collect(['sacks' => ["Cannot set sacks below {$dryingSacks} — already committed to drying."]]));
+            }
+            if (isset($validated['quantity_kg']) && (float) $validated['quantity_kg'] < $dryingKg) {
+                return $this->validationErrorResponse(collect(['quantity_kg' => ["Cannot set quantity below " . number_format($dryingKg, 2) . " kg — already committed to drying."]]));
+            }
+        }
+
         // Block variety change if procurement belongs to a batch
         if ($procurement->batch_id && isset($validated['variety_id'])) {
             $batch = ProcurementBatch::find($procurement->batch_id);
@@ -174,6 +207,11 @@ class ProcurementController extends Controller
             $this->batchService->clearCache();
         }
 
+        $this->logAudit('UPDATE', 'Procurement', "Updated procurement #{$procurement->id}", [
+            'procurement_id' => $procurement->id,
+            'changes' => $validated,
+        ]);
+
         return $this->successResponse(
             new ProcurementResource($procurement),
             'Procurement updated successfully'
@@ -194,9 +232,13 @@ class ProcurementController extends Controller
         // Now soft delete
         $this->procurementService->deleteProcurement($procurement);
 
+        $this->logAudit('DELETE', 'Procurement', "Archived procurement #{$id} — {$procurement->sacks} sacks / {$procurement->quantity_kg} kg", [
+            'procurement_id' => (int) $id,
+        ]);
+
         return $this->successResponse(
             null,
-            'Procurement deleted successfully'
+            'Procurement archived successfully'
         );
     }
 

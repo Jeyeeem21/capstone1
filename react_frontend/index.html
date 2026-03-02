@@ -62,7 +62,7 @@
             }
             
             // Apply primary palette from border_color
-            var borderColor = theme.border_color || theme.borderColor || '#86efac';
+            var borderColor = theme.border_color || theme.borderColor || '#da2b2b';
             var primaryPalette = generatePalette(borderColor);
             for (var shade in primaryPalette) {
               root.style.setProperty('--color-primary-' + shade, primaryPalette[shade]);
@@ -70,7 +70,7 @@
             }
             
             // Apply button palette
-            var buttonPrimary = theme.button_primary || theme.buttonPrimary || '#22c55e';
+            var buttonPrimary = theme.button_primary || theme.buttonPrimary || '#7f0518';
             var buttonPalette = generatePalette(buttonPrimary);
             for (var shade in buttonPalette) {
               root.style.setProperty('--color-button-' + shade, buttonPalette[shade]);
@@ -78,7 +78,8 @@
             
             // Apply other colors
             root.style.setProperty('--color-button-secondary', theme.button_secondary || theme.buttonSecondary || '#eab308');
-            root.style.setProperty('--color-pagination-bg', theme.pagination_bg || theme.paginationBg || '#22c55e');
+            root.style.setProperty('--color-hover', theme.hover_color || theme.hoverColor || '#b22e5c');
+            root.style.setProperty('--color-pagination-bg', theme.pagination_bg || theme.paginationBg || '#7f0518');
             root.style.setProperty('--color-pagination-text', theme.pagination_text || theme.paginationText || '#ffffff');
             
             // Handle dark/light mode
@@ -109,8 +110,8 @@
             }
             
             // Apply font sizes
-            var baseFontSize = theme.font_size_base || theme.fontSizeBase || '16';
-            var sidebarFontSize = theme.font_size_sidebar || theme.fontSizeSidebar || '15';
+            var baseFontSize = theme.font_size_base || theme.fontSizeBase || '12';
+            var sidebarFontSize = theme.font_size_sidebar || theme.fontSizeSidebar || '12';
             root.style.setProperty('--font-size-base', baseFontSize + 'px');
             root.style.setProperty('--font-size-sidebar', sidebarFontSize + 'px');
             root.style.setProperty('--font-size-sm', Math.max(12, parseInt(baseFontSize) - 2) + 'px');

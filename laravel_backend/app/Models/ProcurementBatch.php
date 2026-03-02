@@ -66,21 +66,24 @@ class ProcurementBatch extends Model
     // ── Helpers ──────────────────────────────────────────────────────
 
     /**
-     * Generate the next batch number for today: BATCH-YYYYMMDD-001
+     * Generate the next batch number: BATCH-YYYYMMDD-XXX
+     * The sequence (XXX) increments per year and resets to 001 each new year.
      */
     public static function generateBatchNumber(): string
     {
-        $dateStr = now()->format('Ymd');
-        $prefix  = "BATCH-{$dateStr}-";
+        $now     = now();
+        $dateStr = $now->format('Ymd');
+        $year    = $now->format('Y');
 
+        // Find the highest sequence number used this year (any date in the same year)
         $last = static::withTrashed()
-            ->where('batch_number', 'like', $prefix . '%')
-            ->orderByDesc('batch_number')
+            ->where('batch_number', 'like', "BATCH-{$year}%")
+            ->orderByRaw("CAST(SUBSTRING(batch_number, -3) AS UNSIGNED) DESC")
             ->value('batch_number');
 
         $seq = $last ? ((int) substr($last, -3)) + 1 : 1;
 
-        return $prefix . str_pad($seq, 3, '0', STR_PAD_LEFT);
+        return "BATCH-{$dateStr}-" . str_pad($seq, 3, '0', STR_PAD_LEFT);
     }
 
     /**

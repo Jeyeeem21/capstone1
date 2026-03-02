@@ -4,9 +4,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../../components/common';
 import { Card, CardContent, DataTable, StatusBadge, ActionButtons, StatsCard, DonutChart, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { useDataFetch } from '../../../hooks';
+import { useAuth } from '../../../context/AuthContext';
 
 const Partners = () => {
   const navigate = useNavigate();
+  const { basePath } = useAuth();
   
   // Fetch real data from API
   const { 
@@ -40,7 +42,7 @@ const Partners = () => {
       contact: c.contact || c.name,
       phone: c.phone,
       status: c.status,
-      route: '/admin/partners/customer'
+      route: `${basePath}/partners/customer`
     }));
 
     const formattedSuppliers = suppliers.map(s => ({
@@ -51,7 +53,7 @@ const Partners = () => {
       contact: s.contact,
       phone: s.phone,
       status: s.status,
-      route: '/admin/partners/supplier'
+      route: `${basePath}/partners/supplier`
     }));
 
     // Combine and sort by most recent (assuming higher IDs are more recent)
@@ -68,8 +70,8 @@ const Partners = () => {
   const activeCustomers = customers.filter(c => c.status === 'Active').length;
 
   const partnerSections = [
-    { icon: Truck, title: 'Suppliers', description: 'Manage supplier relationships', to: '/admin/partners/supplier', count: totalSuppliers },
-    { icon: UserCheck, title: 'Customers', description: 'Track customer information', to: '/admin/partners/customer', count: totalCustomers },
+    { icon: Truck, title: 'Suppliers', description: 'Manage supplier relationships', to: `${basePath}/partners/supplier`, count: totalSuppliers },
+    { icon: UserCheck, title: 'Customers', description: 'Track customer information', to: `${basePath}/partners/customer`, count: totalCustomers },
   ];
 
   const partnerBreakdown = useMemo(() => [
@@ -96,7 +98,7 @@ const Partners = () => {
     { header: 'Phone', accessor: 'phone' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onView={() => handleView(row)} onEdit={() => handleEdit(row)} />
+      <ActionButtons onEdit={() => handleEdit(row)} />
     )},
   ];
 
@@ -168,7 +170,7 @@ const Partners = () => {
           searchPlaceholder="Search partners..." 
           filterField="type" 
           filterPlaceholder="All Types"
-          onRowClick={handleView}
+          onRowDoubleClick={handleView}
         />
       )}
     </div>

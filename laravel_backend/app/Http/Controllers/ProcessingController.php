@@ -6,13 +6,14 @@ use App\Models\Processing;
 use App\Services\ProcessingService;
 use App\Http\Resources\ProcessingResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
 class ProcessingController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     public function __construct(
         private ProcessingService $processingService
@@ -86,8 +87,31 @@ class ProcessingController extends Controller
             return $this->validationErrorResponse($validator->errors());
         }
 
+        // Validate input_kg against available drying stock
+        $validated = $validator->validated();
+        $dryingIds = $validated['drying_process_ids'] ?? [];
+        if (empty($dryingIds) && !empty($validated['drying_process_id'])) {
+            $dryingIds = [$validated['drying_process_id']];
+        }
+        if (!empty($dryingIds)) {
+            $totalAvailable = \App\Models\DryingProcess::whereIn('id', $dryingIds)
+                ->get()
+                ->sum(fn($s) => max(0, (float)$s->quantity_kg - (float)$s->quantity_out));
+            $inputKg = (float) ($validated['input_kg'] ?? 0);
+            if ($inputKg > $totalAvailable) {
+                return $this->validationErrorResponse(collect([
+                    'input_kg' => ["Input ({$inputKg} kg) exceeds available stock ({$totalAvailable} kg) from selected drying sources."]
+                ]));
+            }
+        }
+
         try {
-            $processing = $this->processingService->createProcessing($validator->validated());
+            $processing = $this->processingService->createProcessing($validated);
+
+            $this->logAudit('CREATE', 'Processing', "Created processing #{$processing->id} — {$processing->input_kg} kg", [
+                'processing_id' => $processing->id,
+                'input_kg' => $processing->input_kg,
+            ]);
 
             return $this->createdResponse(
                 new ProcessingResource($processing),
@@ -103,7 +127,22 @@ class ProcessingController extends Controller
      */
     public function show(Processing $processing): JsonResponse
     {
-        $processing->load(['procurement:id,supplier_id,quantity_kg,sacks', 'procurement.supplier:id,name']);
+        $processing->load([
+            'procurement:id,supplier_id,variety_id,quantity_kg,sacks,price_per_kg,total_cost',
+            'procurement.supplier:id,name',
+            'procurement.variety:id,name,color',
+            'dryingProcess',
+            'dryingProcess.procurement.supplier',
+            'dryingProcess.batch.variety',
+            'dryingProcess.batchProcurements.procurement.supplier',
+            'dryingProcess.batchProcurements.procurement.variety',
+            'dryingSources',
+            'dryingSources.batch.variety',
+            'dryingSources.procurement.supplier',
+            'dryingSources.procurement.variety',
+            'dryingSources.batchProcurements.procurement.supplier',
+            'dryingSources.batchProcurements.procurement.variety',
+        ]);
         
         return $this->successResponse(
             new ProcessingResource($processing),
@@ -131,6 +170,11 @@ class ProcessingController extends Controller
         try {
             $processing = $this->processingService->updateProcessing($processing, $validator->validated());
 
+            $this->logAudit('UPDATE', 'Processing', "Updated processing #{$processing->id}", [
+                'processing_id' => $processing->id,
+                'changes' => $validator->validated(),
+            ]);
+
             return $this->successResponse(
                 new ProcessingResource($processing),
                 'Processing record updated successfully'
@@ -152,6 +196,11 @@ class ProcessingController extends Controller
         try {
             $processing = $this->processingService->startProcessing($processing);
 
+            $this->logAudit('UPDATE', 'Processing', "Started processing #{$processing->id}", [
+                'processing_id' => $processing->id,
+                'status' => 'Processing',
+            ]);
+
             return $this->successResponse(
                 new ProcessingResource($processing),
                 'Processing started'
@@ -171,7 +220,10 @@ class ProcessingController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'output_kg' => 'required|numeric|min:0',
+            'output_kg' => 'required|numeric|min:0.01|max:' . $processing->input_kg,
+        ], [
+            'output_kg.max' => 'Output quantity cannot exceed the input quantity of ' . number_format($processing->input_kg, 2) . ' kg.',
+            'output_kg.min' => 'Output quantity must be greater than 0.',
         ]);
 
         if ($validator->fails()) {
@@ -183,6 +235,12 @@ class ProcessingController extends Controller
                 $processing, 
                 (float) $request->output_kg
             );
+
+            $this->logAudit('UPDATE', 'Processing', "Completed processing #{$processing->id} — output {$processing->output_kg} kg", [
+                'processing_id' => $processing->id,
+                'output_kg' => $processing->output_kg,
+                'status' => 'Completed',
+            ]);
 
             return $this->successResponse(
                 new ProcessingResource($processing),
@@ -210,6 +268,11 @@ class ProcessingController extends Controller
         try {
             $processing = $this->processingService->returnToProcessing($processing);
 
+            $this->logAudit('UPDATE', 'Processing', "Returned processing #{$processing->id} back to processing status", [
+                'processing_id' => $processing->id,
+                'status' => 'Processing',
+            ]);
+
             return $this->successResponse(
                 new ProcessingResource($processing),
                 'Batch returned to processing'
@@ -225,9 +288,14 @@ class ProcessingController extends Controller
     public function destroy(Processing $processing): JsonResponse
     {
         try {
+            $processingId = $processing->id;
             $this->processingService->deleteProcessing($processing);
 
-            return $this->successResponse(null, 'Processing record removed successfully');
+            $this->logAudit('DELETE', 'Processing', "Archived processing #{$processingId}", [
+                'processing_id' => $processingId,
+            ]);
+
+            return $this->successResponse(null, 'Processing record archived successfully');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to remove processing record: ' . $e->getMessage(), 500);
         }

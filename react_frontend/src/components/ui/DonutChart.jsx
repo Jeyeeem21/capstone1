@@ -6,6 +6,19 @@ const getCSSVariable = (name) => {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 };
 
+// Helper to detect dark mode
+const useIsDarkMode = () => {
+  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.body.classList.contains('dark-mode'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+};
+
 const DonutChart = ({ 
   title, 
   subtitle,
@@ -18,10 +31,12 @@ const DonutChart = ({
   showLegend = true,
   compact = false,
   horizontalLegend = false,
+  compactLegend = false,
   valueUnit = 'kg'
 }) => {
   // Get theme colors from CSS variables
   const [themeColors, setThemeColors] = useState(['#22c55e', '#ef4444', '#f97316', '#3b82f6', '#8b5cf6', '#ec4899']);
+  const isDark = useIsDarkMode();
   
   useEffect(() => {
     const updateColors = () => {
@@ -77,13 +92,15 @@ const DonutChart = ({
                 </Pie>
                 <Tooltip 
                   contentStyle={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e5e7eb',
+                    backgroundColor: isDark ? '#1e293b' : 'white', 
+                    border: `1px solid ${isDark ? '#475569' : '#e5e7eb'}`,
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                     padding: '8px 12px',
-                    fontSize: '12px'
+                    fontSize: '12px',
+                    color: isDark ? '#f1f5f9' : undefined
                   }}
+                  itemStyle={{ color: isDark ? '#cbd5e1' : undefined }}
                   formatter={(value, name) => [`${value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
                 />
               </PieChart>
@@ -101,18 +118,18 @@ const DonutChart = ({
           </div>
 
           {/* Legend beside chart */}
-          <div className="flex-1 space-y-1.5">
+          <div className={`flex-1 ${compactLegend || data.length > 5 ? 'grid grid-cols-2 gap-x-3 gap-y-1' : 'space-y-1.5'}`}>
             {data.map((item, index) => (
-              <div key={item.name} className="flex items-start gap-2">
+              <div key={item.name} className="flex items-center gap-1.5">
                 <div 
-                  className="w-3 h-3 rounded-full mt-0.5 flex-shrink-0"
+                  className={`rounded-full flex-shrink-0 ${compactLegend || data.length > 5 ? 'w-2.5 h-2.5' : 'w-3 h-3 mt-0.5'}`}
                   style={{ backgroundColor: item.color || themeColors[index % themeColors.length] }}
                 />
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-600 dark:text-gray-300 truncate" title={item.name}>{item.name}</p>
-                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  <p className={`text-gray-600 dark:text-gray-300 truncate ${compactLegend || data.length > 5 ? 'text-[11px] leading-tight' : 'text-xs'}`} title={item.name}>{item.name}</p>
+                  <p className={`font-semibold text-gray-800 dark:text-gray-100 ${compactLegend || data.length > 5 ? 'text-xs leading-tight' : 'text-sm'}`}>
                     {item.value.toLocaleString()}{valueUnit}
-                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">
                       ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
                     </span>
                   </p>
@@ -145,13 +162,15 @@ const DonutChart = ({
                 </Pie>
                 <Tooltip 
                   contentStyle={{ 
-                    backgroundColor: 'white', 
-                    border: '1px solid #e5e7eb',
+                    backgroundColor: isDark ? '#1e293b' : 'white', 
+                    border: `1px solid ${isDark ? '#475569' : '#e5e7eb'}`,
                     borderRadius: '8px',
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                     padding: '8px 12px',
-                    fontSize: '12px'
+                    fontSize: '12px',
+                    color: isDark ? '#f1f5f9' : undefined
                   }}
+                  itemStyle={{ color: isDark ? '#cbd5e1' : undefined }}
                   formatter={(value, name) => [`${value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
                 />
               </PieChart>

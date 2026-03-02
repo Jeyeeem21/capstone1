@@ -7,13 +7,14 @@ use App\Models\Procurement;
 use App\Models\ProcurementBatch;
 use App\Services\ProcurementBatchService;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
 
 class ProcurementBatchController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     public function __construct(private readonly ProcurementBatchService $service) {}
 
@@ -61,6 +62,13 @@ class ProcurementBatchController extends Controller
 
         try {
             $batch = $this->service->createBatch($data);
+
+            $this->logAudit('CREATE', 'Procurement Batches', "Created procurement batch #{$batch->id}", [
+                'batch_id' => $batch->id,
+                'variety_id' => $batch->variety_id,
+                'season_date' => $batch->season_date,
+            ]);
+
             return $this->successResponse(new ProcurementBatchResource($batch), 201);
         } catch (Throwable $e) {
             return $this->errorResponse('Failed to create batch: ' . $e->getMessage(), 500);
@@ -79,7 +87,15 @@ class ProcurementBatchController extends Controller
 
         try {
             $batch = ProcurementBatch::findOrFail($id);
+            $oldValues = $batch->only(['variety_id', 'season_date', 'notes', 'status']);
             $batch = $this->service->updateBatch($batch, $data);
+
+            $this->logAudit('UPDATE', 'Procurement Batches', "Updated procurement batch #{$batch->id}", [
+                'batch_id' => $batch->id,
+                'old_values' => $oldValues,
+                'new_values' => $batch->only(['variety_id', 'season_date', 'notes', 'status']),
+            ]);
+
             return $this->successResponse(new ProcurementBatchResource($batch));
         } catch (Throwable $e) {
             return $this->errorResponse('Failed to update batch: ' . $e->getMessage(), 500);
@@ -91,6 +107,13 @@ class ProcurementBatchController extends Controller
     {
         try {
             $batch = ProcurementBatch::findOrFail($id);
+
+            $this->logAudit('DELETE', 'Procurement Batches', "Deleted procurement batch #{$batch->id}", [
+                'batch_id' => $batch->id,
+                'variety_id' => $batch->variety_id,
+                'status' => $batch->status,
+            ]);
+
             $this->service->deleteBatch($batch);
             return $this->successResponse(['message' => 'Batch deleted successfully']);
         } catch (Throwable $e) {
@@ -105,6 +128,12 @@ class ProcurementBatchController extends Controller
             $batch = ProcurementBatch::findOrFail($batchId);
             $procurement = Procurement::findOrFail($procurementId);
             $this->service->assignProcurement($batch, $procurement);
+
+            $this->logAudit('UPDATE', 'Procurement Batches', "Assigned procurement #{$procurementId} to batch #{$batchId}", [
+                'batch_id' => $batchId,
+                'procurement_id' => $procurementId,
+            ]);
+
             // Reload batch with relations for response
             $batch = $this->service->getBatchById($batchId);
             return $this->successResponse(new ProcurementBatchResource($batch));
@@ -119,6 +148,12 @@ class ProcurementBatchController extends Controller
         try {
             $procurement = Procurement::findOrFail($procurementId);
             $batchId = $procurement->batch_id;
+
+            $this->logAudit('UPDATE', 'Procurement Batches', "Removed procurement #{$procurementId} from batch #{$batchId}", [
+                'batch_id' => $batchId,
+                'procurement_id' => $procurementId,
+            ]);
+
             $this->service->removeProcurement($procurement);
             return $this->successResponse(['message' => 'Procurement removed from batch successfully']);
         } catch (Throwable $e) {

@@ -32,38 +32,22 @@ const StaffDashboard = () => {
     return () => observer.disconnect();
   }, []);
 
-  // Mock low stock items
-  const lowStockItems = [
-    { id: 1, product: 'Premium Rice 25kg', sku: 'PR-25KG', currentStock: 15, minStock: 50, status: 'Critical' },
-    { id: 2, product: 'Regular Rice 10kg', sku: 'RR-10KG', currentStock: 28, minStock: 40, status: 'Low' },
-    { id: 3, product: 'Jasmine Rice 5kg', sku: 'JR-05KG', currentStock: 32, minStock: 45, status: 'Low' },
-    { id: 4, product: 'Brown Rice 10kg', sku: 'BR-10KG', currentStock: 8, minStock: 30, status: 'Critical' },
-    { id: 5, product: 'Glutinous Rice 2kg', sku: 'GR-02KG', currentStock: 45, minStock: 50, status: 'Low' },
-  ];
+  // Low stock items — will connect to real API
+  const lowStockItems = [];
 
-  // Mock recent activities
-  const recentActivities = [
-    { id: 1, action: 'Sale Completed', description: 'INV-2026-001 - ₱12,500', time: '10 minutes ago', type: 'sale' },
-    { id: 2, action: 'Stock Updated', description: 'Premium Rice 25kg +50 units', time: '25 minutes ago', type: 'stock' },
-    { id: 3, action: 'New Order', description: 'Customer: Juan Dela Cruz', time: '1 hour ago', type: 'order' },
-    { id: 4, action: 'Low Stock Alert', description: 'Brown Rice 10kg below minimum', time: '2 hours ago', type: 'alert' },
-    { id: 5, action: 'Sale Completed', description: 'INV-2026-002 - ₱8,750', time: '3 hours ago', type: 'sale' },
-  ];
+  // Recent activities — will connect to real API
+  const recentActivities = [];
 
-  // Mock today's stats
+  // Today's stats — will connect to real API
   const todayStats = {
-    totalSales: 12,
-    totalRevenue: 45850,
-    itemsSold: 156,
-    lowStockCount: lowStockItems.filter(item => item.status === 'Critical').length,
+    totalSales: 0,
+    totalRevenue: 0,
+    itemsSold: 0,
+    lowStockCount: 0,
   };
 
   // Stock status distribution
-  const stockDistribution = [
-    { name: 'Healthy Stock', value: 45, color: themeColors.button },
-    { name: 'Low Stock', value: 8, color: '#f59e0b' },
-    { name: 'Critical', value: 3, color: '#ef4444' },
-  ];
+  const stockDistribution = [];
 
   const lowStockColumns = [
     { 

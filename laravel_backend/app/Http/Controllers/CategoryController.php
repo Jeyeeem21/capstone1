@@ -6,12 +6,13 @@ use App\Models\Category;
 use App\Services\CategoryService;
 use App\Http\Resources\CategoryResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class CategoryController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     protected CategoryService $categoryService;
 
@@ -48,6 +49,12 @@ class CategoryController extends Controller
         ]);
 
         $category = $this->categoryService->createCategory($validated);
+
+        $this->logAudit('CREATE', 'Categories', "Created category: {$category->name}", [
+            'category_id' => $category->id,
+            'name' => $category->name,
+            'status' => $category->status,
+        ]);
 
         return $this->successResponse(
             new CategoryResource($category),
@@ -89,7 +96,14 @@ class CategoryController extends Controller
             'name.required' => 'Category name is required.',
         ]);
 
+        $oldValues = $category->only(['name', 'description', 'color', 'status']);
         $category = $this->categoryService->updateCategory($category, $validated);
+
+        $this->logAudit('UPDATE', 'Categories', "Updated category: {$category->name}", [
+            'category_id' => $category->id,
+            'old_values' => $oldValues,
+            'new_values' => $category->only(['name', 'description', 'color', 'status']),
+        ]);
 
         return $this->successResponse(
             new CategoryResource($category),
@@ -111,9 +125,14 @@ class CategoryController extends Controller
         // Now soft delete (sets deleted_at)
         $this->categoryService->deleteCategory($category);
 
+        $this->logAudit('DELETE', 'Categories', "Archived category: {$category->name}", [
+            'category_id' => $category->id,
+            'name' => $category->name,
+        ]);
+
         return $this->successResponse(
             null,
-            'Category deleted successfully'
+            'Category archived successfully'
         );
     }
 }

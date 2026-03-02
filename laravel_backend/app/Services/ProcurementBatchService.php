@@ -24,6 +24,7 @@ class ProcurementBatchService
             return ProcurementBatch::with(['variety:id,name,color'])
                 ->withCount('procurements')
                 ->withSum('procurements', 'total_cost')
+                ->withSum('dryingProcesses', 'total_price')
                 ->orderBy('created_at', 'desc')
                 ->get();
         });

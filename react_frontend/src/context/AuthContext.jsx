@@ -1,26 +1,7 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authApi } from '../api';
 
 const AuthContext = createContext(null);
-
-// Mock user data - in real app, this would come from your backend
-const mockUsers = {
-  admin: {
-    id: 1,
-    email: 'admin@kjpricemill.com',
-    firstName: 'Admin',
-    lastName: 'User',
-    role: 'admin',
-    permissions: ['all'],
-  },
-  staff: {
-    id: 2,
-    email: 'staff@kjpricemill.com',
-    firstName: 'John',
-    lastName: 'Smith',
-    role: 'staff',
-    permissions: ['pos', 'view_inventory'],
-  },
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -28,53 +9,62 @@ export const AuthProvider = ({ children }) => {
 
   // Check for existing session on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem('kjp_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
+    const initAuth = async () => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        try {
+          const response = await authApi.getCurrentUser();
+          if (response.success && response.user) {
+            setUser(response.user);
+          } else {
+            // Token invalid, clear it
+            localStorage.removeItem('auth_token');
+          }
+        } catch {
+          localStorage.removeItem('auth_token');
+        }
+      }
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
-  // Login function
-  const login = async (email, password, role = 'admin') => {
-    // Mock login - replace with actual API call
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const userData = role === 'admin' ? mockUsers.admin : mockUsers.staff;
-        setUser(userData);
-        localStorage.setItem('kjp_user', JSON.stringify(userData));
-        resolve(userData);
-      }, 500);
-    });
-  };
+  // Login function — calls real API
+  const login = useCallback(async (email, password) => {
+    const response = await authApi.login({ email, password });
+
+    if (response.success && response.user) {
+      setUser(response.user);
+      return response;
+    }
+
+    throw new Error(response.error || 'Login failed');
+  }, []);
 
   // Logout function
-  const logout = () => {
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // Even if API call fails, clear local state
+    }
     setUser(null);
-    localStorage.removeItem('kjp_user');
-  };
+    localStorage.removeItem('auth_token');
+  }, []);
 
   // Check if user has a specific role
-  const hasRole = (role) => {
+  const hasRole = useCallback((role) => {
     return user?.role === role;
-  };
+  }, [user]);
 
-  // Check if user is admin
-  const isAdmin = () => {
-    return user?.role === 'admin';
-  };
+  // Role checks
+  const isSuperAdmin = useCallback(() => user?.role === 'super_admin', [user]);
+  const isAdmin = useCallback(() => user?.role === 'admin', [user]);
+  const isStaff = useCallback(() => user?.role === 'staff', [user]);
+  const isAdminOrAbove = useCallback(() => ['super_admin', 'admin'].includes(user?.role), [user]);
 
-  // Check if user is staff
-  const isStaff = () => {
-    return user?.role === 'staff';
-  };
-
-  // Switch role (for demo purposes)
-  const switchRole = (role) => {
-    const userData = role === 'admin' ? mockUsers.admin : mockUsers.staff;
-    setUser(userData);
-    localStorage.setItem('kjp_user', JSON.stringify(userData));
-  };
+  // Base path for admin panel based on role
+  const basePath = user?.role === 'super_admin' ? '/superadmin' : '/admin';
 
   const value = {
     user,
@@ -82,10 +72,12 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     hasRole,
+    isSuperAdmin,
     isAdmin,
+    isAdminOrAbove,
     isStaff,
-    switchRole,
     isAuthenticated: !!user,
+    basePath,
   };
 
   return (

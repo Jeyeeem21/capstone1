@@ -1,0 +1,99 @@
+================================================================================
+                    KJP RICE MILL MANAGEMENT SYSTEM
+                     SYSTEM OBJECTIVES (CAPSTONE)
+================================================================================
+
+
+GENERAL OBJECTIVE:
+    To develop a web-based rice mill management system for KJP Rice Mill
+    that automates and streamlines the end-to-end rice supply chain — from
+    procurement of raw palay to product distribution and delivery — while
+    providing a public-facing e-commerce website for advertising and selling
+    KJP products.
+
+
+SPECIFIC OBJECTIVES:
+
+1.  To create a system that manages the importation and exportation
+    of KJP rice products.
+
+2.  To advertise and showcase KJP rice products through a
+    public-facing website.
+
+3.  To manage the procurement of raw palay from multiple suppliers,
+    tracking quantity, cost, and transaction details.
+
+4.  To organize procurements into batches by rice variety for
+    efficient tracking and bulk processing.
+
+5.  To manage and monitor the drying process of procured palay,
+    tracking duration, cost, and drying status.
+
+6.  To manage the rice milling (processing) stage, recording input
+    and output quantities and automatically computing yield.
+
+7.  To manage rice product inventory with automated stock computation
+    from completed processing output.
+
+8.  To monitor stock levels and provide low-stock and out-of-stock
+    alerts for better inventory visibility.
+
+9.  To manage rice product varieties and ensure variety traceability
+    throughout the entire supply chain.
+
+10. To manage supplier and customer records with validated contact
+    information.
+
+11. To provide an administrative dashboard with key performance
+    indicators, trend charts, and operational summaries.
+
+12. To provide a client portal where customers can browse products,
+    manage a shopping cart, and place orders online.
+
+13. To provide a driver portal for delivery personnel to manage
+    assigned deliveries and update delivery statuses.
+
+14. To provide a staff portal with sales monitoring and inventory
+    alerts for day-to-day operations.
+
+15. To manage delivery assignments, track delivery items, and
+    support proof-of-delivery documentation.
+
+16. To manage staff records including role assignments and
+    employment details.
+
+17. To implement role-based access control with separate portals
+    for Admin, Staff, Client, and Driver users.
+
+18. To implement a Content Management System (CMS) that allows the
+    admin to update public website content without code changes.
+
+19. To provide a customizable appearance and theme system for the
+    admin to personalize the look and feel of the system.
+
+20. To provide a business settings module for managing business
+    information, logo, hours, and social media links.
+
+21. To provide a sales management module for tracking sales
+    transactions, invoices, and payment statuses.
+
+22. To provide an audit trail that logs all system activities
+    for accountability and transparency.
+
+23. To implement a database backup and export feature for data
+    security and recovery.
+
+24. To implement a responsive web design that adapts seamlessly
+    across desktop, tablet, and mobile devices.
+
+25. To implement data visualization through interactive charts
+    and graphs across all dashboards for data-driven decision
+    making.
+
+26. To implement a Point of Sale (POS) module for processing
+    walk-in customer transactions.
+
+
+================================================================================
+                          END OF OBJECTIVES
+================================================================================

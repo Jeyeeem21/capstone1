@@ -6,12 +6,13 @@ use App\Models\Variety;
 use App\Services\VarietyService;
 use App\Http\Resources\VarietyResource;
 use App\Traits\ApiResponse;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class VarietyController extends Controller
 {
-    use ApiResponse;
+    use ApiResponse, AuditLogger;
 
     protected VarietyService $varietyService;
 
@@ -48,6 +49,12 @@ class VarietyController extends Controller
         ]);
 
         $variety = $this->varietyService->createVariety($validated);
+
+        $this->logAudit('CREATE', 'Varieties', "Created variety: {$variety->name}", [
+            'variety_id' => $variety->id,
+            'name' => $variety->name,
+            'status' => $variety->status,
+        ]);
 
         return $this->successResponse(
             new VarietyResource($variety),
@@ -89,7 +96,14 @@ class VarietyController extends Controller
             'name.required' => 'Variety name is required.',
         ]);
 
+        $oldValues = $variety->only(['name', 'description', 'color', 'status']);
         $variety = $this->varietyService->updateVariety($variety, $validated);
+
+        $this->logAudit('UPDATE', 'Varieties', "Updated variety: {$variety->name}", [
+            'variety_id' => $variety->id,
+            'old_values' => $oldValues,
+            'new_values' => $variety->only(['name', 'description', 'color', 'status']),
+        ]);
 
         return $this->successResponse(
             new VarietyResource($variety),
@@ -110,9 +124,14 @@ class VarietyController extends Controller
 
         $this->varietyService->deleteVariety($variety);
 
+        $this->logAudit('DELETE', 'Varieties', "Archived variety: {$variety->name}", [
+            'variety_id' => $variety->id,
+            'name' => $variety->name,
+        ]);
+
         return $this->successResponse(
             null,
-            'Variety deleted successfully'
+            'Variety archived successfully'
         );
     }
 }

@@ -1,15 +1,17 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Package, Box, Tag, DollarSign, CheckCircle, XCircle, Trash2, Scale, Hash, Calendar, ShoppingCart } from 'lucide-react';
+import { Package, Box, Tag, DollarSign, CheckCircle, XCircle, Archive, Scale, Hash, Calendar, ShoppingCart } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
+import { useAuth } from '../../../context/AuthContext';
 
 const CACHE_KEY = '/products';
-const CATEGORIES_CACHE_KEY = '/varieties';
+const VARIETIES_CACHE_KEY = '/varieties';
 
 const Products = () => {
   const toast = useToast();
+  const { isSuperAdmin } = useAuth();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -17,11 +19,14 @@ const Products = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({ 
     product_name: '', 
-    category_id: '', 
+    variety_id: '', 
+    price: '',
+    weight: '',
     status: 'active'
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [costAnalysis, setCostAnalysis] = useState(null);
 
   // Super-fast data fetching with cache
   const { 
@@ -34,24 +39,24 @@ const Products = () => {
     initialData: [],
   });
 
-  // Fetch categories for dropdown
+  // Fetch varieties for dropdown
   const { 
-    data: categories, 
-    refetch: refetchCategories 
+    data: varieties, 
+    refetch: refetchVarieties 
   } = useDataFetch('/varieties', {
-    cacheKey: CATEGORIES_CACHE_KEY,
+    cacheKey: VARIETIES_CACHE_KEY,
     initialData: [],
   });
 
-  // Memoized category options for dropdown
-  const categoryOptions = useMemo(() => {
-    return categories
+  // Memoized variety options for dropdown
+  const varietyOptions = useMemo(() => {
+    return varieties
       .filter(c => c.status === 'Active')
       .map(c => ({
         value: String(c.id),
         label: c.name
       }));
-  }, [categories]);
+  }, [varieties]);
 
   const statusOptions = useMemo(() => [
     { value: 'active', label: 'Active' },
@@ -61,30 +66,44 @@ const Products = () => {
   const handleAdd = useCallback(() => {
     setFormData({ 
       product_name: '', 
-      category_id: '', 
+      variety_id: '', 
+      price: '',
+      weight: '',
       status: 'active'
     });
     setErrors({});
-    refetchCategories();
+    refetchVarieties();
     setIsAddModalOpen(true);
-  }, [refetchCategories]);
+  }, [refetchVarieties]);
 
   const handleView = useCallback((item) => {
     setSelectedItem(item);
     setIsViewModalOpen(true);
   }, []);
 
-  const handleEdit = useCallback((item) => {
+  const handleEdit = useCallback(async (item) => {
     setSelectedItem(item);
     setFormData({ 
       product_name: item.product_name, 
-      category_id: String(item.category_id), 
+      variety_id: String(item.variety_id), 
+      price: item.price || '',
+      weight: item.weight || '',
       status: item.status
     });
     setErrors({});
-    refetchCategories();
+    setCostAnalysis(null);
+    refetchVarieties();
     setIsEditModalOpen(true);
-  }, [refetchCategories]);
+    // Fetch cost analysis for unit cost display
+    try {
+      const response = await apiClient.get(`/products/${item.product_id}/cost-analysis`);
+      if (response.success && response.data) {
+        setCostAnalysis(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching cost analysis:', error);
+    }
+  }, [refetchVarieties]);
 
   const handleDelete = useCallback((item) => {
     setSelectedItem(item);
@@ -113,11 +132,10 @@ const Products = () => {
       setErrors({});
       const submitData = {
         product_name: formData.product_name,
-        category_id: parseInt(formData.category_id),
-        price: 0,
+        variety_id: parseInt(formData.variety_id),
+        price: parseFloat(formData.price) || 0,
         stocks: 0,
-        unit: 'kg',
-        weight: null,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
         status: formData.status,
       };
       const response = await apiClient.post('/products', submitData);
@@ -141,8 +159,8 @@ const Products = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to add product');
@@ -160,11 +178,10 @@ const Products = () => {
       setErrors({});
       const submitData = {
         product_name: formData.product_name,
-        category_id: parseInt(formData.category_id),
-        price: selectedItem.price,
+        variety_id: parseInt(formData.variety_id),
+        price: parseFloat(formData.price) || 0,
         stocks: selectedItem.stocks,
-        unit: selectedItem.unit,
-        weight: selectedItem.weight,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
         status: formData.status,
       };
       const response = await apiClient.put(`/products/${selectedItem.product_id}`, submitData);
@@ -188,8 +205,8 @@ const Products = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to update product');
@@ -214,15 +231,15 @@ const Products = () => {
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Product Removed', `${productName} has been removed.`);
+          toast.success('Product Archived', `${productName} has been archived.`);
         });
         return;
       } else {
-        throw new Error(response.error || 'Failed to delete');
+        throw new Error(response.error || 'Failed to archive');
       }
     } catch (error) {
-      console.error('Error deleting product:', error);
-      toast.error('Error', 'Failed to delete product');
+      console.error('Error archiving product:', error);
+      toast.error('Error', 'Failed to archive product');
       refetch();
     } finally {
       setSaving(false);
@@ -240,17 +257,17 @@ const Products = () => {
   const columns = useMemo(() => [
     { header: 'Product Name', accessor: 'product_name' },
     { 
-      header: 'Category', 
-      accessor: 'category_name',
+      header: 'Variety', 
+      accessor: 'variety_name',
       cell: (row) => (
         <span 
           className="px-2 py-1 rounded-full text-xs font-medium"
           style={{ 
-            backgroundColor: `${row.category_color}20`, 
-            color: row.category_color 
+            backgroundColor: `${row.variety_color}20`, 
+            color: row.variety_color 
           }}
         >
-          {row.category_name}
+          {row.variety_name}
         </span>
       )
     },
@@ -262,18 +279,6 @@ const Products = () => {
       )
     },
     { 
-      header: 'Stocks', 
-      accessor: 'stocks',
-      cell: (row) => (
-        <div className="flex items-center gap-2">
-          <span className={`font-medium ${row.stocks > 0 ? 'text-blue-600' : 'text-red-500'}`}>
-            {row.stocks.toLocaleString()}
-          </span>
-          <span className="text-xs text-gray-500">{row.unit}</span>
-        </div>
-      )
-    },
-    { 
       header: 'Weight', 
       accessor: 'weight_formatted',
       cell: (row) => (
@@ -281,16 +286,20 @@ const Products = () => {
       )
     },
     { 
-      header: 'Stock Status', 
-      accessor: 'stock_status',
+      header: 'Stocks', 
+      accessor: 'stocks',
       cell: (row) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          row.is_in_stock 
-            ? 'bg-green-100 text-green-700' 
-            : 'bg-red-100 text-red-700'
-        }`}>
-          {row.stock_status}
-        </span>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className={`font-medium ${row.stocks > 0 ? 'text-blue-600' : 'text-red-500'}`}>
+              {row.stocks.toLocaleString()}
+            </span>
+            <span className="text-xs text-gray-500">{row.unit}</span>
+          </div>
+          {row.weight && row.stocks > 0 && (
+            <p className="text-[10px] text-gray-400">{(row.stocks * parseFloat(row.weight)).toLocaleString()} kg total</p>
+          )}
+        </div>
       )
     },
     { 
@@ -303,9 +312,8 @@ const Products = () => {
       accessor: 'actions',
       cell: (row) => (
         <ActionButtons
-          onView={() => handleView(row)}
           onEdit={() => handleEdit(row)}
-          onDelete={() => handleDelete(row)}
+          onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined}
         />
       )
     }
@@ -413,16 +421,39 @@ const Products = () => {
               submitted={submitted}
             />
             <FormSelect 
-              label="Category" 
-              name="category_id" 
-              value={formData.category_id} 
+              label="Variety" 
+              name="variety_id" 
+              value={formData.variety_id} 
               onChange={handleFormChange} 
-              options={categoryOptions} 
+              options={varietyOptions} 
               required
-              placeholder="Select a category"
-              error={errors.category_id}
+              placeholder="Select a variety"
+              error={errors.variety_id}
               submitted={submitted}
             />
+            <div className="grid grid-cols-2 gap-4">
+              <FormInput 
+                label="Price (₱)" 
+                name="price" 
+                type="number" 
+                value={formData.price} 
+                onChange={handleFormChange} 
+                placeholder="0.00"
+                error={errors.price}
+                submitted={submitted}
+              />
+              <FormInput 
+                label="Weight (kg)" 
+                name="weight" 
+                type="number" 
+                value={formData.weight} 
+                onChange={handleFormChange} 
+                required
+                placeholder="e.g. 25"
+                error={errors.weight}
+                submitted={submitted}
+              />
+            </div>
           </>
         )}
       </FormModal>
@@ -437,7 +468,9 @@ const Products = () => {
         size="md"
         loading={saving}
       >
-        {({ submitted }) => (
+        {({ submitted }) => {
+          const hasStock = selectedItem?.stocks > 0;
+          return (
           <>
             <FormInput 
               label="Product Name" 
@@ -450,16 +483,50 @@ const Products = () => {
               submitted={submitted}
             />
             <FormSelect 
-              label="Category" 
-              name="category_id" 
-              value={formData.category_id} 
+              label="Variety" 
+              name="variety_id" 
+              value={formData.variety_id} 
               onChange={handleFormChange} 
-              options={categoryOptions} 
+              options={varietyOptions} 
               required
-              placeholder="Select a category"
-              error={errors.category_id}
+              placeholder="Select a variety"
+              error={errors.variety_id}
               submitted={submitted}
+              disabled={hasStock}
+              hint={hasStock ? 'Cannot change variety while product has existing stock' : ''}
             />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FormInput 
+                  label="Price (₱)" 
+                  name="price" 
+                  type="number" 
+                  value={formData.price} 
+                  onChange={handleFormChange} 
+                  placeholder="0.00"
+                  error={errors.price}
+                  submitted={submitted}
+                />
+                {costAnalysis?.has_data && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Unit Cost: <span className="font-semibold text-gray-700">₱{costAnalysis.avg_cost_per_unit.toLocaleString()}</span>
+                  </p>
+                )}
+              </div>
+              <FormInput 
+                label="Weight (kg)" 
+                name="weight" 
+                type="number" 
+                value={formData.weight} 
+                onChange={handleFormChange} 
+                required
+                placeholder="e.g. 25"
+                hint={hasStock ? 'Cannot change weight while product has existing stock' : ''}
+                error={errors.weight}
+                submitted={submitted}
+                disabled={hasStock}
+              />
+            </div>
             <FormSelect 
               label="Status" 
               name="status" 
@@ -469,20 +536,21 @@ const Products = () => {
               submitted={submitted}
             />
           </>
-        )}
+          );
+        }}
       </FormModal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Archive Confirmation Modal */}
       <ConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Delete Product"
-        message={`Are you sure you want to delete "${selectedItem?.product_name}"? This action cannot be undone.`}
-        confirmText="Delete"
+        title="Archive Product"
+        message={`Are you sure you want to archive "${selectedItem?.product_name}"? It will be moved to the archives and can be restored later.`}
+        confirmText="Archive"
         cancelText="Cancel"
-        variant="danger"
-        icon={Trash2}
+        variant="warning"
+        icon={Archive}
         isLoading={saving}
       />
 
@@ -526,9 +594,9 @@ const Products = () => {
             {/* Details Grid */}
             <div className="grid grid-cols-3 gap-2">
               <ViewDetailItem icon={Hash} label="Product ID" value={`#${String(selectedItem.product_id).padStart(4, '0')}`} compact />
-              <ViewDetailItem icon={Tag} label="Category" value={selectedItem.category_name} iconColor="text-blue-500" compact />
+              <ViewDetailItem icon={Tag} label="Variety" value={selectedItem.variety_name} iconColor="text-blue-500" compact />
               <ViewDetailItem icon={DollarSign} label="Price" value={selectedItem.price_formatted} iconColor="text-green-500" compact />
-              <ViewDetailItem icon={Box} label="Stocks" value={`${selectedItem.stocks.toLocaleString()} ${selectedItem.unit}`} iconColor="text-blue-500" compact />
+              <ViewDetailItem icon={Box} label="Stocks" value={`${selectedItem.stocks.toLocaleString()} ${selectedItem.unit}${selectedItem.weight && selectedItem.stocks > 0 ? ` (${(selectedItem.stocks * parseFloat(selectedItem.weight)).toLocaleString()} kg)` : ''}`} iconColor="text-blue-500" compact />
               <ViewDetailItem icon={Scale} label="Weight" value={selectedItem.weight_formatted || 'N/A'} iconColor="text-purple-500" compact />
               <ViewDetailItem icon={ShoppingCart} label="Stock Status" value={selectedItem.stock_status} iconColor={selectedItem.is_in_stock ? 'text-green-500' : 'text-red-500'} compact />
               <ViewDetailItem icon={Calendar} label="Created" value={selectedItem.created_date} iconColor="text-gray-500" compact />

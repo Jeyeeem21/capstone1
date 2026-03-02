@@ -1,14 +1,16 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Trash2, Mail, Phone, MapPin, User, Building2, Package } from 'lucide-react';
+import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Package } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
+import { useAuth } from '../../../context/AuthContext';
 
 const CACHE_KEY = '/customers';
 
 const Customer = () => {
   const toast = useToast();
+  const { isSuperAdmin } = useAuth();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -184,8 +186,8 @@ const Customer = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to add customer');
@@ -227,8 +229,8 @@ const Customer = () => {
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
         toast.error('Error', error.response?.data?.message || error.message || 'Failed to update customer');
@@ -254,15 +256,15 @@ const Customer = () => {
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Customer Removed', `${customerName} has been removed.`);
+          toast.success('Customer Archived', `${customerName} has been archived.`);
         });
         return;
       } else {
-        throw new Error(response.error || 'Failed to delete');
+        throw new Error(response.error || 'Failed to archive');
       }
     } catch (error) {
-      console.error('Error deleting customer:', error);
-      toast.error('Error', 'Failed to delete customer');
+      console.error('Error archiving customer:', error);
+      toast.error('Error', 'Failed to archive customer');
       refetch();
     } finally {
       setSaving(false);
@@ -303,7 +305,7 @@ const Customer = () => {
     { header: 'Orders', accessor: 'orders' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onView={() => handleView(row)} onEdit={() => handleEdit(row)} onDelete={() => handleDelete(row)} />
+      <ActionButtons onEdit={() => handleEdit(row)} onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined} />
     )},
   ], [handleView, handleEdit, handleDelete]);
 
@@ -344,7 +346,7 @@ const Customer = () => {
           filterPlaceholder="All Status" 
           onAdd={handleAdd} 
           addLabel="Add Customer"
-          onRowClick={handleView}
+          onRowDoubleClick={handleView}
         />
       )}
 
@@ -604,7 +606,7 @@ const Customer = () => {
         )}
       </FormModal>
 
-      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Remove Customer" message={`Are you sure you want to remove "${selectedItem?.name}"? The customer will be soft deleted and hidden from the list, but remains in the database.`} confirmText="Remove" variant="danger" icon={Trash2} loading={saving} />
+      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Archive Customer" message={`Are you sure you want to archive "${selectedItem?.name}"? It will be moved to the archives and can be restored later.`} confirmText="Archive" variant="warning" icon={Archive} loading={saving} />
     </div>
   );
 };

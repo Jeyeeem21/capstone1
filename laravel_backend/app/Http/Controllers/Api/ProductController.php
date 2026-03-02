@@ -21,9 +21,9 @@ class ProductController extends Controller
             $query->search($request->search);
         }
 
-        // Apply category filter
-        if ($request->has('category') && $request->category !== 'all') {
-            $query->byCategory($request->category);
+        // Apply variety filter
+        if ($request->has('variety') && $request->variety !== 'all') {
+            $query->byVariety($request->variety);
         }
 
         // Apply stock filter (default: only in-stock for public)
@@ -82,31 +82,31 @@ class ProductController extends Controller
     }
 
     /**
-     * Get product categories with counts
+     * Get product varieties with counts
      */
-    public function categories(): JsonResponse
+    public function varieties(): JsonResponse
     {
-        $categories = Product::where('in_stock', true)
-            ->selectRaw('category, COUNT(*) as count')
-            ->groupBy('category')
+        $varieties = Product::where('in_stock', true)
+            ->selectRaw('variety_id, COUNT(*) as count')
+            ->groupBy('variety_id')
             ->get()
             ->map(function ($item) {
                 return [
-                    'id' => $item->category,
-                    'name' => ucfirst($item->category),
+                    'id' => $item->variety_id,
+                    'name' => $item->variety?->name ?? 'Unknown',
                     'count' => $item->count,
                 ];
             });
 
-        // Add "All Products" category
+        // Add "All Products" variety
         $total = Product::where('in_stock', true)->count();
-        $allCategories = collect([
+        $allVarieties = collect([
             ['id' => 'all', 'name' => 'All Products', 'count' => $total]
-        ])->concat($categories);
+        ])->concat($varieties);
 
         return response()->json([
             'success' => true,
-            'data' => $allCategories,
+            'data' => $allVarieties,
         ]);
     }
 
@@ -128,7 +128,7 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'category' => 'required|string|max:50',
+            'variety' => 'required|string|max:50',
             'description' => 'nullable|string',
             'price' => 'required|numeric|min:0',
             'unit' => 'nullable|string|max:50',
@@ -157,7 +157,7 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'category' => 'sometimes|string|max:50',
+            'variety' => 'sometimes|string|max:50',
             'description' => 'nullable|string',
             'price' => 'sometimes|numeric|min:0',
             'unit' => 'nullable|string|max:50',

@@ -40,17 +40,17 @@ class ProcurementService
     /**
      * Create a new procurement with optional new supplier
      */
-    public function createProcurement(array $data, ?string $newSupplierName = null): Procurement
+    public function createProcurement(array $data, ?string $newSupplierName = null, array $newSupplierData = []): Procurement
     {
-        return DB::transaction(function () use ($data, $newSupplierName) {
+        return DB::transaction(function () use ($data, $newSupplierName, $newSupplierData) {
             // If new supplier name is provided, create the supplier first
             if ($newSupplierName && !isset($data['supplier_id'])) {
                 $supplier = Supplier::create([
                     'name' => $newSupplierName,
-                    'contact' => null,
-                    'phone' => null,
-                    'email' => null,
-                    'address' => null,
+                    'contact' => $newSupplierData['contact'] ?? null,
+                    'phone' => $newSupplierData['phone'] ?? null,
+                    'email' => $newSupplierData['email'] ?? null,
+                    'address' => $newSupplierData['address'] ?? null,
                     'status' => 'Active',
                 ]);
                 $data['supplier_id'] = $supplier->id;

@@ -1,11 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Tag, Layers, Package, CheckCircle, XCircle, Trash2, Palette } from 'lucide-react';
+import { Tag, Layers, Package, CheckCircle, XCircle, Archive, Palette } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, FormTextarea, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
 
-const CACHE_KEY = '/categories';
+const CACHE_KEY = '/varieties';
 
 // Color presets for quick selection
 const colorPresets = ['#22c55e', '#3b82f6', '#eab308', '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
@@ -28,11 +28,11 @@ const Categories = () => {
 
   // Super-fast data fetching with cache
   const { 
-    data: categories, 
+    data: varieties, 
     loading, 
     isRefreshing,
     refetch 
-  } = useDataFetch('/categories', {
+  } = useDataFetch('/varieties', {
     cacheKey: CACHE_KEY,
     initialData: [],
   });
@@ -99,32 +99,32 @@ const Categories = () => {
     setSaving(true);
     try {
       setErrors({});
-      const response = await apiClient.post('/categories', formData);
+      const response = await apiClient.post('/varieties', formData);
       
       if (response.success && response.data) {
-        const categoryName = formData.name;
+        const varietyName = formData.name;
         // Close modal first
         setIsAddModalOpen(false);
         
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Category Added', `${categoryName} has been added successfully.`);
+          toast.success('Variety Added', `${varietyName} has been added successfully.`);
         });
         return;
       } else {
         throw response;
       }
     } catch (error) {
-      console.error('Error adding category:', error);
+      console.error('Error adding variety:', error);
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
-        toast.error('Error', error.response?.data?.message || error.message || 'Failed to add category');
+        toast.error('Error', error.response?.data?.message || error.message || 'Failed to add variety');
         throw error;
       }
     } finally {
@@ -137,32 +137,32 @@ const Categories = () => {
     setSaving(true);
     try {
       setErrors({});
-      const response = await apiClient.put(`/categories/${selectedItem.id}`, formData);
+      const response = await apiClient.put(`/varieties/${selectedItem.id}`, formData);
       
       if (response.success && response.data) {
-        const categoryName = formData.name;
+        const varietyName = formData.name;
         // Close modal first
         setIsEditModalOpen(false);
         
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Category Updated', `${categoryName} has been updated.`);
+          toast.success('Variety Updated', `${varietyName} has been updated.`);
         });
         return;
       } else {
         throw response;
       }
     } catch (error) {
-      console.error('Error updating category:', error);
+      console.error('Error updating variety:', error);
       if (error.response?.data?.errors || error.errors) {
         const backendErrors = error.response?.data?.errors || error.errors;
         setErrors(backendErrors);
-        const fieldNames = Object.keys(backendErrors).join(', ');
-        toast.error('Validation Error', `Please fix the following fields: ${fieldNames}`);
+        const fieldNames = Object.keys(backendErrors).map(f => f.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())).join(', ');
+        toast.error('Validation Error', `Please fix the following: ${fieldNames}`);
         throw error;
       } else {
-        toast.error('Error', error.response?.data?.message || error.message || 'Failed to update category');
+        toast.error('Error', error.response?.data?.message || error.message || 'Failed to update variety');
         throw error;
       }
     } finally {
@@ -174,25 +174,25 @@ const Categories = () => {
     if (saving) return; // Prevent double submit
     setSaving(true);
     try {
-      const response = await apiClient.delete(`/categories/${selectedItem.id}`);
+      const response = await apiClient.delete(`/varieties/${selectedItem.id}`);
       
       if (response.success) {
-        const categoryName = selectedItem.name;
+        const varietyName = selectedItem.name;
         // Close modal first
         setIsDeleteModalOpen(false);
         
         // Refetch and toast together
         invalidateCache(CACHE_KEY);
         refetch().then(() => {
-          toast.success('Category Removed', `${categoryName} has been removed.`);
+          toast.success('Variety Archived', `${varietyName} has been archived.`);
         });
         return;
       } else {
-        throw new Error(response.error || 'Failed to delete');
+        throw new Error(response.error || 'Failed to archive');
       }
     } catch (error) {
-      console.error('Error deleting category:', error);
-      toast.error('Error', 'Failed to delete category');
+      console.error('Error archiving variety:', error);
+      toast.error('Error', 'Failed to archive variety');
       refetch();
     } finally {
       setSaving(false);
@@ -200,10 +200,10 @@ const Categories = () => {
   };
 
   // Stats
-  const totalCategories = categories.length;
-  const activeCategories = categories.filter(c => c.status === 'Active').length;
-  const inactiveCategories = categories.filter(c => c.status === 'Inactive').length;
-  const totalProducts = categories.reduce((sum, c) => sum + (c.products_count || 0), 0);
+  const totalVarieties = varieties.length;
+  const activeVarieties = varieties.filter(c => c.status === 'Active').length;
+  const inactiveVarieties = varieties.filter(c => c.status === 'Inactive').length;
+  const totalProducts = varieties.reduce((sum, c) => sum + (c.products_count || 0), 0);
 
   // Color preview component
   const ColorPreview = ({ color }) => (
@@ -266,7 +266,7 @@ const Categories = () => {
 
   const columns = useMemo(() => [
     { 
-      header: 'Category', 
+      header: 'Variety', 
       accessor: 'name',
       cell: (row) => (
         <div className="flex items-center gap-3">
@@ -287,15 +287,15 @@ const Categories = () => {
     { header: 'Products', accessor: 'products_count', cell: (row) => row.products_count || 0 },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onView={() => handleView(row)} onEdit={() => handleEdit(row)} onDelete={() => handleDelete(row)} />
+      <ActionButtons onEdit={() => handleEdit(row)} onArchive={() => handleDelete(row)} />
     )},
   ], [handleView, handleEdit, handleDelete]);
 
   return (
     <div>
       <PageHeader 
-        title="Categories" 
-        description="Organize your products into categories" 
+        title="Varieties" 
+        description="Organize your products into varieties" 
         icon={Tag}
         action={isRefreshing ? (
           <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
@@ -303,32 +303,32 @@ const Categories = () => {
       />
 
       {/* Stats Cards */}
-      {loading && categories.length === 0 ? (
+      {loading && varieties.length === 0 ? (
         <SkeletonStats count={4} className="mb-6" />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatsCard label="Total Categories" value={totalCategories} unit="categories" icon={Layers} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-          <StatsCard label="Active" value={activeCategories} unit="categories" icon={CheckCircle} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
-          <StatsCard label="Inactive" value={inactiveCategories} unit="categories" icon={XCircle} iconBgColor="bg-gradient-to-br from-red-400 to-red-600" />
+          <StatsCard label="Total Varieties" value={totalVarieties} unit="varieties" icon={Layers} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
+          <StatsCard label="Active" value={activeVarieties} unit="varieties" icon={CheckCircle} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
+          <StatsCard label="Inactive" value={inactiveVarieties} unit="varieties" icon={XCircle} iconBgColor="bg-gradient-to-br from-red-400 to-red-600" />
           <StatsCard label="Total Products" value={totalProducts} unit="products" icon={Package} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
         </div>
       )}
 
       {/* Table */}
-      {loading && categories.length === 0 ? (
+      {loading && varieties.length === 0 ? (
         <SkeletonTable rows={5} columns={5} />
       ) : (
         <DataTable 
-          title="Category List" 
-          subtitle="Manage all product categories" 
+          title="Variety List" 
+          subtitle="Manage all product varieties" 
           columns={columns} 
-          data={categories} 
-          searchPlaceholder="Search categories..." 
+          data={varieties} 
+          searchPlaceholder="Search varieties..." 
           filterField="status" 
           filterPlaceholder="All Status" 
           onAdd={handleAdd} 
-          addLabel="Add Category"
-          onRowClick={handleView}
+          addLabel="Add Variety"
+          onRowDoubleClick={handleView}
         />
       )}
 
@@ -336,7 +336,7 @@ const Categories = () => {
       <Modal 
         isOpen={isViewModalOpen} 
         onClose={() => setIsViewModalOpen(false)} 
-        title="Category Details" 
+        title="Variety Details" 
         size="2xl"
         footer={
           <div className="flex gap-3 justify-end">
@@ -347,7 +347,7 @@ const Categories = () => {
               }}
               className="px-4 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors"
             >
-              Edit Category
+              Edit Variety
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
@@ -360,7 +360,7 @@ const Categories = () => {
       >
         {selectedItem && (
           <div className="space-y-4">
-            {/* Category Name with Color */}
+            {/* Variety Name with Color */}
             <div 
               className="p-4 rounded-lg border-l-4"
               style={{ 
@@ -414,16 +414,16 @@ const Categories = () => {
       </Modal>
 
       {/* Add Modal */}
-      <FormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSubmit} title="Add New Category" submitText="Add Category" size="md" loading={saving}>
+      <FormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSubmit} title="Add New Variety" submitText="Add Variety" size="md" loading={saving}>
         {({ submitted }) => (
           <>
             <FormInput 
-              label="Category Name" 
+              label="Variety Name" 
               name="name" 
               value={formData.name} 
               onChange={handleFormChange} 
               required 
-              placeholder="Enter category name" 
+              placeholder="Enter variety name" 
               submitted={submitted} 
               error={errors.name?.[0]} 
             />
@@ -432,7 +432,7 @@ const Categories = () => {
               name="description" 
               value={formData.description} 
               onChange={handleFormChange} 
-              placeholder="Enter category description (optional)" 
+              placeholder="Enter variety description (optional)" 
               rows={3} 
               submitted={submitted} 
               error={errors.description?.[0]} 
@@ -447,16 +447,16 @@ const Categories = () => {
       </FormModal>
 
       {/* Edit Modal */}
-      <FormModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSubmit={handleEditSubmit} title="Edit Category" submitText="Save Changes" size="md" loading={saving}>
+      <FormModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSubmit={handleEditSubmit} title="Edit Variety" submitText="Save Changes" size="md" loading={saving}>
         {({ submitted }) => (
           <>
             <FormInput 
-              label="Category Name" 
+              label="Variety Name" 
               name="name" 
               value={formData.name} 
               onChange={handleFormChange} 
               required 
-              placeholder="Enter category name" 
+              placeholder="Enter variety name" 
               submitted={submitted} 
               error={errors.name?.[0]} 
             />
@@ -465,7 +465,7 @@ const Categories = () => {
               name="description" 
               value={formData.description} 
               onChange={handleFormChange} 
-              placeholder="Enter category description (optional)" 
+              placeholder="Enter variety description (optional)" 
               rows={3} 
               submitted={submitted} 
               error={errors.description?.[0]} 
@@ -493,11 +493,11 @@ const Categories = () => {
         isOpen={isDeleteModalOpen} 
         onClose={() => setIsDeleteModalOpen(false)} 
         onConfirm={handleDeleteConfirm} 
-        title="Remove Category" 
-        message={`Are you sure you want to remove "${selectedItem?.name}"? The category will be soft deleted and hidden from the list, but remains in the database.`} 
-        confirmText="Remove" 
-        variant="danger" 
-        icon={Trash2} 
+        title="Archive Variety" 
+        message={`Are you sure you want to archive "${selectedItem?.name}"? It will be moved to the archives and can be restored later.`} 
+        confirmText="Archive" 
+        variant="warning" 
+        icon={Archive} 
         loading={saving}
       />
     </div>
