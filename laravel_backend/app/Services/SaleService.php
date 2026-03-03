@@ -60,6 +60,7 @@ class SaleService
                 'customer_id' => $data['customer_id'] ?? null,
                 'subtotal' => 0,
                 'discount' => (float) ($data['discount'] ?? 0),
+                'delivery_fee' => (float) ($data['delivery_fee'] ?? 0),
                 'total' => 0,
                 'amount_tendered' => (float) ($data['amount_tendered'] ?? 0),
                 'change_amount' => 0,
@@ -68,6 +69,7 @@ class SaleService
                 'status' => 'pending',
                 'notes' => $data['notes'] ?? null,
                 'delivery_address' => $data['delivery_address'] ?? null,
+                'distance_km' => $data['distance_km'] ?? null,
             ]);
 
             $subtotal = 0;
@@ -93,12 +95,14 @@ class SaleService
 
             // Update totals
             $discount = (float) ($data['discount'] ?? 0);
-            $total = $subtotal - $discount;
+            $deliveryFee = (float) ($data['delivery_fee'] ?? 0);
+            $total = $subtotal - $discount + $deliveryFee;
             $amountTendered = (float) ($data['amount_tendered'] ?? 0);
             $changeAmount = $amountTendered > 0 ? max(0, $amountTendered - $total) : 0;
 
             $sale->update([
                 'subtotal' => $subtotal,
+                'delivery_fee' => $deliveryFee,
                 'total' => $total,
                 'amount_tendered' => $amountTendered,
                 'change_amount' => $changeAmount,
@@ -330,36 +334,143 @@ class SaleService
     /**
      * Get per-product sales data for growth analysis.
      */
-    public function getProductSalesGrowth(): array
+    public function getProductSalesGrowth(string $period = 'monthly', ?string $customStart = null, ?string $customEnd = null): array
     {
+        // Determine current and previous period date ranges
+        $now = now();
+
+        if ($period === 'custom' && $customStart && $customEnd) {
+            $currentStart = \Carbon\Carbon::parse($customStart)->startOfDay();
+            $currentEnd   = \Carbon\Carbon::parse($customEnd)->endOfDay();
+            // Previous period = same duration before the custom range
+            $durationDays = $currentStart->diffInDays($currentEnd) + 1;
+            $previousEnd   = $currentStart->copy()->subDay()->endOfDay();
+            $previousStart = $previousEnd->copy()->subDays($durationDays - 1)->startOfDay();
+        } else {
+            switch ($period) {
+                case 'daily':
+                    $currentStart = $now->copy()->startOfDay();
+                    $currentEnd   = $now->copy()->endOfDay();
+                    $previousStart = $now->copy()->subDay()->startOfDay();
+                    $previousEnd   = $now->copy()->subDay()->endOfDay();
+                    break;
+                case 'weekly':
+                    $currentStart = $now->copy()->startOfWeek();
+                    $currentEnd   = $now->copy()->endOfWeek();
+                    $previousStart = $now->copy()->subWeek()->startOfWeek();
+                    $previousEnd   = $now->copy()->subWeek()->endOfWeek();
+                    break;
+                case 'monthly':
+                    $currentStart = $now->copy()->startOfMonth();
+                    $currentEnd   = $now->copy()->endOfMonth();
+                    $previousStart = $now->copy()->subMonth()->startOfMonth();
+                    $previousEnd   = $now->copy()->subMonth()->endOfMonth();
+                    break;
+                case 'bi-annually':
+                    if ($now->month <= 6) {
+                        $currentStart = $now->copy()->startOfYear();
+                        $currentEnd   = $now->copy()->month(6)->endOfMonth();
+                        $previousStart = $now->copy()->subYear()->month(7)->startOfMonth();
+                        $previousEnd   = $now->copy()->subYear()->endOfYear();
+                    } else {
+                        $currentStart = $now->copy()->month(7)->startOfMonth();
+                        $currentEnd   = $now->copy()->endOfYear();
+                        $previousStart = $now->copy()->startOfYear();
+                        $previousEnd   = $now->copy()->month(6)->endOfMonth();
+                    }
+                    break;
+                case 'annually':
+                default:
+                    $currentStart = $now->copy()->startOfYear();
+                    $currentEnd   = $now->copy()->endOfYear();
+                    $previousStart = $now->copy()->subYear()->startOfYear();
+                    $previousEnd   = $now->copy()->subYear()->endOfYear();
+                    break;
+            }
+        }
+
+        // Fetch sales covering both periods
         $sales = Sale::with(['items.product.variety'])
             ->whereIn('status', ['completed', 'delivered'])
+            ->where('created_at', '>=', $previousStart)
             ->orderBy('created_at', 'desc')
             ->get();
 
         $productData = [];
         foreach ($sales as $sale) {
+            $saleDate = $sale->created_at;
+            $isCurrent  = $saleDate->between($currentStart, $currentEnd);
+            $isPrevious = $saleDate->between($previousStart, $previousEnd);
+
+            if (!$isCurrent && !$isPrevious) continue;
+
             foreach ($sale->items as $item) {
                 $pid = $item->product_id;
                 if (!isset($productData[$pid])) {
                     $productData[$pid] = [
-                        'product_id' => $pid,
-                        'product_name' => $item->product?->product_name ?? 'Unknown',
-                        'variety_name' => $item->product?->variety?->name ?? 'Unknown',
+                        'product_id'    => $pid,
+                        'product_name'  => $item->product?->product_name ?? 'Unknown',
+                        'variety_name'  => $item->product?->variety?->name ?? 'Unknown',
                         'variety_color' => $item->product?->variety?->color ?? '#6B7280',
                         'current_stock' => (int) ($item->product?->stocks ?? 0),
-                        'sales' => [],
+                        'current_qty'   => 0,
+                        'previous_qty'  => 0,
+                        'current_revenue'  => 0,
+                        'previous_revenue' => 0,
                     ];
                 }
-                $productData[$pid]['sales'][] = [
-                    'quantity' => (int) $item->quantity,
-                    'subtotal' => (float) $item->subtotal,
-                    'date' => $sale->created_at->toISOString(),
-                ];
+
+                if ($isCurrent) {
+                    $productData[$pid]['current_qty']     += (int) $item->quantity;
+                    $productData[$pid]['current_revenue'] += (float) $item->subtotal;
+                } elseif ($isPrevious) {
+                    $productData[$pid]['previous_qty']     += (int) $item->quantity;
+                    $productData[$pid]['previous_revenue'] += (float) $item->subtotal;
+                }
             }
         }
 
-        return array_values($productData);
+        // Calculate growth percentages and stock_before
+        foreach ($productData as &$p) {
+            // stock_before = current stock + units sold in current period
+            // (because selling reduced the stock, adding back gives us stock before sales)
+            $p['stock_before'] = $p['current_stock'] + $p['current_qty'];
+
+            // Quantity growth
+            if ($p['previous_qty'] > 0) {
+                $p['qty_growth'] = round((($p['current_qty'] - $p['previous_qty']) / $p['previous_qty']) * 100, 1);
+            } else {
+                $p['qty_growth'] = $p['current_qty'] > 0 ? 100.0 : 0.0;
+            }
+
+            // Revenue growth
+            if ($p['previous_revenue'] > 0) {
+                $p['revenue_growth'] = round((($p['current_revenue'] - $p['previous_revenue']) / $p['previous_revenue']) * 100, 1);
+            } else {
+                $p['revenue_growth'] = $p['current_revenue'] > 0 ? 100.0 : 0.0;
+            }
+
+            // Trend: up, down, stable
+            $p['trend'] = $p['qty_growth'] > 0 ? 'up' : ($p['qty_growth'] < 0 ? 'down' : 'stable');
+        }
+        unset($p);
+
+        // Sort by current revenue descending
+        $result = array_values($productData);
+        usort($result, fn($a, $b) => $b['current_revenue'] <=> $a['current_revenue']);
+
+        return [
+            'products' => $result,
+            'period' => $period,
+            'current_range' => [
+                'start' => $currentStart->toDateString(),
+                'end'   => $currentEnd->toDateString(),
+            ],
+            'previous_range' => [
+                'start' => $previousStart->toDateString(),
+                'end'   => $previousEnd->toDateString(),
+            ],
+        ];
     }
 
     /**

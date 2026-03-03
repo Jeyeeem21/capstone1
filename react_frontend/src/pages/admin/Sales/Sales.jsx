@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
-import { TrendingUp, DollarSign, ShoppingBag, FileText, CheckCircle, XCircle, Ban, RotateCcw, Receipt, Brain } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingBag, FileText, CheckCircle, XCircle, Ban, RotateCcw, Receipt, Brain, User, Calendar, CreditCard, MapPin, Package, Truck, StickyNote } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
+import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import useDataFetch from '../../../hooks/useDataFetch';
 import PredictiveAnalytics from './PredictiveAnalytics';
@@ -293,64 +293,157 @@ const Sales = () => {
       )}
 
       {/* View Sale Modal */}
-      <FormModal
+      <Modal
         isOpen={isViewModalOpen}
         onClose={() => setIsViewModalOpen(false)}
-        onSubmit={() => setIsViewModalOpen(false)}
         title={`Transaction Details — ${selectedSale?.invoice || ''}`}
-        submitText="Close"
-        size="lg"
+        size="2xl"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setIsViewModalOpen(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
       >
-        {() => selectedSale && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Customer</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedSale.customer}</p>
+        {selectedSale && (
+          <div className="space-y-3">
+            {/* Header with Invoice & Status */}
+            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 to-button-50 rounded-xl border-2 border-primary-200">
+              <div className="flex items-start gap-2">
+                <div className="p-2 bg-button-500 text-white rounded-lg">
+                  <Receipt size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-800">{selectedSale.invoice}</h3>
+                  <p className="text-xs text-gray-500">{selectedSale.date_formatted}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Date</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedSale.date_formatted}</p>
+              <StatusBadge status={selectedSale.status_display} />
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Customer */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
+                  <User size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Customer</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5 truncate">{selectedSale.customer}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Payment Method</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedSale.payment}</p>
+
+              {/* Payment Method */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-green-100 text-green-600">
+                  <CreditCard size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Payment</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedSale.payment}</p>
+                  {selectedSale.reference_number && (
+                    <p className="text-[10px] text-gray-400 truncate">Ref: {selectedSale.reference_number}</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Status</p>
-                <StatusBadge status={selectedSale.status_display} />
+
+              {/* Items Count */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600">
+                  <Package size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Items</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedSale.items_count} item{selectedSale.items_count > 1 ? 's' : ''} ({selectedSale.total_quantity} pcs)</p>
+                </div>
+              </div>
+
+              {/* Date */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                  <Calendar size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Transaction Date</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedSale.date_formatted}</p>
+                </div>
               </div>
             </div>
 
+            {/* Delivery Address */}
             {selectedSale.delivery_address && (
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Delivery Address</p>
-                <p className="text-sm text-gray-800">{selectedSale.delivery_address}</p>
+              <div className="flex items-start gap-2 p-2.5 bg-blue-50 rounded-xl border border-blue-200">
+                <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
+                  <MapPin size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-blue-600 uppercase tracking-wide">Delivery Address</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedSale.delivery_address}</p>
+                  {selectedSale.distance_km && (
+                    <p className="text-[10px] text-blue-500 mt-0.5">{parseFloat(selectedSale.distance_km).toFixed(1)} km from warehouse</p>
+                  )}
+                </div>
               </div>
             )}
 
+            {/* Assigned Driver */}
+            {selectedSale.driver_name && (
+              <div className="flex items-center gap-3 p-2.5 bg-purple-50 rounded-xl border border-purple-200">
+                <div className="w-9 h-9 bg-purple-200 rounded-full flex items-center justify-center">
+                  <User size={16} className="text-purple-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-medium text-purple-600 uppercase tracking-wide">Assigned Driver</p>
+                  <p className="text-sm font-semibold text-gray-800">{selectedSale.driver_name}</p>
+                </div>
+                {selectedSale.driver_plate_number && (
+                  <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0">
+                    <Truck size={10} /> {selectedSale.driver_plate_number}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Notes */}
             {selectedSale.notes && (
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Notes</p>
-                <p className="text-sm text-gray-800 italic">{selectedSale.notes}</p>
+              <div className="flex items-start gap-2 p-2.5 bg-amber-50 rounded-xl border border-amber-200">
+                <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600">
+                  <StickyNote size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-amber-600 uppercase tracking-wide">Transaction Notes</p>
+                  <p className="text-xs text-gray-700 mt-0.5">{selectedSale.notes}</p>
+                </div>
               </div>
             )}
 
+            {/* Return Info */}
             {selectedSale.return_reason && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <p className="text-xs text-orange-600 font-medium">Return Reason</p>
-                <p className="text-sm text-orange-800 font-semibold">{selectedSale.return_reason}</p>
+              <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-200">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                    <RotateCcw size={14} />
+                  </div>
+                  <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wide">Return Information</p>
+                </div>
+                <p className="text-sm font-semibold text-orange-800">{selectedSale.return_reason}</p>
                 {selectedSale.return_notes && (
                   <p className="text-xs text-orange-600 mt-1 italic">{selectedSale.return_notes}</p>
                 )}
               </div>
             )}
 
+            {/* Items Table */}
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2">Items</p>
-              <div className="rounded-lg border border-gray-200 overflow-hidden">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">Transaction Items</p>
+              <div className="rounded-xl border-2 border-primary-200 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-primary-50">
                     <tr>
                       <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600">Product</th>
                       <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600">Qty</th>
@@ -360,32 +453,58 @@ const Sales = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {(selectedSale.items || []).map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="px-3 py-2 text-gray-800">{item.product_name || item.name}</td>
-                        <td className="px-3 py-2 text-center text-gray-600">{item.quantity}</td>
-                        <td className="px-3 py-2 text-right text-gray-600">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-800">₱{(item.subtotal || 0).toLocaleString()}</td>
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.variety_color || '#6B7280' }} />
+                            <span className="text-gray-800 text-xs font-medium">{item.product_name || item.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-600 text-xs">{item.quantity}</td>
+                        <td className="px-3 py-2 text-right text-gray-600 text-xs">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-800 text-xs">₱{(item.subtotal || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50">
+                    {selectedSale.delivery_fee > 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500">Delivery Fee</td>
+                        <td className="px-3 py-1.5 text-right text-xs text-gray-600">₱{selectedSale.delivery_fee.toLocaleString()}</td>
+                      </tr>
+                    )}
                     {selectedSale.discount > 0 && (
                       <tr>
                         <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500">Discount</td>
                         <td className="px-3 py-1.5 text-right text-xs text-red-500">-₱{selectedSale.discount.toLocaleString()}</td>
                       </tr>
                     )}
-                    <tr>
-                      <td colSpan={3} className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Total</td>
+                    <tr className="border-t border-gray-200">
+                      <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold text-gray-600">Total</td>
                       <td className="px-3 py-2 text-right font-bold text-gray-800">₱{selectedSale.total.toLocaleString()}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </div>
+
+            {/* Total Summary Card */}
+            <div className="p-3 bg-green-50 rounded-xl border border-green-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-green-700">Transaction Total</span>
+                <span className="text-xl font-bold text-green-600">₱{selectedSale.total.toLocaleString()}</span>
+              </div>
+              {(selectedSale.delivery_fee > 0 || selectedSale.discount > 0) && (
+                <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-gray-500">
+                  <span>Subtotal: ₱{selectedSale.subtotal?.toLocaleString() || selectedSale.total.toLocaleString()}</span>
+                  {selectedSale.delivery_fee > 0 && <span>+ ₱{selectedSale.delivery_fee.toLocaleString()} delivery</span>}
+                  {selectedSale.discount > 0 && <span>- ₱{selectedSale.discount.toLocaleString()} discount</span>}
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </FormModal>
+      </Modal>
     </div>
   );
 };

@@ -58,6 +58,11 @@ class BusinessSettingController extends Controller
                 'social_twitter' => 'nullable|string|max:500',
                 'social_instagram' => 'nullable|string|max:500',
                 'social_linkedin' => 'nullable|string|max:500',
+                // Shipping fee settings
+                'shipping_rate_per_sack' => 'nullable|numeric|min:0',
+                'shipping_rate_per_km' => 'nullable|numeric|min:0',
+                'shipping_base_km' => 'nullable|numeric|min:0',
+                'warehouse_address' => 'nullable|string|max:500',
             ]);
 
             $settings = $this->settingService->updateSettings($validated);

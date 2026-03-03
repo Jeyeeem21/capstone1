@@ -426,23 +426,62 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* ==================== TABLES: RECENT SALES + LOW STOCK ==================== */}
+      {/* ==================== RECENT SALES (full width, first) ==================== */}
       {loading ? (
         <SkeletonTable rows={5} columns={6} />
       ) : (
+        <div className="mb-6">
+          <DataTable
+            title="Recent Sales"
+            subtitle="Latest transactions"
+            columns={recentSalesColumns}
+            data={recentSales}
+            searchable={false}
+            pagination={false}
+            defaultItemsPerPage={8}
+          />
+        </div>
+      )}
+
+      {/* ==================== RECENT ACTIVITY + LOW STOCK (side by side) ==================== */}
+      {loading ? (
+        <SkeletonTable rows={5} columns={4} />
+      ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          {/* Recent Sales */}
-          <div>
-            <DataTable
-              title="Recent Sales"
-              subtitle="Latest transactions"
-              columns={recentSalesColumns}
-              data={recentSales}
-              searchable={false}
-              pagination={false}
-              defaultItemsPerPage={8}
-            />
-          </div>
+          {/* Recent Activity */}
+          {activity.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4">
+              <h3 className="text-sm font-bold text-content mb-4 flex items-center gap-2">
+                <Activity size={15} className="text-button-500" />
+                Recent Activity
+              </h3>
+              <div className="space-y-0 max-h-[340px] overflow-y-auto pr-1">
+                {activity.map((item, idx) => (
+                  <div key={item.id || idx} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+                    {getActivityIcon(item.action)}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-content truncate">{item.description}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-secondary">{item.user}</span>
+                        <span className="text-[10px] text-gray-300">•</span>
+                        <span className="text-[10px] text-secondary">{item.module}</span>
+                        <span className="text-[10px] text-gray-300">•</span>
+                        <span className="text-[10px] text-secondary">{item.time}</span>
+                      </div>
+                    </div>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      item.action === 'CREATE' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                      item.action === 'UPDATE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
+                      item.action === 'DELETE' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                      'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                    }`}>
+                      {item.action}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Low Stock Alerts */}
           <div>
@@ -471,41 +510,6 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ==================== RECENT ACTIVITY ==================== */}
-      {!loading && activity.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4 mb-6">
-          <h3 className="text-sm font-bold text-content mb-4 flex items-center gap-2">
-            <Activity size={15} className="text-button-500" />
-            Recent Activity
-          </h3>
-          <div className="space-y-0 max-h-[340px] overflow-y-auto pr-1">
-            {activity.map((item, idx) => (
-              <div key={item.id || idx} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                {getActivityIcon(item.action)}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-content truncate">{item.description}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-secondary">{item.user}</span>
-                    <span className="text-[10px] text-gray-300">•</span>
-                    <span className="text-[10px] text-secondary">{item.module}</span>
-                    <span className="text-[10px] text-gray-300">•</span>
-                    <span className="text-[10px] text-secondary">{item.time}</span>
-                  </div>
-                </div>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                  item.action === 'CREATE' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
-                  item.action === 'UPDATE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
-                  item.action === 'DELETE' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
-                  'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                }`}>
-                  {item.action}
-                </span>
-              </div>
-            ))}
           </div>
         </div>
       )}

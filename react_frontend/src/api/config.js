@@ -15,6 +15,12 @@ export const API_BASE_URL = 'http://127.0.0.1:8000/api';
 // export const API_BASE_URL = 'https://your-production-domain.com/api';
 
 // ============================================
+// OpenRouteService API (Free - address autocomplete & distance)
+// ============================================
+export const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjdiYTlmZThhY2QwODQ2ZDViMDU3NDlmOWQ4NTY3N2Y2IiwiaCI6Im11cm11cjY0In0=';
+export const ORS_BASE_URL = 'https://api.openrouteservice.org';
+
+// ============================================
 // API Endpoints Configuration
 // ============================================
 export const ENDPOINTS = {

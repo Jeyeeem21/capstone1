@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Package } from 'lucide-react';
+import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Package, ClipboardList, UserPlus, Send, ShieldCheck, Lock, Loader2, Edit } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -19,6 +19,16 @@ const Customer = () => {
   const [formData, setFormData] = useState({ name: '', contact: '', phone: '', email: '', address: '', status: 'Active' });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [customerOrders, setCustomerOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [verificationStep, setVerificationStep] = useState('initial');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [accountFormData, setAccountFormData] = useState({ password: '', password_confirmation: '' });
+  const [creatingAccount, setCreatingAccount] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const emailCheckTimeout = useRef(null);
 
@@ -90,6 +100,102 @@ const Customer = () => {
       }
     };
   }, []);
+
+  // --- Customer Orders & Account handlers ---
+  const handleViewOrders = useCallback(async (item) => {
+    setSelectedItem(item);
+    setIsOrdersModalOpen(true);
+    setLoadingOrders(true);
+    try {
+      const response = await apiClient.get(`/customers/${item.id}/orders`);
+      if (response.success) {
+        setCustomerOrders(response.data || []);
+      } else {
+        toast.error('Error', 'Failed to load orders');
+        setCustomerOrders([]);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      toast.error('Error', 'Failed to load customer orders');
+      setCustomerOrders([]);
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, [toast]);
+
+  const handleOpenAccountModal = useCallback((item) => {
+    setSelectedItem(item);
+    setVerificationStep('initial');
+    setVerificationCode('');
+    setAccountFormData({ password: '', password_confirmation: '' });
+    setErrors({});
+    setIsAccountModalOpen(true);
+  }, []);
+
+  const handleSendVerificationCode = useCallback(async () => {
+    setSendingCode(true);
+    try {
+      const response = await apiClient.post(`/customers/${selectedItem.id}/send-verification`);
+      if (response.success) {
+        setVerificationStep('code-sent');
+        toast.success('Code Sent', `Verification code sent to ${selectedItem.email}`);
+      } else {
+        toast.error('Error', response.message || 'Failed to send verification code');
+      }
+    } catch (error) {
+      console.error('Error sending verification code:', error);
+      toast.error('Error', error.response?.data?.message || error.message || 'Failed to send verification code');
+    } finally {
+      setSendingCode(false);
+    }
+  }, [selectedItem, toast]);
+
+  const handleVerifyCode = useCallback(async () => {
+    setVerifying(true);
+    setErrors({});
+    try {
+      const response = await apiClient.post(`/customers/${selectedItem.id}/verify-code`, { code: verificationCode });
+      if (response.success) {
+        setVerificationStep('verified');
+        toast.success('Email Verified', 'Email address has been verified successfully');
+      } else {
+        setErrors({ code: [response.message || 'Invalid verification code'] });
+        toast.error('Invalid Code', response.message || 'The verification code is incorrect');
+      }
+    } catch (error) {
+      console.error('Error verifying code:', error);
+      const msg = error.response?.data?.message || error.message || 'Verification failed';
+      setErrors({ code: [msg] });
+      toast.error('Error', msg);
+    } finally {
+      setVerifying(false);
+    }
+  }, [selectedItem, verificationCode, toast]);
+
+  const handleCreateAccountSubmit = useCallback(async () => {
+    setCreatingAccount(true);
+    setErrors({});
+    try {
+      const response = await apiClient.post(`/customers/${selectedItem.id}/create-account`, accountFormData);
+      if (response.success) {
+        toast.success('Account Created', `Account has been created for ${selectedItem.name}`);
+        setIsAccountModalOpen(false);
+        invalidateCache(CACHE_KEY);
+        refetch();
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      console.error('Error creating account:', error);
+      if (error.response?.data?.errors || error.errors) {
+        const backendErrors = error.response?.data?.errors || error.errors;
+        setErrors(backendErrors);
+      }
+      toast.error('Error', error.response?.data?.message || error.message || 'Failed to create account');
+    } finally {
+      setCreatingAccount(false);
+    }
+  }, [selectedItem, accountFormData, toast, refetch]);
 
   const handleAdd = useCallback(() => {
     setFormData({ name: '', contact: '', phone: '', email: '', address: '', status: 'Active' });
@@ -305,9 +411,31 @@ const Customer = () => {
     { header: 'Orders', accessor: 'orders' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onEdit={() => handleEdit(row)} onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined} />
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); handleViewOrders(row); }}
+          className="p-1.5 rounded-md hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
+          title="View Orders"
+        >
+          <ClipboardList size={15} />
+        </button>
+        {!row.has_account ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleOpenAccountModal(row); }}
+            className="p-1.5 rounded-md hover:bg-green-50 text-green-500 hover:text-green-700 transition-colors"
+            title="Create Account"
+          >
+            <UserPlus size={15} />
+          </button>
+        ) : (
+          <span className="p-1.5 text-green-500" title="Has Account">
+            <ShieldCheck size={15} />
+          </span>
+        )}
+        <ActionButtons onEdit={() => handleEdit(row)} onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined} />
+      </div>
     )},
-  ], [handleView, handleEdit, handleDelete]);
+  ], [handleView, handleEdit, handleDelete, handleViewOrders, handleOpenAccountModal, isSuperAdmin]);
 
   return (
     <div>
@@ -358,6 +486,26 @@ const Customer = () => {
         size="2xl"
         footer={
           <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => {
+                setIsViewModalOpen(false);
+                handleViewOrders(selectedItem);
+              }}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2"
+            >
+              <ClipboardList size={16} /> View Orders
+            </button>
+            {selectedItem && !selectedItem.has_account && (
+              <button
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleOpenAccountModal(selectedItem);
+                }}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <UserPlus size={16} /> Create Account
+              </button>
+            )}
             <button
               onClick={() => {
                 setIsViewModalOpen(false);
@@ -413,6 +561,19 @@ const Customer = () => {
                 <div className="flex-1">
                   <p className="text-xs text-gray-600 mb-0.5">Total Orders</p>
                   <p className="text-xl font-bold text-button-600">{selectedItem.orders || 0}</p>
+                </div>
+              </div>
+
+              {/* Account Status */}
+              <div className={`flex items-start gap-2 p-3 rounded-lg ${selectedItem.has_account ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200' : 'bg-gray-50'}`}>
+                <div className={`p-2 rounded-lg ${selectedItem.has_account ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  {selectedItem.has_account ? <ShieldCheck size={18} /> : <UserPlus size={18} />}
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-600 mb-0.5">Account Status</p>
+                  <p className={`text-sm font-semibold ${selectedItem.has_account ? 'text-green-600' : 'text-gray-500'}`}>
+                    {selectedItem.has_account ? 'Active Account' : 'No Account'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -607,6 +768,239 @@ const Customer = () => {
       </FormModal>
 
       <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Archive Customer" message={`Are you sure you want to archive "${selectedItem?.name}"? It will be moved to the archives and can be restored later.`} confirmText="Archive" variant="warning" icon={Archive} loading={saving} />
+
+      {/* Orders Modal */}
+      <Modal
+        isOpen={isOrdersModalOpen}
+        onClose={() => setIsOrdersModalOpen(false)}
+        title={`Orders — ${selectedItem?.name || ''}`}
+        size="full"
+        footer={
+          <div className="flex justify-between items-center">
+            {!loadingOrders && customerOrders.length > 0 && (
+              <span className="text-sm text-gray-500">{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''} found</span>
+            )}
+            <div className="flex-1" />
+            <button
+              onClick={() => setIsOrdersModalOpen(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
+      >
+        {loadingOrders ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 size={32} className="animate-spin text-button-500" />
+            <span className="ml-3 text-gray-500">Loading orders...</span>
+          </div>
+        ) : customerOrders.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <ShoppingBag size={48} className="mx-auto mb-3 text-gray-300" />
+            <p className="text-lg font-medium">No orders found</p>
+            <p className="text-sm">This customer hasn't placed any orders yet.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            {/* Order Summary Cards */}
+            {(() => {
+              const pendingOrders = customerOrders.filter(o => ['pending', 'processing', 'shipped'].includes(o.status));
+              const completedOrders = customerOrders.filter(o => ['delivered', 'completed'].includes(o.status));
+              const pendingTotal = pendingOrders.reduce((sum, o) => sum + o.total, 0);
+              const completedTotal = completedOrders.reduce((sum, o) => sum + o.total, 0);
+              const grandTotal = customerOrders.reduce((sum, o) => sum + o.total, 0);
+              return (
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-yellow-600 font-medium">Pending</p>
+                    <p className="text-lg font-bold text-yellow-700">₱{pendingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-yellow-500">{pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-green-600 font-medium">Completed / Delivered</p>
+                    <p className="text-lg font-bold text-green-700">₱{completedTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-green-500">{completedOrders.length} order{completedOrders.length !== 1 ? 's' : ''}</p>
+                  </div>
+                  <div className="bg-button-50 border border-button-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-button-600 font-medium">Grand Total</p>
+                    <p className="text-lg font-bold text-button-700">₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-button-500">{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+              );
+            })()}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Transaction ID</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Items</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Total</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Payment</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {customerOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs font-medium text-button-600">{order.transaction_id}</td>
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{order.date_formatted}</td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        {order.items?.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.variety_color }}></span>
+                            <span className="text-gray-700">{item.product_name}</span>
+                            <span className="text-gray-400">×{item.quantity}</span>
+                            <span className="text-gray-500">₱{item.unit_price?.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800 whitespace-nowrap">{order.total_formatted}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-600 capitalize">{order.payment_method}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={order.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-4 py-3 bg-gray-50 border-t flex justify-between items-center text-sm">
+              <span className="text-gray-500">{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}</span>
+              <span className="font-semibold text-gray-700">
+                Grand Total: ₱{customerOrders.reduce((sum, o) => sum + o.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Account Creation Modal */}
+      <Modal
+        isOpen={isAccountModalOpen}
+        onClose={() => { setIsAccountModalOpen(false); setVerificationStep('initial'); setVerificationCode(''); setAccountFormData({ password: '', password_confirmation: '' }); setErrors({}); }}
+        title="Create Customer Account"
+        size="lg"
+      >
+        {selectedItem && (
+          <div className="space-y-6">
+            {/* Customer Info */}
+            <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
+              <div className="p-2 bg-button-100 text-button-600 rounded-lg">
+                <User size={20} />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800">{selectedItem.name}</p>
+                <p className="text-sm text-gray-500">{selectedItem.email}</p>
+              </div>
+            </div>
+
+            {/* Step 1: Email Verification */}
+            <div className={`p-4 rounded-lg border-2 ${verificationStep === 'initial' ? 'border-button-200 bg-button-50' : verificationStep === 'verified' ? 'border-green-200 bg-green-50' : 'border-blue-200 bg-blue-50'}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Mail size={18} className={verificationStep === 'verified' ? 'text-green-600' : 'text-button-600'} />
+                <h3 className="font-semibold text-gray-800">Step 1: Verify Email</h3>
+                {verificationStep === 'verified' && <ShieldCheck size={18} className="text-green-600" />}
+              </div>
+
+              {verificationStep === 'initial' && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">Send a verification code to <strong>{selectedItem.email}</strong> to confirm the email address is valid.</p>
+                  <button
+                    onClick={handleSendVerificationCode}
+                    disabled={sendingCode}
+                    className="flex items-center gap-2 px-4 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {sendingCode ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    {sendingCode ? 'Sending...' : 'Send Verification Code'}
+                  </button>
+                </div>
+              )}
+
+              {verificationStep === 'code-sent' && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">A 6-digit code has been sent to <strong>{selectedItem.email}</strong>. Ask the customer for the code and enter it below.</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500 text-center text-lg tracking-widest font-mono"
+                    />
+                    <button
+                      onClick={handleVerifyCode}
+                      disabled={verifying || verificationCode.length !== 6}
+                      className="flex items-center gap-2 px-4 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {verifying ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+                      Verify
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleSendVerificationCode}
+                    disabled={sendingCode}
+                    className="mt-2 text-sm text-button-600 hover:text-button-700 underline"
+                  >
+                    {sendingCode ? 'Sending...' : 'Resend Code'}
+                  </button>
+                  {errors.code && <p className="mt-2 text-sm text-red-500">{Array.isArray(errors.code) ? errors.code[0] : errors.code}</p>}
+                </div>
+              )}
+
+              {verificationStep === 'verified' && (
+                <p className="text-sm text-green-600 font-medium">Email verified successfully!</p>
+              )}
+            </div>
+
+            {/* Step 2: Set Password */}
+            {verificationStep === 'verified' && (
+              <div className="p-4 rounded-lg border-2 border-button-200 bg-button-50">
+                <div className="flex items-center gap-2 mb-3">
+                  <Lock size={18} className="text-button-600" />
+                  <h3 className="font-semibold text-gray-800">Step 2: Set Password</h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={accountFormData.password}
+                      onChange={(e) => setAccountFormData(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder="Minimum 8 characters"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                    />
+                    {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password[0]}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                    <input
+                      type="password"
+                      value={accountFormData.password_confirmation}
+                      onChange={(e) => setAccountFormData(prev => ({ ...prev, password_confirmation: e.target.value }))}
+                      placeholder="Re-enter password"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleCreateAccountSubmit}
+                    disabled={creatingAccount || !accountFormData.password || !accountFormData.password_confirmation}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
+                  >
+                    {creatingAccount ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                    {creatingAccount ? 'Creating Account...' : 'Create Account'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

@@ -23,6 +23,7 @@ class CustomerResource extends JsonResource
             'address' => $this->address,
             'status' => $this->status,
             'orders' => $this->orders,
+            'has_account' => $this->email ? \App\Models\User::where('email', $this->email)->where('role', 'client')->exists() : false,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

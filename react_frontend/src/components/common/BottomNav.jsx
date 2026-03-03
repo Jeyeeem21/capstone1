@@ -71,9 +71,14 @@ const BottomNav = () => {
 
   const handleMenuItemClick = (item) => {
     if (item.hasSubmenu) {
-      // Navigate to the page first
-      navigate(item.to);
-      // Then expand the submenu (useEffect will handle this)
+      const isAlreadyOnPage = location.pathname.includes(item.submenuId);
+      if (isAlreadyOnPage) {
+        // Toggle submenu if already on that page
+        setExpandedMenu(prev => prev === item.submenuId ? null : item.submenuId);
+      } else {
+        // Navigate to the page, useEffect will expand the submenu
+        navigate(item.to);
+      }
     }
   };
 
@@ -94,7 +99,7 @@ const BottomNav = () => {
       {/* Submenu Panel */}
       {expandedMenu && (
         <div 
-          className="fixed bottom-16 left-0 right-0 z-50 md:hidden animate-slide-up"
+          className="fixed bottom-[66px] left-0 right-0 z-50 md:hidden animate-slide-up"
           style={{ backgroundColor: 'var(--color-bg-sidebar)' }}
         >
           <div className="border-t-2 border-primary-300 py-2 px-4">

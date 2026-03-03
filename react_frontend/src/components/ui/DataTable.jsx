@@ -24,6 +24,7 @@ const DataTable = ({
   filterPlaceholder = 'All',
   cardConfig = null, // { titleField, subtitleField, badgeField, fields: [{accessor, label}] }
   dateFilterField = null, // accessor for date field to enable date range filter
+  headerRight = null, // custom JSX rendered in the header area
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -225,19 +226,22 @@ const DataTable = ({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-400 overflow-hidden shadow-lg shadow-primary-100/50">
       {/* Title Header */}
-      {(title || onAdd) && (
+      {(title || onAdd || headerRight) && (
         <div className="p-4 border-b-2 border-primary-300 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               {title && <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{title}</h3>}
               {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
             </div>
-            {onAdd && (
-              <Button onClick={onAdd} size="sm">
-                <Plus size={16} className="mr-1.5" />
-                {addLabel}
-              </Button>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {headerRight}
+              {onAdd && (
+                <Button onClick={onAdd} size="sm">
+                  <Plus size={16} className="mr-1.5" />
+                  {addLabel}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -263,9 +267,11 @@ const DataTable = ({
                   className="pl-9 pr-8 py-2.5 text-sm border-2 border-primary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-600 dark:text-white appearance-none cursor-pointer min-w-[180px] font-medium"
                 >
                   <option value="">{filterPlaceholder}</option>
-                  {computedFilterOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
+                  {computedFilterOptions.map((option) => {
+                    const val = typeof option === 'object' ? option.value : option;
+                    const label = typeof option === 'object' ? option.label : option;
+                    return <option key={val} value={val}>{label}</option>;
+                  })}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 pointer-events-none" />
               </div>

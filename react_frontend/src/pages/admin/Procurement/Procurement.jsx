@@ -150,6 +150,12 @@ const Procurement = () => {
   const { isSuperAdmin } = useAuth();
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  // Chart calendar filter state
+  const [chartDate, setChartDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
+  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
+  const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
+  const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
   const [tableTab, setTableTab] = useState('records'); // 'records' | 'batches'
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -274,32 +280,95 @@ const Procurement = () => {
     return [{ value: '', label: 'None (standalone)' }, ...opts];
   }, [batches]);
 
+  // Helper: get the week ranges for a given month/year
+  const getWeeksInMonth = useCallback((year, month) => {
+    const weeks = [];
+    const firstDay = new Date(year, month, 1);
+    // Start from Monday of the week containing the 1st
+    let start = new Date(firstDay);
+    const dayOfWeek = start.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Monday
+    start.setDate(start.getDate() + diff);
+    
+    while (start.getMonth() <= month || (start.getMonth() > month && start.getFullYear() < year) || weeks.length === 0) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const label = `${months[start.getMonth()]} ${start.getDate()} - ${months[end.getMonth()]} ${end.getDate()}`;
+      weeks.push({ start: new Date(start), end: new Date(end), label });
+      start.setDate(start.getDate() + 7);
+      // Stop if the week starts in the next month entirely
+      if (start.getMonth() > month && start.getFullYear() === year) break;
+      if (start.getFullYear() > year) break;
+      if (weeks.length >= 6) break;
+    }
+    return weeks;
+  }, []);
+
   // Helper: checks if a procurement matches the active chart point filter
   const matchesChartPoint = useCallback((p) => {
     if (!activeChartPoint || !p.created_at) return true;
     const date = new Date(p.created_at);
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     if (chartPeriod === 'daily') {
-      return date.getFullYear() === currentYear && date.getMonth() === currentMonth && String(date.getDate()) === activeChartPoint;
+      const [y, m] = chartDate.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && String(date.getDate()) === activeChartPoint;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      const week = weeks.find(w => w.label === activeChartPoint);
+      if (!week) return false;
+      return date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59);
     }
     if (chartPeriod === 'monthly') {
-      return date.getFullYear() === currentYear && months[date.getMonth()] === activeChartPoint;
+      return date.getFullYear() === chartYear && months[date.getMonth()] === activeChartPoint;
     }
-    if (chartPeriod === 'yearly') {
+    if (chartPeriod === 'bi-annually') {
+      if (activeChartPoint === 'H1') return date.getFullYear() === chartYear && date.getMonth() < 6;
+      if (activeChartPoint === 'H2') return date.getFullYear() === chartYear && date.getMonth() >= 6;
+      return false;
+    }
+    if (chartPeriod === 'annually') {
       return String(date.getFullYear()) === activeChartPoint;
     }
     return true;
-  }, [activeChartPoint, chartPeriod]);
+  }, [activeChartPoint, chartPeriod, chartDate, chartMonth, chartYear, getWeeksInMonth]);
 
-  // Chart-filtered procurements — used for stats, cards, table
+  // Helper: check if a procurement date falls within the current chart scope (period + calendar)
+  const isInChartScope = useCallback((p) => {
+    if (!p.created_at) return false;
+    const date = new Date(p.created_at);
+    
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartDate.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      if (weeks.length === 0) return false;
+      return date >= weeks[0].start && date <= new Date(weeks[weeks.length -1].end.getFullYear(), weeks[weeks.length -1].end.getMonth(), weeks[weeks.length -1].end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') {
+      return date.getFullYear() === chartYear;
+    }
+    if (chartPeriod === 'bi-annually') {
+      return date.getFullYear() === chartYear;
+    }
+    if (chartPeriod === 'annually') {
+      return date.getFullYear() >= chartYearFrom && date.getFullYear() <= chartYearTo;
+    }
+    return true;
+  }, [chartPeriod, chartDate, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
+
+  // Chart-filtered procurements — used for stats, cards, table (scoped by calendar + dot)
   const chartFilteredProcurements = useMemo(() => {
-    if (!activeChartPoint) return procurements;
-    return procurements.filter(matchesChartPoint);
-  }, [procurements, activeChartPoint, matchesChartPoint]);
+    const scoped = procurements.filter(isInChartScope);
+    if (!activeChartPoint) return scoped;
+    return scoped.filter(matchesChartPoint);
+  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint]);
 
   // Chart-filtered batches — used for batches tab
   const chartFilteredBatches = useMemo(() => {
@@ -820,121 +889,120 @@ const Procurement = () => {
   const totalSacks = chartFilteredProcurements.reduce((sum, p) => sum + parseInt(p.sacks || 0), 0);
   const totalCost = chartFilteredProcurements.reduce((sum, p) => sum + parseFloat(p.total_cost || 0), 0);
 
-  // Chart Data - Based on chartPeriod (daily, monthly, yearly)
+  // Chart Data - Based on chartPeriod (daily, weekly, monthly, bi-annually, annually)
   const chartData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     if (chartPeriod === 'daily') {
-      // Show all days in current month
-      const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-      
-      // Group procurements by day
+      const [y, m] = chartDate.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(y, m - 1);
       const dayGroups = {};
       procurements.forEach(p => {
         if (!p.created_at) return;
         const date = new Date(p.created_at);
-        if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+        if (date.getFullYear() === y && date.getMonth() === m - 1) {
           const day = date.getDate();
-          if (!dayGroups[day]) {
-            dayGroups[day] = { value: 0, quantity: 0 };
-          }
+          if (!dayGroups[day]) dayGroups[day] = { value: 0, quantity: 0 };
           dayGroups[day].value += parseFloat(p.total_cost || 0);
           dayGroups[day].quantity += parseFloat(p.quantity_kg || 0);
         }
       });
-
       return Array.from({ length: daysInMonth }, (_, i) => ({
         name: String(i + 1),
         value: dayGroups[i + 1]?.value || 0,
         quantity: dayGroups[i + 1]?.quantity || 0,
       }));
-    } else if (chartPeriod === 'monthly') {
-      // Show all months in current year
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      
-      // Group procurements by month
+    }
+    
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      return weeks.map(week => {
+        let value = 0, quantity = 0;
+        procurements.forEach(p => {
+          if (!p.created_at) return;
+          const date = new Date(p.created_at);
+          if (date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59)) {
+            value += parseFloat(p.total_cost || 0);
+            quantity += parseFloat(p.quantity_kg || 0);
+          }
+        });
+        return { name: week.label, value, quantity };
+      });
+    }
+    
+    if (chartPeriod === 'monthly') {
       const monthGroups = {};
       procurements.forEach(p => {
         if (!p.created_at) return;
         const date = new Date(p.created_at);
-        if (date.getFullYear() === currentYear) {
+        if (date.getFullYear() === chartYear) {
           const month = date.getMonth();
-          if (!monthGroups[month]) {
-            monthGroups[month] = { value: 0, quantity: 0 };
-          }
+          if (!monthGroups[month]) monthGroups[month] = { value: 0, quantity: 0 };
           monthGroups[month].value += parseFloat(p.total_cost || 0);
           monthGroups[month].quantity += parseFloat(p.quantity_kg || 0);
         }
       });
-
       return months.map((name, i) => ({
         name,
         value: monthGroups[i]?.value || 0,
         quantity: monthGroups[i]?.quantity || 0,
       }));
-    } else {
-      // Yearly - current year and past 5 years
-      const years = [];
-      for (let i = 5; i >= 0; i--) {
-        years.push(currentYear - i);
-      }
-      
-      // Group procurements by year
-      const yearGroups = {};
+    }
+    
+    if (chartPeriod === 'bi-annually') {
+      const h1 = { value: 0, quantity: 0 };
+      const h2 = { value: 0, quantity: 0 };
       procurements.forEach(p => {
         if (!p.created_at) return;
         const date = new Date(p.created_at);
-        const year = date.getFullYear();
-        if (!yearGroups[year]) {
-          yearGroups[year] = { value: 0, quantity: 0 };
+        if (date.getFullYear() === chartYear) {
+          const target = date.getMonth() < 6 ? h1 : h2;
+          target.value += parseFloat(p.total_cost || 0);
+          target.quantity += parseFloat(p.quantity_kg || 0);
         }
+      });
+      return [
+        { name: 'H1', fullName: `Jan - Jun ${chartYear}`, value: h1.value, quantity: h1.quantity },
+        { name: 'H2', fullName: `Jul - Dec ${chartYear}`, value: h2.value, quantity: h2.quantity },
+      ];
+    }
+    
+    // annually
+    const years = [];
+    for (let y = chartYearFrom; y <= chartYearTo; y++) years.push(y);
+    const yearGroups = {};
+    procurements.forEach(p => {
+      if (!p.created_at) return;
+      const date = new Date(p.created_at);
+      const year = date.getFullYear();
+      if (year >= chartYearFrom && year <= chartYearTo) {
+        if (!yearGroups[year]) yearGroups[year] = { value: 0, quantity: 0 };
         yearGroups[year].value += parseFloat(p.total_cost || 0);
         yearGroups[year].quantity += parseFloat(p.quantity_kg || 0);
-      });
-
-      return years.map(year => ({
-        name: year.toString(),
-        value: yearGroups[year]?.value || 0,
-        quantity: yearGroups[year]?.quantity || 0,
-      }));
-    }
-  }, [procurements, chartPeriod]);
+      }
+    });
+    return years.map(year => ({
+      name: year.toString(),
+      value: yearGroups[year]?.value || 0,
+      quantity: yearGroups[year]?.quantity || 0,
+    }));
+  }, [procurements, chartPeriod, chartDate, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
   // Supplier breakdown for donut chart - TOP 5 ONLY - filtered by chart period + active point
   const supplierBreakdown = useMemo(() => {
     const colors = ['#22c55e', '#eab308', '#3b82f6', '#f97316', '#8b5cf6'];
     const supplierTotals = {};
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
     
     procurements.forEach(p => {
-      if (!p.created_at) return;
-      const date = new Date(p.created_at);
-      // Filter by period
-      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-      
-      // Filter by active chart point
-      if (activeChartPoint) {
-        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-        if (chartPeriod === 'monthly') {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          if (months[date.getMonth()] !== activeChartPoint) return;
-        }
-        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
-      }
+      if (!isInChartScope(p)) return;
+      if (activeChartPoint && !matchesChartPoint(p)) return;
       
       const supplierName = p.supplier_name || 'Unknown';
-      if (!supplierTotals[supplierName]) {
-        supplierTotals[supplierName] = 0;
-      }
+      if (!supplierTotals[supplierName]) supplierTotals[supplierName] = 0;
       supplierTotals[supplierName] += parseFloat(p.quantity_kg || 0);
     });
 
-    // Convert to array, sort by value, and take TOP 5 only
     return Object.entries(supplierTotals)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -943,32 +1011,16 @@ const Procurement = () => {
         value: Math.round(value),
         color: colors[index % colors.length],
       }));
-  }, [procurements, chartPeriod, activeChartPoint]);
+  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint]);
 
   // Sacks vs Kg comparison for donut chart - filtered by chart period + active point
   const quantityComparison = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    
     let filteredSacks = 0;
     let filteredKg = 0;
     
     procurements.forEach(p => {
-      if (!p.created_at) return;
-      const date = new Date(p.created_at);
-      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-      
-      // Filter by active chart point
-      if (activeChartPoint) {
-        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-        if (chartPeriod === 'monthly') {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          if (months[date.getMonth()] !== activeChartPoint) return;
-        }
-        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
-      }
+      if (!isInChartScope(p)) return;
+      if (activeChartPoint && !matchesChartPoint(p)) return;
       
       filteredSacks += parseInt(p.sacks || 0);
       filteredKg += parseFloat(p.quantity_kg || 0);
@@ -978,7 +1030,7 @@ const Procurement = () => {
       { name: 'Total Sacks', value: filteredSacks, color: '#3b82f6' },
       { name: 'Total Kg', value: Math.round(filteredKg), color: '#22c55e' },
     ];
-  }, [procurements, chartPeriod, activeChartPoint]);
+  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint]);
 
   // Average order value
   const avgOrderValue = totalProcurements > 0 ? Math.floor(totalCost / totalProcurements) : 0;
@@ -1236,13 +1288,80 @@ const Procurement = () => {
               lines={[{ dataKey: 'value', name: 'Value (₱)' }]} 
               height={280} 
               yAxisUnit="₱"
-              tabs={[
-                { label: 'Daily', value: 'daily' }, 
-                { label: 'Monthly', value: 'monthly' }, 
-                { label: 'Yearly', value: 'yearly' }
-              ]} 
-              activeTab={chartPeriod} 
-              onTabChange={(val) => { setChartPeriod(val); setActiveChartPoint(null); }}
+              headerRight={
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Period dropdown */}
+                  <select
+                    value={chartPeriod}
+                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="bi-annually">Bi-Annually</option>
+                    <option value="annually">Annually</option>
+                  </select>
+                  {/* Calendar controls based on period */}
+                  {chartPeriod === 'daily' && (
+                    <input
+                      type="date"
+                      value={chartDate}
+                      onChange={(e) => { setChartDate(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  )}
+                  {chartPeriod === 'weekly' && (
+                    <input
+                      type="month"
+                      value={chartMonth}
+                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  )}
+                  {chartPeriod === 'monthly' && (
+                    <input
+                      type="number"
+                      value={chartYear}
+                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000"
+                      max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                    />
+                  )}
+                  {chartPeriod === 'bi-annually' && (
+                    <input
+                      type="number"
+                      value={chartYear}
+                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000"
+                      max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                    />
+                  )}
+                  {chartPeriod === 'annually' && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={chartYearFrom}
+                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                        min="2000"
+                        max={chartYearTo}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
+                      <input
+                        type="number"
+                        value={chartYearTo}
+                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                        min={chartYearFrom}
+                        max={new Date().getFullYear()}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                      />
+                    </div>
+                  )}
+                </div>
+              }
               onDotClick={setActiveChartPoint}
               activePoint={activeChartPoint}
               summaryStats={[

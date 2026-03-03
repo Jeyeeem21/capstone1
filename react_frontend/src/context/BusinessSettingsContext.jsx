@@ -32,6 +32,10 @@ const defaultSettings = {
   social_twitter: '',
   social_instagram: '',
   social_linkedin: '',
+  shipping_rate_per_sack: '',
+  shipping_rate_per_km: '',
+  shipping_base_km: '',
+  warehouse_address: '',
 };
 
 // Get initial settings from localStorage
@@ -84,6 +88,10 @@ export const BusinessSettingsProvider = ({ children }) => {
             social_twitter: data.social_twitter || '',
             social_instagram: data.social_instagram || '',
             social_linkedin: data.social_linkedin || '',
+            shipping_rate_per_sack: data.shipping_rate_per_sack || '',
+            shipping_rate_per_km: data.shipping_rate_per_km || '',
+            shipping_base_km: data.shipping_base_km || '',
+            warehouse_address: data.warehouse_address || '',
           };
           setSettings(newSettings);
           localStorage.setItem('kjp-business-settings', JSON.stringify(newSettings));

@@ -16,6 +16,7 @@ class SaleResource extends JsonResource
             'customer_name' => $this->customer?->name ?? 'Walk-in',
             'subtotal' => (float) $this->subtotal,
             'discount' => (float) $this->discount,
+            'delivery_fee' => (float) ($this->delivery_fee ?? 0),
             'total' => (float) $this->total,
             'total_formatted' => '₱' . number_format($this->total, 2),
             'amount_tendered' => (float) $this->amount_tendered,
@@ -39,6 +40,9 @@ class SaleResource extends JsonResource
                 ];
             }),
             'delivery_address' => $this->delivery_address,
+            'distance_km' => $this->distance_km ? (float) $this->distance_km : null,
+            'driver_name' => $this->driver_name,
+            'driver_plate_number' => $this->driver_plate_number,
             'return_reason' => $this->return_reason,
             'return_notes' => $this->return_notes,
             'created_at' => $this->created_at?->toISOString(),

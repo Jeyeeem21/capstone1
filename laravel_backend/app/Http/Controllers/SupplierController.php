@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
+use App\Models\Procurement;
 use App\Services\SupplierService;
 use App\Http\Resources\SupplierResource;
+use App\Http\Resources\ProcurementResource;
 use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
@@ -190,6 +192,24 @@ class SupplierController extends Controller
         return $this->successResponse(
             ['available' => !$exists],
             $exists ? 'Email is already taken' : 'Email is available'
+        );
+    }
+
+    /**
+     * Get all procurements for a specific supplier
+     */
+    public function procurements(string $id): JsonResponse
+    {
+        $supplier = Supplier::findOrFail($id);
+        
+        $procurements = Procurement::with(['variety', 'batch', 'dryingProcesses', 'dryingBatchAllocations'])
+            ->where('supplier_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return $this->successResponse(
+            ProcurementResource::collection($procurements),
+            "Procurements for {$supplier->name} retrieved successfully"
         );
     }
 }

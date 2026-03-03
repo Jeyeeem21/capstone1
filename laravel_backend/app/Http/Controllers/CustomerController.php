@@ -3,14 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\User;
+use App\Models\Sale;
 use App\Services\CustomerService;
 use App\Http\Resources\CustomerResource;
+use App\Http\Resources\SaleResource;
 use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
 use App\Traits\HasCaching;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Cache;
 
 class CustomerController extends Controller
 {
@@ -190,6 +196,162 @@ class CustomerController extends Controller
         return $this->successResponse(
             ['available' => !$exists],
             $exists ? 'Email is already taken' : 'Email is available'
+        );
+    }
+
+    /**
+     * Get all orders/sales for a specific customer
+     */
+    public function orders(string $id): JsonResponse
+    {
+        $customer = Customer::findOrFail($id);
+
+        $sales = Sale::where('customer_id', $customer->id)
+            ->with(['items.product.variety'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return $this->successResponse(
+            SaleResource::collection($sales),
+            'Customer orders retrieved successfully'
+        );
+    }
+
+    /**
+     * Send email verification code to customer's email
+     */
+    public function sendVerificationCode(Request $request, string $id): JsonResponse
+    {
+        $customer = Customer::findOrFail($id);
+
+        if (!$customer->email) {
+            return $this->errorResponse('Customer has no email address.', 422);
+        }
+
+        // Generate 6-digit code
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        // Store in cache for 10 minutes
+        $cacheKey = "email_verify_{$customer->id}";
+        Cache::put($cacheKey, [
+            'code' => $code,
+            'email' => $customer->email,
+            'attempts' => 0,
+        ], now()->addMinutes(10));
+
+        // Send email
+        try {
+            Mail::raw(
+                "Your KJP Ricemill email verification code is: {$code}\n\nThis code will expire in 10 minutes.\n\nIf you did not request this, please ignore this email.",
+                function ($message) use ($customer) {
+                    $message->to($customer->email)
+                            ->subject('KJP Ricemill - Email Verification Code');
+                }
+            );
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to send verification email. Please check mail configuration. Error: ' . $e->getMessage(), 500);
+        }
+
+        $this->logAudit('VERIFY_EMAIL', 'Customer', "Sent verification code to {$customer->email}", [
+            'customer_id' => $customer->id,
+            'email' => $customer->email,
+        ]);
+
+        return $this->successResponse(
+            ['sent' => true],
+            'Verification code sent to ' . $customer->email
+        );
+    }
+
+    /**
+     * Verify the code entered by admin
+     */
+    public function verifyCode(Request $request, string $id): JsonResponse
+    {
+        $customer = Customer::findOrFail($id);
+
+        $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
+
+        $cacheKey = "email_verify_{$customer->id}";
+        $cached = Cache::get($cacheKey);
+
+        if (!$cached) {
+            return $this->errorResponse('Verification code has expired. Please request a new one.', 422);
+        }
+
+        if ($cached['attempts'] >= 5) {
+            Cache::forget($cacheKey);
+            return $this->errorResponse('Too many failed attempts. Please request a new code.', 429);
+        }
+
+        if ($cached['code'] !== $request->code) {
+            // Increment attempts
+            $cached['attempts']++;
+            Cache::put($cacheKey, $cached, now()->addMinutes(10));
+            $remaining = 5 - $cached['attempts'];
+            return $this->errorResponse("Invalid verification code. {$remaining} attempts remaining.", 422);
+        }
+
+        // Code is valid — clear it
+        Cache::forget($cacheKey);
+
+        $this->logAudit('EMAIL_VERIFIED', 'Customer', "Email verified for {$customer->email}", [
+            'customer_id' => $customer->id,
+            'email' => $customer->email,
+        ]);
+
+        return $this->successResponse(
+            ['verified' => true, 'email' => $customer->email],
+            'Email verified successfully'
+        );
+    }
+
+    /**
+     * Create a user account for a customer
+     */
+    public function createAccount(Request $request, string $id): JsonResponse
+    {
+        $customer = Customer::findOrFail($id);
+
+        // Check if account already exists
+        $existingUser = User::where('email', $customer->email)->first();
+        if ($existingUser) {
+            return $this->errorResponse('An account with this email already exists.', 422);
+        }
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:8|confirmed',
+        ], [
+            'password.min' => 'Password must be at least 8 characters.',
+            'password.confirmed' => 'Password confirmation does not match.',
+        ]);
+
+        $user = User::create([
+            'name' => $customer->name,
+            'first_name' => $customer->contact ? explode(' ', $customer->contact)[0] : null,
+            'last_name' => $customer->contact ? (count(explode(' ', $customer->contact)) > 1 ? implode(' ', array_slice(explode(' ', $customer->contact), 1)) : null) : null,
+            'email' => $customer->email,
+            'password' => Hash::make($validated['password']),
+            'role' => 'client',
+            'phone' => $customer->phone,
+            'status' => 'active',
+        ]);
+
+        $this->logAudit('CREATE_ACCOUNT', 'Customer', "Created client account for {$customer->name} ({$customer->email})", [
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'email' => $customer->email,
+        ]);
+
+        return $this->successResponse(
+            [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'role' => $user->role,
+            ],
+            'Client account created successfully'
         );
     }
 }

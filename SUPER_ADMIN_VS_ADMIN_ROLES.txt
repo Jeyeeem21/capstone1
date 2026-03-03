@@ -20,7 +20,7 @@ and finalize before implementing.
    [x] Orders (manage, cancel, process returns)
    [x] Sales (view all, void transactions)
    [x] Partners - Suppliers & Customers (full CRUD)
-   [x] Staff Management — can create/edit/delete ALL users
+   [x] Staff Management — can create/edit/archive/delete ALL users
         including Admins, Staff, Drivers
    [x] Audit Trail — full view of all system activity logs
    [x] Settings:
@@ -55,7 +55,7 @@ and finalize before implementing.
    [x] Partners - Suppliers & Customers (add, edit — NO delete)
    [x] Staff Management — can manage Staff & Drivers only
         (CANNOT create/edit other Admins)
-   [ ] Audit Trail — NO access (or view-only, your call)
+   [ ] Audit Trail — NO access (or view-only)
    [ ] Settings — NO access to business/appearance settings
         (can only edit own profile)
 

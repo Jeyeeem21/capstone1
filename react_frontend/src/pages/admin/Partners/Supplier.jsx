@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { Truck, Users, Package, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Box, Scale } from 'lucide-react';
+import { Truck, Users, Package, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Box, Scale, Layers, ClipboardList, Loader2, ShoppingBag } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -7,7 +7,6 @@ import { useDataFetch, invalidateCache } from '../../../hooks';
 import { useAuth } from '../../../context/AuthContext';
 
 const CACHE_KEY = '/suppliers';
-const PROCUREMENTS_CACHE_KEY = '/procurements';
 
 const Supplier = () => {
   const toast = useToast();
@@ -20,6 +19,9 @@ const Supplier = () => {
   const [formData, setFormData] = useState({ name: '', contact: '', phone: '', email: '', address: '', status: 'Active' });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [isProcurementsModalOpen, setIsProcurementsModalOpen] = useState(false);
+  const [supplierProcurements, setSupplierProcurements] = useState([]);
+  const [loadingProcurements, setLoadingProcurements] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const emailCheckTimeout = useRef(null);
 
@@ -34,25 +36,6 @@ const Supplier = () => {
     cacheKey: CACHE_KEY,
     initialData: [],
   });
-
-  // Fetch procurements to calculate kg per supplier
-  const { data: procurements } = useDataFetch('/procurements', {
-    cacheKey: PROCUREMENTS_CACHE_KEY,
-    initialData: [],
-  });
-
-  // Calculate total kg procured per supplier
-  const supplierKgMap = useMemo(() => {
-    const map = {};
-    procurements.forEach(p => {
-      const supplierId = p.supplier_id;
-      if (!map[supplierId]) {
-        map[supplierId] = 0;
-      }
-      map[supplierId] += parseFloat(p.quantity_kg || 0);
-    });
-    return map;
-  }, [procurements]);
 
   const statusOptions = useMemo(() => [
     { value: 'Active', label: 'Active' },
@@ -121,6 +104,27 @@ const Supplier = () => {
     setSelectedItem(item);
     setIsViewModalOpen(true);
   }, []);
+
+  const handleViewProcurements = useCallback(async (item) => {
+    setSelectedItem(item);
+    setIsProcurementsModalOpen(true);
+    setLoadingProcurements(true);
+    try {
+      const response = await apiClient.get(`/suppliers/${item.id}/procurements`);
+      if (response.success) {
+        setSupplierProcurements(response.data || []);
+      } else {
+        toast.error('Error', 'Failed to load procurement records');
+        setSupplierProcurements([]);
+      }
+    } catch (error) {
+      console.error('Error fetching procurements:', error);
+      toast.error('Error', 'Failed to load procurement records');
+      setSupplierProcurements([]);
+    } finally {
+      setLoadingProcurements(false);
+    }
+  }, [toast]);
 
   const handleEdit = useCallback((item) => {
     setSelectedItem(item);
@@ -292,7 +296,8 @@ const Supplier = () => {
   const totalSuppliers = suppliers.length;
   const activeSuppliers = suppliers.filter(s => s.status === 'Active').length;
   const inactiveSuppliers = suppliers.filter(s => s.status === 'Inactive').length;
-  const totalKgProcured = Object.values(supplierKgMap).reduce((sum, kg) => sum + kg, 0);
+  const totalKgProcured = suppliers.reduce((sum, s) => sum + (s.total_kg || 0), 0);
+  const totalSacks = suppliers.reduce((sum, s) => sum + (s.total_sacks || 0), 0);
 
   const columns = useMemo(() => [
     { header: 'Company Name', accessor: 'name' },
@@ -320,18 +325,34 @@ const Supplier = () => {
     },
     { header: 'Address', accessor: 'address' },
     { 
-      header: 'Procured (kg)', 
+      header: 'Procured (Sacks / kg)', 
       accessor: 'kg_procured',
       cell: (row) => {
-        const kg = supplierKgMap[row.id] || 0;
-        return <span className={`font-semibold ${kg > 0 ? 'text-green-600' : 'text-gray-400'}`}>{kg.toLocaleString()}</span>;
+        const sacks = row.total_sacks || 0;
+        const kg = row.total_kg || 0;
+        return (
+          <div className="text-sm">
+            <span className={`font-semibold ${sacks > 0 ? 'text-button-600' : 'text-gray-400'}`}>{sacks.toLocaleString()} sacks</span>
+            <span className="text-gray-400 mx-1">/</span>
+            <span className={`font-semibold ${kg > 0 ? 'text-green-600' : 'text-gray-400'}`}>{kg.toLocaleString()} kg</span>
+          </div>
+        );
       }
     },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onEdit={() => handleEdit(row)} onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined} />
+      <div className="flex items-center gap-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); handleViewProcurements(row); }}
+          className="p-1.5 rounded-md hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
+          title="View Procurement Records"
+        >
+          <ClipboardList size={15} />
+        </button>
+        <ActionButtons onEdit={() => handleEdit(row)} onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined} />
+      </div>
     )},
-  ], [handleView, handleEdit, handleDelete, supplierKgMap]);
+  ], [handleView, handleEdit, handleDelete, handleViewProcurements, isSuperAdmin]);
 
   return (
     <div>
@@ -351,7 +372,7 @@ const Supplier = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatsCard label="Total Suppliers" value={totalSuppliers} unit="suppliers" icon={Users} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
           <StatsCard label="Active" value={activeSuppliers} unit="suppliers" icon={CheckCircle} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
-          <StatsCard label="Inactive" value={inactiveSuppliers} unit="suppliers" icon={XCircle} iconBgColor="bg-gradient-to-br from-red-400 to-red-600" />
+          <StatsCard label="Total Sacks" value={totalSacks.toLocaleString()} unit="sacks" icon={Layers} iconBgColor="bg-gradient-to-br from-amber-400 to-amber-600" />
           <StatsCard label="Total Procured" value={totalKgProcured.toLocaleString()} unit="kg" icon={Scale} iconBgColor="bg-gradient-to-br from-green-400 to-green-600" />
         </div>
       )}
@@ -382,6 +403,15 @@ const Supplier = () => {
         size="2xl"
         footer={
           <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => {
+                setIsViewModalOpen(false);
+                handleViewProcurements(selectedItem);
+              }}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2"
+            >
+              <ClipboardList size={16} /> View Records
+            </button>
             <button
               onClick={() => {
                 setIsViewModalOpen(false);
@@ -437,6 +467,32 @@ const Supplier = () => {
                 <div className="flex-1">
                   <p className="text-xs text-gray-600 mb-0.5">Products Supplied</p>
                   <p className="text-xl font-bold text-button-600">{selectedItem.products || 0}</p>
+                </div>
+              </div>
+
+              {/* Procurement Stats */}
+              <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <Scale size={16} className="text-green-600" />
+                  <p className="text-xs font-semibold text-gray-700">Procurement Summary</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-xs text-gray-500">Transactions</p>
+                    <p className="text-sm font-bold text-gray-800">{selectedItem.procurement_count || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Total Cost</p>
+                    <p className="text-sm font-bold text-gray-800">₱{(selectedItem.total_cost || 0).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Total Sacks</p>
+                    <p className="text-sm font-bold text-amber-600">{(selectedItem.total_sacks || 0).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Total Kg</p>
+                    <p className="text-sm font-bold text-green-600">{(selectedItem.total_kg || 0).toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -632,6 +688,111 @@ const Supplier = () => {
       </FormModal>
 
       <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Archive Supplier" message={`Are you sure you want to archive "${selectedItem?.name}"? It will be moved to the archives and can be restored later.`} confirmText="Archive" variant="warning" icon={Archive} loading={saving} />
+
+      {/* Procurement Records Modal */}
+      <Modal
+        isOpen={isProcurementsModalOpen}
+        onClose={() => setIsProcurementsModalOpen(false)}
+        title={`Procurement Records — ${selectedItem?.name || ''}`}
+        size="full"
+        footer={
+          <div className="flex justify-between items-center">
+            {!loadingProcurements && supplierProcurements.length > 0 && (
+              <span className="text-sm text-gray-500">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
+            )}
+            <div className="flex-1" />
+            <button
+              onClick={() => setIsProcurementsModalOpen(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
+      >
+        {loadingProcurements ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 size={32} className="animate-spin text-button-500" />
+            <span className="ml-3 text-gray-500">Loading procurement records...</span>
+          </div>
+        ) : supplierProcurements.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <ShoppingBag size={48} className="mx-auto mb-3 text-gray-300" />
+            <p className="text-lg font-medium">No procurement records</p>
+            <p className="text-sm">No purchases from this supplier yet.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            {/* Summary Cards */}
+            {(() => {
+              const totalSacks = supplierProcurements.reduce((sum, p) => sum + (p.sacks || 0), 0);
+              const totalKg = supplierProcurements.reduce((sum, p) => sum + (p.quantity_kg || 0), 0);
+              const totalCost = supplierProcurements.reduce((sum, p) => sum + (p.total_cost || 0), 0);
+              const varieties = [...new Set(supplierProcurements.map(p => p.variety_name).filter(Boolean))];
+              return (
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-amber-600 font-medium">Total Sacks</p>
+                    <p className="text-lg font-bold text-amber-700">{totalSacks.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-green-600 font-medium">Total Kg</p>
+                    <p className="text-lg font-bold text-green-700">{totalKg.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-blue-600 font-medium">Total Cost</p>
+                    <p className="text-lg font-bold text-blue-700">₱{totalCost.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+                    <p className="text-xs text-purple-600 font-medium">Varieties</p>
+                    <p className="text-lg font-bold text-purple-700">{varieties.length}</p>
+                    <p className="text-xs text-purple-400 truncate" title={varieties.join(', ')}>{varieties.join(', ') || '—'}</p>
+                  </div>
+                </div>
+              );
+            })()}
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Variety</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Sacks</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Quantity (kg)</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Price/kg</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Total Cost</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Batch</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {supplierProcurements.map((proc) => (
+                  <tr key={proc.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{proc.created_at ? new Date(proc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: proc.variety_color || '#6B7280' }}></span>
+                        <span className="text-gray-700 font-medium">{proc.variety_name || 'Unknown'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800">{(proc.sacks || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800">{(proc.quantity_kg || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">₱{(proc.price_per_kg || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800">₱{(proc.total_cost || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs font-mono">{proc.batch_number || '—'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={proc.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="px-4 py-3 bg-gray-50 border-t flex justify-between items-center text-sm">
+              <span className="text-gray-500">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
+              <span className="font-semibold text-gray-700">
+                Total: ₱{supplierProcurements.reduce((sum, p) => sum + (p.total_cost || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

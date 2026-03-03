@@ -42,6 +42,7 @@ class User extends Authenticatable
         'password',
         'role',
         'position',
+        'truck_plate_number',
         'phone',
         'status',
         'date_hired',

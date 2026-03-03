@@ -1,10 +1,12 @@
-import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock } from 'lucide-react';
-import { useState, useMemo, memo, useCallback } from 'react';
+import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation } from 'lucide-react';
+import { useState, useMemo, memo, useCallback, useRef, useEffect } from 'react';
 import { PageHeader } from '../../../components/common';
 import { Button, StatsCard, useToast } from '../../../components/ui';
 import { useDataFetch, invalidateCache } from '../../../hooks/useDataFetch';
 import apiClient from '../../../api/apiClient';
 import { useAuth } from '../../../context/AuthContext';
+import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
+import { debouncedSearchAddress, calculateDistance, geocodeAddress } from '../../../api/openRouteService';
 
 // Customer combobox component - select existing or add new (requires name + contact or email)
 const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange, onInputChange, onContactChange, onEmailChange, customerOptions, error }) => {
@@ -127,6 +129,7 @@ CustomerCombobox.displayName = 'CustomerCombobox';
 const PointOfSale = () => {
   const toast = useToast();
   const { isSuperAdmin } = useAuth();
+  const { settings: businessSettings } = useBusinessSettings();
   const [cart, setCart] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVariety, setSelectedVariety] = useState('');
@@ -149,6 +152,78 @@ const PointOfSale = () => {
   const [newCustomerContact, setNewCustomerContact] = useState('');
   const [newCustomerEmail, setNewCustomerEmail] = useState('');
   const [customerError, setCustomerError] = useState('');
+  // Delivery / Shipping state
+  const [forDelivery, setForDelivery] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [distanceKm, setDistanceKm] = useState('');
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedCoords, setSelectedCoords] = useState(null);
+  const [calculatingDistance, setCalculatingDistance] = useState(false);
+  const [estimatedDuration, setEstimatedDuration] = useState(null);
+  const [isEstimate, setIsEstimate] = useState(false);
+  const [warehouseCoords, setWarehouseCoords] = useState(null);
+  const addressInputRef = useRef(null);
+  const suggestionsRef = useRef(null);
+
+  // Geocode warehouse address on mount
+  useEffect(() => {
+    if (businessSettings.warehouse_address && !warehouseCoords) {
+      geocodeAddress(businessSettings.warehouse_address).then(coords => {
+        if (coords) setWarehouseCoords(coords);
+      });
+    }
+  }, [businessSettings.warehouse_address]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target) &&
+          addressInputRef.current && !addressInputRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle address input change with autocomplete
+  const handleAddressInput = useCallback((value) => {
+    setDeliveryAddress(value);
+    setSelectedCoords(null);
+    setDistanceKm('');
+    setEstimatedDuration(null);
+    debouncedSearchAddress(value, (results) => {
+      setAddressSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    }, warehouseCoords || {});
+  }, [warehouseCoords]);
+
+  // Handle selecting an address suggestion
+  const handleSelectAddress = useCallback(async (suggestion) => {
+    setDeliveryAddress(suggestion.label);
+    setSelectedCoords({ lat: suggestion.lat, lng: suggestion.lng });
+    setShowSuggestions(false);
+    setAddressSuggestions([]);
+
+    // Auto-calculate distance if warehouse coords are available
+    if (warehouseCoords) {
+      setCalculatingDistance(true);
+      try {
+        const result = await calculateDistance(
+          warehouseCoords.lat, warehouseCoords.lng,
+          suggestion.lat, suggestion.lng
+        );
+        setDistanceKm(String(result.distanceKm));
+        setEstimatedDuration(result.durationMin);
+        setIsEstimate(result.isEstimate || false);
+      } catch (err) {
+        console.error('Distance calc failed:', err);
+      } finally {
+        setCalculatingDistance(false);
+      }
+    }
+  }, [warehouseCoords]);
 
   // Fetch real data from API
   const { data: productsRaw, refetch: refetchProducts } = useDataFetch('/products');
@@ -194,14 +269,28 @@ const PointOfSale = () => {
   }, [selectedCustomerId, customersRaw]);
 
   const handleCustomerSelect = useCallback((e) => {
-    setSelectedCustomerId(e.target.value);
-    if (e.target.value) {
+    const id = e.target.value;
+    setSelectedCustomerId(id);
+    if (id) {
       setNewCustomerName('');
       setNewCustomerContact('');
       setNewCustomerEmail('');
+      // Auto-fill delivery address from customer's saved address
+      if (forDelivery) {
+        const customer = (customersRaw || []).find(c => String(c.id) === id);
+        if (customer?.address) {
+          setDeliveryAddress(customer.address);
+        } else {
+          setDeliveryAddress('');
+        }
+        // Reset distance — will be recalculated on confirm
+        setDistanceKm('');
+        setEstimatedDuration(null);
+        setSelectedCoords(null);
+      }
     }
     setCustomerError('');
-  }, []);
+  }, [forDelivery, customersRaw]);
 
   const handleNewCustomerInput = useCallback((e) => {
     const val = e.target.value;
@@ -351,7 +440,7 @@ const PointOfSale = () => {
     setShowCustomerModal(true);
   };
 
-  const confirmCustomer = () => {
+  const confirmCustomer = async () => {
     // Validate customer: must have name + (contact or email)
     if (!selectedCustomerId && !newCustomerName) {
       setCustomerError('Please select a customer or add a new one.');
@@ -368,6 +457,35 @@ const PointOfSale = () => {
     if (newCustomerName && !newCustomerContact.trim() && !newCustomerEmail.trim()) {
       setCustomerError('Provide at least a contact number or email for the new customer.');
       return;
+    }
+
+    // If for delivery, require address
+    if (forDelivery && !deliveryAddress.trim()) {
+      setCustomerError('Delivery address is required for delivery orders.');
+      return;
+    }
+
+    // Auto-calculate distance if for delivery and address is set
+    if (forDelivery && deliveryAddress.trim() && !distanceKm) {
+      setCalculatingDistance(true);
+      try {
+        // Geocode delivery address
+        const destCoords = await geocodeAddress(deliveryAddress);
+        if (destCoords && warehouseCoords) {
+          setSelectedCoords(destCoords);
+          const result = await calculateDistance(
+            warehouseCoords.lat, warehouseCoords.lng,
+            destCoords.lat, destCoords.lng
+          );
+          setDistanceKm(String(result.distanceKm));
+          setEstimatedDuration(result.durationMin);
+          setIsEstimate(result.isEstimate || false);
+        }
+      } catch (err) {
+        console.error('Distance calc failed:', err);
+      } finally {
+        setCalculatingDistance(false);
+      }
     }
 
     setCustomerError('');
@@ -403,6 +521,9 @@ const PointOfSale = () => {
         payment_method: paymentMethod,
         amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
         reference_number: paymentMethod === 'gcash' ? gcashReference : null,
+        delivery_fee: forDelivery ? deliveryFee : 0,
+        distance_km: forDelivery && distanceKm ? parseFloat(distanceKm) : null,
+        delivery_address: forDelivery ? deliveryAddress : null,
       };
 
       const response = await apiClient.post('/sales/order', payload);
@@ -420,6 +541,9 @@ const PointOfSale = () => {
           cashTendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : null,
           change: paymentMethod === 'cash' ? parseFloat(cashTendered) - total : null,
           gcashReference: paymentMethod === 'gcash' ? gcashReference : null,
+          deliveryFee: forDelivery ? deliveryFee : 0,
+          subtotal,
+          forDelivery,
         };
         setLastSale(saleData);
         setShowPaymentModal(false);
@@ -430,6 +554,12 @@ const PointOfSale = () => {
         setNewCustomerContact('');
         setNewCustomerEmail('');
         setCustomerError('');
+        setForDelivery(false);
+        setDeliveryAddress('');
+        setDistanceKm('');
+        setSelectedCoords(null);
+        setEstimatedDuration(null);
+        setAddressSuggestions([]);
 
         // Refresh data
         invalidateCache('/sales');
@@ -455,8 +585,24 @@ const PointOfSale = () => {
     }
   };
 
-  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalSacks = totalItems; // Each item quantity represents sacks
+
+  // Calculate delivery fee based on business settings
+  const deliveryFee = useMemo(() => {
+    if (!forDelivery || !distanceKm) return 0;
+    const distance = parseFloat(distanceKm) || 0;
+    const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
+    const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
+    const ratePerKm = parseFloat(businessSettings.shipping_rate_per_km) || 0;
+    // Formula: ceil(distance / baseKm) * ratePerSack * totalSacks + (ratePerKm * distance)
+    const sackBasedFee = Math.ceil(distance / baseKm) * ratePerSack * totalSacks;
+    const kmBasedFee = ratePerKm * distance;
+    return sackBasedFee + kmBasedFee;
+  }, [forDelivery, distanceKm, totalSacks, businessSettings.shipping_base_km, businessSettings.shipping_rate_per_sack, businessSettings.shipping_rate_per_km]);
+
+  const total = subtotal + deliveryFee;
 
   return (
     <div>
@@ -647,12 +793,68 @@ const PointOfSale = () => {
                 </div>
               </div>
 
+              {/* Delivery Toggle */}
+              <div className="border-t-2 border-primary-200 pt-3 shrink-0">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className={`relative w-10 h-5 rounded-full transition-colors ${forDelivery ? 'bg-orange-500' : 'bg-gray-300'}`}
+                    onClick={() => {
+                      const next = !forDelivery;
+                      setForDelivery(next);
+                      if (!next) { setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }
+                    }}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                    <Truck size={14} className={forDelivery ? 'text-orange-500' : 'text-gray-400'} />
+                    For Delivery
+                  </span>
+                </label>
+
+                {forDelivery && (deliveryAddress || distanceKm || calculatingDistance) && (
+                  <div className="mt-2 space-y-1">
+                    {deliveryAddress && (
+                      <p className="text-[10px] text-gray-500 flex items-start gap-1">
+                        <MapPin size={10} className="mt-0.5 shrink-0 text-orange-400" />
+                        <span className="line-clamp-2">{deliveryAddress}</span>
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between">
+                      {distanceKm && (
+                        <p className="text-[10px] text-orange-500 font-medium flex items-center gap-1">
+                          <Navigation size={10} />
+                          {distanceKm} km
+                          {estimatedDuration && (
+                            <span className="text-gray-400 ml-1">
+                              (~{estimatedDuration >= 60 ? `${Math.floor(estimatedDuration / 60)}h ${estimatedDuration % 60}m` : `${estimatedDuration} min`})
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      {calculatingDistance && (
+                        <p className="text-[10px] text-orange-500 flex items-center gap-1">
+                          <Loader2 size={10} className="animate-spin" /> Calculating...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Total Section - always visible */}
               <div className="border-t-2 border-primary-200 pt-4 shrink-0">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-gray-500 font-medium">Subtotal</span>
-                  <span className="text-sm font-semibold text-gray-700">₱{total.toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-gray-700">₱{subtotal.toLocaleString()}</span>
                 </div>
+                {forDelivery && deliveryFee > 0 && (
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-orange-500 font-medium flex items-center gap-1">
+                      <Truck size={10} /> Shipping Fee
+                    </span>
+                    <span className="text-sm font-semibold text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center mb-4 pb-4 border-b-2 border-primary-100">
                   <span className="font-bold text-gray-800">Total</span>
                   <span className="text-xl font-bold text-primary-600">₱{total.toLocaleString()}</span>
@@ -769,12 +971,43 @@ const PointOfSale = () => {
                       </div>
                     </div>
 
+                    {/* Delivery Toggle - Mobile */}
+                    <div className="border-t-2 border-primary-200 pt-3 mb-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <div className={`relative w-10 h-5 rounded-full transition-colors ${forDelivery ? 'bg-orange-500' : 'bg-gray-300'}`}
+                          onClick={() => {
+                            const next = !forDelivery;
+                            setForDelivery(next);
+                            if (!next) { setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }
+                          }}
+                        >
+                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                          <Truck size={14} className={forDelivery ? 'text-orange-500' : 'text-gray-400'} />
+                          For Delivery
+                        </span>
+                      </label>
+                      {forDelivery && (deliveryAddress || distanceKm) && (
+                        <div className="mt-1">
+                          {deliveryAddress && <p className="text-[10px] text-gray-500 truncate"><MapPin size={10} className="inline mr-0.5 text-orange-400" />{deliveryAddress}</p>}
+                          {distanceKm && <p className="text-[10px] text-orange-500 font-medium"><Navigation size={10} className="inline mr-0.5" />{distanceKm} km</p>}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Total */}
                     <div className="border-t-2 border-primary-200 pt-3 mb-3">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs text-gray-500 font-medium">Subtotal</span>
-                        <span className="text-sm font-semibold text-gray-700">₱{total.toLocaleString()}</span>
+                        <span className="text-sm font-semibold text-gray-700">₱{subtotal.toLocaleString()}</span>
                       </div>
+                      {forDelivery && deliveryFee > 0 && (
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs text-orange-500 font-medium flex items-center gap-1"><Truck size={10} /> Shipping</span>
+                          <span className="text-sm font-semibold text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-gray-800">Total</span>
                         <span className="text-lg font-bold text-primary-600">₱{total.toLocaleString()}</span>
@@ -846,6 +1079,124 @@ const PointOfSale = () => {
                   customerOptions={customerOptions}
                   error={customerError}
                 />
+
+                {/* Delivery Address — shown when For Delivery is toggled on */}
+                {forDelivery && (
+                  <div className="mt-4 p-3 bg-orange-50 rounded-xl border-2 border-orange-200">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+                      <Truck size={14} className="text-orange-500" />
+                      Delivery Address <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin size={12} className="absolute left-2.5 top-3 text-gray-400" />
+                      <textarea
+                        ref={addressInputRef}
+                        value={deliveryAddress}
+                        onChange={(e) => {
+                          setDeliveryAddress(e.target.value);
+                          setDistanceKm('');
+                          setEstimatedDuration(null);
+                          setSelectedCoords(null);
+                          setCustomerError('');
+                          // Trigger autocomplete
+                          debouncedSearchAddress(e.target.value, (results) => {
+                            setAddressSuggestions(results);
+                            setShowSuggestions(results.length > 0);
+                          }, warehouseCoords || {});
+                        }}
+                        onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
+                        placeholder="Enter delivery address..."
+                        rows={2}
+                        className="w-full pl-7 pr-3 py-2 text-xs border-2 border-orange-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white"
+                      />
+                      {/* Suggestions dropdown */}
+                      {showSuggestions && addressSuggestions.length > 0 && (
+                        <div ref={suggestionsRef} className="absolute z-50 w-full mt-1 bg-white border-2 border-orange-200 rounded-lg shadow-lg max-h-36 overflow-y-auto">
+                          {addressSuggestions.map((s, i) => (
+                            <button
+                              key={i}
+                              onClick={async () => {
+                                setDeliveryAddress(s.label);
+                                setShowSuggestions(false);
+                                setAddressSuggestions([]);
+                                setSelectedCoords({ lat: s.lat, lng: s.lng });
+                                // Auto-calculate distance
+                                if (warehouseCoords) {
+                                  setCalculatingDistance(true);
+                                  try {
+                                    const result = await calculateDistance(warehouseCoords.lat, warehouseCoords.lng, s.lat, s.lng);
+                                    setDistanceKm(String(result.distanceKm));
+                                    setEstimatedDuration(result.durationMin);
+                                    setIsEstimate(result.isEstimate || false);
+                                  } catch (err) {
+                                    console.error('Distance calc failed:', err);
+                                  } finally {
+                                    setCalculatingDistance(false);
+                                  }
+                                }
+                              }}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-orange-50 border-b border-gray-100 last:border-0 transition-colors"
+                            >
+                              <span className="font-medium text-gray-800">{s.label}</span>
+                              {s.locality && <span className="block text-[10px] text-gray-400">{s.locality}{s.region ? `, ${s.region}` : ''}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Distance info */}
+                    {(distanceKm || calculatingDistance) && (
+                      <div className="mt-2 space-y-1.5">
+                        {calculatingDistance ? (
+                          <p className="text-[10px] text-orange-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Calculating distance...</p>
+                        ) : (
+                          <>
+                            <p className="text-[10px] text-orange-600 font-semibold flex items-center gap-1">
+                              <Navigation size={10} /> {distanceKm} km
+                              {estimatedDuration && (
+                                <span className="text-gray-400 font-normal ml-1">
+                                  (~{estimatedDuration >= 60 ? `${Math.floor(estimatedDuration / 60)}h ${estimatedDuration % 60}m` : `${estimatedDuration} min`} drive)
+                                </span>
+                              )}
+                            </p>
+                            {deliveryFee > 0 && (() => {
+                              const distance = parseFloat(distanceKm) || 0;
+                              const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
+                              const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
+                              const ratePerKm = parseFloat(businessSettings.shipping_rate_per_km) || 0;
+                              const trips = Math.ceil(distance / baseKm);
+                              const sackFee = trips * ratePerSack * totalSacks;
+                              const kmFee = ratePerKm * distance;
+                              return (
+                                <div className="bg-orange-100/60 rounded-lg p-2 space-y-1">
+                                  <p className="text-[10px] font-bold text-orange-700 uppercase tracking-wide">Shipping Fee Breakdown</p>
+                                  <div className="text-[10px] text-gray-600 space-y-0.5">
+                                    {ratePerSack > 0 && (
+                                      <div className="flex justify-between">
+                                        <span>Sack-based: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
+                                        <span className="font-semibold text-gray-800">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                    {ratePerKm > 0 && (
+                                      <div className="flex justify-between">
+                                        <span>Distance-based: ₱{ratePerKm}/km × {distance} km</span>
+                                        <span className="font-semibold text-gray-800">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex justify-between border-t border-orange-300/50 pt-1">
+                                    <span className="text-[10px] font-bold text-orange-700">Total Shipping</span>
+                                    <span className="text-xs font-bold text-orange-700">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
@@ -892,6 +1243,44 @@ const PointOfSale = () => {
                     <span className="text-gray-500">Items</span>
                     <span className="font-medium text-gray-800">{totalItems} items</span>
                   </div>
+                  {forDelivery && deliveryFee > 0 && (() => {
+                    const distance = parseFloat(distanceKm) || 0;
+                    const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
+                    const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
+                    const ratePerKm = parseFloat(businessSettings.shipping_rate_per_km) || 0;
+                    const trips = Math.ceil(distance / baseKm);
+                    const sackFee = trips * ratePerSack * totalSacks;
+                    const kmFee = ratePerKm * distance;
+                    return (
+                      <>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-500">Subtotal</span>
+                          <span className="font-medium text-gray-800">₱{subtotal.toLocaleString()}</span>
+                        </div>
+                        <div className="bg-orange-50 rounded-md p-2 mb-1">
+                          <div className="flex justify-between text-sm mb-0.5">
+                            <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping</span>
+                            <span className="font-medium text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 space-y-0.5 mt-1">
+                            {ratePerSack > 0 && (
+                              <div className="flex justify-between">
+                                <span>Sack fee: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
+                                <span className="text-gray-700">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            )}
+                            {ratePerKm > 0 && (
+                              <div className="flex justify-between">
+                                <span>Distance fee: ₱{ratePerKm}/km × {distance} km</span>
+                                <span className="text-gray-700">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            )}
+                            <p className="text-[9px] text-gray-400 mt-0.5">Distance: {distanceKm} km from warehouse</p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
                     <span className="font-bold text-gray-800">Total Due</span>
                     <span className="text-xl font-bold text-primary-600">₱{total.toLocaleString()}</span>
@@ -1189,6 +1578,18 @@ const PointOfSale = () => {
                     </div>
                   )}
                   <div className="border-t-2 border-primary-100 pt-2 mt-2">
+                    {lastSale.forDelivery && lastSale.deliveryFee > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-500">Subtotal</span>
+                          <span className="font-medium text-gray-800">₱{lastSale.subtotal.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping</span>
+                          <span className="font-medium text-orange-600">₱{lastSale.deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between">
                       <span className="font-bold text-gray-800">Total</span>
                       <span className="text-xl font-bold text-primary-600">₱{lastSale.total.toLocaleString()}</span>

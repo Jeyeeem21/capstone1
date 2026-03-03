@@ -169,6 +169,10 @@ const Settings = () => {
     social_twitter: '',
     social_instagram: '',
     social_linkedin: '',
+    shipping_rate_per_sack: '',
+    shipping_rate_per_km: '',
+    shipping_base_km: '',
+    warehouse_address: '',
   });
   const [businessLoading, setBusinessLoading] = useState(true);
   const [businessSaving, setBusinessSaving] = useState(false);
@@ -221,6 +225,10 @@ const Settings = () => {
           social_twitter: cachedData.social_twitter ?? '',
           social_instagram: cachedData.social_instagram ?? '',
           social_linkedin: cachedData.social_linkedin ?? '',
+          shipping_rate_per_sack: cachedData.shipping_rate_per_sack ?? '',
+          shipping_rate_per_km: cachedData.shipping_rate_per_km ?? '',
+          shipping_base_km: cachedData.shipping_base_km ?? '',
+          warehouse_address: cachedData.warehouse_address ?? '',
         });
         if (cachedData.business_logo && cachedData.business_logo !== '/logo.svg' && !cachedData.business_logo.startsWith('blob:')) {
           setLogoPreview(getFullLogoUrl(cachedData.business_logo));
@@ -254,6 +262,10 @@ const Settings = () => {
             social_twitter: data.social_twitter ?? '',
             social_instagram: data.social_instagram ?? '',
             social_linkedin: data.social_linkedin ?? '',
+            shipping_rate_per_sack: data.shipping_rate_per_sack ?? '',
+            shipping_rate_per_km: data.shipping_rate_per_km ?? '',
+            shipping_base_km: data.shipping_base_km ?? '',
+            warehouse_address: data.warehouse_address ?? '',
           });
           if (data.business_logo && data.business_logo !== '/logo.svg' && !data.business_logo.startsWith('blob:')) {
             setLogoPreview(getFullLogoUrl(data.business_logo));
@@ -797,6 +809,67 @@ const Settings = () => {
           <p className="text-sm text-gray-500 mt-3">
             Leave empty to hide the social media icon in the footer.
           </p>
+        </div>
+
+        {/* Shipping & Delivery Settings */}
+        <div className="p-4 bg-orange-50 dark:bg-orange-500/10 rounded-xl border border-orange-200 dark:border-orange-500/30">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1 flex items-center gap-2">
+            <Truck size={18} className="text-orange-600 dark:text-orange-400" />
+            Shipping & Delivery
+          </h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Configure shipping rates based on distance from your warehouse.
+          </p>
+          <div className="space-y-4">
+            <FormTextarea 
+              label="Warehouse Address"
+              name="warehouse_address"
+              value={businessInfo.warehouse_address}
+              onChange={handleBusinessChange}
+              rows={2}
+              placeholder="Enter your warehouse/business full address"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormInput 
+                label="Base Distance (km)"
+                name="shipping_base_km"
+                type="number"
+                value={businessInfo.shipping_base_km}
+                onChange={handleBusinessChange}
+                placeholder="e.g. 50"
+              />
+              <FormInput 
+                label="Rate per Sack (₱)"
+                name="shipping_rate_per_sack"
+                type="number"
+                value={businessInfo.shipping_rate_per_sack}
+                onChange={handleBusinessChange}
+                placeholder="e.g. 10"
+              />
+              <FormInput 
+                label="Rate per KM (₱)"
+                name="shipping_rate_per_km"
+                type="number"
+                value={businessInfo.shipping_rate_per_km}
+                onChange={handleBusinessChange}
+                placeholder="e.g. 5"
+              />
+            </div>
+            {(businessInfo.shipping_base_km && businessInfo.shipping_rate_per_sack) ? (
+              <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-500/30">
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  <strong>Preview:</strong> For every <span className="text-orange-600 font-semibold">{businessInfo.shipping_base_km} km</span>, 
+                  charge <span className="text-orange-600 font-semibold">₱{businessInfo.shipping_rate_per_sack}</span> per sack.
+                  {businessInfo.shipping_rate_per_km && (
+                    <> Additional rate: <span className="text-orange-600 font-semibold">₱{businessInfo.shipping_rate_per_km}</span> per km.</>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Example: 100 km × 20 sacks = ₱{((100 / Number(businessInfo.shipping_base_km || 1)) * Number(businessInfo.shipping_rate_per_sack || 0) * 20).toLocaleString()} shipping fee
+                </p>
+              </div>
+            ) : null}
+          </div>
         </div>
         
         <div className="flex justify-end pt-4 border-t border-primary-200">

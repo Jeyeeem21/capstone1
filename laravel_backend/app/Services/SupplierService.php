@@ -22,7 +22,7 @@ class SupplierService
     public function getAllSuppliers(): Collection
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Supplier::orderBy('created_at', 'desc')->get();
+            return Supplier::with('procurements')->orderBy('created_at', 'desc')->get();
         });
     }
 

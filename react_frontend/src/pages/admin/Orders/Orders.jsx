@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, FileText, ShoppingBag, RotateCcw, PlayCircle } from 'lucide-react';
+import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
+import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
 import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
 
@@ -22,6 +22,13 @@ const AdminOrders = () => {
     return tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'All';
   });
   const [saving, setSaving] = useState(false);
+  const [isShipModalOpen, setIsShipModalOpen] = useState(false);
+  const [shipOrder, setShipOrder] = useState(null);
+  const [drivers, setDrivers] = useState([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [selectedDriverId, setSelectedDriverId] = useState('');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
 
   // Sync active tab to URL
   useEffect(() => {
@@ -131,6 +138,46 @@ const AdminOrders = () => {
     const nextStatus = nextStatusMap[order.raw_status];
     if (!nextStatus) return;
 
+    // If shipping, show driver selection modal instead
+    if (nextStatus === 'shipped') {
+      setShipOrder(order);
+      setSelectedDriverId('');
+      setDeliveryNotes('');
+      setIsShipModalOpen(true);
+      // Fetch staff drivers (users with position=Driver)
+      setLoadingDrivers(true);
+      try {
+        const res = await apiClient.get('/users', { params: { role: 'staff' } });
+        if (res.success) {
+          const staffDrivers = (res.data?.data || res.data || []).filter(u => u.position === 'Driver' && u.status === 'active');
+          setDrivers(staffDrivers);
+        }
+      } catch (err) {
+        console.error('Error fetching drivers:', err);
+      } finally {
+        setLoadingDrivers(false);
+      }
+
+      // Auto-estimate delivery date based on distance (with +1 day allowance)
+      const distKm = parseFloat(order.distance_km) || 0;
+      if (distKm > 0) {
+        // Rough estimate: average truck speed ~40 km/h + 1hr loading + 1 day allowance
+        const driveHours = distKm / 40;
+        const totalHours = driveHours + 1;
+        const baseDays = totalHours > 8 ? Math.ceil(totalHours / 8) : 1;
+        const daysWithAllowance = baseDays + 1; // +1 day allowance/buffer
+        const estimated = new Date();
+        estimated.setDate(estimated.getDate() + daysWithAllowance);
+        setDeliveryDate(estimated.toISOString().split('T')[0]);
+      } else {
+        // Default: day after tomorrow (tomorrow + 1 day allowance)
+        const est = new Date();
+        est.setDate(est.getDate() + 2);
+        setDeliveryDate(est.toISOString().split('T')[0]);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await apiClient.put(`/sales/${order.id}/status`, { status: nextStatus });
@@ -149,6 +196,35 @@ const AdminOrders = () => {
       setSaving(false);
     }
   }, [saving, refetch, toast]);
+
+  // Confirm ship with driver assignment
+  const handleShipConfirm = useCallback(async () => {
+    if (!shipOrder || !selectedDriverId || saving) return;
+    setSaving(true);
+    try {
+      // Get selected driver details
+      const selectedDriver = drivers.find(d => String(d.id) === selectedDriverId);
+
+      // 1. Update order status to shipped (include driver info)
+      const statusRes = await apiClient.put(`/sales/${shipOrder.id}/status`, {
+        status: 'shipped',
+        driver_name: selectedDriver?.name || null,
+        driver_plate_number: selectedDriver?.truck_plate_number || null,
+      });
+      if (!statusRes.success) throw statusRes;
+
+      invalidateCache('/sales');
+      invalidateCache('/products');
+      invalidateCache('/users');
+      refetch();
+      toast.success('Order Shipped', `Order ${shipOrder.order_id} has been shipped with ${selectedDriver?.name || 'a driver'} assigned.`);
+      setIsShipModalOpen(false);
+    } catch (error) {
+      toast.error('Ship Failed', error.message || 'Failed to ship order');
+    } finally {
+      setSaving(false);
+    }
+  }, [shipOrder, selectedDriverId, deliveryDate, deliveryNotes, saving, refetch, toast]);
 
   const handleCancelConfirm = useCallback(async () => {
     if (!selectedOrder || saving) return;
@@ -435,64 +511,157 @@ const AdminOrders = () => {
       )}
 
       {/* View Order Modal */}
-      <FormModal
+      <Modal
         isOpen={isViewModalOpen}
         onClose={() => setIsViewModalOpen(false)}
-        onSubmit={() => setIsViewModalOpen(false)}
         title={`Order Details — ${selectedOrder?.order_id || ''}`}
-        submitText="Close"
-        size="lg"
+        size="2xl"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setIsViewModalOpen(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
       >
-        {() => selectedOrder && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Customer</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedOrder.customer}</p>
+        {selectedOrder && (
+          <div className="space-y-3">
+            {/* Header with Order ID & Status */}
+            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 to-button-50 rounded-xl border-2 border-primary-200">
+              <div className="flex items-start gap-2">
+                <div className="p-2 bg-button-500 text-white rounded-lg">
+                  <Receipt size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-800">{selectedOrder.order_id}</h3>
+                  <p className="text-xs text-gray-500">{selectedOrder.date_formatted}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Date</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedOrder.date_formatted}</p>
+              <StatusBadge status={selectedOrder.status} />
+            </div>
+
+            {/* Details Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Customer */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
+                  <User size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Customer</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5 truncate">{selectedOrder.customer}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Payment Method</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedOrder.payment_method}</p>
+
+              {/* Payment Method */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-green-100 text-green-600">
+                  <CreditCard size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Payment</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedOrder.payment_method}</p>
+                  {selectedOrder.reference_number && (
+                    <p className="text-[10px] text-gray-400 truncate">Ref: {selectedOrder.reference_number}</p>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Status</p>
-                <StatusBadge status={selectedOrder.status} />
+
+              {/* Items Count */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600">
+                  <Package size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Items</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedOrder.items_count} item{selectedOrder.items_count > 1 ? 's' : ''} ({selectedOrder.total_quantity} pcs)</p>
+                </div>
+              </div>
+
+              {/* Date */}
+              <div className="flex items-start gap-2 p-2.5 bg-gray-50 rounded-xl">
+                <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                  <Calendar size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Order Date</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedOrder.date_formatted}</p>
+                </div>
               </div>
             </div>
 
+            {/* Delivery Address */}
             {selectedOrder.delivery_address && (
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Delivery Address</p>
-                <p className="text-sm text-gray-800">{selectedOrder.delivery_address}</p>
+              <div className="flex items-start gap-2 p-2.5 bg-blue-50 rounded-xl border border-blue-200">
+                <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
+                  <MapPin size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-blue-600 uppercase tracking-wide">Delivery Address</p>
+                  <p className="text-xs font-semibold text-gray-800 mt-0.5">{selectedOrder.delivery_address}</p>
+                  {selectedOrder.distance_km && (
+                    <p className="text-[10px] text-blue-500 mt-0.5">{parseFloat(selectedOrder.distance_km).toFixed(1)} km from warehouse</p>
+                  )}
+                </div>
               </div>
             )}
 
+            {/* Assigned Driver */}
+            {selectedOrder.driver_name && (
+              <div className="flex items-center gap-3 p-2.5 bg-purple-50 rounded-xl border border-purple-200">
+                <div className="w-9 h-9 bg-purple-200 rounded-full flex items-center justify-center">
+                  <User size={16} className="text-purple-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-medium text-purple-600 uppercase tracking-wide">Assigned Driver</p>
+                  <p className="text-sm font-semibold text-gray-800">{selectedOrder.driver_name}</p>
+                </div>
+                {selectedOrder.driver_plate_number && (
+                  <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0">
+                    <Truck size={10} /> {selectedOrder.driver_plate_number}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Notes */}
             {selectedOrder.notes && (
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Notes</p>
-                <p className="text-sm text-gray-800 italic">{selectedOrder.notes}</p>
+              <div className="flex items-start gap-2 p-2.5 bg-amber-50 rounded-xl border border-amber-200">
+                <div className="p-1.5 rounded-lg bg-amber-100 text-amber-600">
+                  <StickyNote size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-medium text-amber-600 uppercase tracking-wide">Order Notes</p>
+                  <p className="text-xs text-gray-700 mt-0.5">{selectedOrder.notes}</p>
+                </div>
               </div>
             )}
 
+            {/* Return Info */}
             {selectedOrder.return_reason && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <p className="text-xs text-orange-600 font-medium">Return Reason</p>
-                <p className="text-sm text-orange-800 font-semibold">{selectedOrder.return_reason}</p>
+              <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-200">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="p-1.5 rounded-lg bg-orange-100 text-orange-600">
+                    <RotateCcw size={14} />
+                  </div>
+                  <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wide">Return Information</p>
+                </div>
+                <p className="text-sm font-semibold text-orange-800">{selectedOrder.return_reason}</p>
                 {selectedOrder.return_notes && (
                   <p className="text-xs text-orange-600 mt-1 italic">{selectedOrder.return_notes}</p>
                 )}
               </div>
             )}
 
+            {/* Items Table */}
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2">Items</p>
-              <div className="rounded-lg border border-gray-200 overflow-hidden">
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">Order Items</p>
+              <div className="rounded-xl border-2 border-primary-200 overflow-hidden">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-primary-50">
                     <tr>
                       <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600">Product</th>
                       <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600">Qty</th>
@@ -502,26 +671,58 @@ const AdminOrders = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {(selectedOrder.items || []).map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="px-3 py-2 text-gray-800">{item.product_name || item.name}</td>
-                        <td className="px-3 py-2 text-center text-gray-600">{item.quantity}</td>
-                        <td className="px-3 py-2 text-right text-gray-600">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-800">₱{(item.subtotal || 0).toLocaleString()}</td>
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.variety_color || '#6B7280' }} />
+                            <span className="text-gray-800 text-xs font-medium">{item.product_name || item.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-600 text-xs">{item.quantity}</td>
+                        <td className="px-3 py-2 text-right text-gray-600 text-xs">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-800 text-xs">₱{(item.subtotal || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan={3} className="px-3 py-2 text-right text-xs font-semibold text-gray-600">Total</td>
+                    {selectedOrder.delivery_fee > 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500">Delivery Fee</td>
+                        <td className="px-3 py-1.5 text-right text-xs text-gray-600">₱{selectedOrder.delivery_fee.toLocaleString()}</td>
+                      </tr>
+                    )}
+                    {selectedOrder.discount > 0 && (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500">Discount</td>
+                        <td className="px-3 py-1.5 text-right text-xs text-red-500">-₱{selectedOrder.discount.toLocaleString()}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t border-gray-200">
+                      <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold text-gray-600">Total</td>
                       <td className="px-3 py-2 text-right font-bold text-gray-800">₱{selectedOrder.total.toLocaleString()}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </div>
+
+            {/* Total Summary Card */}
+            <div className="p-3 bg-green-50 rounded-xl border border-green-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-green-700">Order Total</span>
+                <span className="text-xl font-bold text-green-600">₱{selectedOrder.total.toLocaleString()}</span>
+              </div>
+              {(selectedOrder.delivery_fee > 0 || selectedOrder.discount > 0) && (
+                <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-gray-500">
+                  <span>Subtotal: ₱{selectedOrder.subtotal?.toLocaleString() || selectedOrder.total.toLocaleString()}</span>
+                  {selectedOrder.delivery_fee > 0 && <span>+ ₱{selectedOrder.delivery_fee.toLocaleString()} delivery</span>}
+                  {selectedOrder.discount > 0 && <span>- ₱{selectedOrder.discount.toLocaleString()} discount</span>}
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </FormModal>
+      </Modal>
 
       {/* Cancel Confirmation Modal */}
       <ConfirmModal
@@ -609,6 +810,174 @@ const AdminOrders = () => {
           </div>
         )}
       </FormModal>
+
+      {/* Ship Order — Driver Selection Modal */}
+      <Modal
+        isOpen={isShipModalOpen}
+        onClose={() => setIsShipModalOpen(false)}
+        title={`Assign Driver — ${shipOrder?.order_id || ''}`}
+        size="lg"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setIsShipModalOpen(false)}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleShipConfirm}
+              disabled={saving || !selectedDriverId}
+              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Truck size={16} />}
+              {saving ? 'Shipping...' : 'Confirm & Ship'}
+            </button>
+          </div>
+        }
+      >
+        {shipOrder && (
+          <div className="space-y-4">
+            {/* Order Summary */}
+            <div className="bg-gray-50 rounded-lg p-3">
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500">Customer</p>
+                  <p className="font-semibold text-gray-800">{shipOrder.customer}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Total</p>
+                  <p className="font-semibold text-gray-800">₱{shipOrder.total?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Items</p>
+                  <p className="font-semibold text-gray-800">{shipOrder.items_count} item{shipOrder.items_count > 1 ? 's' : ''} ({shipOrder.total_quantity} pcs)</p>
+                </div>
+              </div>
+              {shipOrder.delivery_address && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <p className="text-xs text-gray-500">Delivery Address</p>
+                  <p className="text-sm font-medium text-gray-800">{shipOrder.delivery_address}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Driver Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Driver *</label>
+              {loadingDrivers ? (
+                <div className="flex items-center gap-2 p-4 text-gray-500">
+                  <Loader2 size={18} className="animate-spin" /> Loading drivers...
+                </div>
+              ) : drivers.length === 0 ? (
+                <p className="text-sm text-red-500 p-3 bg-red-50 rounded-lg">No active drivers available. Please add drivers first.</p>
+              ) : (
+                <>
+                  <select
+                    value={selectedDriverId}
+                    onChange={(e) => setSelectedDriverId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm bg-white"
+                  >
+                    <option value="">Select driver...</option>
+                    {drivers.map(driver => (
+                      <option key={driver.id} value={String(driver.id)}>
+                        {driver.name}{driver.truck_plate_number ? ` — ${driver.truck_plate_number}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {/* Selected driver info card */}
+                  {selectedDriverId && (() => {
+                    const d = drivers.find(dr => String(dr.id) === selectedDriverId);
+                    if (!d) return null;
+                    return (
+                      <div className="mt-2 flex items-center gap-3 p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
+                        <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 font-bold text-sm">
+                          {d.name?.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-gray-800 truncate">{d.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{d.phone || d.email || 'No contact'}</p>
+                        </div>
+                        {d.truck_plate_number && (
+                          <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0">
+                            <Truck size={10} /> {d.truck_plate_number}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+
+            {/* Estimated Delivery Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Delivery Date *</label>
+              <input
+                type="date"
+                value={deliveryDate}
+                onChange={(e) => setDeliveryDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
+              {shipOrder && (() => {
+                const distKm = parseFloat(shipOrder.distance_km) || 0;
+                if (distKm <= 0) return <p className="text-[11px] text-gray-400 mt-1">Estimated: within 2 days (no distance data — +1 day allowance)</p>;
+                const driveHrs = distKm / 40;
+                const totalHrs = driveHrs + 1;
+                const baseDays = totalHrs > 8 ? Math.ceil(totalHrs / 8) : 1;
+                const withAllowance = baseDays + 1;
+                const earliest = new Date(); earliest.setDate(earliest.getDate() + baseDays);
+                const latest = new Date(); latest.setDate(latest.getDate() + withAllowance);
+                const fmt = (d) => d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+                return (
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Est. {fmt(earliest)} – {fmt(latest)} ({distKm.toFixed(1)} km · ~{Math.ceil(totalHrs)} hrs travel + 1 day allowance)
+                  </p>
+                );
+              })()}
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Notes (Optional)</label>
+              <input
+                type="text"
+                value={deliveryNotes}
+                onChange={(e) => setDeliveryNotes(e.target.value)}
+                placeholder="Any special instructions for the driver..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm"
+              />
+            </div>
+
+            {/* Client Delivery Note Preview */}
+            {selectedDriverId && (() => {
+              const selectedDriver = drivers.find(d => String(d.id) === selectedDriverId);
+              if (!selectedDriver) return null;
+              return (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <p className="text-[10px] font-bold text-purple-600 uppercase tracking-wide mb-1.5">Client Delivery Note</p>
+                  <div className="text-xs text-gray-700 space-y-1">
+                    <p><span className="font-semibold">Driver:</span> {selectedDriver.name}</p>
+                    {selectedDriver.truck_plate_number && (
+                      <p><span className="font-semibold">Plate No.:</span> {selectedDriver.truck_plate_number}</p>
+                    )}
+                    {(selectedDriver.phone || selectedDriver.email) && (
+                      <p><span className="font-semibold">Contact:</span> {selectedDriver.phone || selectedDriver.email}</p>
+                    )}
+                    {shipOrder.delivery_address && (
+                      <p><span className="font-semibold">Deliver to:</span> {shipOrder.delivery_address}</p>
+                    )}
+                    {deliveryDate && (
+                      <p><span className="font-semibold">Est. Delivery:</span> {new Date(deliveryDate).toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

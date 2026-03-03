@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { UserCog, Shield, Users, CheckCircle, XCircle, Briefcase, Archive } from 'lucide-react';
+import { UserCog, Shield, Users, CheckCircle, XCircle, Briefcase, Archive, Truck } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
@@ -16,7 +16,7 @@ const StaffManagement = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({
-    name: '', position: '', email: '', phone: '', date_hired: '', status: 'active', password: '',
+    name: '', position: '', truck_plate_number: '', email: '', phone: '', date_hired: '', status: 'active', password: '',
   });
 
   const positionOptions = [
@@ -50,7 +50,7 @@ const StaffManagement = () => {
 
   const handleAdd = () => {
     setFormData({
-      name: '', position: '', email: '', phone: '',
+      name: '', position: '', truck_plate_number: '', email: '', phone: '',
       date_hired: new Date().toISOString().split('T')[0],
       status: 'active', password: '',
     });
@@ -62,6 +62,7 @@ const StaffManagement = () => {
     setFormData({
       name: item.name || '',
       position: item.position || '',
+      truck_plate_number: item.truck_plate_number || '',
       email: item.email || '',
       phone: item.phone || '',
       date_hired: item.date_hired ? item.date_hired.split('T')[0] : '',
@@ -87,6 +88,7 @@ const StaffManagement = () => {
         password: formData.password,
         role: 'staff',
         position: formData.position,
+        truck_plate_number: formData.position === 'Driver' ? formData.truck_plate_number : null,
         phone: formData.phone,
         status: formData.status,
         date_hired: formData.date_hired || null,
@@ -110,6 +112,7 @@ const StaffManagement = () => {
         name: formData.name,
         email: formData.email,
         position: formData.position,
+        truck_plate_number: formData.position === 'Driver' ? formData.truck_plate_number : null,
         phone: formData.phone,
         status: formData.status,
         date_hired: formData.date_hired || null,
@@ -163,10 +166,18 @@ const StaffManagement = () => {
     { header: 'Name', accessor: 'name' },
     { header: 'Position', accessor: 'position', cell: (row) => (
       row.position ? (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${getPositionBadge(row.position)}`}>
-          <Shield size={12} />
-          {row.position}
-        </span>
+        <div>
+          <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${getPositionBadge(row.position)}`}>
+            <Shield size={12} />
+            {row.position}
+          </span>
+          {row.position === 'Driver' && row.truck_plate_number && (
+            <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-600">
+              <Truck size={10} />
+              {row.truck_plate_number}
+            </span>
+          )}
+        </div>
       ) : <span className="text-gray-400 text-xs">—</span>
     )},
     { header: 'Email', accessor: 'email' },
@@ -207,6 +218,9 @@ const StaffManagement = () => {
           <>
             <FormInput label="Full Name" name="name" value={formData.name} onChange={handleFormChange} required placeholder="Enter full name" submitted={submitted} />
             <FormSelect label="Position" name="position" value={formData.position} onChange={handleFormChange} options={positionOptions} required submitted={submitted} />
+            {formData.position === 'Driver' && (
+              <FormInput label="Truck Plate Number" name="truck_plate_number" value={formData.truck_plate_number} onChange={handleFormChange} placeholder="e.g. ABC 1234" submitted={submitted} />
+            )}
             <div className="grid grid-cols-2 gap-4">
               <FormInput label="Email" name="email" type="email" value={formData.email} onChange={handleFormChange} required placeholder="email@kjp.com" submitted={submitted} />
               <FormInput label="Phone" name="phone" value={formData.phone} onChange={handleFormChange} placeholder="+63 XXX XXX XXXX" submitted={submitted} />
@@ -226,6 +240,9 @@ const StaffManagement = () => {
           <>
             <FormInput label="Full Name" name="name" value={formData.name} onChange={handleFormChange} required placeholder="Enter full name" submitted={submitted} />
             <FormSelect label="Position" name="position" value={formData.position} onChange={handleFormChange} options={positionOptions} required submitted={submitted} />
+            {formData.position === 'Driver' && (
+              <FormInput label="Truck Plate Number" name="truck_plate_number" value={formData.truck_plate_number} onChange={handleFormChange} placeholder="e.g. ABC 1234" submitted={submitted} />
+            )}
             <div className="grid grid-cols-2 gap-4">
               <FormInput label="Email" name="email" type="email" value={formData.email} onChange={handleFormChange} required placeholder="email@kjp.com" submitted={submitted} />
               <FormInput label="Phone" name="phone" value={formData.phone} onChange={handleFormChange} placeholder="+63 XXX XXX XXXX" submitted={submitted} />

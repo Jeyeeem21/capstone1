@@ -22,4 +22,12 @@ class Supplier extends Model
     protected $casts = [
         'products' => 'integer',
     ];
+
+    /**
+     * Get all procurements from this supplier.
+     */
+    public function procurements()
+    {
+        return $this->hasMany(Procurement::class);
+    }
 }

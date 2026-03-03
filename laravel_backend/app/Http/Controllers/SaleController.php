@@ -56,6 +56,8 @@ class SaleController extends Controller
                 'reference_number' => 'nullable|string',
                 'notes' => 'nullable|string|max:500',
                 'delivery_address' => 'nullable|string|max:500',
+                'delivery_fee' => 'nullable|numeric|min:0',
+                'distance_km' => 'nullable|numeric|min:0',
             ]);
 
             $newCustomerName = $validated['new_customer_name'] ?? null;
@@ -64,6 +66,15 @@ class SaleController extends Controller
             unset($validated['new_customer_name'], $validated['new_customer_contact'], $validated['new_customer_email']);
 
             $sale = $this->saleService->createOrder($validated, $newCustomerName, $newCustomerContact, $newCustomerEmail);
+
+            // Log audit for inline customer creation
+            if ($newCustomerName && $sale->customer_id) {
+                $this->logAudit('CREATE', 'Customer', "Created customer (via POS): {$newCustomerName}", [
+                    'customer_id' => $sale->customer_id,
+                    'name' => $newCustomerName,
+                    'source' => 'inline_pos',
+                ]);
+            }
 
             $this->logAudit('CREATE', 'Orders', "Created order #{$sale->transaction_id} — ₱" . number_format($sale->total, 2), [
                 'sale_id' => $sale->id,
@@ -98,9 +109,19 @@ class SaleController extends Controller
         try {
             $validated = $request->validate([
                 'status' => 'required|string|in:pending,processing,shipped,delivered,return_requested,returned,cancelled',
+                'driver_name' => 'nullable|string|max:255',
+                'driver_plate_number' => 'nullable|string|max:20',
             ]);
 
             $sale = $this->saleService->updateOrderStatus($id, $validated['status']);
+
+            // Save driver info when shipping
+            if ($validated['status'] === 'shipped') {
+                $sale->update([
+                    'driver_name' => $validated['driver_name'] ?? null,
+                    'driver_plate_number' => $validated['driver_plate_number'] ?? null,
+                ]);
+            }
 
             $this->logAudit('UPDATE', 'Orders', "Updated order #{$sale->transaction_id} status to {$validated['status']}", [
                 'sale_id' => $sale->id,
@@ -235,10 +256,13 @@ class SaleController extends Controller
     /**
      * Get per-product sales for growth analysis.
      */
-    public function productGrowth(): JsonResponse
+    public function productGrowth(Request $request): JsonResponse
     {
         try {
-            $data = $this->saleService->getProductSalesGrowth();
+            $period = $request->query('period', 'monthly');
+            $customStart = $request->query('custom_start');
+            $customEnd = $request->query('custom_end');
+            $data = $this->saleService->getProductSalesGrowth($period, $customStart, $customEnd);
             return response()->json([
                 'success' => true,
                 'data' => $data,

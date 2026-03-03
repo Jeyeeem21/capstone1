@@ -144,6 +144,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [CustomerController::class, 'show']);
         Route::put('/{id}', [CustomerController::class, 'update']);
         Route::delete('/{id}', [CustomerController::class, 'destroy']);
+        Route::get('/{id}/orders', [CustomerController::class, 'orders']);
+        Route::post('/{id}/send-verification', [CustomerController::class, 'sendVerificationCode']);
+        Route::post('/{id}/verify-code', [CustomerController::class, 'verifyCode']);
+        Route::post('/{id}/create-account', [CustomerController::class, 'createAccount']);
     });
 
     // Supplier Routes
@@ -154,6 +158,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [SupplierController::class, 'show']);
         Route::put('/{id}', [SupplierController::class, 'update']);
         Route::delete('/{id}', [SupplierController::class, 'destroy']);
+        Route::get('/{id}/procurements', [SupplierController::class, 'procurements']);
     });
 
     // Variety Routes

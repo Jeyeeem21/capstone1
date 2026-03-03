@@ -11,6 +11,7 @@ class Sale extends Model
         'customer_id',
         'subtotal',
         'discount',
+        'delivery_fee',
         'total',
         'amount_tendered',
         'change_amount',
@@ -19,6 +20,9 @@ class Sale extends Model
         'status',
         'notes',
         'delivery_address',
+        'distance_km',
+        'driver_name',
+        'driver_plate_number',
         'return_reason',
         'return_notes',
     ];
@@ -26,9 +30,11 @@ class Sale extends Model
     protected $casts = [
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
+        'delivery_fee' => 'decimal:2',
         'total' => 'decimal:2',
         'amount_tendered' => 'decimal:2',
         'change_amount' => 'decimal:2',
+        'distance_km' => 'decimal:2',
     ];
 
     /**

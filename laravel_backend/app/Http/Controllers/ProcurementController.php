@@ -78,6 +78,15 @@ class ProcurementController extends Controller
 
         $procurement = $this->procurementService->createProcurement($validated, $newSupplierName, $newSupplierData);
 
+        // Log audit for inline supplier creation
+        if ($newSupplierName && $procurement->supplier_id) {
+            $this->logAudit('CREATE', 'Supplier', "Created supplier (via Procurement): {$newSupplierName}", [
+                'supplier_id' => $procurement->supplier_id,
+                'name' => $newSupplierName,
+                'source' => 'inline_procurement',
+            ]);
+        }
+
         // If batch_id is set, validate variety match + batch status and recalculate totals
         if (!empty($validated['batch_id'])) {
             $batch = ProcurementBatch::findOrFail($validated['batch_id']);

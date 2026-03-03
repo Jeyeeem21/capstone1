@@ -105,6 +105,7 @@ const LineChart = ({
   tabs = null,
   activeTab = null,
   onTabChange = null,
+  headerRight = null,
   summaryStats = null,
   areaChart = false,
   yAxisUnit = 'kg',
@@ -145,14 +146,14 @@ const LineChart = ({
   return (
     <div className="bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 outline-none [&_*]:outline-none p-4">
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{title}</h3>
           {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
         </div>
         
         {/* Tabs */}
-        {tabs && (
+        {tabs && !headerRight && (
           <div className="flex bg-white dark:bg-gray-700 rounded-lg p-1 shadow-sm border border-primary-200">
             {tabs.map((tab) => (
               <button
@@ -169,6 +170,7 @@ const LineChart = ({
             ))}
           </div>
         )}
+        {headerRight && headerRight}
       </div>
 
       {/* Legend - clickable to toggle visibility */}

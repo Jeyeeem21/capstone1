@@ -30,6 +30,10 @@ const Inventory = () => {
   const [activeChartPoint, setActiveChartPoint] = useState(null);
   const [growthChartPeriod, setGrowthChartPeriod] = useState('daily');
   const [activeGrowthChartPoint, setActiveGrowthChartPoint] = useState(null);
+  const [productGrowth, setProductGrowth] = useState(null);
+  const [loadingProductGrowth, setLoadingProductGrowth] = useState(false);
+  const [growthCustomStart, setGrowthCustomStart] = useState('');
+  const [growthCustomEnd, setGrowthCustomEnd] = useState('');
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -105,6 +109,30 @@ const Inventory = () => {
     cacheKey: '/sales',
     initialData: [],
   });
+
+  // Fetch per-product growth when period or custom dates change
+  useEffect(() => {
+    // For custom period, only fetch when both dates are provided
+    if (growthChartPeriod === 'custom' && (!growthCustomStart || !growthCustomEnd)) return;
+    const fetchProductGrowth = async () => {
+      setLoadingProductGrowth(true);
+      try {
+        let url = `/sales/product-growth?period=${growthChartPeriod}`;
+        if (growthChartPeriod === 'custom' && growthCustomStart && growthCustomEnd) {
+          url += `&custom_start=${growthCustomStart}&custom_end=${growthCustomEnd}`;
+        }
+        const response = await apiClient.get(url);
+        if (response.success && response.data) {
+          setProductGrowth(response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching product growth:', error);
+      } finally {
+        setLoadingProductGrowth(false);
+      }
+    };
+    fetchProductGrowth();
+  }, [growthChartPeriod, growthCustomStart, growthCustomEnd]);
 
   // Variety options for dropdown (variety)
   const varietyOptions = useMemo(() => {
@@ -818,6 +846,31 @@ const Inventory = () => {
         value: dayGroups[i + 1]?.value || 0,
         quantity: dayGroups[i + 1]?.quantity || 0,
       }));
+    } else if (growthChartPeriod === 'weekly') {
+      // Show each day of the current week (Mon-Sun)
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const weekStart = new Date(now);
+      const dayOfWeek = weekStart.getDay(); // 0=Sun...6=Sat
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // shift to Monday start
+      weekStart.setDate(weekStart.getDate() + diff);
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weekGroups = {};
+      completedSales.forEach(sale => {
+        if (!sale.created_at) return;
+        const date = new Date(sale.created_at);
+        const diffDays = Math.floor((date - weekStart) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0 && diffDays < 7) {
+          if (!weekGroups[diffDays]) weekGroups[diffDays] = { value: 0, quantity: 0 };
+          weekGroups[diffDays].value += sale.total || 0;
+          weekGroups[diffDays].quantity += sale.total_quantity || 0;
+        }
+      });
+      return dayNames.map((name, i) => ({
+        name,
+        value: weekGroups[i]?.value || 0,
+        quantity: weekGroups[i]?.quantity || 0,
+      }));
     } else if (growthChartPeriod === 'monthly') {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const monthGroups = {};
@@ -836,7 +889,24 @@ const Inventory = () => {
         value: monthGroups[i]?.value || 0,
         quantity: monthGroups[i]?.quantity || 0,
       }));
+    } else if (growthChartPeriod === 'bi-annually') {
+      // Show H1 and H2 for the current year
+      const halfGroups = { H1: { value: 0, quantity: 0 }, H2: { value: 0, quantity: 0 } };
+      completedSales.forEach(sale => {
+        if (!sale.created_at) return;
+        const date = new Date(sale.created_at);
+        if (date.getFullYear() === currentYear) {
+          const half = date.getMonth() < 6 ? 'H1' : 'H2';
+          halfGroups[half].value += sale.total || 0;
+          halfGroups[half].quantity += sale.total_quantity || 0;
+        }
+      });
+      return [
+        { name: 'H1 (Jan-Jun)', value: halfGroups.H1.value, quantity: halfGroups.H1.quantity },
+        { name: 'H2 (Jul-Dec)', value: halfGroups.H2.value, quantity: halfGroups.H2.quantity },
+      ];
     } else {
+      // annually
       const years = [];
       for (let i = 5; i >= 0; i--) years.push(currentYear - i);
       const yearGroups = {};
@@ -869,9 +939,24 @@ const Inventory = () => {
     if (!activeGrowthChartPoint || !createdAt) return true;
     const date = new Date(createdAt);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     if (growthChartPeriod === 'daily') return String(date.getDate()) === activeGrowthChartPoint;
+    if (growthChartPeriod === 'weekly') {
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() + diff);
+      weekStart.setHours(0, 0, 0, 0);
+      const diffDays = Math.floor((date - weekStart) / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays < 7 && dayNames[diffDays] === activeGrowthChartPoint;
+    }
     if (growthChartPeriod === 'monthly') return months[date.getMonth()] === activeGrowthChartPoint;
-    if (growthChartPeriod === 'yearly') return String(date.getFullYear()) === activeGrowthChartPoint;
+    if (growthChartPeriod === 'bi-annually') {
+      const half = date.getMonth() < 6 ? 'H1 (Jan-Jun)' : 'H2 (Jul-Dec)';
+      return half === activeGrowthChartPoint;
+    }
+    if (growthChartPeriod === 'annually') return String(date.getFullYear()) === activeGrowthChartPoint;
     return true;
   }, [activeGrowthChartPoint, growthChartPeriod]);
 
@@ -886,82 +971,22 @@ const Inventory = () => {
       const date = new Date(sale.created_at);
       // Scope to current period
       if (growthChartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return false;
+      if (growthChartPeriod === 'weekly') {
+        const dayOfWeek = now.getDay();
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() + diff);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        if (date < weekStart || date >= weekEnd) return false;
+      }
       if (growthChartPeriod === 'monthly' && date.getFullYear() !== currentYear) return false;
+      if (growthChartPeriod === 'bi-annually' && date.getFullYear() !== currentYear) return false;
+      if (growthChartPeriod === 'annually') { /* show all years */ }
       return matchesGrowthChartPoint(sale.created_at);
     });
   }, [completedSales, growthChartPeriod, matchesGrowthChartPoint]);
-
-  // Growth donut: sales by variety - filtered by activeGrowthChartPoint
-  const growthVarietyDonut = useMemo(() => {
-    const map = {};
-    filteredGrowthSales.forEach(sale => {
-      if (!sale.items) return;
-      sale.items.forEach(item => {
-        const variety = item.variety_name || 'Unknown';
-        if (!map[variety]) map[variety] = { name: variety, value: 0 };
-        map[variety].value += item.quantity;
-      });
-    });
-    return Object.values(map).filter(v => v.value > 0).sort((a, b) => b.value - a.value);
-  }, [filteredGrowthSales]);
-
-  // Growth donut: top selling products - filtered by activeGrowthChartPoint
-  const growthProductDonut = useMemo(() => {
-    const colors = ['#22c55e', '#3b82f6', '#eab308', '#f97316', '#8b5cf6'];
-    const map = {};
-    filteredGrowthSales.forEach(sale => {
-      if (!sale.items) return;
-      sale.items.forEach(item => {
-        const name = item.product_name || 'Unknown';
-        if (!map[name]) map[name] = { name, value: 0 };
-        map[name].value += item.quantity;
-      });
-    });
-    return Object.values(map)
-      .filter(v => v.value > 0)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5)
-      .map((item, idx) => ({ ...item, color: colors[idx % colors.length] }));
-  }, [filteredGrowthSales]);
-
-  // Sales table columns
-  const salesColumns = useMemo(() => [
-    { header: 'Transaction ID', accessor: 'transaction_id' },
-    {
-      header: 'Customer',
-      accessor: 'customer_name',
-      cell: (row) => <span className="text-gray-700 font-medium">{row.customer_name}</span>,
-    },
-    {
-      header: 'Items',
-      accessor: 'items_count',
-      cell: (row) => <span className="font-medium">{row.items_count} items</span>,
-    },
-    {
-      header: 'Qty Sold',
-      accessor: 'total_quantity',
-      cell: (row) => <span className="font-semibold text-gray-800">{row.total_quantity?.toLocaleString()}</span>,
-    },
-    {
-      header: 'Total',
-      accessor: 'total',
-      cell: (row) => <span className="font-bold text-green-600">{row.total_formatted}</span>,
-    },
-    {
-      header: 'Payment',
-      accessor: 'payment_method',
-      cell: (row) => (
-        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${
-          row.payment_method === 'cash'
-            ? 'bg-green-50 text-green-700 border border-green-200'
-            : 'bg-blue-50 text-blue-700 border border-blue-200'
-        }`}>
-          {row.payment_method}
-        </span>
-      ),
-    },
-    { header: 'Date', accessor: 'date_formatted' },
-  ], []);
 
   // ─── Columns ─────────────────────────────────────────────────
 
@@ -1361,69 +1386,206 @@ const Inventory = () => {
             <StatsCard label="Avg. Transaction" value={`₱${Number(growthStats.avgTransaction).toLocaleString()}`} unit="per sale" icon={TrendingUp} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
           </div>
 
-          {/* Chart + Donuts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            <div className="lg:col-span-2">
-              <LineChart
-                title="Sales Trends"
-                subtitle={activeGrowthChartPoint ? `Filtered: ${activeGrowthChartPoint} — click dot again to clear` : "Revenue from completed sales"}
-                data={growthChartData}
-                lines={[{ dataKey: 'value', name: 'Revenue (₱)' }]}
-                height={280}
-                yAxisUnit="₱"
-                tabs={[
-                  { label: 'Daily', value: 'daily' },
-                  { label: 'Monthly', value: 'monthly' },
-                  { label: 'Yearly', value: 'yearly' },
-                ]}
-                activeTab={growthChartPeriod}
-                onTabChange={(val) => { setGrowthChartPeriod(val); setActiveGrowthChartPoint(null); }}
-                onDotClick={setActiveGrowthChartPoint}
-                activePoint={activeGrowthChartPoint}
-                summaryStats={[
-                  { label: 'Transactions', value: filteredGrowthSales.length.toString(), color: 'text-primary-600' },
-                  { label: 'Avg Sale', value: `₱${filteredGrowthSales.length > 0 ? Math.round(filteredGrowthSales.reduce((s, sale) => s + (sale.total || 0), 0) / filteredGrowthSales.length).toLocaleString() : 0}`, color: 'text-primary-600' },
-                  { label: 'Units Sold', value: `${filteredGrowthSales.reduce((s, sale) => s + (sale.total_quantity || 0), 0).toLocaleString()}`, color: 'text-green-600' },
-                ]}
-              />
-            </div>
-            <div className="space-y-4">
-              <DonutChart
-                title="Sales by Variety"
-                data={growthVarietyDonut}
-                centerValue={growthVarietyDonut.reduce((s, v) => s + v.value, 0).toString()}
-                centerLabel="Units"
-                height={175}
-                innerRadius={56}
-                outerRadius={78}
-                showLegend={true}
-                horizontalLegend={true}
-              />
-              <DonutChart
-                title="Top Selling Products"
-                data={growthProductDonut}
-                centerValue={`${growthProductDonut.length}`}
-                centerLabel="Products"
-                height={140}
-                innerRadius={45}
-                outerRadius={62}
-                showLegend={true}
-                horizontalLegend={true}
-              />
-            </div>
+          {/* Sales Trends Chart (full width) */}
+          <div className="mb-6">
+            <LineChart
+              title="Sales Trends"
+              subtitle={activeGrowthChartPoint ? `Filtered: ${activeGrowthChartPoint} — click dot again to clear` : "Revenue from completed sales"}
+              data={growthChartData}
+              lines={[{ dataKey: 'value', name: 'Revenue (₱)' }]}
+              height={280}
+              yAxisUnit="₱"
+              tabs={[
+                { label: 'Daily', value: 'daily' },
+                { label: 'Weekly', value: 'weekly' },
+                { label: 'Monthly', value: 'monthly' },
+                { label: 'Bi-Annually', value: 'bi-annually' },
+                { label: 'Annually', value: 'annually' },
+              ]}
+              activeTab={growthChartPeriod === 'custom' ? null : growthChartPeriod}
+              onTabChange={(val) => { setGrowthChartPeriod(val); setActiveGrowthChartPoint(null); }}
+              onDotClick={setActiveGrowthChartPoint}
+              activePoint={activeGrowthChartPoint}
+              summaryStats={[
+                { label: 'Transactions', value: filteredGrowthSales.length.toString(), color: 'text-primary-600' },
+                { label: 'Avg Sale', value: `₱${filteredGrowthSales.length > 0 ? Math.round(filteredGrowthSales.reduce((s, sale) => s + (sale.total || 0), 0) / filteredGrowthSales.length).toLocaleString() : 0}`, color: 'text-primary-600' },
+                { label: 'Units Sold', value: `${filteredGrowthSales.reduce((s, sale) => s + (sale.total_quantity || 0), 0).toLocaleString()}`, color: 'text-green-600' },
+              ]}
+            />
           </div>
 
-          {/* Sales Records Table */}
-          <DataTable
-            title="Sales Records"
-            subtitle={activeGrowthChartPoint ? `Filtered: ${activeGrowthChartPoint} — click dot to clear` : 'All completed sale transactions'}
-            columns={salesColumns}
-            data={filteredGrowthSales}
-            searchPlaceholder="Search sales..."
-            filterField="payment_method"
-            filterPlaceholder="All Payments"
-            dateFilterField="created_at"
-          />
+          {/* ── Per-Product Growth Table ── */}
+          {loadingProductGrowth ? (
+            <SkeletonTable rows={5} columns={8} />
+          ) : (
+            <DataTable
+              title="Product Sales Growth"
+              subtitle={
+                productGrowth?.period === 'daily' ? `Today vs Yesterday  •  ${productGrowth?.current_range?.start || ''}` :
+                productGrowth?.period === 'weekly' ? `This Week vs Last Week  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
+                productGrowth?.period === 'monthly' ? `This Month vs Last Month  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
+                productGrowth?.period === 'bi-annually' ? `Current Half vs Previous Half  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
+                productGrowth?.period === 'annually' ? `This Year vs Last Year  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
+                productGrowth?.period === 'custom' ? `Custom Range  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
+                'Comparing current vs previous period'
+              }
+              columns={[
+                {
+                  header: 'Product',
+                  accessor: 'product_name',
+                  cell: (row) => (
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: row.variety_color }} />
+                      <div className="min-w-0">
+                        <span className="font-bold text-content text-sm">{row.product_name}</span>
+                        <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${row.variety_color}20`, color: row.variety_color }}>
+                          {row.variety_name}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  header: 'Stock Before',
+                  accessor: 'stock_before',
+                  cell: (row) => <span className="font-semibold text-gray-600">{(row.stock_before ?? 0).toLocaleString()}</span>
+                },
+                {
+                  header: 'Units Sold',
+                  accessor: 'current_qty',
+                  cell: (row) => (
+                    <div>
+                      <span className="font-bold text-red-500">{row.current_qty.toLocaleString()}</span>
+                      <p className="text-[10px] text-secondary">prev: {row.previous_qty.toLocaleString()}</p>
+                    </div>
+                  )
+                },
+                {
+                  header: 'Current Stock',
+                  accessor: 'current_stock',
+                  cell: (row) => (
+                    <span className={`font-bold ${row.current_stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                      {row.current_stock.toLocaleString()}
+                    </span>
+                  )
+                },
+                {
+                  header: 'Qty Growth',
+                  accessor: 'qty_growth',
+                  cell: (row) => (
+                    <div className={`flex items-center gap-1 ${
+                      row.trend === 'up' ? 'text-green-600' : row.trend === 'down' ? 'text-red-500' : 'text-gray-400'
+                    }`}>
+                      {row.trend === 'up' && <TrendingUp size={14} />}
+                      {row.trend === 'down' && <TrendingDown size={14} />}
+                      {row.trend === 'stable' && <Minus size={12} />}
+                      <span className="text-sm font-bold">
+                        {row.qty_growth > 0 && '+'}{row.qty_growth}%
+                      </span>
+                    </div>
+                  )
+                },
+                {
+                  header: 'Revenue',
+                  accessor: 'current_revenue',
+                  cell: (row) => (
+                    <div>
+                      <span className="font-bold text-green-600">₱{Number(row.current_revenue).toLocaleString()}</span>
+                      <p className="text-[10px] text-secondary">prev: ₱{Number(row.previous_revenue).toLocaleString()}</p>
+                    </div>
+                  )
+                },
+                {
+                  header: 'Revenue Growth',
+                  accessor: 'revenue_growth',
+                  cell: (row) => (
+                    <div className={`flex items-center gap-1 ${
+                      row.revenue_growth > 0 ? 'text-green-600' : row.revenue_growth < 0 ? 'text-red-500' : 'text-gray-400'
+                    }`}>
+                      {row.revenue_growth > 0 && <TrendingUp size={14} />}
+                      {row.revenue_growth < 0 && <TrendingDown size={14} />}
+                      {row.revenue_growth === 0 && <Minus size={12} />}
+                      <span className="text-sm font-bold">
+                        {row.revenue_growth > 0 && '+'}{row.revenue_growth}%
+                      </span>
+                    </div>
+                  )
+                },
+                {
+                  header: 'Trend',
+                  accessor: 'trend',
+                  cell: (row) => (
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                      row.trend === 'up' ? 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-500/20 dark:text-green-400' :
+                      row.trend === 'down' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-500/20 dark:text-red-400' :
+                      'bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-400'
+                    }`}>
+                      {row.trend === 'up' && <TrendingUp size={12} />}
+                      {row.trend === 'down' && <TrendingDown size={12} />}
+                      {row.trend === 'stable' && <Minus size={10} />}
+                      {row.trend === 'up' ? 'Up' : row.trend === 'down' ? 'Down' : 'Stable'}
+                    </span>
+                  )
+                },
+              ]}
+              data={productGrowth?.products || []}
+              searchPlaceholder="Search products..."
+              filterField="trend"
+              filterPlaceholder="All Trends"
+              filterOptions={[
+                { value: 'up', label: 'Up' },
+                { value: 'down', label: 'Down' },
+                { value: 'stable', label: 'Stable' },
+              ]}
+              pagination={true}
+              defaultItemsPerPage={10}
+              headerRight={
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Period selector pills */}
+                  <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+                    {[
+                      { label: 'Daily', value: 'daily' },
+                      { label: 'Weekly', value: 'weekly' },
+                      { label: 'Monthly', value: 'monthly' },
+                      { label: 'Bi-Annual', value: 'bi-annually' },
+                      { label: 'Annual', value: 'annually' },
+                      { label: 'Custom', value: 'custom' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setGrowthChartPeriod(opt.value); }}
+                        className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                          growthChartPeriod === opt.value
+                            ? 'bg-white dark:bg-gray-600 text-button-600 dark:text-button-400 shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Custom date inputs */}
+                  {growthChartPeriod === 'custom' && (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={growthCustomStart}
+                        onChange={(e) => setGrowthCustomStart(e.target.value)}
+                        className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-content focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                      />
+                      <span className="text-xs text-secondary">to</span>
+                      <input
+                        type="date"
+                        value={growthCustomEnd}
+                        onChange={(e) => setGrowthCustomEnd(e.target.value)}
+                        className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-content focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              }
+            />
+          )}
         </>
       )}
 
