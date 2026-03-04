@@ -125,11 +125,11 @@ class DeliveryAssignmentService
     }
 
     /**
-     * Delete a delivery assignment
+     * Archive a delivery assignment (move to archives)
      */
     public function deleteDelivery(DeliveryAssignment $delivery): bool
     {
-        $result = $delivery->delete();
+        $result = $delivery->archive();
         $this->clearCache();
         return $result;
     }

@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasArchiving;
 
 class Procurement extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasArchiving;
 
     protected $fillable = [
         'supplier_id',
@@ -21,6 +22,8 @@ class Procurement extends Model
         'description',
         'total_cost',
         'status',
+        'is_archived',
+        'archived_at',
     ];
 
     protected $casts = [

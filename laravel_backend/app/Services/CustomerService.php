@@ -55,11 +55,11 @@ class CustomerService
     }
 
     /**
-     * Delete a customer (soft delete)
+     * Archive a customer (move to archives)
      */
     public function deleteCustomer(Customer $customer): bool
     {
-        $result = $customer->delete();
+        $result = $customer->archive();
         $this->clearCache();
         return $result;
     }

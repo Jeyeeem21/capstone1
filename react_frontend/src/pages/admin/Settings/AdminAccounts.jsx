@@ -198,7 +198,7 @@ const AdminAccounts = () => {
       </FormModal>
 
       {/* Delete Confirm */}
-      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Remove Admin Account" message={`Are you sure you want to remove "${selectedItem?.name}"? Their admin access will be permanently revoked.`} confirmText={submitting ? 'Removing...' : 'Remove'} variant="warning" icon={Trash2} />
+      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Archive Admin Account" message={`Are you sure you want to archive "${selectedItem?.name}"? Their admin access will be revoked. You can restore this record from the Archives.`} confirmText={submitting ? 'Archiving...' : 'Archive'} variant="warning" icon={Trash2} />
     </div>
   );
 };

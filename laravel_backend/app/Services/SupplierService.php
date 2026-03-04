@@ -55,11 +55,11 @@ class SupplierService
     }
 
     /**
-     * Delete a supplier (soft delete)
+     * Archive a supplier (move to archives)
      */
     public function deleteSupplier(Supplier $supplier): bool
     {
-        $result = $supplier->delete();
+        $result = $supplier->archive();
         $this->clearCache();
         return $result;
     }

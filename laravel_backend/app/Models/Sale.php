@@ -16,7 +16,10 @@ class Sale extends Model
         'amount_tendered',
         'change_amount',
         'payment_method',
+        'payment_status',
         'reference_number',
+        'payment_proof',
+        'paid_at',
         'status',
         'notes',
         'delivery_address',
@@ -25,6 +28,10 @@ class Sale extends Model
         'driver_plate_number',
         'return_reason',
         'return_notes',
+        'return_proof',
+        'return_pickup_driver',
+        'return_pickup_plate',
+        'return_pickup_date',
     ];
 
     protected $casts = [
@@ -35,6 +42,10 @@ class Sale extends Model
         'amount_tendered' => 'decimal:2',
         'change_amount' => 'decimal:2',
         'distance_km' => 'decimal:2',
+        'return_proof' => 'array',
+        'return_pickup_date' => 'date',
+        'payment_proof' => 'array',
+        'paid_at' => 'datetime',
     ];
 
     /**

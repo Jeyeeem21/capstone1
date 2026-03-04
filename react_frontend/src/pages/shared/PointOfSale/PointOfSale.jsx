@@ -1,4 +1,4 @@
-import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation } from 'lucide-react';
+import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
 import { useState, useMemo, memo, useCallback, useRef, useEffect } from 'react';
 import { PageHeader } from '../../../components/common';
 import { Button, StatsCard, useToast } from '../../../components/ui';
@@ -140,6 +140,12 @@ const PointOfSale = () => {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [cashTendered, setCashTendered] = useState('');
   const [gcashReference, setGcashReference] = useState('');
+  const [gcashProofFiles, setGcashProofFiles] = useState([]);
+  const [gcashProofPreviews, setGcashProofPreviews] = useState([]);
+  const [showCamera, setShowCamera] = useState(false);
+  const cameraVideoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const gcashProofInputRef = useRef(null);
   const [lastSale, setLastSale] = useState(null);
   const [voidSearch, setVoidSearch] = useState('');
   const [selectedVoidTxn, setSelectedVoidTxn] = useState(null);
@@ -243,7 +249,9 @@ const PointOfSale = () => {
         variety: p.variety_name,
         variety_color: p.variety_color,
         variety_id: p.variety_id,
+        weight_formatted: p.weight_formatted || null,
       })),
+
     [productsRaw]
   );
 
@@ -492,7 +500,65 @@ const PointOfSale = () => {
     setShowCustomerModal(false);
     setCashTendered('');
     setGcashReference('');
+    setGcashProofFiles([]);
+    setGcashProofPreviews([]);
+    setShowCamera(false);
+    stopCamera();
     setShowPaymentModal(true);
+  };
+
+  // Camera helpers
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      cameraStreamRef.current = stream;
+      setShowCamera(true);
+      setTimeout(() => {
+        if (cameraVideoRef.current) cameraVideoRef.current.srcObject = stream;
+      }, 100);
+    } catch {
+      toast.error('Camera Error', 'Could not access camera. Please check permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(t => t.stop());
+      cameraStreamRef.current = null;
+    }
+    setShowCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (!cameraVideoRef.current) return;
+    const video = cameraVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `gcash_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setGcashProofFiles(prev => [...prev, file]);
+      setGcashProofPreviews(prev => [...prev, URL.createObjectURL(blob)]);
+      stopCamera();
+    }, 'image/jpeg', 0.85);
+  };
+
+  const handleGcashProofUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setGcashProofFiles(prev => [...prev, ...files]);
+    setGcashProofPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+    e.target.value = '';
+  };
+
+  const removeGcashProof = (idx) => {
+    setGcashProofFiles(prev => prev.filter((_, i) => i !== idx));
+    setGcashProofPreviews(prev => {
+      URL.revokeObjectURL(prev[idx]);
+      return prev.filter((_, i) => i !== idx);
+    });
   };
 
   const confirmPayment = async () => {
@@ -508,25 +574,52 @@ const PointOfSale = () => {
 
     setSaving(true);
     try {
-      const payload = {
-        items: cart.map(item => ({
-          product_id: item.id,
-          quantity: item.quantity,
-          unit_price: item.price,
-        })),
-        customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
-        new_customer_name: newCustomerName || null,
-        new_customer_contact: newCustomerContact || null,
-        new_customer_email: newCustomerEmail || null,
-        payment_method: paymentMethod,
-        amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
-        reference_number: paymentMethod === 'gcash' ? gcashReference : null,
-        delivery_fee: forDelivery ? deliveryFee : 0,
-        distance_km: forDelivery && distanceKm ? parseFloat(distanceKm) : null,
-        delivery_address: forDelivery ? deliveryAddress : null,
-      };
+      let response;
 
-      const response = await apiClient.post('/sales/order', payload);
+      if (paymentMethod === 'gcash' && gcashProofFiles.length > 0) {
+        // Use FormData when there are proof files
+        const formData = new FormData();
+        cart.forEach((item, i) => {
+          formData.append(`items[${i}][product_id]`, item.id);
+          formData.append(`items[${i}][quantity]`, item.quantity);
+          formData.append(`items[${i}][unit_price]`, item.price);
+        });
+        if (selectedCustomerId) formData.append('customer_id', parseInt(selectedCustomerId));
+        if (newCustomerName) formData.append('new_customer_name', newCustomerName);
+        if (newCustomerContact) formData.append('new_customer_contact', newCustomerContact);
+        if (newCustomerEmail) formData.append('new_customer_email', newCustomerEmail);
+        formData.append('payment_method', paymentMethod);
+        formData.append('amount_tendered', total);
+        formData.append('reference_number', gcashReference);
+        if (forDelivery) {
+          formData.append('delivery_fee', deliveryFee);
+          if (distanceKm) formData.append('distance_km', parseFloat(distanceKm));
+          if (deliveryAddress) formData.append('delivery_address', deliveryAddress);
+        } else {
+          formData.append('delivery_fee', 0);
+        }
+        gcashProofFiles.forEach(file => formData.append('payment_proof[]', file));
+        response = await apiClient.post('/sales/order', formData);
+      } else {
+        const payload = {
+          items: cart.map(item => ({
+            product_id: item.id,
+            quantity: item.quantity,
+            unit_price: item.price,
+          })),
+          customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+          new_customer_name: newCustomerName || null,
+          new_customer_contact: newCustomerContact || null,
+          new_customer_email: newCustomerEmail || null,
+          payment_method: paymentMethod,
+          amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
+          reference_number: paymentMethod === 'gcash' ? gcashReference : null,
+          delivery_fee: forDelivery ? deliveryFee : 0,
+          distance_km: forDelivery && distanceKm ? parseFloat(distanceKm) : null,
+          delivery_address: forDelivery ? deliveryAddress : null,
+        };
+        response = await apiClient.post('/sales/order', payload);
+      }
       
       if (response.success && response.data) {
         const customerName = newCustomerName || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.label : null);
@@ -662,7 +755,7 @@ const PointOfSale = () => {
                   <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-xl mx-auto mb-2 flex items-center justify-center border border-primary-200">
                     <Package size={20} className="text-primary-600" />
                   </div>
-                  <h4 className="font-semibold text-gray-800 text-xs mb-1 line-clamp-2">{product.name}</h4>
+                  <h4 className="font-semibold text-gray-800 text-xs mb-1 line-clamp-2">{product.name}{product.weight_formatted ? ` (${product.weight_formatted})` : ''}</h4>
                   <p className="text-primary-600 font-bold text-sm">₱{product.price.toLocaleString()}</p>
                   <p className={`text-[10px] mt-0.5 ${product.stock > 0 ? 'text-gray-400' : 'text-amber-500 font-medium'}`}>{product.stock > 0 ? `${product.stock} in stock` : 'No stock'}</p>
                   <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-medium bg-primary-50 text-primary-600 rounded-full border border-primary-200">
@@ -704,7 +797,7 @@ const PointOfSale = () => {
                     {cart.map((item) => (
                       <div key={item.id} className="flex items-center justify-between p-2.5 bg-primary-50/30 rounded-lg border-2 border-primary-200">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-800 text-xs truncate">{item.name}</p>
+                          <p className="font-semibold text-gray-800 text-xs truncate">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</p>
                           <p className="text-primary-600 text-xs font-medium">₱{item.price.toLocaleString()} × {item.quantity}</p>
                         </div>
                         <div className="flex items-center gap-1">
@@ -897,7 +990,7 @@ const PointOfSale = () => {
                       {cart.map((item) => (
                         <div key={item.id} className="flex items-center justify-between p-2.5 bg-primary-50/30 rounded-lg border-2 border-primary-200">
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-800 text-xs truncate">{item.name}</p>
+                            <p className="font-semibold text-gray-800 text-xs truncate">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</p>
                             <p className="text-primary-600 text-xs font-medium">₱{item.price.toLocaleString()} × {item.quantity}</p>
                           </div>
                           <div className="flex items-center gap-1">
@@ -1345,10 +1438,77 @@ const PointOfSale = () => {
                       />
                     </div>
 
+                    {/* Payment Proof Upload */}
+                    <div className="mb-4">
+                      <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+                        Payment Proof <span className="font-normal normal-case text-gray-400">(Optional)</span>
+                      </label>
+
+                      {/* Camera View */}
+                      {showCamera && (
+                        <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-blue-300">
+                          <video ref={cameraVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
+                          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                            <button onClick={capturePhoto} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-blue-600 flex items-center gap-1.5">
+                              <Camera size={14} /> Capture
+                            </button>
+                            <button onClick={stopCamera} className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5">
+                              <X size={14} /> Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Proof Previews */}
+                      {gcashProofPreviews.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {gcashProofPreviews.map((url, idx) => (
+                            <div key={idx} className="relative group">
+                              <img src={url} alt={`Proof ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200" />
+                              <button
+                                onClick={() => removeGcashProof(idx)}
+                                className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Upload + Camera Buttons */}
+                      {!showCamera && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => gcashProofInputRef.current?.click()}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 text-xs font-semibold transition-all"
+                          >
+                            <ImageIcon size={14} /> Upload Image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={startCamera}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 text-xs font-semibold transition-all"
+                          >
+                            <Camera size={14} /> Open Camera
+                          </button>
+                          <input
+                            ref={gcashProofInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleGcashProofUpload}
+                            className="hidden"
+                          />
+                        </div>
+                      )}
+                    </div>
+
                     {/* GCash Info */}
                     <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
                       <p className="text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Payment Verification</p>
-                      <p className="text-xs text-blue-600">Enter the GCash reference number from the customer's payment confirmation as proof of payment.</p>
+                      <p className="text-xs text-blue-600">Enter the GCash reference number and optionally upload a screenshot or capture the payment confirmation as proof.</p>
                     </div>
                   </>
                 ) : paymentMethod === 'pay_later' ? (
@@ -1602,7 +1762,7 @@ const PointOfSale = () => {
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">Items Ordered</p>
                   {lastSale.items.map(item => (
                     <div key={item.id} className="flex justify-between text-xs py-0.5">
-                      <span className="text-gray-600">{item.name} ×{item.quantity}</span>
+                      <span className="text-gray-600">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''} ×{item.quantity}</span>
                       <span className="font-medium text-gray-700">₱{(item.price * item.quantity).toLocaleString()}</span>
                     </div>
                   ))}

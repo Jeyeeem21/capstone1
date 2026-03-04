@@ -57,11 +57,11 @@ class VarietyService
     }
 
     /**
-     * Delete a variety (soft delete)
+     * Archive a variety (move to archives)
      */
     public function deleteVariety(Variety $variety): bool
     {
-        $result = $variety->delete();
+        $result = $variety->archive();
         $this->clearCache();
         return $result;
     }

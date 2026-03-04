@@ -4,15 +4,17 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Traits\HasArchiving;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasApiTokens;
+    use HasFactory, Notifiable, TwoFactorAuthenticatable, HasApiTokens, SoftDeletes, HasArchiving;
 
     // Role constants
     const ROLE_SUPER_ADMIN = 'super_admin';
@@ -45,6 +47,8 @@ class User extends Authenticatable
         'truck_plate_number',
         'phone',
         'status',
+        'is_archived',
+        'archived_at',
         'date_hired',
     ];
 

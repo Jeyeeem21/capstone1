@@ -54,11 +54,11 @@ class DriverService
     }
 
     /**
-     * Delete a driver (soft delete)
+     * Archive a driver (move to archives)
      */
     public function deleteDriver(Driver $driver): bool
     {
-        $result = $driver->delete();
+        $result = $driver->archive();
         $this->clearCache();
         return $result;
     }

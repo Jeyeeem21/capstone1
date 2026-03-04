@@ -258,7 +258,7 @@ class DryingProcessService
     }
 
     /**
-     * Delete a drying process (soft delete)
+     * Archive a drying process (move to archives)
      * Reverts procurement status and restores batch remaining if needed
      */
     public function deleteDryingProcess(DryingProcess $drying): bool
@@ -327,7 +327,7 @@ class DryingProcessService
                 }
             }
 
-            $deleted = $drying->delete();
+            $deleted = $drying->archive();
             $this->clearCache();
             return $deleted;
         });

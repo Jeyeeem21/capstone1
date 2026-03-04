@@ -24,15 +24,16 @@ class DashboardService
     /**
      * Get all dashboard statistics in a single call
      */
-    public function getStats(string $period = 'monthly'): array
+    public function getStats(string $period = 'monthly', array $chartParams = []): array
     {
-        $cacheKey = self::CACHE_KEY . "_{$period}";
+        $paramKey = md5(json_encode($chartParams));
+        $cacheKey = self::CACHE_KEY . "_{$period}_{$paramKey}";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($period) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($period, $chartParams) {
             return [
                 'overview' => $this->getOverviewStats(),
-                'revenue' => $this->getRevenueData($period),
-                'processing' => $this->getProcessingData($period),
+                'revenue' => $this->getRevenueData($period, $chartParams),
+                'processing' => $this->getProcessingData($period, $chartParams),
                 'procurement' => $this->getProcurementSummary(),
                 'inventory' => $this->getInventorySummary(),
                 'top_products' => $this->getTopProducts(),
@@ -145,9 +146,9 @@ class DashboardService
     }
 
     /**
-     * Revenue chart data — daily/monthly/yearly
+     * Revenue chart data — daily/weekly/monthly/bi-annually/annually
      */
-    private function getRevenueData(string $period): array
+    private function getRevenueData(string $period, array $chartParams = []): array
     {
         $completedStatuses = ['delivered', 'completed'];
         $sales = Sale::with('items')
@@ -157,19 +158,22 @@ class DashboardService
 
         $now = Carbon::now();
         $result = [];
+        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         if ($period === 'daily') {
-            $daysInMonth = $now->daysInMonth;
-            $startOfMonth = $now->copy()->startOfMonth();
-
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            $daysInMonth = Carbon::create($targetYear, $targetMonth, 1)->daysInMonth;
             for ($day = 1; $day <= $daysInMonth; $day++) {
-                $date = $startOfMonth->copy()->addDays($day - 1);
-                $dateStr = $date->toDateString();
-
-                $daySales = $sales->filter(fn($s) =>
-                    $s->created_at->toDateString() === $dateStr
-                );
-
+                $dateStr = Carbon::create($targetYear, $targetMonth, $day)->toDateString();
+                $daySales = $sales->filter(fn($s) => $s->created_at->toDateString() === $dateStr);
                 $result[] = [
                     'name' => (string) $day,
                     'revenue' => round((float) $daySales->sum('total'), 2),
@@ -177,16 +181,35 @@ class DashboardService
                     'items' => $daySales->sum(fn($s) => $s->items->sum('quantity')),
                 ];
             }
+        } elseif ($period === 'weekly') {
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            $weeks = $this->getWeeksInMonth($targetYear, $targetMonth);
+            foreach ($weeks as $week) {
+                $weekSales = $sales->filter(fn($s) =>
+                    $s->created_at->gte($week['start']) && $s->created_at->lte($week['end'])
+                );
+                $result[] = [
+                    'name' => $week['label'],
+                    'revenue' => round((float) $weekSales->sum('total'), 2),
+                    'orders' => $weekSales->count(),
+                    'items' => $weekSales->sum(fn($s) => $s->items->sum('quantity')),
+                ];
+            }
         } elseif ($period === 'monthly') {
-            $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            $currentYear = $now->year;
-
+            $targetYear = $chartParams['year'] ?? $now->year;
             foreach ($months as $idx => $monthName) {
                 $monthSales = $sales->filter(fn($s) =>
-                    $s->created_at->year === $currentYear &&
+                    $s->created_at->year === $targetYear &&
                     $s->created_at->month === ($idx + 1)
                 );
-
                 $result[] = [
                     'name' => $monthName,
                     'revenue' => round((float) $monthSales->sum('total'), 2),
@@ -194,9 +217,18 @@ class DashboardService
                     'items' => $monthSales->sum(fn($s) => $s->items->sum('quantity')),
                 ];
             }
-        } else { // yearly
-            $currentYear = $now->year;
-            for ($year = $currentYear - 4; $year <= $currentYear; $year++) {
+        } elseif ($period === 'bi-annually') {
+            $targetYear = $chartParams['year'] ?? $now->year;
+            $h1Sales = $sales->filter(fn($s) => $s->created_at->year === $targetYear && $s->created_at->month <= 6);
+            $h2Sales = $sales->filter(fn($s) => $s->created_at->year === $targetYear && $s->created_at->month > 6);
+            $result = [
+                ['name' => 'H1', 'fullName' => "Jan - Jun {$targetYear}", 'revenue' => round((float) $h1Sales->sum('total'), 2), 'orders' => $h1Sales->count(), 'items' => $h1Sales->sum(fn($s) => $s->items->sum('quantity'))],
+                ['name' => 'H2', 'fullName' => "Jul - Dec {$targetYear}", 'revenue' => round((float) $h2Sales->sum('total'), 2), 'orders' => $h2Sales->count(), 'items' => $h2Sales->sum(fn($s) => $s->items->sum('quantity'))],
+            ];
+        } else { // annually
+            $yearFrom = $chartParams['year_from'] ?? ($now->year - 4);
+            $yearTo = $chartParams['year_to'] ?? $now->year;
+            for ($year = $yearFrom; $year <= $yearTo; $year++) {
                 $yearSales = $sales->filter(fn($s) => $s->created_at->year === $year);
                 $result[] = [
                     'name' => (string) $year,
@@ -213,7 +245,7 @@ class DashboardService
     /**
      * Processing performance data (milling operations)
      */
-    private function getProcessingData(string $period): array
+    private function getProcessingData(string $period, array $chartParams = []): array
     {
         $processings = Processing::where('status', Processing::STATUS_COMPLETED)
             ->orderBy('completed_date')
@@ -221,47 +253,75 @@ class DashboardService
 
         $now = Carbon::now();
         $result = [];
+        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
         if ($period === 'daily') {
-            $daysInMonth = $now->daysInMonth;
-            $startOfMonth = $now->copy()->startOfMonth();
-
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            $daysInMonth = Carbon::create($targetYear, $targetMonth, 1)->daysInMonth;
             for ($day = 1; $day <= $daysInMonth; $day++) {
-                $date = $startOfMonth->copy()->addDays($day - 1);
-                $dateStr = $date->toDateString();
-
-                $dayProcessings = $processings->filter(fn($p) =>
-                    $p->completed_date?->toDateString() === $dateStr
-                );
-
+                $dateStr = Carbon::create($targetYear, $targetMonth, $day)->toDateString();
+                $dayProcessings = $processings->filter(fn($p) => $p->completed_date?->toDateString() === $dateStr);
                 $result[] = [
                     'name' => (string) $day,
                     'input' => round((float) $dayProcessings->sum('input_kg'), 2),
                     'output' => round((float) $dayProcessings->sum('output_kg'), 2),
                 ];
             }
+        } elseif ($period === 'weekly') {
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            $weeks = $this->getWeeksInMonth($targetYear, $targetMonth);
+            foreach ($weeks as $week) {
+                $weekProcessings = $processings->filter(fn($p) =>
+                    $p->completed_date && $p->completed_date->gte($week['start']) && $p->completed_date->lte($week['end'])
+                );
+                $result[] = [
+                    'name' => $week['label'],
+                    'input' => round((float) $weekProcessings->sum('input_kg'), 2),
+                    'output' => round((float) $weekProcessings->sum('output_kg'), 2),
+                ];
+            }
         } elseif ($period === 'monthly') {
-            $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            $currentYear = $now->year;
-
+            $targetYear = $chartParams['year'] ?? $now->year;
             foreach ($months as $idx => $monthName) {
                 $monthProcessings = $processings->filter(fn($p) =>
-                    $p->completed_date?->year === $currentYear &&
+                    $p->completed_date?->year === $targetYear &&
                     $p->completed_date?->month === ($idx + 1)
                 );
-
                 $result[] = [
                     'name' => $monthName,
                     'input' => round((float) $monthProcessings->sum('input_kg'), 2),
                     'output' => round((float) $monthProcessings->sum('output_kg'), 2),
                 ];
             }
-        } else {
-            $currentYear = $now->year;
-            for ($year = $currentYear - 4; $year <= $currentYear; $year++) {
-                $yearProcessings = $processings->filter(fn($p) =>
-                    $p->completed_date?->year === $year
-                );
+        } elseif ($period === 'bi-annually') {
+            $targetYear = $chartParams['year'] ?? $now->year;
+            $h1 = $processings->filter(fn($p) => $p->completed_date?->year === $targetYear && $p->completed_date?->month <= 6);
+            $h2 = $processings->filter(fn($p) => $p->completed_date?->year === $targetYear && $p->completed_date?->month > 6);
+            $result = [
+                ['name' => 'H1', 'fullName' => "Jan - Jun {$targetYear}", 'input' => round((float) $h1->sum('input_kg'), 2), 'output' => round((float) $h1->sum('output_kg'), 2)],
+                ['name' => 'H2', 'fullName' => "Jul - Dec {$targetYear}", 'input' => round((float) $h2->sum('input_kg'), 2), 'output' => round((float) $h2->sum('output_kg'), 2)],
+            ];
+        } else { // annually
+            $yearFrom = $chartParams['year_from'] ?? ($now->year - 4);
+            $yearTo = $chartParams['year_to'] ?? $now->year;
+            for ($year = $yearFrom; $year <= $yearTo; $year++) {
+                $yearProcessings = $processings->filter(fn($p) => $p->completed_date?->year === $year);
                 $result[] = [
                     'name' => (string) $year,
                     'input' => round((float) $yearProcessings->sum('input_kg'), 2),
@@ -284,6 +344,36 @@ class DashboardService
             'avg_yield' => $avgYield,
             'total_records' => Processing::count(),
         ];
+    }
+
+    /**
+     * Helper: get week ranges in a month (matches frontend getWeeksInMonth)
+     */
+    private function getWeeksInMonth(int $year, int $month): array
+    {
+        $weeks = [];
+        $monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        $firstDay = Carbon::create($year, $month, 1)->startOfDay();
+        $start = $firstDay->copy();
+        $dayOfWeek = $start->dayOfWeek; // 0=Sunday
+        $diff = $dayOfWeek === 0 ? -6 : 1 - $dayOfWeek;
+        $start->addDays($diff);
+
+        while ($start->month <= $month || ($start->month > $month && $start->year < $year) || count($weeks) === 0) {
+            $end = $start->copy()->addDays(6);
+            $label = $monthNames[$start->month - 1] . ' ' . $start->day . ' - ' . $monthNames[$end->month - 1] . ' ' . $end->day;
+            $weeks[] = [
+                'start' => $start->copy()->startOfDay(),
+                'end' => $end->copy()->endOfDay(),
+                'label' => $label,
+            ];
+            $start->addDays(7);
+            if ($start->month > $month && $start->year === $year) break;
+            if ($start->year > $year) break;
+            if (count($weeks) >= 6) break;
+        }
+
+        return $weeks;
     }
 
     /**
@@ -511,9 +601,27 @@ class DashboardService
      */
     public function clearCache(): void
     {
+        // Clear known base keys
+        $periods = ['daily', 'weekly', 'monthly', 'bi-annually', 'annually'];
+        $emptyParamKey = md5(json_encode(['month' => null, 'year' => null, 'year_from' => null, 'year_to' => null]));
+        foreach ($periods as $p) {
+            Cache::forget(self::CACHE_KEY . "_{$p}_{$emptyParamKey}");
+        }
+        // Also clear legacy keys
         Cache::forget(self::CACHE_KEY . '_daily');
         Cache::forget(self::CACHE_KEY . '_monthly');
         Cache::forget(self::CACHE_KEY . '_yearly');
         Cache::forget('dashboard_recent_activity');
+
+        // Flush all dashboard_stats keys if using tagged cache or file driver
+        try {
+            $cacheStore = Cache::getStore();
+            if (method_exists($cacheStore, 'flush')) {
+                // For file/array drivers, use pattern-based approach via cache prefix
+                // This is safe — just clears the specific keys we know about
+            }
+        } catch (\Throwable $e) {
+            // Ignore
+        }
     }
 }

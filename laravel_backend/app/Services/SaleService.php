@@ -65,7 +65,10 @@ class SaleService
                 'amount_tendered' => (float) ($data['amount_tendered'] ?? 0),
                 'change_amount' => 0,
                 'payment_method' => $data['payment_method'] ?? 'cash',
+                'payment_status' => in_array($data['payment_method'] ?? 'cash', ['cash', 'gcash']) ? 'paid' : 'not_paid',
                 'reference_number' => $data['reference_number'] ?? null,
+                'payment_proof' => $data['payment_proof'] ?? null,
+                'paid_at' => in_array($data['payment_method'] ?? 'cash', ['cash', 'gcash']) ? now() : null,
                 'status' => 'pending',
                 'notes' => $data['notes'] ?? null,
                 'delivery_address' => $data['delivery_address'] ?? null,
@@ -115,6 +118,49 @@ class SaleService
     }
 
     /**
+     * Mark an order as paid (for pay_later / COD orders).
+     */
+    public function markPaid(int $id, array $data): Sale
+    {
+        return DB::transaction(function () use ($id, $data) {
+            $sale = Sale::findOrFail($id);
+
+            if ($sale->payment_status === 'paid') {
+                throw new \Exception('This order is already marked as paid.');
+            }
+
+            $updateData = [
+                'payment_status' => 'paid',
+                'paid_at' => now(),
+            ];
+
+            // Allow changing payment method when paying (e.g., pay_later → cash)
+            if (!empty($data['payment_method'])) {
+                $updateData['payment_method'] = $data['payment_method'];
+            }
+
+            if (!empty($data['reference_number'])) {
+                $updateData['reference_number'] = $data['reference_number'];
+            }
+
+            if (!empty($data['amount_tendered'])) {
+                $updateData['amount_tendered'] = (float) $data['amount_tendered'];
+                $updateData['change_amount'] = max(0, (float) $data['amount_tendered'] - (float) $sale->total);
+            }
+
+            if (!empty($data['payment_proof'])) {
+                $updateData['payment_proof'] = $data['payment_proof'];
+            }
+
+            $sale->update($updateData);
+
+            $this->clearCache();
+
+            return $sale->load(['customer', 'items.product.variety']);
+        });
+    }
+
+    /**
      * Update order status with business logic.
      * Stock is deducted when status changes to 'processing'.
      * Stock is restored when cancelled (if was already deducted).
@@ -131,7 +177,7 @@ class SaleService
                 'processing' => ['shipped', 'cancelled'],
                 'shipped' => ['delivered', 'cancelled'],
                 'delivered' => ['return_requested'],
-                'return_requested' => ['returned', 'delivered'],
+                'picking_up' => ['returned'],
             ];
 
             $allowed = $validTransitions[$oldStatus] ?? [];
@@ -209,15 +255,66 @@ class SaleService
     }
 
     /**
-     * Process a return — restore stock + mark returned.
+     * Request a return — mark as return_requested (no stock restore yet).
      */
-    public function processReturn(int $saleId, string $reason, ?string $notes = null): Sale
+    public function processReturn(int $saleId, string $reason, ?string $notes = null, ?array $proofPaths = null): Sale
     {
-        return DB::transaction(function () use ($saleId, $reason, $notes) {
+        return DB::transaction(function () use ($saleId, $reason, $notes, $proofPaths) {
             $sale = Sale::with('items.product')->findOrFail($saleId);
 
-            if (!in_array($sale->status, ['delivered', 'return_requested'])) {
-                throw new \Exception('Only delivered or return-requested orders can be returned.');
+            if ($sale->status !== 'delivered') {
+                throw new \Exception('Only delivered orders can request a return.');
+            }
+
+            $sale->update([
+                'status' => 'return_requested',
+                'return_reason' => $reason,
+                'return_notes' => $notes,
+                'return_proof' => $proofPaths,
+            ]);
+
+            $this->clearCache();
+
+            return $sale->load(['customer', 'items.product.variety']);
+        });
+    }
+
+    /**
+     * Accept a return — assign pickup driver & date, mark as picking_up.
+     * Stock is NOT restored yet — that happens when markReturned is called.
+     */
+    public function acceptReturn(int $saleId, ?string $pickupDriver = null, ?string $pickupPlate = null, ?string $pickupDate = null): Sale
+    {
+        return DB::transaction(function () use ($saleId, $pickupDriver, $pickupPlate, $pickupDate) {
+            $sale = Sale::with('items.product')->findOrFail($saleId);
+
+            if ($sale->status !== 'return_requested') {
+                throw new \Exception('Only return-requested orders can be accepted.');
+            }
+
+            $sale->update([
+                'status' => 'picking_up',
+                'return_pickup_driver' => $pickupDriver,
+                'return_pickup_plate' => $pickupPlate,
+                'return_pickup_date' => $pickupDate,
+            ]);
+
+            $this->clearCache();
+
+            return $sale->load(['customer', 'items.product.variety']);
+        });
+    }
+
+    /**
+     * Mark a picking_up order as returned — restore stock + decrement customer orders.
+     */
+    public function markReturned(int $saleId): Sale
+    {
+        return DB::transaction(function () use ($saleId) {
+            $sale = Sale::with('items.product')->findOrFail($saleId);
+
+            if ($sale->status !== 'picking_up') {
+                throw new \Exception('Only orders being picked up can be marked as returned.');
             }
 
             // Restore stock
@@ -236,7 +333,7 @@ class SaleService
                     'kg_amount' => $product->weight ? $item->quantity * (float) $product->weight : null,
                     'source_type' => 'order_return',
                     'source_id' => $sale->id,
-                    'notes' => "Order returned ({$sale->transaction_id}) — {$reason}",
+                    'notes' => "Order returned ({$sale->transaction_id}) — {$sale->return_reason}",
                 ]);
             }
 
@@ -247,14 +344,37 @@ class SaleService
 
             $sale->update([
                 'status' => 'returned',
-                'return_reason' => $reason,
-                'return_notes' => $notes,
             ]);
 
             $this->clearCache();
             Cache::forget('products_all');
             Cache::forget('products_featured');
             Cache::forget('stock_logs_all');
+
+            return $sale->load(['customer', 'items.product.variety']);
+        });
+    }
+
+    /**
+     * Reject a return — revert to delivered status.
+     */
+    public function rejectReturn(int $saleId): Sale
+    {
+        return DB::transaction(function () use ($saleId) {
+            $sale = Sale::findOrFail($saleId);
+
+            if ($sale->status !== 'return_requested') {
+                throw new \Exception('Only return-requested orders can be rejected.');
+            }
+
+            $sale->update([
+                'status' => 'delivered',
+                'return_reason' => null,
+                'return_notes' => null,
+                'return_proof' => null,
+            ]);
+
+            $this->clearCache();
 
             return $sale->load(['customer', 'items.product.variety']);
         });

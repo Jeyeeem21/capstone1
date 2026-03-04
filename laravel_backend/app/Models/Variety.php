@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasArchiving;
 
 class Variety extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasArchiving;
 
     protected $table = 'varieties';
 
@@ -17,6 +18,8 @@ class Variety extends Model
         'description',
         'color',
         'status',
+        'is_archived',
+        'archived_at',
         'products_count',
     ];
 

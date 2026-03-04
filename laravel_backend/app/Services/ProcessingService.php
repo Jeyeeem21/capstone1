@@ -311,7 +311,7 @@ class ProcessingService
     }
 
     /**
-     * Delete a processing (soft delete)
+     * Archive a processing (move to archives)
      * Returns the input_kg back to all linked drying sources
      */
     public function deleteProcessing(Processing $processing): bool
@@ -332,7 +332,7 @@ class ProcessingService
                 }
             }
             
-            $deleted = $processing->delete();
+            $deleted = $processing->archive();
             $this->clearCache();
             return $deleted;
         });

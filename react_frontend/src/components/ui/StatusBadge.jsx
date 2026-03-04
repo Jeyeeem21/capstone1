@@ -15,7 +15,7 @@ const StatusBadge = ({ status, variant }) => {
     if (['active', 'completed', 'dried', 'in stock', 'paid', 'approved', 'delivered'].includes(statusLower)) {
       return variants.success;
     }
-    if (['pending', 'low stock', 'drying', 'warning', 'postponed', 'return requested'].includes(statusLower)) {
+    if (['pending', 'low stock', 'drying', 'warning', 'postponed', 'return requested', 'picking up'].includes(statusLower)) {
       return variants.warning;
     }
     if (['inactive', 'cancelled', 'voided', 'out of stock', 'rejected', 'failed', 'returned'].includes(statusLower)) {

@@ -76,11 +76,11 @@ class ProcurementService
     }
 
     /**
-     * Delete a procurement (soft delete)
+     * Archive a procurement (move to archives)
      */
     public function deleteProcurement(Procurement $procurement): bool
     {
-        $result = $procurement->delete();
+        $result = $procurement->archive();
         $this->clearCache();
         return $result;
     }

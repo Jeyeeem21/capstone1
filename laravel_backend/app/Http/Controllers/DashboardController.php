@@ -23,11 +23,18 @@ class DashboardController extends Controller
         try {
             $period = $request->query('period', 'monthly');
 
-            if (!in_array($period, ['daily', 'monthly', 'yearly'])) {
+            if (!in_array($period, ['daily', 'weekly', 'monthly', 'bi-annually', 'annually'])) {
                 $period = 'monthly';
             }
 
-            $stats = $this->dashboardService->getStats($period);
+            $chartParams = [
+                'month' => $request->query('month'),
+                'year' => $request->query('year') ? (int) $request->query('year') : null,
+                'year_from' => $request->query('year_from') ? (int) $request->query('year_from') : null,
+                'year_to' => $request->query('year_to') ? (int) $request->query('year_to') : null,
+            ];
+
+            $stats = $this->dashboardService->getStats($period, $chartParams);
 
             return $this->successResponse($stats, 'Dashboard statistics retrieved successfully');
         } catch (\Exception $e) {

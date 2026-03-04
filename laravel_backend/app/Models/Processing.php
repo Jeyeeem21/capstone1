@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Traits\HasArchiving;
 
 class Processing extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasArchiving;
 
     protected $fillable = [
         'procurement_id',
@@ -21,6 +22,8 @@ class Processing extends Model
         'yield_percent',
         'operator_name',
         'status',
+        'is_archived',
+        'archived_at',
         'processing_date',
         'completed_date',
     ];

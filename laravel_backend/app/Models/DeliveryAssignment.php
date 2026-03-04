@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasArchiving;
 use Carbon\Carbon;
 
 class DeliveryAssignment extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasArchiving;
 
     protected $fillable = [
         'delivery_number',
@@ -22,6 +23,8 @@ class DeliveryAssignment extends Model
         'delivery_date',
         'priority',
         'status',
+        'is_archived',
+        'archived_at',
         'notes',
         'driver_notes',
         'proof_of_delivery',

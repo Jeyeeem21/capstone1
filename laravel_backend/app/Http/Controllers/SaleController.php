@@ -54,11 +54,22 @@ class SaleController extends Controller
                 'amount_tendered' => 'nullable|numeric|min:0',
                 'payment_method' => 'nullable|string|in:cash,gcash,cod,pay_later',
                 'reference_number' => 'nullable|string',
+                'payment_proof' => 'nullable|array',
+                'payment_proof.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
                 'notes' => 'nullable|string|max:500',
                 'delivery_address' => 'nullable|string|max:500',
                 'delivery_fee' => 'nullable|numeric|min:0',
                 'distance_km' => 'nullable|numeric|min:0',
             ]);
+
+            // Handle payment proof file uploads (GCash screenshots)
+            if ($request->hasFile('payment_proof')) {
+                $proofPaths = [];
+                foreach ($request->file('payment_proof') as $file) {
+                    $proofPaths[] = $file->store('payment_proofs', 'public');
+                }
+                $validated['payment_proof'] = $proofPaths;
+            }
 
             $newCustomerName = $validated['new_customer_name'] ?? null;
             $newCustomerContact = $validated['new_customer_contact'] ?? null;
@@ -108,7 +119,7 @@ class SaleController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|string|in:pending,processing,shipped,delivered,return_requested,returned,cancelled',
+                'status' => 'required|string|in:pending,processing,shipped,delivered,return_requested,picking_up,returned,cancelled',
                 'driver_name' => 'nullable|string|max:255',
                 'driver_plate_number' => 'nullable|string|max:20',
             ]);
@@ -142,7 +153,7 @@ class SaleController extends Controller
     }
 
     /**
-     * Process a return.
+     * Request a return (sets status to return_requested).
      */
     public function processReturn(int $id, Request $request): JsonResponse
     {
@@ -150,18 +161,114 @@ class SaleController extends Controller
             $validated = $request->validate([
                 'return_reason' => 'required|string|max:255',
                 'return_notes' => 'nullable|string|max:500',
+                'return_proof' => 'nullable|array',
+                'return_proof.*' => 'image|mimes:jpg,jpeg,png,webp|max:5120',
             ]);
 
-            $sale = $this->saleService->processReturn($id, $validated['return_reason'], $validated['return_notes'] ?? null);
+            $proofPaths = [];
+            if ($request->hasFile('return_proof')) {
+                foreach ($request->file('return_proof') as $file) {
+                    $proofPaths[] = $file->store('return-proofs', 'public');
+                }
+            }
 
-            $this->logAudit('UPDATE', 'Orders', "Processed return for order #{$sale->transaction_id}", [
+            $sale = $this->saleService->processReturn($id, $validated['return_reason'], $validated['return_notes'] ?? null, $proofPaths ?: null);
+
+            $this->logAudit('UPDATE', 'Orders', "Return requested for order #{$sale->transaction_id}", [
                 'sale_id' => $sale->id,
                 'reason' => $validated['return_reason'],
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Return processed successfully',
+                'message' => 'Return request submitted successfully',
+                'data' => new SaleResource($sale),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Accept a return — assign pickup driver, restore stock, mark returned.
+     */
+    public function acceptReturn(int $id, Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'pickup_driver' => 'nullable|string|max:255',
+                'pickup_plate' => 'nullable|string|max:20',
+                'pickup_date' => 'nullable|date',
+            ]);
+
+            $sale = $this->saleService->acceptReturn(
+                $id,
+                $validated['pickup_driver'] ?? null,
+                $validated['pickup_plate'] ?? null,
+                $validated['pickup_date'] ?? null
+            );
+
+            $this->logAudit('UPDATE', 'Orders', "Return accepted for order #{$sale->transaction_id}. Pickup assigned.", [
+                'sale_id' => $sale->id,
+                'pickup_driver' => $validated['pickup_driver'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Return accepted. Pickup driver assigned.',
+                'data' => new SaleResource($sale),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Reject a return — revert to delivered.
+     */
+    public function rejectReturn(int $id): JsonResponse
+    {
+        try {
+            $sale = $this->saleService->rejectReturn($id);
+
+            $this->logAudit('UPDATE', 'Orders', "Return rejected for order #{$sale->transaction_id}. Reverted to delivered.", [
+                'sale_id' => $sale->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Return rejected. Order reverted to delivered.',
+                'data' => new SaleResource($sale),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Get a single sale.
+     */
+    public function markReturned(int $id): JsonResponse
+    {
+        try {
+            $sale = $this->saleService->markReturned($id);
+
+            $this->logAudit('UPDATE', 'Orders', "Order #{$sale->transaction_id} marked as returned. Stock restored.", [
+                'sale_id' => $sale->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order marked as returned. Stock has been restored.',
                 'data' => new SaleResource($sale),
             ]);
         } catch (\Exception $e) {
@@ -188,6 +295,55 @@ class SaleController extends Controller
                 'success' => false,
                 'message' => 'Sale not found',
             ], 404);
+        }
+    }
+
+    /**
+     * Mark an order as paid.
+     */
+    public function markPaid(int $id, Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'payment_method' => 'required|string|in:cash,gcash',
+                'reference_number' => 'nullable|string',
+                'amount_tendered' => 'nullable|numeric|min:0',
+                'payment_proof' => 'nullable|array',
+                'payment_proof.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            ]);
+
+            $data = [
+                'payment_method' => $validated['payment_method'],
+                'reference_number' => $validated['reference_number'] ?? null,
+                'amount_tendered' => $validated['amount_tendered'] ?? null,
+            ];
+
+            // Handle payment proof file uploads
+            if ($request->hasFile('payment_proof')) {
+                $proofPaths = [];
+                foreach ($request->file('payment_proof') as $file) {
+                    $proofPaths[] = $file->store('payment_proofs', 'public');
+                }
+                $data['payment_proof'] = $proofPaths;
+            }
+
+            $sale = $this->saleService->markPaid($id, $data);
+
+            $this->logAudit('UPDATE', 'Orders', "Marked order #{$sale->transaction_id} as paid via {$validated['payment_method']}", [
+                'sale_id' => $sale->id,
+                'payment_method' => $validated['payment_method'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment recorded successfully',
+                'data' => new SaleResource($sale),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
         }
     }
 

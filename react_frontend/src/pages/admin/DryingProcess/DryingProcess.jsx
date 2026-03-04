@@ -13,6 +13,10 @@ const DryingProcess = () => {
   const toast = useToast();
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
+  const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
+  const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false); // kept for add modal reuse
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -315,29 +319,111 @@ const DryingProcess = () => {
     }
   }, [selectedItem, invalidateAndRefetch, toast, saving]);
 
-  // ---- Stats ----
-  const totalRecords = dryingProcesses.length;
-  const dryingCount = dryingProcesses.filter(d => d.status === 'Drying').length;
-  const driedCount = dryingProcesses.filter(d => d.status === 'Dried').length;
-  const totalQuantity = dryingProcesses.reduce((sum, d) => sum + parseFloat(d.quantity_kg || 0), 0);
-  const totalCost = dryingProcesses.reduce((sum, d) => sum + parseFloat(d.total_price || 0), 0);
-  const avgDays = totalRecords > 0 ? (dryingProcesses.reduce((sum, d) => sum + (d.days || 0), 0) / totalRecords).toFixed(1) : 0;
+  // ---- Chart helper functions ----
+  const getWeeksInMonth = useCallback((year, month) => {
+    const weeks = [];
+    const firstDay = new Date(year, month, 1);
+    let start = new Date(firstDay);
+    const dayOfWeek = start.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    start.setDate(start.getDate() + diff);
+    while (start.getMonth() <= month || (start.getMonth() > month && start.getFullYear() < year) || weeks.length === 0) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const label = `${months[start.getMonth()]} ${start.getDate()} - ${months[end.getMonth()]} ${end.getDate()}`;
+      weeks.push({ start: new Date(start), end: new Date(end), label });
+      start.setDate(start.getDate() + 7);
+      if (start.getMonth() > month && start.getFullYear() === year) break;
+      if (start.getFullYear() > year) break;
+      if (weeks.length >= 6) break;
+    }
+    return weeks;
+  }, []);
 
-  // ---- Chart Data ----
+  const matchesChartPoint = useCallback((d) => {
+    if (!activeChartPoint || !d.created_at) return true;
+    const date = new Date(d.created_at);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && String(date.getDate()) === activeChartPoint;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      const week = weeks.find(w => w.label === activeChartPoint);
+      if (!week) return false;
+      return date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') {
+      return date.getFullYear() === chartYear && months[date.getMonth()] === activeChartPoint;
+    }
+    if (chartPeriod === 'bi-annually') {
+      if (activeChartPoint === 'H1') return date.getFullYear() === chartYear && date.getMonth() < 6;
+      if (activeChartPoint === 'H2') return date.getFullYear() === chartYear && date.getMonth() >= 6;
+      return false;
+    }
+    if (chartPeriod === 'annually') {
+      return String(date.getFullYear()) === activeChartPoint;
+    }
+    return true;
+  }, [activeChartPoint, chartPeriod, chartMonth, chartYear, getWeeksInMonth]);
+
+  const isInChartScope = useCallback((d) => {
+    if (!d.created_at) return false;
+    const date = new Date(d.created_at);
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      if (weeks.length === 0) return false;
+      return date >= weeks[0].start && date <= new Date(weeks[weeks.length-1].end.getFullYear(), weeks[weeks.length-1].end.getMonth(), weeks[weeks.length-1].end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') return date.getFullYear() === chartYear;
+    if (chartPeriod === 'bi-annually') return date.getFullYear() === chartYear;
+    if (chartPeriod === 'annually') return date.getFullYear() >= chartYearFrom && date.getFullYear() <= chartYearTo;
+    return true;
+  }, [chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
+
+  const chartFilteredDrying = useMemo(() => {
+    const scoped = dryingProcesses.filter(isInChartScope);
+    if (!activeChartPoint) return scoped;
+    return scoped.filter(matchesChartPoint);
+  }, [dryingProcesses, isInChartScope, activeChartPoint, matchesChartPoint]);
+
+  const chartFilteredTableData = useMemo(() => {
+    const filtered = chartFilteredDrying;
+    if (batchFilter === 'no-batch') return filtered.filter(d => !d.batch_id);
+    if (batchFilter) return filtered.filter(d => String(d.batch_id) === batchFilter);
+    return filtered;
+  }, [chartFilteredDrying, batchFilter]);
+
+  // ---- Stats — filtered by chart scope + active point ----
+  const totalRecords = chartFilteredDrying.length;
+  const dryingCount = chartFilteredDrying.filter(d => d.status === 'Drying').length;
+  const driedCount = chartFilteredDrying.filter(d => d.status === 'Dried').length;
+  const totalQuantity = chartFilteredDrying.reduce((sum, d) => sum + parseFloat(d.quantity_kg || 0), 0);
+  const totalCost = chartFilteredDrying.reduce((sum, d) => sum + parseFloat(d.total_price || 0), 0);
+  const avgDays = totalRecords > 0 ? (chartFilteredDrying.reduce((sum, d) => sum + (d.days || 0), 0) / totalRecords).toFixed(1) : 0;
+
+  // ---- Chart Data (daily, weekly, monthly, bi-annually, annually) ----
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 
   const chartData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     if (chartPeriod === 'daily') {
-      const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+      const [y, m] = chartMonth.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(y, m - 1);
       const dayGroups = {};
       dryingProcesses.forEach(d => {
         if (!d.created_at) return;
         const date = new Date(d.created_at);
-        if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+        if (date.getFullYear() === y && date.getMonth() === m - 1) {
           const day = date.getDate();
           if (!dayGroups[day]) dayGroups[day] = { cost: 0, quantity: 0 };
           dayGroups[day].cost += parseFloat(d.total_price || 0);
@@ -349,13 +435,31 @@ const DryingProcess = () => {
         value: dayGroups[i + 1]?.cost || 0,
         quantity: dayGroups[i + 1]?.quantity || 0,
       }));
-    } else if (chartPeriod === 'monthly') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    }
+
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      return weeks.map(week => {
+        let cost = 0, quantity = 0;
+        dryingProcesses.forEach(d => {
+          if (!d.created_at) return;
+          const date = new Date(d.created_at);
+          if (date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59)) {
+            cost += parseFloat(d.total_price || 0);
+            quantity += parseFloat(d.quantity_kg || 0);
+          }
+        });
+        return { name: week.label, value: cost, quantity };
+      });
+    }
+
+    if (chartPeriod === 'monthly') {
       const monthGroups = {};
       dryingProcesses.forEach(d => {
         if (!d.created_at) return;
         const date = new Date(d.created_at);
-        if (date.getFullYear() === currentYear) {
+        if (date.getFullYear() === chartYear) {
           const month = date.getMonth();
           if (!monthGroups[month]) monthGroups[month] = { cost: 0, quantity: 0 };
           monthGroups[month].cost += parseFloat(d.total_price || 0);
@@ -367,45 +471,51 @@ const DryingProcess = () => {
         value: monthGroups[i]?.cost || 0,
         quantity: monthGroups[i]?.quantity || 0,
       }));
-    } else {
-      const years = [];
-      for (let i = 5; i >= 0; i--) years.push(currentYear - i);
-      const yearGroups = {};
+    }
+
+    if (chartPeriod === 'bi-annually') {
+      const h1 = { cost: 0, quantity: 0 };
+      const h2 = { cost: 0, quantity: 0 };
       dryingProcesses.forEach(d => {
         if (!d.created_at) return;
         const date = new Date(d.created_at);
-        const year = date.getFullYear();
-        if (!yearGroups[year]) yearGroups[year] = { cost: 0, quantity: 0 };
-        yearGroups[year].cost += parseFloat(d.total_price || 0);
-        yearGroups[year].quantity += parseFloat(d.quantity_kg || 0);
+        if (date.getFullYear() === chartYear) {
+          const target = date.getMonth() < 6 ? h1 : h2;
+          target.cost += parseFloat(d.total_price || 0);
+          target.quantity += parseFloat(d.quantity_kg || 0);
+        }
       });
-      return years.map(year => ({
-        name: year.toString(),
-        value: yearGroups[year]?.cost || 0,
-        quantity: yearGroups[year]?.quantity || 0,
-      }));
+      return [
+        { name: 'H1', fullName: `Jan - Jun ${chartYear}`, value: h1.cost, quantity: h1.quantity },
+        { name: 'H2', fullName: `Jul - Dec ${chartYear}`, value: h2.cost, quantity: h2.quantity },
+      ];
     }
-  }, [dryingProcesses, chartPeriod]);
 
-  // Status breakdown for donut chart - filtered by period + active point
-  const statusBreakdown = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    let drying = 0, dried = 0;
+    // annually
+    const years = [];
+    for (let y = chartYearFrom; y <= chartYearTo; y++) years.push(y);
+    const yearGroups = {};
     dryingProcesses.forEach(d => {
       if (!d.created_at) return;
       const date = new Date(d.created_at);
-      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-      if (activeChartPoint) {
-        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-        if (chartPeriod === 'monthly') {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          if (months[date.getMonth()] !== activeChartPoint) return;
-        }
-        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
+      const year = date.getFullYear();
+      if (year >= chartYearFrom && year <= chartYearTo) {
+        if (!yearGroups[year]) yearGroups[year] = { cost: 0, quantity: 0 };
+        yearGroups[year].cost += parseFloat(d.total_price || 0);
+        yearGroups[year].quantity += parseFloat(d.quantity_kg || 0);
       }
+    });
+    return years.map(year => ({
+      name: year.toString(),
+      value: yearGroups[year]?.cost || 0,
+      quantity: yearGroups[year]?.quantity || 0,
+    }));
+  }, [dryingProcesses, chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
+
+  // Status breakdown for donut chart — uses chartFilteredDrying
+  const statusBreakdown = useMemo(() => {
+    let drying = 0, dried = 0;
+    chartFilteredDrying.forEach(d => {
       if (d.status === 'Drying') drying++;
       if (d.status === 'Dried') dried++;
     });
@@ -413,28 +523,13 @@ const DryingProcess = () => {
       { name: 'Drying', value: drying, color: '#eab308' },
       { name: 'Dried', value: dried, color: '#22c55e' },
     ].filter(item => item.value > 0);
-  }, [dryingProcesses, chartPeriod, activeChartPoint]);
+  }, [chartFilteredDrying]);
 
-  // Sacks vs Kg comparison - filtered by period + active point
-  const totalSacks = dryingProcesses.reduce((sum, d) => sum + parseInt(d.sacks || 0), 0);
+  // Sacks vs Kg comparison — uses chartFilteredDrying
+  const totalSacks = chartFilteredDrying.reduce((sum, d) => sum + parseInt(d.sacks || 0), 0);
   const quantityComparison = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
     let filteredSacks = 0, filteredKg = 0;
-    dryingProcesses.forEach(d => {
-      if (!d.created_at) return;
-      const date = new Date(d.created_at);
-      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-      if (activeChartPoint) {
-        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-        if (chartPeriod === 'monthly') {
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          if (months[date.getMonth()] !== activeChartPoint) return;
-        }
-        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
-      }
+    chartFilteredDrying.forEach(d => {
       filteredSacks += parseInt(d.sacks || 0);
       filteredKg += parseFloat(d.quantity_kg || 0);
     });
@@ -442,7 +537,7 @@ const DryingProcess = () => {
       { name: 'Sacks', value: filteredSacks, color: '#22c55e' },
       { name: 'Kg', value: Math.round(filteredKg), color: '#3b82f6' },
     ];
-  }, [dryingProcesses, chartPeriod, activeChartPoint]);
+  }, [chartFilteredDrying]);
 
   // ---- Table Columns ----
   const columns = useMemo(() => [
@@ -619,13 +714,50 @@ const DryingProcess = () => {
               lines={[{ dataKey: 'value', name: 'Cost (₱)' }]}
               height={280}
               yAxisUnit="₱"
-              tabs={[
-                { label: 'Daily', value: 'daily' },
-                { label: 'Monthly', value: 'monthly' },
-                { label: 'Yearly', value: 'yearly' },
-              ]}
-              activeTab={chartPeriod}
-              onTabChange={(val) => { setChartPeriod(val); setActiveChartPoint(null); }}
+              headerRight={
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={chartPeriod}
+                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="bi-annually">Bi-Annually</option>
+                    <option value="annually">Annually</option>
+                  </select>
+                  {chartPeriod === 'daily' && (
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  )}
+                  {chartPeriod === 'weekly' && (
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  )}
+                  {chartPeriod === 'monthly' && (
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000" max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                  )}
+                  {chartPeriod === 'bi-annually' && (
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000" max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                  )}
+                  {chartPeriod === 'annually' && (
+                    <div className="flex items-center gap-1">
+                      <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                        min="2000" max={chartYearTo}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
+                      <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                        min={chartYearFrom} max={new Date().getFullYear()}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                    </div>
+                  )}
+                </div>
+              }
               onDotClick={setActiveChartPoint}
               activePoint={activeChartPoint}
               summaryStats={[
@@ -711,11 +843,7 @@ const DryingProcess = () => {
             title="Drying Records"
             subtitle="Manage all drying process records"
             columns={columns}
-            data={batchFilter === 'no-batch' 
-              ? dryingProcesses.filter(d => !d.batch_id) 
-              : batchFilter 
-                ? dryingProcesses.filter(d => String(d.batch_id) === batchFilter) 
-                : dryingProcesses}
+            data={chartFilteredTableData}
             searchPlaceholder="Search drying records..."
             filterField="status"
             filterPlaceholder="All Status"

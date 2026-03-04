@@ -10,12 +10,19 @@ import { ENDPOINTS } from './config';
 export const dashboardApi = {
   /**
    * Get dashboard statistics
-   * @param {string} period - 'daily' | 'monthly' | 'yearly'
+   * @param {string} period - 'daily' | 'weekly' | 'monthly' | 'bi-annually' | 'annually'
+   * @param {object} chartParams - { month, year, yearFrom, yearTo }
    */
-  getStats: async (period = 'monthly') => {
-    return apiClient.get(`${ENDPOINTS.DASHBOARD.STATS}?period=${period}`, {
+  getStats: async (period = 'monthly', chartParams = {}) => {
+    const params = new URLSearchParams({ period });
+    if (chartParams.month) params.set('month', chartParams.month);
+    if (chartParams.year) params.set('year', chartParams.year);
+    if (chartParams.yearFrom) params.set('year_from', chartParams.yearFrom);
+    if (chartParams.yearTo) params.set('year_to', chartParams.yearTo);
+    const cacheKey = `dashboard-stats-${period}-${JSON.stringify(chartParams)}`;
+    return apiClient.get(`${ENDPOINTS.DASHBOARD.STATS}?${params.toString()}`, {
       useCache: true,
-      cacheKey: `dashboard-stats-${period}`,
+      cacheKey,
     });
   },
 

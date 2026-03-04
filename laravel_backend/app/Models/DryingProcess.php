@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasArchiving;
 
 class DryingProcess extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasArchiving;
 
     protected $fillable = [
         'procurement_id',
@@ -21,6 +22,8 @@ class DryingProcess extends Model
         'price',
         'total_price',
         'status',
+        'is_archived',
+        'archived_at',
         'dried_at',
     ];
 

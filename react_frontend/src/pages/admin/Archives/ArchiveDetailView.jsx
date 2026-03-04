@@ -1,7 +1,7 @@
 import {
   Package, Tag, Truck, UserCheck, ShoppingCart, Sun, Settings2, Car, MapPin,
   DollarSign, Scale, User, Calendar, Mail, Phone, Building2, Layers,
-  Hash, FileText, Box, Boxes, Activity, CheckCircle, Percent, ArrowDown,
+  Hash, FileText, Box, Boxes, Activity, CheckCircle, Percent, ArrowDown, Shield,
 } from 'lucide-react';
 import { StatusBadge } from '../../../components/ui';
 
@@ -16,6 +16,7 @@ const moduleIcons = {
   processings: Settings2,
   drivers: Car,
   deliveries: MapPin,
+  users: Shield,
 };
 
 const moduleColors = {
@@ -28,6 +29,7 @@ const moduleColors = {
   processings: { bg: 'bg-rose-500', light: 'bg-rose-100 text-rose-600' },
   drivers: { bg: 'bg-teal-500', light: 'bg-teal-100 text-teal-600' },
   deliveries: { bg: 'bg-purple-500', light: 'bg-purple-100 text-purple-600' },
+  users: { bg: 'bg-violet-500', light: 'bg-violet-100 text-violet-600' },
 };
 
 // Reusable detail item
@@ -364,6 +366,36 @@ const DeliveryView = ({ data }) => (
   </div>
 );
 
+const UserView = ({ data }) => (
+  <div className="grid grid-cols-2 gap-3">
+    <div className="space-y-3">
+      <RecordHeader module="users" id={data.id} name={data.name} status={data.status} />
+      <DetailItem icon={Mail} iconBg="bg-blue-100 text-blue-600" label="Email">
+        {data.email ? (
+          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 hover:underline text-sm">{data.email}</a>
+        ) : (
+          <p className="text-sm text-gray-400">—</p>
+        )}
+      </DetailItem>
+      <DetailItem icon={Phone} iconBg="bg-purple-100 text-purple-600" label="Phone">
+        {data.phone ? (
+          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 hover:underline text-sm">{data.phone}</a>
+        ) : (
+          <p className="text-sm text-gray-400">—</p>
+        )}
+      </DetailItem>
+    </div>
+    <div className="space-y-3">
+      <DetailItem icon={Shield} iconBg="bg-violet-100 text-violet-600" label="Role" value={data.role_label || data.role} />
+      <DetailItem icon={Building2} iconBg="bg-orange-100 text-orange-600" label="Position" value={data.position} />
+      {data.truck_plate_number && (
+        <DetailItem icon={Car} iconBg="bg-teal-100 text-teal-600" label="Truck Plate" value={data.truck_plate_number} />
+      )}
+      <DetailItem icon={Calendar} iconBg="bg-gray-100 text-gray-600" label="Date Hired" value={formatDate(data.date_hired)} />
+    </div>
+  </div>
+);
+
 // ═══════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════
@@ -378,6 +410,7 @@ const moduleViews = {
   drying_processes: DryingProcessView,
   drivers: DriverView,
   deliveries: DeliveryView,
+  users: UserView,
 };
 
 const ArchiveDetailView = ({ item }) => {

@@ -133,13 +133,13 @@ class ProductService
     }
 
     /**
-     * Soft delete a product.
+     * Archive a product (move to archives).
      */
     public function deleteProduct(int $id): bool
     {
         return DB::transaction(function () use ($id) {
             $product = Product::findOrFail($id);
-            $result = $product->softDelete();
+            $result = $product->archive();
             
             $this->clearCache();
             

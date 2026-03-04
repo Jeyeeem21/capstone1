@@ -151,7 +151,6 @@ const Procurement = () => {
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
   // Chart calendar filter state
-  const [chartDate, setChartDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; });
   const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
   const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
@@ -312,7 +311,7 @@ const Procurement = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     if (chartPeriod === 'daily') {
-      const [y, m] = chartDate.split('-').map(Number);
+      const [y, m] = chartMonth.split('-').map(Number);
       return date.getFullYear() === y && date.getMonth() === m - 1 && String(date.getDate()) === activeChartPoint;
     }
     if (chartPeriod === 'weekly') {
@@ -334,7 +333,7 @@ const Procurement = () => {
       return String(date.getFullYear()) === activeChartPoint;
     }
     return true;
-  }, [activeChartPoint, chartPeriod, chartDate, chartMonth, chartYear, getWeeksInMonth]);
+  }, [activeChartPoint, chartPeriod, chartMonth, chartYear, getWeeksInMonth]);
 
   // Helper: check if a procurement date falls within the current chart scope (period + calendar)
   const isInChartScope = useCallback((p) => {
@@ -342,7 +341,7 @@ const Procurement = () => {
     const date = new Date(p.created_at);
     
     if (chartPeriod === 'daily') {
-      const [y, m] = chartDate.split('-').map(Number);
+      const [y, m] = chartMonth.split('-').map(Number);
       return date.getFullYear() === y && date.getMonth() === m - 1;
     }
     if (chartPeriod === 'weekly') {
@@ -361,7 +360,7 @@ const Procurement = () => {
       return date.getFullYear() >= chartYearFrom && date.getFullYear() <= chartYearTo;
     }
     return true;
-  }, [chartPeriod, chartDate, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
+  }, [chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
   // Chart-filtered procurements — used for stats, cards, table (scoped by calendar + dot)
   const chartFilteredProcurements = useMemo(() => {
@@ -894,7 +893,7 @@ const Procurement = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     if (chartPeriod === 'daily') {
-      const [y, m] = chartDate.split('-').map(Number);
+      const [y, m] = chartMonth.split('-').map(Number);
       const daysInMonth = getDaysInMonth(y, m - 1);
       const dayGroups = {};
       procurements.forEach(p => {
@@ -987,7 +986,7 @@ const Procurement = () => {
       value: yearGroups[year]?.value || 0,
       quantity: yearGroups[year]?.quantity || 0,
     }));
-  }, [procurements, chartPeriod, chartDate, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
+  }, [procurements, chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
   // Supplier breakdown for donut chart - TOP 5 ONLY - filtered by chart period + active point
   const supplierBreakdown = useMemo(() => {
@@ -1305,9 +1304,9 @@ const Procurement = () => {
                   {/* Calendar controls based on period */}
                   {chartPeriod === 'daily' && (
                     <input
-                      type="date"
-                      value={chartDate}
-                      onChange={(e) => { setChartDate(e.target.value); setActiveChartPoint(null); }}
+                      type="month"
+                      value={chartMonth}
+                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}

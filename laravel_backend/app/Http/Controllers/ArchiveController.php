@@ -16,6 +16,7 @@ use App\Models\Variety;
 use App\Models\Driver;
 use App\Models\DeliveryAssignment;
 use App\Models\ProcurementBatch;
+use App\Models\User;
 use App\Models\AuditTrail;
 use Illuminate\Support\Facades\Cache;
 
@@ -111,11 +112,21 @@ class ArchiveController extends Controller
                 'auditAction' => 'DELETE',
                 'auditDetailKey' => 'delivery_id',
             ],
+            'users' => [
+                'model' => User::class,
+                'label' => 'User',
+                'nameField' => 'name',
+                'idField' => 'id',
+                'auditModule' => 'Users',
+                'auditAction' => 'DELETE',
+                'auditDetailKey' => 'user_id',
+            ],
         ];
     }
 
     /**
-     * Get all archived (soft-deleted) records across all modules.
+     * Get all archived records across all modules.
+     * Tier 1: is_archived = true (visible in archive page).
      */
     public function index(): JsonResponse
     {
@@ -135,11 +146,11 @@ class ArchiveController extends Controller
         foreach ($modules as $key => $config) {
             try {
                 $modelClass = $config['model'];
-                $usesCustom = $config['usesCustomSoftDelete'] ?? false;
 
-            $query = $usesCustom
-                ? $modelClass::onlyDeleted()
-                : $modelClass::onlyTrashed();
+            // Use onlyArchived scope (bypasses notArchived global scope,
+            // but SoftDeletes / notDeleted scopes still apply so
+            // tier-2-deleted records are excluded automatically).
+            $query = $modelClass::onlyArchived();
 
             // Eager-load relations if configured
             if (isset($moduleRelations[$key])) {
@@ -158,9 +169,9 @@ class ArchiveController extends Controller
                     $name = $config['label'] . ' #' . str_pad($record->{$idField}, 4, '0', STR_PAD_LEFT);
                 }
 
-                $deletedAt = $usesCustom
-                    ? $record->updated_at
-                    : $record->deleted_at;
+                $deletedAt = $record->archived_at
+                    ? \Carbon\Carbon::parse($record->archived_at)
+                    : $record->updated_at;
 
                 // Build record data with relationship names resolved
                 $recordData = $record->toArray();
@@ -184,6 +195,12 @@ class ArchiveController extends Controller
                     $recordData['driver_name'] = $record->driver?->name ?? '—';
                     $recordData['customer_name'] = $record->customer?->name ?? '—';
                     $recordData['items_count'] = $record->items?->count() ?? 0;
+                } elseif ($key === 'users') {
+                    $recordData['role_label'] = ucwords(str_replace('_', ' ', $record->role ?? ''));
+                    $recordData['position'] = $record->position;
+                    $recordData['email'] = $record->email;
+                    // Hide sensitive fields
+                    unset($recordData['password'], $recordData['remember_token'], $recordData['two_factor_secret'], $recordData['two_factor_recovery_codes']);
                 }
 
                 $archives[] = [
@@ -235,11 +252,8 @@ class ArchiveController extends Controller
         foreach ($modules as $key => $config) {
             try {
             $modelClass = $config['model'];
-            $usesCustom = $config['usesCustomSoftDelete'] ?? false;
 
-            $count = $usesCustom
-                ? $modelClass::onlyDeleted()->count()
-                : $modelClass::onlyTrashed()->count();
+            $count = $modelClass::onlyArchived()->count();
 
             if ($count > 0) {
                 $stats[] = [
@@ -265,7 +279,7 @@ class ArchiveController extends Controller
     }
 
     /**
-     * Restore an archived record.
+     * Restore an archived record (move back to main page).
      */
     public function restore(string $module, string $id): JsonResponse
     {
@@ -277,26 +291,23 @@ class ArchiveController extends Controller
 
         $config = $modules[$module];
         $modelClass = $config['model'];
-        $usesCustom = $config['usesCustomSoftDelete'] ?? false;
         $idField = $config['idField'];
 
         try {
-            if ($usesCustom) {
-                $record = $modelClass::onlyDeleted()->where($idField, $id)->firstOrFail();
-                $record->restore(); // Uses Product's custom restore method
-            } else {
-                $record = $modelClass::onlyTrashed()->where($idField, $id)->firstOrFail();
-                
-                // Restore status to Active for models that set it to Inactive on archive
+            $record = $modelClass::onlyArchived()->where($idField, $id)->firstOrFail();
+
+            // Restore status to Active for models that set it to Inactive on archive
+            if (in_array($module, ['varieties', 'suppliers', 'customers', 'users'])) {
+                $record->status = 'active';
                 if (in_array($module, ['varieties', 'suppliers', 'customers'])) {
                     $record->status = 'Active';
                 }
-                if ($module === 'procurements') {
-                    $record->status = 'Pending';
-                }
-                
-                $record->restore();
             }
+            if ($module === 'procurements') {
+                $record->status = 'Pending';
+            }
+
+            $record->unarchive();
 
             // Clear relevant caches
             $this->clearModuleCache($module);
@@ -318,9 +329,10 @@ class ArchiveController extends Controller
     }
 
     /**
-     * Permanently delete an archived record (force delete from database).
+     * Soft-delete an archived record (Tier 2).
+     * The record disappears from the archive page but remains in the database.
      */
-    public function permanentDelete(string $module, string $id): JsonResponse
+    public function softDelete(string $module, string $id): JsonResponse
     {
         $modules = $this->getModuleConfig();
 
@@ -334,29 +346,74 @@ class ArchiveController extends Controller
         $idField = $config['idField'];
 
         try {
+            $record = $modelClass::onlyArchived()->where($idField, $id)->firstOrFail();
+
+            $nameField = $config['nameField'];
+            $name = $nameField ? ($record->{$nameField} ?? $config['label']) : $config['label'] . ' #' . str_pad($id, 4, '0', STR_PAD_LEFT);
+
             if ($usesCustom) {
-                $record = $modelClass::onlyDeleted()->where($idField, $id)->firstOrFail();
-                $record->forceDelete();
+                $record->softDelete(); // Product's custom method — sets is_deleted = true
             } else {
-                $record = $modelClass::onlyTrashed()->where($idField, $id)->firstOrFail();
-                $nameField = $config['nameField'];
-                $name = $nameField ? ($record->{$nameField} ?? $config['label']) : $config['label'] . ' #' . str_pad($id, 4, '0', STR_PAD_LEFT);
-                $record->forceDelete();
+                $record->delete(); // SoftDeletes — sets deleted_at
             }
 
             // Clear relevant caches
             $this->clearModuleCache($module);
 
-            $this->logAudit('PERMANENT_DELETE', 'Archives', "Permanently deleted {$config['label']}: " . ($name ?? 'record'), [
+            $this->logAudit('SOFT_DELETE', 'Archives', "Soft deleted {$config['label']}: {$name}", [
                 'module' => $module,
                 'record_id' => $id,
             ]);
 
-            return $this->successResponse(null, 'Record permanently deleted');
+            return $this->successResponse(null, "{$name} has been soft deleted. It remains in the database.");
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->errorResponse('Archived record not found', 404);
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to permanently delete: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to soft delete: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Soft-delete ALL archived records for a given module (Tier 2).
+     */
+    public function softDeleteAll(string $module): JsonResponse
+    {
+        $modules = $this->getModuleConfig();
+
+        if (!isset($modules[$module])) {
+            return $this->errorResponse('Invalid module', 404);
+        }
+
+        $config = $modules[$module];
+        $modelClass = $config['model'];
+        $usesCustom = $config['usesCustomSoftDelete'] ?? false;
+
+        try {
+            $records = $modelClass::onlyArchived()->get();
+            $count = $records->count();
+
+            if ($count === 0) {
+                return $this->errorResponse('No archived records to delete', 404);
+            }
+
+            foreach ($records as $record) {
+                if ($usesCustom) {
+                    $record->softDelete();
+                } else {
+                    $record->delete();
+                }
+            }
+
+            $this->clearModuleCache($module);
+
+            $this->logAudit('SOFT_DELETE_ALL', 'Archives', "Soft deleted all {$count} archived {$config['label']} records", [
+                'module' => $module,
+                'count' => $count,
+            ]);
+
+            return $this->successResponse(null, "{$count} archived {$config['label']} record(s) soft deleted.");
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to soft delete: ' . $e->getMessage(), 500);
         }
     }
 
@@ -421,6 +478,7 @@ class ArchiveController extends Controller
             'processings' => 'processings_all',
             'drivers' => 'drivers_all',
             'deliveries' => 'delivery_assignments_all',
+            'users' => 'users_all',
         ];
 
         if (isset($cacheKeys[$module])) {

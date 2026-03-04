@@ -13,6 +13,11 @@ const DRYING_CACHE_KEY = '/drying-processes';
 const Processing = () => {
   const toast = useToast();
   const [chartPeriod, setChartPeriod] = useState('daily');
+  const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
+  const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
+  const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -524,122 +529,227 @@ const Processing = () => {
     }
   }, [selectedItem, invalidateAndRefetch, toast, saving]);
 
-  // Memoized stats calculations
+  // ---- Chart helper functions ----
+  const getWeeksInMonth = useCallback((year, month) => {
+    const weeks = [];
+    const firstDay = new Date(year, month, 1);
+    let start = new Date(firstDay);
+    const dayOfWeek = start.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    start.setDate(start.getDate() + diff);
+    while (start.getMonth() <= month || (start.getMonth() > month && start.getFullYear() < year) || weeks.length === 0) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const label = `${months[start.getMonth()]} ${start.getDate()} - ${months[end.getMonth()]} ${end.getDate()}`;
+      weeks.push({ start: new Date(start), end: new Date(end), label });
+      start.setDate(start.getDate() + 7);
+      if (start.getMonth() > month && start.getFullYear() === year) break;
+      if (start.getFullYear() > year) break;
+      if (weeks.length >= 6) break;
+    }
+    return weeks;
+  }, []);
+
+  const matchesChartPoint = useCallback((p) => {
+    if (!activeChartPoint || !p.processing_date) return true;
+    const date = new Date(p.processing_date);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && String(date.getDate()) === activeChartPoint;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      const week = weeks.find(w => w.label === activeChartPoint);
+      if (!week) return false;
+      return date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') {
+      return date.getFullYear() === chartYear && months[date.getMonth()] === activeChartPoint;
+    }
+    if (chartPeriod === 'bi-annually') {
+      if (activeChartPoint === 'H1') return date.getFullYear() === chartYear && date.getMonth() < 6;
+      if (activeChartPoint === 'H2') return date.getFullYear() === chartYear && date.getMonth() >= 6;
+      return false;
+    }
+    if (chartPeriod === 'annually') {
+      return String(date.getFullYear()) === activeChartPoint;
+    }
+    return true;
+  }, [activeChartPoint, chartPeriod, chartMonth, chartYear, getWeeksInMonth]);
+
+  const isInChartScope = useCallback((p) => {
+    if (!p.processing_date) return false;
+    const date = new Date(p.processing_date);
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      if (weeks.length === 0) return false;
+      return date >= weeks[0].start && date <= new Date(weeks[weeks.length-1].end.getFullYear(), weeks[weeks.length-1].end.getMonth(), weeks[weeks.length-1].end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') return date.getFullYear() === chartYear;
+    if (chartPeriod === 'bi-annually') return date.getFullYear() === chartYear;
+    if (chartPeriod === 'annually') return date.getFullYear() >= chartYearFrom && date.getFullYear() <= chartYearTo;
+    return true;
+  }, [chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
+
+  const chartFilteredProcessings = useMemo(() => {
+    const scoped = allProcessings.filter(isInChartScope);
+    if (!activeChartPoint) return scoped;
+    return scoped.filter(matchesChartPoint);
+  }, [allProcessings, isInChartScope, activeChartPoint, matchesChartPoint]);
+
+  const chartFilteredActive = useMemo(() => {
+    const scoped = activeProcessings.filter(isInChartScope);
+    if (!activeChartPoint) return scoped;
+    return scoped.filter(matchesChartPoint);
+  }, [activeProcessings, isInChartScope, activeChartPoint, matchesChartPoint]);
+
+  const chartFilteredCompleted = useMemo(() => {
+    const scoped = completedProcessings.filter(isInChartScope);
+    if (!activeChartPoint) return scoped;
+    return scoped.filter(matchesChartPoint);
+  }, [completedProcessings, isInChartScope, activeChartPoint, matchesChartPoint]);
+
+  // Memoized stats calculations — filtered by chart scope + active point
   const stats = useMemo(() => {
-    const totalRecords = allProcessings.length;
-    const pendingCount = activeProcessings.filter(p => p.status === 'Pending').length;
-    const processingCount = activeProcessings.filter(p => p.status === 'Processing').length;
-    const completedCount = completedProcessings.length;
-    const totalInput = allProcessings.reduce((sum, p) => sum + parseFloat(p.input_kg || 0), 0);
-    const totalOutput = completedProcessings.reduce((sum, p) => sum + parseFloat(p.output_kg || 0), 0);
-    const totalHusk = completedProcessings.reduce((sum, p) => sum + parseFloat(p.husk_kg || 0), 0);
+    const totalRecords = chartFilteredProcessings.length;
+    const pendingCount = chartFilteredProcessings.filter(p => p.status === 'Pending').length;
+    const processingCount = chartFilteredProcessings.filter(p => p.status === 'Processing').length;
+    const completedCount = chartFilteredProcessings.filter(p => p.status === 'Completed').length;
+    const completedItems = chartFilteredProcessings.filter(p => p.status === 'Completed');
+    const totalInput = chartFilteredProcessings.reduce((sum, p) => sum + parseFloat(p.input_kg || 0), 0);
+    const totalOutput = completedItems.reduce((sum, p) => sum + parseFloat(p.output_kg || 0), 0);
+    const totalHusk = completedItems.reduce((sum, p) => sum + parseFloat(p.husk_kg || 0), 0);
     const avgYield = completedCount > 0 
-      ? (completedProcessings.reduce((sum, p) => sum + parseFloat(p.yield_percent || 0), 0) / completedCount).toFixed(2)
+      ? (completedItems.reduce((sum, p) => sum + parseFloat(p.yield_percent || 0), 0) / completedCount).toFixed(2)
       : 0;
     
     return { totalRecords, pendingCount, processingCount, completedCount, totalInput, totalOutput, totalHusk, avgYield };
-  }, [allProcessings, activeProcessings, completedProcessings]);
+  }, [chartFilteredProcessings]);
 
   // Helper function to get days in a month
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 
-  // Chart data based on chartPeriod
+  // Chart data based on chartPeriod (daily, weekly, monthly, bi-annually, annually)
   const chartData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     if (chartPeriod === 'daily') {
-      const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+      const [y, m] = chartMonth.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(y, m - 1);
       const dayGroups = {};
-      
       allProcessings.forEach(p => {
         if (!p.processing_date) return;
         const date = new Date(p.processing_date);
-        if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+        if (date.getFullYear() === y && date.getMonth() === m - 1) {
           const day = date.getDate();
-          if (!dayGroups[day]) {
-            dayGroups[day] = { input: 0, output: 0 };
-          }
+          if (!dayGroups[day]) dayGroups[day] = { input: 0, output: 0 };
           dayGroups[day].input += parseFloat(p.input_kg || 0);
-          if (p.output_kg) {
-            dayGroups[day].output += parseFloat(p.output_kg);
-          }
+          if (p.output_kg) dayGroups[day].output += parseFloat(p.output_kg);
         }
       });
-
       return Array.from({ length: daysInMonth }, (_, i) => ({
         name: String(i + 1),
         input: dayGroups[i + 1]?.input || 0,
         output: dayGroups[i + 1]?.output || 0,
       }));
-    } else if (chartPeriod === 'monthly') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    }
+    
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      return weeks.map(week => {
+        let input = 0, output = 0;
+        allProcessings.forEach(p => {
+          if (!p.processing_date) return;
+          const date = new Date(p.processing_date);
+          if (date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59)) {
+            input += parseFloat(p.input_kg || 0);
+            if (p.output_kg) output += parseFloat(p.output_kg);
+          }
+        });
+        return { name: week.label, input, output };
+      });
+    }
+    
+    if (chartPeriod === 'monthly') {
       const monthGroups = {};
-      
       allProcessings.forEach(p => {
         if (!p.processing_date) return;
         const date = new Date(p.processing_date);
-        if (date.getFullYear() === currentYear) {
+        if (date.getFullYear() === chartYear) {
           const month = date.getMonth();
-          if (!monthGroups[month]) {
-            monthGroups[month] = { input: 0, output: 0 };
-          }
+          if (!monthGroups[month]) monthGroups[month] = { input: 0, output: 0 };
           monthGroups[month].input += parseFloat(p.input_kg || 0);
-          if (p.output_kg) {
-            monthGroups[month].output += parseFloat(p.output_kg);
-          }
+          if (p.output_kg) monthGroups[month].output += parseFloat(p.output_kg);
         }
       });
-
       return months.map((name, i) => ({
         name,
         input: monthGroups[i]?.input || 0,
         output: monthGroups[i]?.output || 0,
       }));
-    } else {
-      const years = [];
-      for (let i = 5; i >= 0; i--) {
-        years.push(currentYear - i);
-      }
-      
-      const yearGroups = {};
+    }
+    
+    if (chartPeriod === 'bi-annually') {
+      const h1 = { input: 0, output: 0 };
+      const h2 = { input: 0, output: 0 };
       allProcessings.forEach(p => {
         if (!p.processing_date) return;
         const date = new Date(p.processing_date);
-        const year = date.getFullYear();
-        if (!yearGroups[year]) {
-          yearGroups[year] = { input: 0, output: 0 };
-        }
-        yearGroups[year].input += parseFloat(p.input_kg || 0);
-        if (p.output_kg) {
-          yearGroups[year].output += parseFloat(p.output_kg);
+        if (date.getFullYear() === chartYear) {
+          const target = date.getMonth() < 6 ? h1 : h2;
+          target.input += parseFloat(p.input_kg || 0);
+          if (p.output_kg) target.output += parseFloat(p.output_kg);
         }
       });
-
-      return years.map(year => ({
-        name: year.toString(),
-        input: yearGroups[year]?.input || 0,
-        output: yearGroups[year]?.output || 0,
-      }));
+      return [
+        { name: 'H1', fullName: `Jan - Jun ${chartYear}`, input: h1.input, output: h1.output },
+        { name: 'H2', fullName: `Jul - Dec ${chartYear}`, input: h2.input, output: h2.output },
+      ];
     }
-  }, [allProcessings, chartPeriod]);
+    
+    // annually
+    const years = [];
+    for (let y = chartYearFrom; y <= chartYearTo; y++) years.push(y);
+    const yearGroups = {};
+    allProcessings.forEach(p => {
+      if (!p.processing_date) return;
+      const date = new Date(p.processing_date);
+      const year = date.getFullYear();
+      if (year >= chartYearFrom && year <= chartYearTo) {
+        if (!yearGroups[year]) yearGroups[year] = { input: 0, output: 0 };
+        yearGroups[year].input += parseFloat(p.input_kg || 0);
+        if (p.output_kg) yearGroups[year].output += parseFloat(p.output_kg);
+      }
+    });
+    return years.map(year => ({
+      name: year.toString(),
+      input: yearGroups[year]?.input || 0,
+      output: yearGroups[year]?.output || 0,
+    }));
+  }, [allProcessings, chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
   // Average daily output
   const avgPerDay = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+    const [y, m] = chartMonth.split('-').map(Number);
+    const daysInMonth = getDaysInMonth(y, m - 1);
     
     const monthOutput = completedProcessings.filter(p => {
       if (!p.completed_date) return false;
       const date = new Date(p.completed_date);
-      return date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+      return date.getFullYear() === y && date.getMonth() === m - 1;
     }).reduce((sum, p) => sum + parseFloat(p.output_kg || 0), 0);
     
     return Math.floor(monthOutput / daysInMonth);
-  }, [completedProcessings]);
+  }, [completedProcessings, chartMonth]);
 
   // Donut charts data - using stats object
   const outputBreakdown = useMemo(() => {
@@ -907,13 +1017,56 @@ const Processing = () => {
           <div className="lg:col-span-2">
             <LineChart 
               title="Processing Trends" 
-              subtitle="Production performance overview" 
+              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Production performance overview"} 
               data={chartData} 
               lines={[{ dataKey: 'input', name: 'Input (kg)', dashed: true }, { dataKey: 'output', name: 'Output (kg)' }]} 
               height={280} 
-              tabs={[{ label: 'Daily', value: 'daily' }, { label: 'Monthly', value: 'monthly' }, { label: 'Yearly', value: 'yearly' }]} 
-              activeTab={chartPeriod} 
-              onTabChange={setChartPeriod} 
+              headerRight={
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={chartPeriod}
+                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="bi-annually">Bi-Annually</option>
+                    <option value="annually">Annually</option>
+                  </select>
+                  {chartPeriod === 'daily' && (
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  )}
+                  {chartPeriod === 'weekly' && (
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  )}
+                  {chartPeriod === 'monthly' && (
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000" max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                  )}
+                  {chartPeriod === 'bi-annually' && (
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000" max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                  )}
+                  {chartPeriod === 'annually' && (
+                    <div className="flex items-center gap-1">
+                      <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                        min="2000" max={chartYearTo}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
+                      <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                        min={chartYearFrom} max={new Date().getFullYear()}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                    </div>
+                  )}
+                </div>
+              }
+              onDotClick={setActiveChartPoint}
+              activePoint={activeChartPoint}
               summaryStats={[
                 { label: 'Total Output', value: `${stats.totalOutput.toLocaleString()} kg`, color: 'text-primary-600' }, 
                 { label: 'Avg per Day', value: `${avgPerDay.toLocaleString()} kg`, color: 'text-primary-600' }, 
@@ -958,7 +1111,7 @@ const Processing = () => {
             title="Processing Records"
             subtitle="Pending and active processing batches"
             columns={activeColumns} 
-            data={activeProcessings} 
+            data={chartFilteredActive} 
             searchPlaceholder="Search records..." 
             filterField="status" 
             filterPlaceholder="All Status"
@@ -978,7 +1131,7 @@ const Processing = () => {
           title="Completed Records"
           subtitle="Finished processing batches with results"
           columns={completedColumns} 
-          data={completedProcessings} 
+          data={chartFilteredCompleted} 
           searchPlaceholder="Search completed..." 
           dateFilterField="completed_date"
           onRowDoubleClick={handleView}

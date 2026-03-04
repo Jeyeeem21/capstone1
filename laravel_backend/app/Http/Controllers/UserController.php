@@ -202,18 +202,19 @@ class UserController extends Controller
             return $this->errorResponse('Cannot delete your own account', 403);
         }
 
-        $this->logAudit('DELETE', 'Users', "Deleted user: {$user->name}", [
+        $this->logAudit('DELETE', 'Users', "Archived user: {$user->name}", [
             'user_id' => $user->id,
             'name'    => $user->name,
             'email'   => $user->email,
             'role'    => $user->role,
         ]);
 
-        // Revoke all tokens before deleting
+        // Revoke all tokens before archiving
         $user->tokens()->delete();
-        $user->delete();
+        $user->status = 'inactive';
+        $user->archive(); // Archive — record moves to Archives page
 
-        return $this->successResponse(null, 'User deleted successfully');
+        return $this->successResponse(null, 'User archived successfully');
     }
 
     /**

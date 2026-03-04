@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Archive, RotateCcw, Trash2, Package, Tag, Truck, UserCheck, ShoppingCart, Sun, Settings2, Car, MapPin, AlertTriangle, RefreshCw, User } from 'lucide-react';
+import { Archive, RotateCcw, Trash2, Package, Tag, Truck, UserCheck, ShoppingCart, Sun, Settings2, Car, MapPin, AlertTriangle, RefreshCw, User, Shield } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatsCard, ConfirmModal, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import ArchiveDetailView from './ArchiveDetailView';
@@ -20,6 +20,7 @@ const moduleIcons = {
   processings: Settings2,
   drivers: Car,
   deliveries: MapPin,
+  users: Shield,
 };
 
 // Module color mapping
@@ -33,6 +34,7 @@ const moduleColors = {
   processings: 'bg-rose-100 text-rose-600',
   drivers: 'bg-teal-100 text-teal-600',
   deliveries: 'bg-purple-100 text-purple-600',
+  users: 'bg-violet-100 text-violet-600',
 };
 
 const Archives = () => {
@@ -58,7 +60,7 @@ const Archives = () => {
     setIsRestoreModalOpen(true);
   }, []);
 
-  const handlePermanentDelete = useCallback((item) => {
+  const handleSoftDelete = useCallback((item) => {
     setSelectedItem(item);
     setIsDeleteModalOpen(true);
   }, []);
@@ -104,15 +106,15 @@ const Archives = () => {
         invalidateCache(CACHE_KEY);
         invalidateCache(STATS_CACHE_KEY);
         refetch().then(() => {
-          toast.success('Permanently Deleted', 'Record has been permanently removed from the database.');
+          toast.success('Soft Deleted', 'Record has been soft deleted. It still exists in the database.');
         });
         return;
       } else {
-        throw new Error(response.error || 'Failed to delete');
+        throw new Error(response.error || 'Failed to soft delete');
       }
     } catch (error) {
-      console.error('Error permanently deleting:', error);
-      toast.error('Error', 'Failed to permanently delete record');
+      console.error('Error soft deleting:', error);
+      toast.error('Error', 'Failed to soft delete record');
     } finally {
       setSaving(false);
     }
@@ -187,16 +189,16 @@ const Archives = () => {
             <RotateCcw size={15} />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); handlePermanentDelete(row); }}
-            className="p-1.5 rounded-md hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors"
-            title="Permanently Delete"
+            onClick={(e) => { e.stopPropagation(); handleSoftDelete(row); }}
+            className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+            title="Soft Delete"
           >
             <Trash2 size={15} />
           </button>
         </div>
       )
     },
-  ], [handleRestore, handlePermanentDelete]);
+  ], [handleRestore, handleSoftDelete]);
 
   return (
     <div>
@@ -278,16 +280,16 @@ const Archives = () => {
         isLoading={saving}
       />
 
-      {/* Permanent Delete Confirmation Modal */}
+      {/* Soft Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Permanently Delete"
-        message={`Are you sure you want to permanently delete "${selectedItem?.name}"? This action CANNOT be undone. The record will be removed from the database forever.`}
-        confirmText="Delete Forever"
+        title="Soft Delete Record"
+        message={`Are you sure you want to soft delete "${selectedItem?.name}"? The record will be hidden from archives but will remain in the database.`}
+        confirmText="Soft Delete"
         variant="danger"
-        icon={AlertTriangle}
+        icon={Trash2}
         isLoading={saving}
       />
 
@@ -302,9 +304,19 @@ const Archives = () => {
             <button
               onClick={() => {
                 setIsViewModalOpen(false);
+                handleSoftDelete(selectedItem);
+              }}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 size={14} />
+              Soft Delete
+            </button>
+            <button
+              onClick={() => {
+                setIsViewModalOpen(false);
                 handleRestore(selectedItem);
               }}
-              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-1.5"
+              className="px-4 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors flex items-center gap-1.5"
             >
               <RotateCcw size={14} />
               Restore

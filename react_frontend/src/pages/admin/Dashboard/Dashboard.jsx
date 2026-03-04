@@ -21,6 +21,11 @@ const getCSSVariable = (name) => {
 const Dashboard = () => {
   const { basePath } = useAuth();
   const [period, setPeriod] = useState('monthly');
+  const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
+  const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
+  const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState(null);
@@ -46,11 +51,20 @@ const Dashboard = () => {
     return () => observer.disconnect();
   }, []);
 
+  // Build chart params from state
+  const chartParams = useMemo(() => {
+    const params = {};
+    if (period === 'daily' || period === 'weekly') params.month = chartMonth;
+    if (period === 'monthly' || period === 'bi-annually') params.year = chartYear;
+    if (period === 'annually') { params.yearFrom = chartYearFrom; params.yearTo = chartYearTo; }
+    return params;
+  }, [period, chartMonth, chartYear, chartYearFrom, chartYearTo]);
+
   // Fetch dashboard data
-  const fetchData = useCallback(async (selectedPeriod) => {
+  const fetchData = useCallback(async (selectedPeriod, selectedChartParams = {}) => {
     try {
       const [statsRes, activityRes] = await Promise.all([
-        dashboardApi.getStats(selectedPeriod),
+        dashboardApi.getStats(selectedPeriod, selectedChartParams),
         dashboardApi.getRecentActivity(15),
       ]);
       setStats(statsRes?.data || statsRes);
@@ -65,15 +79,15 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!stats) setLoading(true); // Only show skeletons on first load
-    fetchData(period);
-  }, [period, fetchData]);
+    fetchData(period, chartParams);
+  }, [period, chartParams, fetchData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
       await dashboardApi.refresh();
     } catch (_) { /* ignore */ }
-    fetchData(period);
+    fetchData(period, chartParams);
   };
 
   // Derived data
@@ -276,7 +290,7 @@ const Dashboard = () => {
           <div className="lg:col-span-2">
             <LineChart
               title="Revenue Trends"
-              subtitle="Sales revenue from completed orders"
+              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Sales revenue from completed orders"}
               data={revenueChart}
               lines={[
                 { dataKey: 'revenue', name: 'Revenue (₱)' },
@@ -284,13 +298,52 @@ const Dashboard = () => {
               ]}
               height={280}
               yAxisUnit="₱"
-              tabs={[
-                { label: 'Daily', value: 'daily' },
-                { label: 'Monthly', value: 'monthly' },
-                { label: 'Yearly', value: 'yearly' },
-              ]}
-              activeTab={period}
-              onTabChange={setPeriod}
+              headerRight={
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={period}
+                    onChange={(e) => { setPeriod(e.target.value); setActiveChartPoint(null); }}
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="bi-annually">Bi-Annually</option>
+                    <option value="annually">Annually</option>
+                  </select>
+                  {period === 'daily' && (
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  )}
+                  {period === 'weekly' && (
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  )}
+                  {period === 'monthly' && (
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000" max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                  )}
+                  {period === 'bi-annually' && (
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      min="2000" max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                  )}
+                  {period === 'annually' && (
+                    <div className="flex items-center gap-1">
+                      <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                        min="2000" max={chartYearTo}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
+                      <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                        min={chartYearFrom} max={new Date().getFullYear()}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                    </div>
+                  )}
+                </div>
+              }
+              onDotClick={setActiveChartPoint}
+              activePoint={activeChartPoint}
               summaryStats={[
                 { label: 'This Month', value: fmt(overview.current_month_revenue), color: 'text-primary-600' },
                 { label: 'Avg Order', value: fmt(overview.avg_order_value), color: 'text-primary-600' },

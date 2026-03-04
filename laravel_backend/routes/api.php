@@ -101,6 +101,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/void', [SaleController::class, 'void']);
         Route::put('/{id}/status', [SaleController::class, 'updateStatus']);
         Route::post('/{id}/return', [SaleController::class, 'processReturn']);
+        Route::post('/{id}/return/accept', [SaleController::class, 'acceptReturn']);
+        Route::post('/{id}/return/reject', [SaleController::class, 'rejectReturn']);
+        Route::post('/{id}/return/complete', [SaleController::class, 'markReturned']);
+        Route::post('/{id}/pay', [SaleController::class, 'markPaid']);
     });
 
     // Sales Predictive Analysis Routes
@@ -258,7 +262,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [ArchiveController::class, 'index']);
         Route::get('/statistics', [ArchiveController::class, 'statistics']);
         Route::post('/{module}/{id}/restore', [ArchiveController::class, 'restore']);
-        Route::delete('/{module}/{id}', [ArchiveController::class, 'permanentDelete']);
+        Route::delete('/{module}/{id}', [ArchiveController::class, 'softDelete']);
+        Route::delete('/{module}/all/soft-delete', [ArchiveController::class, 'softDeleteAll']);
     });
 
     // Audit Trail Routes

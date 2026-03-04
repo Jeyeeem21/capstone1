@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use App\Traits\HasArchiving;
 
 class Product extends Model
 {
-    use HasFactory;
+    use HasFactory, HasArchiving;
 
     /**
      * The primary key for the model.
@@ -28,6 +29,8 @@ class Product extends Model
         'weight',
         'status',
         'is_deleted',
+        'is_archived',
+        'archived_at',
     ];
 
     /**

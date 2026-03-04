@@ -257,7 +257,7 @@ const StaffManagement = () => {
       </FormModal>
 
       {/* Delete Confirm */}
-      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Remove Staff Member" message={`Are you sure you want to remove "${selectedItem?.name}"? This action cannot be undone.`} confirmText={submitting ? 'Removing...' : 'Remove'} variant="warning" icon={Archive} />
+      <ConfirmModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleDeleteConfirm} title="Archive Staff Member" message={`Are you sure you want to archive "${selectedItem?.name}"? You can restore this record from the Archives.`} confirmText={submitting ? 'Archiving...' : 'Archive'} variant="warning" icon={Archive} />
     </div>
   );
 };

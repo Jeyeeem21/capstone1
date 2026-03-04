@@ -28,8 +28,18 @@ const Inventory = () => {
   }, [activeTab]);
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  // In/Out chart calendar state
+  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
+  const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
+  const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
   const [growthChartPeriod, setGrowthChartPeriod] = useState('daily');
   const [activeGrowthChartPoint, setActiveGrowthChartPoint] = useState(null);
+  // Growth chart calendar state
+  const [growthChartMonth, setGrowthChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [growthChartYear, setGrowthChartYear] = useState(() => new Date().getFullYear());
+  const [growthChartYearFrom, setGrowthChartYearFrom] = useState(() => new Date().getFullYear() - 4);
+  const [growthChartYearTo, setGrowthChartYearTo] = useState(() => new Date().getFullYear());
   const [productGrowth, setProductGrowth] = useState(null);
   const [loadingProductGrowth, setLoadingProductGrowth] = useState(false);
   const [growthCustomStart, setGrowthCustomStart] = useState('');
@@ -577,129 +587,196 @@ const Inventory = () => {
   // ─── In/Out Tab: Stock movement chart data (Procurement-style) ─
   const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 
-  const inOutChartData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+  // Helper: get the week ranges for a given month/year
+  const getWeeksInMonth = useCallback((year, month) => {
+    const weeks = [];
+    const firstDay = new Date(year, month, 1);
+    let start = new Date(firstDay);
+    const dayOfWeek = start.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    start.setDate(start.getDate() + diff);
+    while (start.getMonth() <= month || (start.getMonth() > month && start.getFullYear() < year) || weeks.length === 0) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 6);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const label = `${months[start.getMonth()]} ${start.getDate()} - ${months[end.getMonth()]} ${end.getDate()}`;
+      weeks.push({ start: new Date(start), end: new Date(end), label });
+      start.setDate(start.getDate() + 7);
+      if (start.getMonth() > month && start.getFullYear() === year) break;
+      if (start.getFullYear() > year) break;
+      if (weeks.length >= 6) break;
+    }
+    return weeks;
+  }, []);
 
+  // In/Out: check if a stock log is within current chart scope
+  const isInOutInScope = useCallback((log) => {
+    if (!log.created_at) return false;
+    const date = new Date(log.created_at);
     if (chartPeriod === 'daily') {
-      const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-      const dayGroups = {};
+      const [y, m] = chartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      if (weeks.length === 0) return false;
+      return date >= weeks[0].start && date <= new Date(weeks[weeks.length - 1].end.getFullYear(), weeks[weeks.length - 1].end.getMonth(), weeks[weeks.length - 1].end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') return date.getFullYear() === chartYear;
+    if (chartPeriod === 'bi-annually') return date.getFullYear() === chartYear;
+    if (chartPeriod === 'annually') return date.getFullYear() >= chartYearFrom && date.getFullYear() <= chartYearTo;
+    return true;
+  }, [chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
+  // In/Out: check if a stock log matches the active chart point
+  const matchesInOutChartPoint = useCallback((log) => {
+    if (!activeChartPoint || !log.created_at) return true;
+    const date = new Date(log.created_at);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && String(date.getDate()) === activeChartPoint;
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      const week = weeks.find(w => w.label === activeChartPoint);
+      if (!week) return false;
+      return date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59);
+    }
+    if (chartPeriod === 'monthly') return date.getFullYear() === chartYear && months[date.getMonth()] === activeChartPoint;
+    if (chartPeriod === 'bi-annually') {
+      if (activeChartPoint === 'H1') return date.getFullYear() === chartYear && date.getMonth() < 6;
+      if (activeChartPoint === 'H2') return date.getFullYear() === chartYear && date.getMonth() >= 6;
+      return false;
+    }
+    if (chartPeriod === 'annually') return String(date.getFullYear()) === activeChartPoint;
+    return true;
+  }, [activeChartPoint, chartPeriod, chartMonth, chartYear, getWeeksInMonth]);
+
+  const chartFilteredStockLogs = useMemo(() => {
+    const scoped = stockLogs.filter(isInOutInScope);
+    if (!activeChartPoint) return scoped;
+    return scoped.filter(matchesInOutChartPoint);
+  }, [stockLogs, isInOutInScope, activeChartPoint, matchesInOutChartPoint]);
+
+  const inOutChartData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const getLogGroups = (filterFn) => {
+      const groups = {};
       stockLogs.forEach(log => {
         if (!log.created_at) return;
         const date = new Date(log.created_at);
-        if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+        if (!filterFn(date)) return;
+        const key = filterFn.keyFn(date);
+        if (!groups[key]) groups[key] = { stock_in: 0, stock_out: 0 };
+        if (log.type === 'in') groups[key].stock_in += log.quantity_change;
+        else groups[key].stock_out += log.quantity_change;
+      });
+      return groups;
+    };
+
+    if (chartPeriod === 'daily') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(y, m - 1);
+      const dayGroups = {};
+      stockLogs.forEach(log => {
+        if (!log.created_at) return;
+        const date = new Date(log.created_at);
+        if (date.getFullYear() === y && date.getMonth() === m - 1) {
           const day = date.getDate();
           if (!dayGroups[day]) dayGroups[day] = { stock_in: 0, stock_out: 0 };
           if (log.type === 'in') dayGroups[day].stock_in += log.quantity_change;
           else dayGroups[day].stock_out += log.quantity_change;
         }
       });
-
-      // Fallback: also use completedProcessings if no stock logs yet
-      if (stockLogs.length === 0) {
-        completedProcessings.filter(p => p.stock_out > 0).forEach(p => {
-          if (!p.completed_date) return;
-          const date = new Date(p.completed_date);
-          if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
-            const day = date.getDate();
-            if (!dayGroups[day]) dayGroups[day] = { stock_in: 0, stock_out: 0 };
-            dayGroups[day].stock_in += (p.stock_out || 0);
-          }
-        });
-      }
-
       return Array.from({ length: daysInMonth }, (_, i) => ({
         name: String(i + 1),
         stock_in: dayGroups[i + 1]?.stock_in || 0,
         stock_out: dayGroups[i + 1]?.stock_out || 0,
       }));
-    } else if (chartPeriod === 'monthly') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    }
+    if (chartPeriod === 'weekly') {
+      const [y, m] = chartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      return weeks.map(week => {
+        let stock_in = 0, stock_out = 0;
+        stockLogs.forEach(log => {
+          if (!log.created_at) return;
+          const date = new Date(log.created_at);
+          if (date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59)) {
+            if (log.type === 'in') stock_in += log.quantity_change;
+            else stock_out += log.quantity_change;
+          }
+        });
+        return { name: week.label, stock_in, stock_out };
+      });
+    }
+    if (chartPeriod === 'monthly') {
       const monthGroups = {};
-
       stockLogs.forEach(log => {
         if (!log.created_at) return;
         const date = new Date(log.created_at);
-        if (date.getFullYear() === currentYear) {
+        if (date.getFullYear() === chartYear) {
           const month = date.getMonth();
           if (!monthGroups[month]) monthGroups[month] = { stock_in: 0, stock_out: 0 };
           if (log.type === 'in') monthGroups[month].stock_in += log.quantity_change;
           else monthGroups[month].stock_out += log.quantity_change;
         }
       });
-
-      if (stockLogs.length === 0) {
-        completedProcessings.filter(p => p.stock_out > 0).forEach(p => {
-          if (!p.completed_date) return;
-          const date = new Date(p.completed_date);
-          if (date.getFullYear() === currentYear) {
-            const month = date.getMonth();
-            if (!monthGroups[month]) monthGroups[month] = { stock_in: 0, stock_out: 0 };
-            monthGroups[month].stock_in += (p.stock_out || 0);
-          }
-        });
-      }
-
       return months.map((name, i) => ({
         name,
         stock_in: monthGroups[i]?.stock_in || 0,
         stock_out: monthGroups[i]?.stock_out || 0,
       }));
-    } else {
-      const years = [];
-      for (let i = 5; i >= 0; i--) years.push(currentYear - i);
-      const yearGroups = {};
-
+    }
+    if (chartPeriod === 'bi-annually') {
+      const h1 = { stock_in: 0, stock_out: 0 }, h2 = { stock_in: 0, stock_out: 0 };
       stockLogs.forEach(log => {
         if (!log.created_at) return;
-        const year = new Date(log.created_at).getFullYear();
+        const date = new Date(log.created_at);
+        if (date.getFullYear() === chartYear) {
+          const target = date.getMonth() < 6 ? h1 : h2;
+          if (log.type === 'in') target.stock_in += log.quantity_change;
+          else target.stock_out += log.quantity_change;
+        }
+      });
+      return [
+        { name: 'H1', fullName: `Jan - Jun ${chartYear}`, stock_in: h1.stock_in, stock_out: h1.stock_out },
+        { name: 'H2', fullName: `Jul - Dec ${chartYear}`, stock_in: h2.stock_in, stock_out: h2.stock_out },
+      ];
+    }
+    // annually
+    const years = [];
+    for (let y = chartYearFrom; y <= chartYearTo; y++) years.push(y);
+    const yearGroups = {};
+    stockLogs.forEach(log => {
+      if (!log.created_at) return;
+      const year = new Date(log.created_at).getFullYear();
+      if (year >= chartYearFrom && year <= chartYearTo) {
         if (!yearGroups[year]) yearGroups[year] = { stock_in: 0, stock_out: 0 };
         if (log.type === 'in') yearGroups[year].stock_in += log.quantity_change;
         else yearGroups[year].stock_out += log.quantity_change;
-      });
-
-      if (stockLogs.length === 0) {
-        completedProcessings.filter(p => p.stock_out > 0).forEach(p => {
-          if (!p.completed_date) return;
-          const year = new Date(p.completed_date).getFullYear();
-          if (!yearGroups[year]) yearGroups[year] = { stock_in: 0, stock_out: 0 };
-          yearGroups[year].stock_in += (p.stock_out || 0);
-        });
       }
+    });
+    return years.map(year => ({
+      name: year.toString(),
+      stock_in: yearGroups[year]?.stock_in || 0,
+      stock_out: yearGroups[year]?.stock_out || 0,
+    }));
+  }, [stockLogs, chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
-      return years.map(year => ({
-        name: year.toString(),
-        stock_in: yearGroups[year]?.stock_in || 0,
-        stock_out: yearGroups[year]?.stock_out || 0,
-      }));
-    }
-  }, [stockLogs, completedProcessings, chartPeriod]);
-
-  // In/Out: Stock distributed by variety (donut) — filtered by activeChartPoint
+  // In/Out: Stock distributed by variety (donut) — filtered by scope + activeChartPoint
   const varietyDistribution = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const map = {};
-
     const logsToUse = stockLogs.length > 0 ? stockLogs.filter(l => l.type === 'in') : [];
 
     if (logsToUse.length > 0) {
       logsToUse.forEach(log => {
-        if (!log.created_at) return;
-        const date = new Date(log.created_at);
-        // Period filter
-        if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-        if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-        // Active point filter
-        if (activeChartPoint) {
-          if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-          if (chartPeriod === 'monthly' && months[date.getMonth()] !== activeChartPoint) return;
-          if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
-        }
+        if (!isInOutInScope(log)) return;
+        if (!matchesInOutChartPoint(log)) return;
         const variety = log.variety_name || 'Unknown';
         if (!map[variety]) map[variety] = { name: variety, value: 0 };
         map[variety].value += log.quantity_change;
@@ -715,27 +792,16 @@ const Inventory = () => {
     }
 
     return Object.values(map).filter(v => v.value > 0).sort((a, b) => b.value - a.value);
-  }, [stockLogs, completedProcessings, chartPeriod, activeChartPoint]);
+  }, [stockLogs, completedProcessings, isInOutInScope, matchesInOutChartPoint]);
 
-  // In/Out: Product breakdown donut — filtered by activeChartPoint
+  // In/Out: Product breakdown donut — filtered by scope + activeChartPoint
   const productBreakdown = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const colors = ['#22c55e', '#3b82f6', '#eab308', '#f97316', '#8b5cf6'];
     const map = {};
 
     stockLogs.filter(l => l.type === 'in').forEach(log => {
-      if (!log.created_at) return;
-      const date = new Date(log.created_at);
-      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-      if (activeChartPoint) {
-        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-        if (chartPeriod === 'monthly' && months[date.getMonth()] !== activeChartPoint) return;
-        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
-      }
+      if (!isInOutInScope(log)) return;
+      if (!matchesInOutChartPoint(log)) return;
       const name = log.product_name || 'Unknown';
       if (!map[name]) map[name] = { name, value: 0 };
       map[name].value += log.quantity_change;
@@ -746,32 +812,21 @@ const Inventory = () => {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5)
       .map((item, idx) => ({ ...item, color: colors[idx % colors.length] }));
-  }, [stockLogs, chartPeriod, activeChartPoint]);
+  }, [stockLogs, isInOutInScope, matchesInOutChartPoint]);
 
-  // In/Out stats — filtered by activeChartPoint
+  // In/Out stats — filtered by scope + activeChartPoint
   const inOutStats = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     let totalIn = 0, totalOut = 0, inCount = 0, outCount = 0;
 
     stockLogs.forEach(log => {
-      if (!log.created_at) return;
-      const date = new Date(log.created_at);
-      if (chartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return;
-      if (chartPeriod === 'monthly' && date.getFullYear() !== currentYear) return;
-      if (activeChartPoint) {
-        if (chartPeriod === 'daily' && String(date.getDate()) !== activeChartPoint) return;
-        if (chartPeriod === 'monthly' && months[date.getMonth()] !== activeChartPoint) return;
-        if (chartPeriod === 'yearly' && String(date.getFullYear()) !== activeChartPoint) return;
-      }
+      if (!isInOutInScope(log)) return;
+      if (!matchesInOutChartPoint(log)) return;
       if (log.type === 'in') { totalIn += log.quantity_change; inCount++; }
       else { totalOut += log.quantity_change; outCount++; }
     });
 
     return { totalIn, totalOut, inCount, outCount, netChange: totalIn - totalOut };
-  }, [stockLogs, chartPeriod, activeChartPoint]);
+  }, [stockLogs, isInOutInScope, matchesInOutChartPoint]);
 
   // ─── Cost Records: Distribution logs with cost data ──────
   const costRecords = useMemo(() => {
@@ -785,7 +840,7 @@ const Inventory = () => {
       };
     });
 
-    return stockLogs
+    return chartFilteredStockLogs
       .filter(l => l.type === 'in' && l.total_cost !== null && l.total_cost !== undefined)
       .map(log => {
         const product = productMap[log.product_id];
@@ -802,7 +857,7 @@ const Inventory = () => {
           product_unit: product?.unit || null,
         };
       });
-  }, [stockLogs, products]);
+  }, [chartFilteredStockLogs, products]);
 
   const costStats = useMemo(() => {
     if (costRecords.length === 0) return { totalCost: 0, avgCostPerUnit: 0, avgProfitPerUnit: 0, avgMargin: 0, totalUnits: 0, totalProfit: 0 };
@@ -822,19 +877,18 @@ const Inventory = () => {
   // ─── Growth Analysis: Sales-based growth over time ──────
   const completedSales = useMemo(() => sales.filter(s => s.status === 'completed'), [sales]);
 
-  // Chart data — matches Procurement/Drying pattern: { name, value, quantity }
+  // Chart data — matches Procurement pattern: { name, value, quantity }
   const growthChartData = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     if (growthChartPeriod === 'daily') {
-      const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+      const [y, m] = growthChartMonth.split('-').map(Number);
+      const daysInMonth = getDaysInMonth(y, m - 1);
       const dayGroups = {};
       completedSales.forEach(sale => {
         if (!sale.created_at) return;
         const date = new Date(sale.created_at);
-        if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+        if (date.getFullYear() === y && date.getMonth() === m - 1) {
           const day = date.getDate();
           if (!dayGroups[day]) dayGroups[day] = { value: 0, quantity: 0 };
           dayGroups[day].value += sale.total || 0;
@@ -846,38 +900,29 @@ const Inventory = () => {
         value: dayGroups[i + 1]?.value || 0,
         quantity: dayGroups[i + 1]?.quantity || 0,
       }));
-    } else if (growthChartPeriod === 'weekly') {
-      // Show each day of the current week (Mon-Sun)
-      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const weekStart = new Date(now);
-      const dayOfWeek = weekStart.getDay(); // 0=Sun...6=Sat
-      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // shift to Monday start
-      weekStart.setDate(weekStart.getDate() + diff);
-      weekStart.setHours(0, 0, 0, 0);
-
-      const weekGroups = {};
-      completedSales.forEach(sale => {
-        if (!sale.created_at) return;
-        const date = new Date(sale.created_at);
-        const diffDays = Math.floor((date - weekStart) / (1000 * 60 * 60 * 24));
-        if (diffDays >= 0 && diffDays < 7) {
-          if (!weekGroups[diffDays]) weekGroups[diffDays] = { value: 0, quantity: 0 };
-          weekGroups[diffDays].value += sale.total || 0;
-          weekGroups[diffDays].quantity += sale.total_quantity || 0;
-        }
+    }
+    if (growthChartPeriod === 'weekly') {
+      const [y, m] = growthChartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      return weeks.map(week => {
+        let value = 0, quantity = 0;
+        completedSales.forEach(sale => {
+          if (!sale.created_at) return;
+          const date = new Date(sale.created_at);
+          if (date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59)) {
+            value += sale.total || 0;
+            quantity += sale.total_quantity || 0;
+          }
+        });
+        return { name: week.label, value, quantity };
       });
-      return dayNames.map((name, i) => ({
-        name,
-        value: weekGroups[i]?.value || 0,
-        quantity: weekGroups[i]?.quantity || 0,
-      }));
-    } else if (growthChartPeriod === 'monthly') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    }
+    if (growthChartPeriod === 'monthly') {
       const monthGroups = {};
       completedSales.forEach(sale => {
         if (!sale.created_at) return;
         const date = new Date(sale.created_at);
-        if (date.getFullYear() === currentYear) {
+        if (date.getFullYear() === growthChartYear) {
           const month = date.getMonth();
           if (!monthGroups[month]) monthGroups[month] = { value: 0, quantity: 0 };
           monthGroups[month].value += sale.total || 0;
@@ -889,41 +934,42 @@ const Inventory = () => {
         value: monthGroups[i]?.value || 0,
         quantity: monthGroups[i]?.quantity || 0,
       }));
-    } else if (growthChartPeriod === 'bi-annually') {
-      // Show H1 and H2 for the current year
-      const halfGroups = { H1: { value: 0, quantity: 0 }, H2: { value: 0, quantity: 0 } };
+    }
+    if (growthChartPeriod === 'bi-annually') {
+      const h1 = { value: 0, quantity: 0 }, h2 = { value: 0, quantity: 0 };
       completedSales.forEach(sale => {
         if (!sale.created_at) return;
         const date = new Date(sale.created_at);
-        if (date.getFullYear() === currentYear) {
-          const half = date.getMonth() < 6 ? 'H1' : 'H2';
-          halfGroups[half].value += sale.total || 0;
-          halfGroups[half].quantity += sale.total_quantity || 0;
+        if (date.getFullYear() === growthChartYear) {
+          const target = date.getMonth() < 6 ? h1 : h2;
+          target.value += sale.total || 0;
+          target.quantity += sale.total_quantity || 0;
         }
       });
       return [
-        { name: 'H1 (Jan-Jun)', value: halfGroups.H1.value, quantity: halfGroups.H1.quantity },
-        { name: 'H2 (Jul-Dec)', value: halfGroups.H2.value, quantity: halfGroups.H2.quantity },
+        { name: 'H1', fullName: `Jan - Jun ${growthChartYear}`, value: h1.value, quantity: h1.quantity },
+        { name: 'H2', fullName: `Jul - Dec ${growthChartYear}`, value: h2.value, quantity: h2.quantity },
       ];
-    } else {
-      // annually
-      const years = [];
-      for (let i = 5; i >= 0; i--) years.push(currentYear - i);
-      const yearGroups = {};
-      completedSales.forEach(sale => {
-        if (!sale.created_at) return;
-        const year = new Date(sale.created_at).getFullYear();
+    }
+    // annually
+    const years = [];
+    for (let y = growthChartYearFrom; y <= growthChartYearTo; y++) years.push(y);
+    const yearGroups = {};
+    completedSales.forEach(sale => {
+      if (!sale.created_at) return;
+      const year = new Date(sale.created_at).getFullYear();
+      if (year >= growthChartYearFrom && year <= growthChartYearTo) {
         if (!yearGroups[year]) yearGroups[year] = { value: 0, quantity: 0 };
         yearGroups[year].value += sale.total || 0;
         yearGroups[year].quantity += sale.total_quantity || 0;
-      });
-      return years.map(year => ({
-        name: year.toString(),
-        value: yearGroups[year]?.value || 0,
-        quantity: yearGroups[year]?.quantity || 0,
-      }));
-    }
-  }, [completedSales, growthChartPeriod]);
+      }
+    });
+    return years.map(year => ({
+      name: year.toString(),
+      value: yearGroups[year]?.value || 0,
+      quantity: yearGroups[year]?.quantity || 0,
+    }));
+  }, [completedSales, growthChartPeriod, growthChartMonth, growthChartYear, growthChartYearFrom, growthChartYearTo, getWeeksInMonth]);
 
   // Sales stats (overall)
   const growthStats = useMemo(() => {
@@ -939,54 +985,49 @@ const Inventory = () => {
     if (!activeGrowthChartPoint || !createdAt) return true;
     const date = new Date(createdAt);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    if (growthChartPeriod === 'daily') return String(date.getDate()) === activeGrowthChartPoint;
-    if (growthChartPeriod === 'weekly') {
-      const now = new Date();
-      const dayOfWeek = now.getDay();
-      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() + diff);
-      weekStart.setHours(0, 0, 0, 0);
-      const diffDays = Math.floor((date - weekStart) / (1000 * 60 * 60 * 24));
-      return diffDays >= 0 && diffDays < 7 && dayNames[diffDays] === activeGrowthChartPoint;
+    if (growthChartPeriod === 'daily') {
+      const [y, m] = growthChartMonth.split('-').map(Number);
+      return date.getFullYear() === y && date.getMonth() === m - 1 && String(date.getDate()) === activeGrowthChartPoint;
     }
-    if (growthChartPeriod === 'monthly') return months[date.getMonth()] === activeGrowthChartPoint;
+    if (growthChartPeriod === 'weekly') {
+      const [y, m] = growthChartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      const week = weeks.find(w => w.label === activeGrowthChartPoint);
+      if (!week) return false;
+      return date >= week.start && date <= new Date(week.end.getFullYear(), week.end.getMonth(), week.end.getDate(), 23, 59, 59);
+    }
+    if (growthChartPeriod === 'monthly') return date.getFullYear() === growthChartYear && months[date.getMonth()] === activeGrowthChartPoint;
     if (growthChartPeriod === 'bi-annually') {
-      const half = date.getMonth() < 6 ? 'H1 (Jan-Jun)' : 'H2 (Jul-Dec)';
-      return half === activeGrowthChartPoint;
+      if (activeGrowthChartPoint === 'H1') return date.getFullYear() === growthChartYear && date.getMonth() < 6;
+      if (activeGrowthChartPoint === 'H2') return date.getFullYear() === growthChartYear && date.getMonth() >= 6;
+      return false;
     }
     if (growthChartPeriod === 'annually') return String(date.getFullYear()) === activeGrowthChartPoint;
     return true;
-  }, [activeGrowthChartPoint, growthChartPeriod]);
+  }, [activeGrowthChartPoint, growthChartPeriod, growthChartMonth, growthChartYear, getWeeksInMonth]);
 
-  // Filtered sales for table (respects chart point click)
+  // Filtered sales for table (respects chart scope + point click)
   const filteredGrowthSales = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
     return completedSales.filter(sale => {
       if (!sale.created_at) return false;
       const date = new Date(sale.created_at);
-      // Scope to current period
-      if (growthChartPeriod === 'daily' && (date.getFullYear() !== currentYear || date.getMonth() !== currentMonth)) return false;
-      if (growthChartPeriod === 'weekly') {
-        const dayOfWeek = now.getDay();
-        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() + diff);
-        weekStart.setHours(0, 0, 0, 0);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 7);
-        if (date < weekStart || date >= weekEnd) return false;
+      // Scope to current period calendar setting
+      if (growthChartPeriod === 'daily') {
+        const [y, m] = growthChartMonth.split('-').map(Number);
+        if (date.getFullYear() !== y || date.getMonth() !== m - 1) return false;
       }
-      if (growthChartPeriod === 'monthly' && date.getFullYear() !== currentYear) return false;
-      if (growthChartPeriod === 'bi-annually' && date.getFullYear() !== currentYear) return false;
-      if (growthChartPeriod === 'annually') { /* show all years */ }
+      if (growthChartPeriod === 'weekly') {
+        const [y, m] = growthChartMonth.split('-').map(Number);
+        const weeks = getWeeksInMonth(y, m - 1);
+        if (weeks.length === 0) return false;
+        if (date < weeks[0].start || date > new Date(weeks[weeks.length - 1].end.getFullYear(), weeks[weeks.length - 1].end.getMonth(), weeks[weeks.length - 1].end.getDate(), 23, 59, 59)) return false;
+      }
+      if (growthChartPeriod === 'monthly' && date.getFullYear() !== growthChartYear) return false;
+      if (growthChartPeriod === 'bi-annually' && date.getFullYear() !== growthChartYear) return false;
+      if (growthChartPeriod === 'annually' && (date.getFullYear() < growthChartYearFrom || date.getFullYear() > growthChartYearTo)) return false;
       return matchesGrowthChartPoint(sale.created_at);
     });
-  }, [completedSales, growthChartPeriod, matchesGrowthChartPoint]);
+  }, [completedSales, growthChartPeriod, growthChartMonth, growthChartYear, growthChartYearFrom, growthChartYearTo, matchesGrowthChartPoint, getWeeksInMonth]);
 
   // ─── Columns ─────────────────────────────────────────────────
 
@@ -1260,9 +1301,60 @@ const Inventory = () => {
                   { dataKey: 'stock_out', name: 'Stock Out (units)' },
                 ]}
                 height={280}
-                tabs={[{ label: 'Daily', value: 'daily' }, { label: 'Monthly', value: 'monthly' }, { label: 'Yearly', value: 'yearly' }]}
-                activeTab={chartPeriod}
-                onTabChange={(val) => { setChartPeriod(val); setActiveChartPoint(null); }}
+                headerRight={
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <select
+                      value={chartPeriod}
+                      onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="bi-annually">Bi-Annually</option>
+                      <option value="annually">Annually</option>
+                    </select>
+                    {(chartPeriod === 'daily' || chartPeriod === 'weekly') && (
+                      <input
+                        type="month"
+                        value={chartMonth}
+                        onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                        className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    )}
+                    {(chartPeriod === 'monthly' || chartPeriod === 'bi-annually') && (
+                      <input
+                        type="number"
+                        value={chartYear}
+                        onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                        min="2000"
+                        max={new Date().getFullYear()}
+                        className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                      />
+                    )}
+                    {chartPeriod === 'annually' && (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={chartYearFrom}
+                          onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                          min="2000"
+                          max={chartYearTo}
+                          className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                        />
+                        <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
+                        <input
+                          type="number"
+                          value={chartYearTo}
+                          onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                          min={chartYearFrom}
+                          max={new Date().getFullYear()}
+                          className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                        />
+                      </div>
+                    )}
+                  </div>
+                }
                 onDotClick={setActiveChartPoint}
                 activePoint={activeChartPoint}
                 yAxisUnit=" units"
@@ -1369,7 +1461,7 @@ const Inventory = () => {
                 )
               },
             ]}
-            data={stockLogs}
+            data={chartFilteredStockLogs}
             searchPlaceholder="Search stock movements..."
           />
         </>
@@ -1395,15 +1487,60 @@ const Inventory = () => {
               lines={[{ dataKey: 'value', name: 'Revenue (₱)' }]}
               height={280}
               yAxisUnit="₱"
-              tabs={[
-                { label: 'Daily', value: 'daily' },
-                { label: 'Weekly', value: 'weekly' },
-                { label: 'Monthly', value: 'monthly' },
-                { label: 'Bi-Annually', value: 'bi-annually' },
-                { label: 'Annually', value: 'annually' },
-              ]}
-              activeTab={growthChartPeriod === 'custom' ? null : growthChartPeriod}
-              onTabChange={(val) => { setGrowthChartPeriod(val); setActiveGrowthChartPoint(null); }}
+              headerRight={
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={growthChartPeriod}
+                    onChange={(e) => { setGrowthChartPeriod(e.target.value); setActiveGrowthChartPoint(null); }}
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="bi-annually">Bi-Annually</option>
+                    <option value="annually">Annually</option>
+                  </select>
+                  {(growthChartPeriod === 'daily' || growthChartPeriod === 'weekly') && (
+                    <input
+                      type="month"
+                      value={growthChartMonth}
+                      onChange={(e) => { setGrowthChartMonth(e.target.value); setActiveGrowthChartPoint(null); }}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  )}
+                  {(growthChartPeriod === 'monthly' || growthChartPeriod === 'bi-annually') && (
+                    <input
+                      type="number"
+                      value={growthChartYear}
+                      onChange={(e) => { setGrowthChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveGrowthChartPoint(null); }}
+                      min="2000"
+                      max={new Date().getFullYear()}
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                    />
+                  )}
+                  {growthChartPeriod === 'annually' && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={growthChartYearFrom}
+                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setGrowthChartYearFrom(v); setActiveGrowthChartPoint(null); }}
+                        min="2000"
+                        max={growthChartYearTo}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
+                      <input
+                        type="number"
+                        value={growthChartYearTo}
+                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setGrowthChartYearTo(v); setActiveGrowthChartPoint(null); }}
+                        min={growthChartYearFrom}
+                        max={new Date().getFullYear()}
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                      />
+                    </div>
+                  )}
+                </div>
+              }
               onDotClick={setActiveGrowthChartPoint}
               activePoint={activeGrowthChartPoint}
               summaryStats={[
