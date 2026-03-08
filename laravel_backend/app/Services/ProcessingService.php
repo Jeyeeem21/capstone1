@@ -349,6 +349,7 @@ class ProcessingService
         // Also clear related caches since processing affects quantity_out
         Cache::forget('procurements_all');
         Cache::forget('drying_processes_all');
+        DashboardService::clearStatsCache();
     }
 
     /**

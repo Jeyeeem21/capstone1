@@ -156,22 +156,22 @@ const About = () => {
       </section>
 
       {/* Mission & Vision Section */}
-      <section className="py-24 bg-white">
+      <section className="py-24 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-12">
             {/* Mission */}
-            <div className="bg-gradient-to-br from-button-50 to-primary-50 rounded-xl p-10 shadow-lg shadow-primary-100/50 border-2 border-primary-300">
+            <div className="bg-gradient-to-br from-button-50 to-primary-50 dark:from-gray-700 dark:to-gray-800 rounded-xl p-10 shadow-lg shadow-primary-100/50 dark:shadow-none border-2 border-primary-300 dark:border-primary-700">
               <div className="w-16 h-16 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-button-500/25">
                 <Target size={32} className="text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">{content.missionTitle}</h2>
-              <p className="text-gray-600 leading-relaxed mb-6">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{content.missionTitle}</h2>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
                 {content.missionDescription}
               </p>
               <ul className="space-y-3">
                 {(content.missionPoints || defaultContent.missionPoints).map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-gray-700">
-                    <CheckCircle size={18} className="text-button-600 flex-shrink-0" />
+                  <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-200">
+                    <CheckCircle size={18} className="text-button-600 dark:text-button-400 flex-shrink-0" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -179,17 +179,17 @@ const About = () => {
             </div>
 
             {/* Vision */}
-            <div className="bg-gradient-to-br from-primary-50 to-button-50 rounded-xl p-10 shadow-lg shadow-primary-100/50 border-2 border-primary-300">
+            <div className="bg-gradient-to-br from-primary-50 to-button-50 dark:from-gray-700 dark:to-gray-800 rounded-xl p-10 shadow-lg shadow-primary-100/50 dark:shadow-none border-2 border-primary-300 dark:border-primary-700">
               <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-primary-500/25">
                 <Eye size={32} className="text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">{content.visionTitle}</h2>
-              <p className="text-gray-600 leading-relaxed mb-6">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{content.visionTitle}</h2>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
                 {content.visionDescription}
               </p>
               <ul className="space-y-3">
                 {(content.visionPoints || defaultContent.visionPoints).map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-gray-700">
+                  <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-200">
                     <CheckCircle size={18} className="text-primary-500 flex-shrink-0" />
                     <span>{item}</span>
                   </li>
@@ -218,16 +218,16 @@ const About = () => {
       </section>
 
       {/* Our Values Section */}
-      <section className="py-24 bg-gradient-to-b from-white to-primary-50">
+      <section className="py-24 bg-gradient-to-b from-white to-primary-50 dark:from-gray-800 dark:to-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+            <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
               Our Values
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               What We Stand For
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Our core values guide everything we do, from how we source our rice to how we serve our customers
             </p>
           </div>
@@ -236,13 +236,13 @@ const About = () => {
             {values.map((value) => (
               <div 
                 key={value.title}
-                className="group bg-white rounded-xl p-8 shadow-lg shadow-primary-100/50 hover:shadow-xl transition-all duration-300 border-2 border-primary-300 hover:border-button-400 text-center"
+                className="group bg-white dark:bg-gray-700 rounded-xl p-8 shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400 text-center"
               >
                 <div className="w-16 h-16 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-button-500/25">
                   <value.icon size={28} className="text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3">{value.title}</h3>
-                <p className="text-gray-600">{value.description}</p>
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-3">{value.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300">{value.description}</p>
               </div>
             ))}
           </div>
@@ -250,40 +250,40 @@ const About = () => {
       </section>
 
       {/* Timeline Section */}
-      <section className="py-24 bg-white">
+      <section className="py-24 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+            <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
               Our Journey
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               A Legacy of Quality
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               From humble beginnings to becoming a trusted name in the rice industry
             </p>
           </div>
 
           <div className="relative">
             {/* Timeline Line */}
-            <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-0.5 bg-button-200" />
+            <div className="hidden md:block absolute left-1/2 top-0 bottom-0 w-0.5 bg-button-200 dark:bg-button-500/30" />
 
             <div className="space-y-12">
               {timeline.map((item, index) => (
                 <div key={item.year} className={`relative flex items-center ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'}`}>
                   {/* Content */}
                   <div className={`w-full md:w-1/2 ${index % 2 === 0 ? 'md:pr-12 md:text-right' : 'md:pl-12'}`}>
-                    <div className="bg-gradient-to-br from-primary-50 to-button-50 rounded-xl p-6 shadow-lg shadow-primary-100/50 border-2 border-primary-300 hover:border-button-400 transition-colors">
+                    <div className="bg-gradient-to-br from-primary-50 to-button-50 dark:from-gray-700 dark:to-gray-800 rounded-xl p-6 shadow-lg shadow-primary-100/50 dark:shadow-none border-2 border-primary-300 dark:border-primary-700 hover:border-button-400 transition-colors">
                       <span className="inline-block px-3 py-1 bg-button-500 text-white text-sm font-bold rounded-full mb-3">
                         {item.year}
                       </span>
-                      <h3 className="text-xl font-semibold text-gray-800 mb-2">{item.title}</h3>
-                      <p className="text-gray-600">{item.description}</p>
+                      <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">{item.title}</h3>
+                      <p className="text-gray-600 dark:text-gray-300">{item.description}</p>
                     </div>
                   </div>
 
                   {/* Timeline Dot */}
-                  <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 w-6 h-6 bg-button-500 rounded-full border-4 border-white shadow-lg" />
+                  <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 w-6 h-6 bg-button-500 rounded-full border-4 border-white dark:border-gray-800 shadow-lg" />
                 </div>
               ))}
             </div>
@@ -292,16 +292,16 @@ const About = () => {
       </section>
 
       {/* Team Section */}
-      <section className="py-24 bg-gradient-to-b from-primary-50 to-white">
+      <section className="py-24 bg-gradient-to-b from-primary-50 to-white dark:from-gray-900 dark:to-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+            <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
               Our Team
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               Meet the People Behind KJP
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               A dedicated team committed to bringing you the best quality rice products
             </p>
           </div>
@@ -310,7 +310,7 @@ const About = () => {
             {team.map((member) => (
               <div 
                 key={member.name}
-                className="group bg-white rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 hover:shadow-xl transition-all duration-300 border-2 border-primary-300 hover:border-button-400"
+                className="group bg-white dark:bg-gray-700 rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400"
               >
                 <div className="relative h-64 overflow-hidden">
                   <img 
@@ -321,11 +321,11 @@ const About = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent" />
                 </div>
                 <div className="p-6 text-center -mt-16 relative">
-                  <div className="w-20 h-20 bg-gradient-to-br from-button-500 to-button-700 rounded-full mx-auto mb-4 border-4 border-white shadow-lg flex items-center justify-center text-white text-2xl font-bold">
+                  <div className="w-20 h-20 bg-gradient-to-br from-button-500 to-button-700 rounded-full mx-auto mb-4 border-4 border-white dark:border-gray-800 shadow-lg flex items-center justify-center text-white text-2xl font-bold">
                     {member.name.charAt(0)}
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-800">{member.name}</h3>
-                  <p className="text-sm text-button-600">{member.role}</p>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">{member.name}</h3>
+                  <p className="text-sm text-button-600 dark:text-button-400">{member.role}</p>
                 </div>
               </div>
             ))}
@@ -349,7 +349,7 @@ const About = () => {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/contact">
-              <Button size="lg" className="px-8 bg-white !text-button-700 hover:bg-gray-100 group">
+              <Button size="lg" className="px-8 bg-white dark:bg-gray-700 !text-button-700 dark:text-button-300 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 group">
                 Get in Touch
                 <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
               </Button>

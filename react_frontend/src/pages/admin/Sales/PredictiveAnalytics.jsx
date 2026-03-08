@@ -109,14 +109,14 @@ const PredictiveAnalytics = () => {
   const summary = data?.summary || {};
 
   const TrendIcon = summary.revenue_trend === 'growing' ? TrendingUp : summary.revenue_trend === 'declining' ? TrendingDown : Minus;
-  const trendColor = summary.revenue_trend === 'growing' ? 'text-green-600' : summary.revenue_trend === 'declining' ? 'text-red-600' : 'text-gray-500';
-  const trendBg = summary.revenue_trend === 'growing' ? 'bg-green-50 border-green-200' : summary.revenue_trend === 'declining' ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+  const trendColor = summary.revenue_trend === 'growing' ? 'text-green-600 dark:text-green-400' : summary.revenue_trend === 'declining' ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
+  const trendBg = summary.revenue_trend === 'growing' ? 'bg-green-50 border-green-200 dark:border-green-700' : summary.revenue_trend === 'declining' ? 'bg-red-50 border-red-200 dark:border-red-700' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600';
 
   const confidenceColor = {
-    high: 'text-green-600 bg-green-50 border-green-200',
-    medium: 'text-amber-600 bg-amber-50 border-amber-200',
-    low: 'text-red-600 bg-red-50 border-red-200',
-  }[summary.confidence] || 'text-gray-600 bg-gray-50 border-gray-200';
+    high: 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700',
+    medium: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700',
+    low: 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700',
+  }[summary.confidence] || 'text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600';
 
   const periodLabel = { daily: 'Day', monthly: 'Month', yearly: 'Year' }[period] || 'Period';
 
@@ -124,7 +124,7 @@ const PredictiveAnalytics = () => {
     return (
       <div className="space-y-6">
         <SkeletonStats count={4} />
-        <div className="h-80 bg-gray-100 rounded-xl animate-pulse" />
+        <div className="h-80 bg-gray-100 dark:bg-gray-700 rounded-xl animate-pulse" />
       </div>
     );
   }
@@ -144,11 +144,11 @@ const PredictiveAnalytics = () => {
       {/* Header with period selector and refresh */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <Brain size={20} className="text-primary-600" />
+          <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <Brain size={20} className="text-primary-600 dark:text-primary-400" />
             Predictive Sales Analysis
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Forecast based on {summary.data_points || 0} historical data points
             {data.generated_at && <span> · Generated {new Date(data.generated_at).toLocaleString()}</span>}
           </p>
@@ -157,7 +157,7 @@ const PredictiveAnalytics = () => {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 border-2 border-primary-200 rounded-lg hover:bg-primary-50 transition-all disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 border-2 border-primary-200 dark:border-primary-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all disabled:opacity-50"
           >
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
             Refresh
@@ -231,8 +231,8 @@ const PredictiveAnalytics = () => {
             activeTab={period}
             onTabChange={setPeriod}
             summaryStats={[
-              { label: 'Avg Historical', value: `₱${(summary.avg_historical_revenue || 0).toLocaleString()}`, color: 'text-primary-600' },
-              { label: `Next ${periodLabel}`, value: `₱${(summary.predicted_revenue || 0).toLocaleString()}`, color: 'text-purple-600' },
+              { label: 'Avg Historical', value: `₱${(summary.avg_historical_revenue || 0).toLocaleString()}`, color: 'text-primary-600 dark:text-primary-400' },
+              { label: `Next ${periodLabel}`, value: `₱${(summary.predicted_revenue || 0).toLocaleString()}`, color: 'text-purple-600 dark:text-purple-400' },
               { label: 'Trend', value: `${summary.trend_percentage > 0 ? '+' : ''}${summary.trend_percentage || 0}%`, color: trendColor },
             ]}
           />
@@ -273,42 +273,42 @@ const PredictiveAnalytics = () => {
 
       {/* Top Products — Predicted Demand Table */}
       {data.top_products && data.top_products.length > 0 && (
-        <div className="bg-white rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 overflow-hidden">
-          <div className="p-4 border-b-2 border-primary-100">
-            <h4 className="font-bold text-gray-800 flex items-center gap-2 text-sm">
-              <Package size={16} className="text-primary-600" />
+        <div className="bg-white dark:bg-gray-700 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 overflow-hidden">
+          <div className="p-4 border-b-2 border-primary-100 dark:border-primary-800">
+            <h4 className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2 text-sm">
+              <Package size={16} className="text-primary-600 dark:text-primary-400" />
               Product Demand Predictions
             </h4>
-            <p className="text-xs text-gray-500 mt-0.5">Based on historical sales velocity and current stock levels</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Based on historical sales velocity and current stock levels</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Product</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Total Sold</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Avg Daily</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Est. Weekly</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Est. Monthly</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Current Stock</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Days to Stockout</th>
-                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Product</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Total Sold</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Avg Daily</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Est. Weekly</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Est. Monthly</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Current Stock</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Days to Stockout</th>
+                  <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600 dark:text-gray-300">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {data.top_products.map((product, idx) => {
                   const statusConfig = {
-                    critical: { label: 'Critical', bg: 'bg-red-100', text: 'text-red-700', icon: AlertTriangle },
-                    low: { label: 'Low', bg: 'bg-orange-100', text: 'text-orange-700', icon: ArrowDown },
-                    moderate: { label: 'Moderate', bg: 'bg-yellow-100', text: 'text-yellow-700', icon: Clock },
-                    healthy: { label: 'Healthy', bg: 'bg-green-100', text: 'text-green-700', icon: ArrowUp },
-                    no_sales: { label: 'No Sales', bg: 'bg-gray-100', text: 'text-gray-500', icon: Minus },
-                  }[product.stock_status] || { label: 'Unknown', bg: 'bg-gray-100', text: 'text-gray-500', icon: Minus };
+                    critical: { label: 'Critical', bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', icon: AlertTriangle },
+                    low: { label: 'Low', bg: 'bg-orange-100 dark:bg-orange-900/30', text: 'text-orange-700 dark:text-orange-300', icon: ArrowDown },
+                    moderate: { label: 'Moderate', bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-300', icon: Clock },
+                    healthy: { label: 'Healthy', bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', icon: ArrowUp },
+                    no_sales: { label: 'No Sales', bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-500 dark:text-gray-400', icon: Minus },
+                  }[product.stock_status] || { label: 'Unknown', bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-500 dark:text-gray-400', icon: Minus };
 
                   const StatusIcon = statusConfig.icon;
 
                   return (
-                    <tr key={product.product_id} className="hover:bg-primary-50/30 transition-colors">
+                    <tr key={product.product_id} className="hover:bg-primary-50/30 dark:hover:bg-primary-900/20 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div
@@ -316,29 +316,29 @@ const PredictiveAnalytics = () => {
                             style={{ backgroundColor: product.variety_color }}
                           />
                           <div>
-                            <p className="font-semibold text-gray-800 text-xs">{product.product_name}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-xs">{product.product_name}</p>
                             <p className="text-[10px] text-gray-400">{product.variety_name}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-center text-xs font-medium text-gray-700">
+                      <td className="px-3 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-200">
                         {product.total_sold.toLocaleString()}
                       </td>
-                      <td className="px-3 py-3 text-center text-xs font-medium text-gray-700">
+                      <td className="px-3 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-200">
                         {product.avg_daily_sales}
                       </td>
-                      <td className="px-3 py-3 text-center text-xs font-semibold text-purple-600">
+                      <td className="px-3 py-3 text-center text-xs font-semibold text-purple-600 dark:text-purple-400">
                         {product.predicted_weekly_demand}
                       </td>
-                      <td className="px-3 py-3 text-center text-xs font-semibold text-purple-600">
+                      <td className="px-3 py-3 text-center text-xs font-semibold text-purple-600 dark:text-purple-400">
                         {product.predicted_monthly_demand}
                       </td>
-                      <td className="px-3 py-3 text-center text-xs font-medium text-gray-700">
+                      <td className="px-3 py-3 text-center text-xs font-medium text-gray-700 dark:text-gray-200">
                         {product.current_stock.toLocaleString()}
                       </td>
                       <td className="px-3 py-3 text-center">
                         {product.days_until_stockout !== null ? (
-                          <span className={`text-xs font-bold ${product.days_until_stockout <= 7 ? 'text-red-600' : product.days_until_stockout <= 14 ? 'text-orange-600' : 'text-gray-700'}`}>
+                          <span className={`text-xs font-bold ${product.days_until_stockout <= 7 ? 'text-red-600 dark:text-red-400' : product.days_until_stockout <= 14 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-700 dark:text-gray-200'}`}>
                             {product.days_until_stockout} days
                           </span>
                         ) : (

@@ -81,7 +81,13 @@ const LoginModal = ({ isOpen, onClose }) => {
       const response = await login(formData.email, formData.password);
       onClose();
       if (response?.user?.role === 'staff') {
-        navigate('/staff/dashboard');
+        if (response?.user?.position === 'Driver') {
+          navigate('/driver/dashboard');
+        } else {
+          navigate('/staff/pos');
+        }
+      } else if (response?.user?.role === 'client') {
+        navigate('/client/dashboard');
       } else if (response?.user?.role === 'super_admin') {
         navigate('/superadmin/dashboard');
       } else {
@@ -111,9 +117,9 @@ const LoginModal = ({ isOpen, onClose }) => {
     const paddingClasses = `${hasLeftIcon ? 'pl-10' : 'px-4'} ${hasRightIcon ? 'pr-12' : 'pr-10'}`;
     
     const statusClasses = {
-      error: 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20',
-      success: 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20',
-      default: 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+      error: 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20',
+      success: 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20',
+      default: 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
     };
 
     return `${baseClasses} ${paddingClasses} ${statusClasses[status]} ${shouldShake ? 'animate-shake' : ''}`;
@@ -136,12 +142,12 @@ const LoginModal = ({ isOpen, onClose }) => {
 
         {/* Welcome Text */}
         <div className="text-center mb-4">
-          <p className="text-gray-600">Welcome back! Please login to your account.</p>
+          <p className="text-gray-600 dark:text-gray-300">Welcome back! Please login to your account.</p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="p-3 bg-red-50 border-2 border-red-200 text-red-600 text-sm rounded-xl flex items-center gap-2">
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 text-sm rounded-xl flex items-center gap-2">
             <AlertCircle size={16} />
             {error}
           </div>
@@ -149,7 +155,7 @@ const LoginModal = ({ isOpen, onClose }) => {
 
         {/* Email Field */}
         <div className="mb-4">
-          <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+          <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             Email Address
             <span className="text-red-500">*</span>
           </label>
@@ -180,7 +186,7 @@ const LoginModal = ({ isOpen, onClose }) => {
 
         {/* Password Field */}
         <div className="mb-4">
-          <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+          <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
             Password
             <span className="text-red-500">*</span>
           </label>
@@ -198,7 +204,7 @@ const LoginModal = ({ isOpen, onClose }) => {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors z-10"
+              className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-300 transition-colors z-10"
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
@@ -219,10 +225,10 @@ const LoginModal = ({ isOpen, onClose }) => {
         {/* Remember Me & Forgot Password */}
         <div className="flex items-center justify-between text-sm">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 text-button-600 border-primary-300 rounded focus:ring-button-500" />
-            <span className="text-gray-600">Remember me</span>
+            <input type="checkbox" className="w-4 h-4 text-button-600 dark:text-button-400 border-primary-300 dark:border-primary-700 rounded focus:ring-button-500" />
+            <span className="text-gray-600 dark:text-gray-300">Remember me</span>
           </label>
-          <button type="button" className="text-button-600 hover:text-button-700 font-medium">
+          <button type="button" className="text-button-600 hover:text-button-700 dark:text-button-300 font-medium">
             Forgot Password?
           </button>
         </div>

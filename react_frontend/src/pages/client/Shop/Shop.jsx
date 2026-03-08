@@ -171,7 +171,7 @@ const Shop = () => {
   const renderProductCard = (product) => {
     const qty = getQty(product.id);
     return (
-      <div key={product.id} className="bg-white rounded-xl overflow-hidden hover:shadow-md transition-all"
+      <div key={product.id} className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden hover:shadow-md transition-all"
         style={{ border: `1px solid ${theme.border_color}` }}>
         <div className="relative">
           <img src={product.image} alt={product.name} className="w-full h-36 object-cover" />
@@ -197,7 +197,7 @@ const Shop = () => {
           {product.inStock && (
             <div className="flex items-center gap-2 mt-3">
               <div className="flex items-center rounded-lg" style={{ border: `1px solid ${theme.border_color}` }}>
-                <button onClick={() => setQty(product.id, Math.max(1, (parseInt(qty) || 1) - 1), product.stocks)} className="p-1.5 hover:bg-gray-100 rounded-l-lg" disabled={qty <= 1}>
+                <button onClick={() => setQty(product.id, Math.max(1, (parseInt(qty) || 1) - 1), product.stocks)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-lg" disabled={qty <= 1}>
                   <Minus size={14} style={{ color: qty <= 1 ? '#d1d5db' : theme.text_primary }} />
                 </button>
                 <input type="number" value={qty}
@@ -205,7 +205,7 @@ const Shop = () => {
                   onBlur={() => handleQtyBlur(product.id)}
                   className="w-12 text-center text-sm font-semibold border-x py-1 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: theme.border_color, color: theme.text_primary, backgroundColor: 'transparent' }} min={1} max={product.stocks} />
-                <button onClick={() => setQty(product.id, Math.min((parseInt(qty) || 1) + 1, product.stocks), product.stocks)} className="p-1.5 hover:bg-gray-100 rounded-r-lg" disabled={(parseInt(qty) || 1) >= product.stocks}>
+                <button onClick={() => setQty(product.id, Math.min((parseInt(qty) || 1) + 1, product.stocks), product.stocks)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-r-lg" disabled={(parseInt(qty) || 1) >= product.stocks}>
                   <Plus size={14} style={{ color: (parseInt(qty) || 1) >= product.stocks ? '#d1d5db' : theme.text_primary }} />
                 </button>
               </div>
@@ -225,7 +225,7 @@ const Shop = () => {
   const renderProductListItem = (product) => {
     const qty = getQty(product.id);
     return (
-      <div key={product.id} className="bg-white rounded-xl p-3 flex gap-3 hover:shadow-md transition-all"
+      <div key={product.id} className="bg-white dark:bg-gray-800 rounded-xl p-3 flex gap-3 hover:shadow-md transition-all"
         style={{ border: `1px solid ${theme.border_color}` }}>
         <img src={product.image} alt={product.name} className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
         <div className="flex-1 min-w-0">
@@ -238,7 +238,7 @@ const Shop = () => {
               <div className="flex items-center gap-2 mt-0.5">
                 <Star size={11} className="fill-yellow-400 text-yellow-400" />
                 <span className="text-xs" style={{ color: theme.text_secondary }}>{product.rating}</span>
-                {product.inStock ? <span className="text-xs text-green-600">{product.stocks} in stock</span> : <span className="text-xs text-red-500">Out of Stock</span>}
+                {product.inStock ? <span className="text-xs text-green-600 dark:text-green-400">{product.stocks} in stock</span> : <span className="text-xs text-red-500">Out of Stock</span>}
               </div>
             </div>
             <span className="text-base font-bold flex-shrink-0" style={{ color: theme.button_primary }}>₱{product.price.toLocaleString()}</span>
@@ -246,7 +246,7 @@ const Shop = () => {
           {product.inStock && (
             <div className="flex items-center gap-2 mt-2">
               <div className="flex items-center rounded-lg" style={{ border: `1px solid ${theme.border_color}` }}>
-                <button onClick={() => setQty(product.id, Math.max(1, (parseInt(qty) || 1) - 1), product.stocks)} className="p-1 hover:bg-gray-100 rounded-l-lg" disabled={qty <= 1}>
+                <button onClick={() => setQty(product.id, Math.max(1, (parseInt(qty) || 1) - 1), product.stocks)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-lg" disabled={qty <= 1}>
                   <Minus size={12} />
                 </button>
                 <input type="number" value={qty}
@@ -254,7 +254,7 @@ const Shop = () => {
                   onBlur={() => handleQtyBlur(product.id)}
                   className="w-10 text-center text-xs font-semibold border-x py-1 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ borderColor: theme.border_color, color: theme.text_primary, backgroundColor: 'transparent' }} min={1} max={product.stocks} />
-                <button onClick={() => setQty(product.id, Math.min((parseInt(qty) || 1) + 1, product.stocks), product.stocks)} className="p-1 hover:bg-gray-100 rounded-r-lg" disabled={(parseInt(qty) || 1) >= product.stocks}>
+                <button onClick={() => setQty(product.id, Math.min((parseInt(qty) || 1) + 1, product.stocks), product.stocks)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-r-lg" disabled={(parseInt(qty) || 1) >= product.stocks}>
                   <Plus size={12} />
                 </button>
               </div>
@@ -272,7 +272,7 @@ const Shop = () => {
 
   // Order Panel (POS-style matching admin design)
   const renderOrderPanel = () => (
-    <div className="bg-white rounded-xl overflow-hidden flex flex-col h-full" style={{ border: `2px solid ${theme.border_color}` }}>
+    <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden flex flex-col h-full" style={{ border: `2px solid ${theme.border_color}` }}>
       {/* Gradient Header - matching admin POS */}
       <div className="p-4 text-white shrink-0" style={{ background: `linear-gradient(to right, ${theme.button_primary}, ${theme.button_primary}dd)` }}>
         <h3 className="font-bold text-base flex items-center gap-2">
@@ -306,16 +306,16 @@ const Shop = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => updateOrderItemQty(item.id, Math.max(1, (parseInt(item.quantity) || 1) - 1))}
-                      className="p-1 rounded hover:bg-gray-100" style={{ border: `1px solid ${theme.border_color}` }}>
+                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" style={{ border: `1px solid ${theme.border_color}` }}>
                       <Minus size={12} style={{ color: theme.text_primary }} />
                     </button>
                     <span className="w-6 text-center text-xs font-bold" style={{ color: theme.text_primary }}>{item.quantity}</span>
                     <button onClick={() => updateOrderItemQty(item.id, Math.min((parseInt(item.quantity) || 1) + 1, item.stocks))}
-                      className="p-1 rounded hover:bg-gray-100" style={{ border: `1px solid ${theme.border_color}` }}>
+                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" style={{ border: `1px solid ${theme.border_color}` }}>
                       <Plus size={12} style={{ color: theme.text_primary }} />
                     </button>
                     <button onClick={() => removeFromOrder(item.id)}
-                      className="p-1 rounded ml-1 text-red-400 hover:text-red-500 hover:bg-red-50"
+                      className="p-1 rounded ml-1 text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                       style={{ border: `1px solid ${theme.border_color}` }}>
                       <Trash2 size={12} />
                     </button>
@@ -384,7 +384,7 @@ const Shop = () => {
             <strong style={{ color: theme.text_primary }}>{filteredProducts.length}</strong> product(s)
           </p>
         </div>
-        <div className="bg-white rounded-xl p-3" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-3" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="flex-1 relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: theme.text_secondary }} />
@@ -396,12 +396,12 @@ const Shop = () => {
             </div>
             <div className="flex items-center gap-2">
               <select value={selectedVariety} onChange={(e) => setSelectedVariety(e.target.value)}
-                className="px-2.5 py-2 text-sm rounded-lg focus:outline-none appearance-none bg-white pr-7 cursor-pointer"
+                className="px-2.5 py-2 text-sm rounded-lg focus:outline-none appearance-none bg-white dark:bg-gray-800 pr-7 cursor-pointer"
                 style={{ border: `1.5px solid ${theme.border_color}`, color: theme.text_primary }}>
                 {varieties.map(v => <option key={v} value={v}>{v === 'All' ? 'All Varieties' : v}</option>)}
               </select>
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="px-2.5 py-2 text-sm rounded-lg focus:outline-none appearance-none bg-white pr-7 cursor-pointer"
+                className="px-2.5 py-2 text-sm rounded-lg focus:outline-none appearance-none bg-white dark:bg-gray-800 pr-7 cursor-pointer"
                 style={{ border: `1.5px solid ${theme.border_color}`, color: theme.text_primary }}>
                 {sortOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
@@ -427,7 +427,7 @@ const Shop = () => {
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.border_color}` }}>
+                <div key={i} className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.border_color}` }}>
                   <Skeleton variant="image" className="h-40 w-full rounded-none" />
                   <div className="p-3 space-y-2">
                     <Skeleton variant="title" width="w-3/4" />
@@ -444,7 +444,7 @@ const Shop = () => {
               ))}
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
               <Package size={48} className="mx-auto mb-4" style={{ color: theme.text_secondary }} />
               <h3 className="text-lg font-semibold" style={{ color: theme.text_primary }}>No products found</h3>
               <p className="text-sm mt-1" style={{ color: theme.text_secondary }}>Try adjusting your search or filters</p>
@@ -473,7 +473,7 @@ const Shop = () => {
             {mobileOrderOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setMobileOrderOpen(false)} />}
             <div className="fixed bottom-16 left-0 right-0 z-50">
               {mobileOrderOpen && (
-                <div className="bg-white max-h-[65vh] overflow-y-auto rounded-t-2xl shadow-2xl">
+                <div className="bg-white dark:bg-gray-800 max-h-[65vh] overflow-y-auto rounded-t-2xl shadow-2xl">
                   {renderOrderPanel()}
                 </div>
               )}
@@ -495,7 +495,7 @@ const Shop = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowPaymentModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
               style={{ border: `2px solid ${theme.border_color}` }}>
               {/* Header */}
               <div className="p-5 text-white shrink-0"
@@ -557,11 +557,11 @@ const Shop = () => {
                     </div>
 
                     {cashTendered && (
-                      <div className={`rounded-lg p-3 text-center ${parseFloat(cashTendered) >= orderTotal ? 'bg-green-50 border-2 border-green-200' : 'bg-red-50 border-2 border-red-200'}`}>
+                      <div className={`rounded-lg p-3 text-center ${parseFloat(cashTendered) >= orderTotal ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
                         <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(cashTendered) >= orderTotal ? '#16a34a' : '#dc2626' }}>
                           {parseFloat(cashTendered) >= orderTotal ? 'Change' : 'Insufficient'}
                         </p>
-                        <p className={`text-2xl font-bold ${parseFloat(cashTendered) >= orderTotal ? 'text-green-600' : 'text-red-600'}`}>
+                        <p className={`text-2xl font-bold ${parseFloat(cashTendered) >= orderTotal ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           ₱{Math.abs((parseFloat(cashTendered) || 0) - orderTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
@@ -582,9 +582,9 @@ const Shop = () => {
                       />
                     </div>
 
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
-                      <p className="text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Payment Verification</p>
-                      <p className="text-xs text-blue-600">Enter the GCash reference number from the payment confirmation as proof of payment.</p>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                      <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1 uppercase tracking-wide">Payment Verification</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">Enter the GCash reference number from the payment confirmation as proof of payment.</p>
                     </div>
                   </>
                 )}
@@ -593,7 +593,7 @@ const Shop = () => {
               <div className="p-4 flex gap-3 shrink-0" style={{ borderTop: `2px solid ${theme.border_color}20` }}>
                 <button
                   onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all"
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                   style={{ border: `2px solid ${theme.border_color}`, color: theme.text_secondary }}
                 >
                   Cancel
@@ -617,7 +617,7 @@ const Shop = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowOrderModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
               style={{ border: `2px solid ${theme.border_color}` }}>
               {/* Success Header */}
               <div className="p-6 text-white text-center"
@@ -648,7 +648,7 @@ const Shop = () => {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span style={{ color: theme.text_secondary }}>Change</span>
-                        <span className="font-bold text-green-600">₱{lastOrder.change.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="font-bold text-green-600 dark:text-green-400">₱{lastOrder.change.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </>
                   )}

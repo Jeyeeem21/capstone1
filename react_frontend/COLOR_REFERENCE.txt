@@ -3,6 +3,7 @@
 ================================================================================
 
 Created: January 31, 2026
+Last Updated: March 10, 2026
 Purpose: Documentation of all colors used in the application
 
 ================================================================================
@@ -203,6 +204,30 @@ Completed           | bg-green-100    | text-green-700
 In Progress         | bg-blue-100     | text-blue-700
 Pending             | bg-yellow-100   | text-yellow-700
 
+ORDER/SALE STATUS:
+------------------
+Status              | Background      | Text Color
+--------------------|-----------------|------------------
+Pending             | bg-yellow-50    | text-yellow-600
+Processing          | bg-blue-50      | text-blue-600
+Shipped             | bg-blue-50      | text-blue-600
+Delivered           | bg-green-50     | text-green-600
+Completed           | bg-green-50     | text-green-600
+Return Requested    | bg-yellow-50    | text-yellow-600
+Picking Up          | bg-yellow-50    | text-yellow-600
+Returned            | bg-red-50       | text-red-600
+Cancelled           | bg-red-50       | text-red-600
+Voided              | bg-red-50       | text-red-600
+Rejected            | bg-red-50       | text-red-600
+Paid                | bg-green-50     | text-green-600
+
+PAYMENT STATUS:
+---------------
+Status              | Background      | Text Color
+--------------------|-----------------|------------------
+Paid                | bg-green-50     | text-green-600
+Not Paid            | bg-yellow-50    | text-yellow-600
+
 ================================================================================
                          8. SHADOW COLORS
 ================================================================================
@@ -274,6 +299,74 @@ GRAY PRESETS:
 WHITE/LIGHT PRESETS:
 --------------------
 #ffffff, #f9fafb, #f3f4f6, #fafafa, #f0fdf4
+
+================================================================================
+                      11. DARK MODE COLORS
+================================================================================
+
+ACTIVATION: Dark mode is toggled via `html.dark` CSS class (Tailwind `class` strategy).
+Overrides are defined in `src/index.css` under `html.dark` and `@layer base`.
+
+BACKGROUND OVERRIDES:
+---------------------
+Light Class          | Dark Override        | Dark Hex
+---------------------|----------------------|-----------
+bg-white             | #1e293b              | Slate 800
+bg-gray-50           | #334155              | Slate 700
+bg-gray-100          | #334155              | Slate 700
+aside (sidebar)      | #1e293b !important   | Slate 800
+
+CSS VARIABLE OVERRIDES:
+-----------------------
+Variable                    | Light Value   | Dark Value
+----------------------------|---------------|---------------
+--color-bg-primary          | #ffffff       | #0f172a (Slate 900)
+--color-bg-secondary        | #f0fdf4       | #1e293b (Slate 800)
+--color-text-primary        | #1f2937       | #f1f5f9 (Slate 100)
+--color-text-secondary      | #6b7280       | #cbd5e1 (Slate 300)
+
+TEXT OVERRIDES:
+--------------
+Light Class          | Dark Override        | Dark Hex
+---------------------|----------------------|-----------
+text-gray-800/900    | #f1f5f9              | Slate 100
+text-gray-700        | #e2e8f0              | Slate 200
+text-gray-600        | #cbd5e1              | Slate 300
+text-gray-500/400    | #94a3b8              | Slate 400
+
+BORDER OVERRIDES:
+-----------------
+Light Class          | Dark Override        | Dark Hex
+---------------------|----------------------|-----------
+border-gray-100/200  | #475569              | Slate 600
+border-gray-300      | #64748b              | Slate 500
+
+INPUT/FORM OVERRIDES:
+---------------------
+input, select, textarea  | bg: #334155 | text: #f1f5f9 | placeholder: #94a3b8
+
+TABLE OVERRIDES:
+----------------
+Element              | Dark Override
+---------------------|-----------------------------
+th                   | bg: #334155, text: #f1f5f9
+td                   | text: #e2e8f0
+row hover            | var(--color-hover-light) rgba(34,197,94,0.3)
+row selected         | var(--color-button-700)
+
+SHADOW OVERRIDES:
+-----------------
+shadow-xl, shadow-lg | --tw-shadow-color: rgba(0,0,0,0.4)
+
+STATUSBADGE DARK MODE (Tailwind dark: variants inline):
+-------------------------------------------------------
+Variant   | Dark Background           | Dark Text
+----------|---------------------------|-----------------
+success   | dark:bg-green-500/15      | dark:text-green-400
+warning   | dark:bg-yellow-500/15     | dark:text-yellow-400
+danger    | dark:bg-red-500/15        | dark:text-red-400
+info      | dark:bg-blue-500/15       | dark:text-blue-400
+default   | dark:bg-gray-700          | dark:text-gray-300
 
 ================================================================================
                               SUMMARY

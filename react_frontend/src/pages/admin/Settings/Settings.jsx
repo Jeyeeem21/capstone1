@@ -47,16 +47,16 @@ const AppearanceColorPicker = ({ label, description, icon: Icon, value, onChange
   }, [value]);
 
   return (
-    <div className={`bg-gray-50 rounded-xl border-2 border-primary-200 hover:border-primary-300 transition-colors ${compact ? 'p-3' : 'p-4'}`}>
+    <div className={`bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:border-primary-700 transition-colors ${compact ? 'p-3' : 'p-4'}`}>
       <div className={`flex items-start gap-2 ${compact ? 'mb-2' : 'mb-3'}`}>
         {!compact && (
-          <div className="p-2 rounded-lg bg-white shadow-sm text-primary-500">
+          <div className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm text-primary-500">
             <Icon size={18} />
           </div>
         )}
         <div className="flex-1">
-          <h4 className={`font-semibold text-gray-800 ${compact ? 'text-xs' : 'text-sm'}`}>{label}</h4>
-          <p className={`text-gray-500 ${compact ? 'text-[10px]' : 'text-xs'}`}>{description}</p>
+          <h4 className={`font-semibold text-gray-800 dark:text-gray-100 ${compact ? 'text-xs' : 'text-sm'}`}>{label}</h4>
+          <p className={`text-gray-500 dark:text-gray-400 ${compact ? 'text-[10px]' : 'text-xs'}`}>{description}</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -65,7 +65,7 @@ const AppearanceColorPicker = ({ label, description, icon: Icon, value, onChange
             ref={colorInputRef}
             type="color"
             defaultValue={value}
-            className={`rounded-lg cursor-pointer border-2 border-primary-200 hover:border-primary-400 transition-colors ${compact ? 'w-8 h-8' : 'w-12 h-12'}`}
+            className={`rounded-lg cursor-pointer border-2 border-primary-200 dark:border-primary-700 hover:border-primary-400 transition-colors ${compact ? 'w-8 h-8' : 'w-12 h-12'}`}
             style={{ padding: 0 }}
           />
         </div>
@@ -77,7 +77,7 @@ const AppearanceColorPicker = ({ label, description, icon: Icon, value, onChange
               const val = e.target.value;
               if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) onChange(val);
             }}
-            className={`w-full font-mono border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'}`}
+            className={`w-full font-mono border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-gray-100 ${compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'}`}
             placeholder="#000000"
           />
         </div>
@@ -88,7 +88,7 @@ const AppearanceColorPicker = ({ label, description, icon: Icon, value, onChange
             <button
               key={i}
               onClick={() => onChange(preset)}
-              className={`rounded-lg border-2 border-primary-200 hover:border-primary-400 hover:scale-110 transition-all shadow-sm ${compact ? 'w-6 h-6' : 'w-8 h-8'}`}
+              className={`rounded-lg border-2 border-primary-200 dark:border-primary-700 hover:border-primary-400 hover:scale-110 transition-all shadow-sm ${compact ? 'w-6 h-6' : 'w-8 h-8'}`}
               style={{ backgroundColor: preset }}
               title={preset}
             />
@@ -101,31 +101,31 @@ const AppearanceColorPicker = ({ label, description, icon: Icon, value, onChange
 
 // Font size slider component (extracted to module level to prevent remount on re-render)
 const AppearanceFontSizeSlider = ({ label, description, icon: Icon, value, onChange, min = 12, max = 24 }) => (
-  <div className="p-4 bg-gray-50 rounded-xl border-2 border-primary-200 hover:border-primary-300 transition-colors">
+  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:border-primary-700 transition-colors">
     <div className="flex items-start gap-3 mb-3">
-      <div className="p-2 rounded-lg bg-white shadow-sm text-primary-500">
+      <div className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm text-primary-500">
         <Icon size={18} />
       </div>
       <div className="flex-1">
-        <h4 className="font-semibold text-gray-800 text-sm">{label}</h4>
-        <p className="text-xs text-gray-500">{description}</p>
+        <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{label}</h4>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
       </div>
-      <div className="text-lg font-bold text-primary-600">{value}px</div>
+      <div className="text-lg font-bold text-primary-600 dark:text-primary-400">{value}px</div>
     </div>
     <div className="flex items-center gap-3">
-      <span className="text-xs text-gray-500 w-8">{min}px</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400 w-8">{min}px</span>
       <input
         type="range"
         min={min}
         max={max}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 h-2 bg-primary-200 rounded-lg appearance-none cursor-pointer accent-button-500"
+        className="flex-1 h-2 bg-primary-200 dark:bg-primary-800 rounded-lg appearance-none cursor-pointer accent-button-500"
       />
-      <span className="text-xs text-gray-500 w-8">{max}px</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400 w-8">{max}px</span>
     </div>
-    <div className="mt-3 p-3 bg-white rounded-lg border border-primary-100">
-      <p style={{ fontSize: `${value}px` }} className="text-gray-700">
+    <div className="mt-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-primary-100 dark:border-primary-700">
+      <p style={{ fontSize: `${value}px` }} className="text-gray-700 dark:text-gray-200">
         Preview: The quick brown fox jumps over the lazy dog
       </p>
     </div>
@@ -475,7 +475,7 @@ const Settings = () => {
       switchRole(role);
       toast.success('Role Switched', `You are now viewing as ${role === 'admin' ? 'Administrator' : 'Staff'}`);
       if (role === 'staff') {
-        navigate('/staff/dashboard');
+        navigate('/staff/pos');
       } else if (role === 'super_admin') {
         navigate('/superadmin/dashboard');
       } else {
@@ -485,7 +485,7 @@ const Settings = () => {
 
     return (
       <div className="space-y-6">
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-xl mb-6">
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl mb-6">
           <p className="text-yellow-700 dark:text-yellow-300 text-sm">
             <strong>Demo Mode:</strong> Use this section to test different user views. 
             In production, users would be assigned roles through the Staff Management page.
@@ -497,18 +497,18 @@ const Settings = () => {
           <div 
             className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
               user?.role === 'admin' 
-                ? 'border-button-500 bg-button-50 shadow-lg' 
-                : 'border-gray-200 hover:border-button-300 bg-white'
+                ? 'border-button-500 bg-button-50 dark:bg-gray-700 shadow-lg' 
+                : 'border-primary-200 dark:border-primary-700 hover:border-button-300 dark:hover:border-button-700 bg-white dark:bg-gray-700'
             }`}
             onClick={() => handleRoleSwitch('admin')}
           >
             <div className="flex items-center gap-4 mb-4">
-              <div className={`p-3 rounded-xl ${user?.role === 'admin' ? 'bg-button-500' : 'bg-gray-100'}`}>
-                <Shield size={28} className={user?.role === 'admin' ? 'text-white' : 'text-gray-600'} />
+              <div className={`p-3 rounded-xl ${user?.role === 'admin' ? 'bg-button-500' : 'bg-gray-100 dark:bg-gray-600'}`}>
+                <Shield size={28} className={user?.role === 'admin' ? 'text-white' : 'text-gray-600 dark:text-gray-300'} />
               </div>
               <div>
-                <h3 className="font-bold text-lg text-gray-800">Administrator</h3>
-                <p className="text-sm text-gray-500">Full system access</p>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Administrator</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Full system access</p>
               </div>
               {user?.role === 'admin' && (
                 <div className="ml-auto">
@@ -516,7 +516,7 @@ const Settings = () => {
                 </div>
               )}
             </div>
-            <ul className="space-y-2 text-sm text-gray-600">
+            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
               <li className="flex items-center gap-2">
                 <CheckCircle size={14} className="text-green-500" />
                 Dashboard & Analytics
@@ -548,18 +548,18 @@ const Settings = () => {
           <div 
             className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
               user?.role === 'staff' 
-                ? 'border-button-500 bg-button-50 shadow-lg' 
-                : 'border-gray-200 hover:border-button-300 bg-white'
+                ? 'border-button-500 bg-button-50 dark:bg-gray-700 shadow-lg' 
+                : 'border-primary-200 dark:border-primary-700 hover:border-button-300 dark:hover:border-button-700 bg-white dark:bg-gray-700'
             }`}
             onClick={() => handleRoleSwitch('staff')}
           >
             <div className="flex items-center gap-4 mb-4">
-              <div className={`p-3 rounded-xl ${user?.role === 'staff' ? 'bg-button-500' : 'bg-gray-100'}`}>
-                <User size={28} className={user?.role === 'staff' ? 'text-white' : 'text-gray-600'} />
+              <div className={`p-3 rounded-xl ${user?.role === 'staff' ? 'bg-button-500' : 'bg-gray-100 dark:bg-gray-600'}`}>
+                <User size={28} className={user?.role === 'staff' ? 'text-white' : 'text-gray-600 dark:text-gray-300'} />
               </div>
               <div>
-                <h3 className="font-bold text-lg text-gray-800">Staff</h3>
-                <p className="text-sm text-gray-500">Limited access</p>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Staff</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Limited access</p>
               </div>
               {user?.role === 'staff' && (
                 <div className="ml-auto">
@@ -567,7 +567,7 @@ const Settings = () => {
                 </div>
               )}
             </div>
-            <ul className="space-y-2 text-sm text-gray-600">
+            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
               <li className="flex items-center gap-2">
                 <CheckCircle size={14} className="text-green-500" />
                 Staff Dashboard (Low Stock Alerts)
@@ -592,8 +592,8 @@ const Settings = () => {
           </div>
         </div>
 
-        <div className="p-4 bg-gray-50 rounded-xl">
-          <p className="text-sm text-gray-600">
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             <strong>Current Role:</strong> {user?.role === 'admin' ? 'Administrator' : 'Staff'} 
             <span className="text-gray-400 ml-2">({user?.email || 'Not logged in'})</span>
           </p>
@@ -611,19 +611,19 @@ const Settings = () => {
     return (
       <div className="space-y-6">
         {/* Logo Upload */}
-        <div className="flex items-center gap-6 p-4 bg-gray-50 rounded-xl border-2 border-dashed border-primary-200">
+        <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-700">
           <div className="w-24 h-24 bg-gradient-to-br from-button-500 to-button-600 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden relative">
             {businessSaving ? (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                 <Loader2 size={32} className="text-white animate-spin" />
               </div>
             ) : null}
-            <img src={logoPreview} alt="Business Logo" className="w-20 h-20 object-contain rounded-lg bg-white/90 p-1" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+            <img src={logoPreview} alt="Business Logo" className="w-20 h-20 object-contain rounded-lg bg-white/90 dark:bg-gray-700/90 p-1" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
             <span className="text-white font-bold text-3xl hidden">{businessInfo.business_name?.substring(0, 3) || 'KJP'}</span>
           </div>
           <div>
-            <h4 className="font-semibold text-gray-800 mb-1">Business Logo</h4>
-            <p className="text-sm text-gray-500 mb-3">Upload your company logo (PNG, JPG, SVG, WebP - Max 10MB). Logo uploads immediately.</p>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Business Logo</h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Upload your company logo (PNG, JPG, SVG, WebP - Max 10MB). Logo uploads immediately.</p>
             <input
               ref={logoInputRef}
               type="file"
@@ -704,24 +704,24 @@ const Settings = () => {
         />
         
         {/* Business Hours */}
-        <div className="p-4 bg-button-50 rounded-xl border border-button-200">
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-            <Clock size={18} className="text-button-600" />
+        <div className="p-4 bg-button-50 dark:bg-gray-700/50 rounded-xl border border-button-200 dark:border-gray-600">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <Clock size={18} className="text-button-600 dark:text-button-400" />
             Business Hours
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormInput label="Opening Time" name="business_open_time" type="time" value={businessInfo.business_open_time} onChange={handleBusinessChange} required />
             <FormInput label="Closing Time" name="business_close_time" type="time" value={businessInfo.business_close_time} onChange={handleBusinessChange} required />
           </div>
-          <p className="text-sm text-gray-500 mt-3">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
             <strong>Preview:</strong> {businessInfo.business_open_days}: {formatTime(businessInfo.business_open_time)} - {formatTime(businessInfo.business_close_time)}
           </p>
         </div>
 
         {/* Footer Content */}
-        <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-            <FileText size={18} className="text-gray-600" />
+        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-primary-200 dark:border-primary-700">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <FileText size={18} className="text-primary-600 dark:text-primary-400" />
             Footer Content
           </h4>
           <div className="space-y-4">
@@ -751,7 +751,7 @@ const Settings = () => {
         </div>
 
         {/* Social Media Links */}
-        <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-200 dark:border-blue-500/30">
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
           <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Share2 size={18} className="text-blue-600 dark:text-blue-400" />
             Social Media Links
@@ -760,7 +760,7 @@ const Settings = () => {
             <FormInput 
               label={
                 <span className="flex items-center gap-2">
-                  <Facebook size={16} className="text-blue-600" />
+                  <Facebook size={16} className="text-blue-600 dark:text-blue-400" />
                   Facebook URL
                 </span>
               }
@@ -796,7 +796,7 @@ const Settings = () => {
             <FormInput 
               label={
                 <span className="flex items-center gap-2">
-                  <Linkedin size={16} className="text-blue-700" />
+                  <Linkedin size={16} className="text-blue-700 dark:text-blue-300" />
                   LinkedIn URL
                 </span>
               }
@@ -806,13 +806,13 @@ const Settings = () => {
               placeholder="https://linkedin.com/company/yourcompany" 
             />
           </div>
-          <p className="text-sm text-gray-500 mt-3">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
             Leave empty to hide the social media icon in the footer.
           </p>
         </div>
 
         {/* Shipping & Delivery Settings */}
-        <div className="p-4 bg-orange-50 dark:bg-orange-500/10 rounded-xl border border-orange-200 dark:border-orange-500/30">
+        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-500/30">
           <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1 flex items-center gap-2">
             <Truck size={18} className="text-orange-600 dark:text-orange-400" />
             Shipping & Delivery
@@ -858,10 +858,10 @@ const Settings = () => {
             {(businessInfo.shipping_base_km && businessInfo.shipping_rate_per_sack) ? (
               <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-500/30">
                 <p className="text-sm text-gray-700 dark:text-gray-300">
-                  <strong>Preview:</strong> For every <span className="text-orange-600 font-semibold">{businessInfo.shipping_base_km} km</span>, 
-                  charge <span className="text-orange-600 font-semibold">₱{businessInfo.shipping_rate_per_sack}</span> per sack.
+                  <strong>Preview:</strong> For every <span className="text-orange-600 dark:text-orange-400 font-semibold">{businessInfo.shipping_base_km} km</span>, 
+                  charge <span className="text-orange-600 dark:text-orange-400 font-semibold">₱{businessInfo.shipping_rate_per_sack}</span> per sack.
                   {businessInfo.shipping_rate_per_km && (
-                    <> Additional rate: <span className="text-orange-600 font-semibold">₱{businessInfo.shipping_rate_per_km}</span> per km.</>
+                    <> Additional rate: <span className="text-orange-600 dark:text-orange-400 font-semibold">₱{businessInfo.shipping_rate_per_km}</span> per km.</>
                   )}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -872,7 +872,7 @@ const Settings = () => {
           </div>
         </div>
         
-        <div className="flex justify-end pt-4 border-t border-primary-200">
+        <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
           <Button onClick={handleSaveGeneral} disabled={businessSaving}>
             {businessSaving ? (
               <>
@@ -895,13 +895,13 @@ const Settings = () => {
   const ProfileSection = () => (
     <div className="space-y-6">
       {/* Profile Avatar */}
-      <div className="flex items-center gap-6 p-4 bg-gray-50 rounded-xl border-2 border-dashed border-primary-200">
+      <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-700">
         <div className="w-20 h-20 bg-gradient-to-br from-secondary-400 to-secondary-500 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
           {profileInfo.firstName.charAt(0)}{profileInfo.lastName.charAt(0)}
         </div>
         <div>
-          <h4 className="font-semibold text-gray-800 mb-1">Profile Picture</h4>
-          <p className="text-sm text-gray-500 mb-3">Upload a photo (PNG, JPG - Max 10MB)</p>
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Profile Picture</h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Upload a photo (PNG, JPG - Max 10MB)</p>
           <Button variant="outline" size="sm">
             <Camera size={16} className="mr-1.5" />
             Upload Photo
@@ -919,7 +919,7 @@ const Settings = () => {
       </div>
       <FormInput label="Role" name="role" value={profileInfo.role} onChange={handleProfileChange} disabled hint="Contact administrator to change your role" />
       
-      <div className="flex justify-end pt-4 border-t border-primary-200">
+      <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
         <Button onClick={handleSaveProfile}>
           <Save size={16} className="mr-1.5" />
           Update Profile
@@ -931,7 +931,7 @@ const Settings = () => {
   // Security Section
   const SecuritySection = () => (
     <div className="space-y-6">
-      <div className="p-4 bg-blue-50 dark:bg-blue-500/10 rounded-xl border border-blue-200 dark:border-blue-500/30">
+      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
         <div className="flex items-start gap-3">
           <Shield size={20} className="text-blue-600 dark:text-blue-400 mt-0.5" />
           <div>
@@ -955,11 +955,11 @@ const Settings = () => {
       </div>
       
       <label className="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" checked={showPassword} onChange={() => setShowPassword(!showPassword)} className="w-4 h-4 rounded border-primary-300 text-primary-500 focus:ring-primary-500" />
-        <span className="text-sm text-gray-600">Show passwords</span>
+        <input type="checkbox" checked={showPassword} onChange={() => setShowPassword(!showPassword)} className="w-4 h-4 rounded border-primary-300 dark:border-primary-700 text-primary-500 focus:ring-primary-500" />
+        <span className="text-sm text-gray-600 dark:text-gray-300">Show passwords</span>
       </label>
 
-      <div className="flex justify-end pt-4 border-t border-primary-200">
+      <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
         <Button onClick={handleSaveSecurity}>
           <Lock size={16} className="mr-1.5" />
           Change Password
@@ -978,10 +978,10 @@ const Settings = () => {
         { key: 'salesReports', title: 'Daily Sales Reports', description: 'Get daily sales summary via email' },
         { key: 'systemUpdates', title: 'System Updates', description: 'Notifications about system maintenance' },
       ].map((item) => (
-        <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-primary-200 hover:border-primary-300 transition-colors">
+        <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:border-primary-700 transition-colors">
           <div>
-            <h4 className="font-semibold text-gray-800">{item.title}</h4>
-            <p className="text-sm text-gray-500">{item.description}</p>
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100">{item.title}</h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input 
@@ -990,12 +990,12 @@ const Settings = () => {
               onChange={() => setNotificationSettings({ ...notificationSettings, [item.key]: !notificationSettings[item.key] })}
               className="sr-only peer" 
             />
-            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+            <div className="w-11 h-6 bg-gray-300 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-gray-700 dark:after:bg-gray-300 after:border-primary-300 dark:border-primary-700 dark:after:border-gray-500 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
           </label>
         </div>
       ))}
       
-      <div className="flex justify-end pt-4 border-t border-primary-200">
+      <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
         <Button onClick={handleSaveNotifications}>
           <Save size={16} className="mr-1.5" />
           Save Preferences
@@ -1019,27 +1019,27 @@ const Settings = () => {
       <div className="space-y-6">
         {/* Theme Mode */}
         <div>
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Layout size={18} className="text-primary-500" />
             Theme Mode
           </h4>
           <div className="grid grid-cols-2 gap-4">
             <button 
               onClick={() => updateTheme('mode', 'light')}
-              className={`p-5 rounded-xl border-2 transition-all ${theme.mode === 'light' ? 'border-primary-500 bg-primary-50 shadow-lg shadow-primary-100' : 'border-primary-200 hover:border-primary-300'}`}
+              className={`p-5 rounded-xl border-2 transition-all ${theme.mode === 'light' ? 'border-primary-500 bg-primary-50 dark:bg-gray-700 shadow-lg shadow-primary-100 dark:shadow-gray-900/30' : 'border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:border-primary-700'}`}
             >
-              <Sun size={28} className={`mx-auto mb-2 ${theme.mode === 'light' ? 'text-primary-600' : 'text-gray-400'}`} />
-              <h4 className="font-semibold text-gray-800 text-sm">Light Mode</h4>
-              <p className="text-xs text-gray-500">Default light theme</p>
+              <Sun size={28} className={`mx-auto mb-2 ${theme.mode === 'light' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} />
+              <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Light Mode</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Default light theme</p>
               {theme.mode === 'light' && <CheckCircle size={18} className="text-primary-500 mx-auto mt-2" />}
             </button>
             <button 
               onClick={() => updateTheme('mode', 'dark')}
-              className={`p-5 rounded-xl border-2 transition-all ${theme.mode === 'dark' ? 'border-primary-500 bg-primary-50 shadow-lg shadow-primary-100' : 'border-primary-200 hover:border-primary-300'}`}
+              className={`p-5 rounded-xl border-2 transition-all ${theme.mode === 'dark' ? 'border-primary-500 bg-primary-50 dark:bg-gray-700 shadow-lg shadow-primary-100 dark:shadow-gray-900/30' : 'border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:border-primary-700'}`}
             >
-              <Moon size={28} className={`mx-auto mb-2 ${theme.mode === 'dark' ? 'text-primary-600' : 'text-gray-400'}`} />
-              <h4 className="font-semibold text-gray-800 text-sm">Dark Mode</h4>
-              <p className="text-xs text-gray-500">Easier on the eyes</p>
+              <Moon size={28} className={`mx-auto mb-2 ${theme.mode === 'dark' ? 'text-primary-600 dark:text-primary-400' : 'text-gray-400'}`} />
+              <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Dark Mode</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Easier on the eyes</p>
               {theme.mode === 'dark' && <CheckCircle size={18} className="text-primary-500 mx-auto mt-2" />}
             </button>
           </div>
@@ -1075,7 +1075,7 @@ const Settings = () => {
 
         {/* Background Colors - 4 columns */}
         <div>
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Layout size={18} className="text-primary-500" />
             Background Colors
           </h4>
@@ -1121,7 +1121,7 @@ const Settings = () => {
 
         {/* Text Colors - 3 columns */}
         <div>
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Type size={18} className="text-primary-500" />
             Text Colors
           </h4>
@@ -1158,7 +1158,7 @@ const Settings = () => {
 
         {/* Font Sizes - 2 columns */}
         <div>
-          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Type size={18} className="text-primary-500" />
             Font Sizes
           </h4>
@@ -1185,9 +1185,9 @@ const Settings = () => {
         </div>
 
         {/* Preview & Actions - Combined */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 rounded-xl border-2 border-primary-200 bg-primary-50/30">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 rounded-xl border-2 border-primary-200 dark:border-primary-700 bg-primary-50 dark:bg-gray-700/50">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-gray-600 mr-2">Preview:</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300 mr-2">Preview:</span>
             <button 
               className="px-3 py-1.5 rounded-lg font-medium text-white text-sm shadow-sm"
               style={{ backgroundColor: theme.button_primary || '#7f0518' }}
@@ -1502,13 +1502,13 @@ const Settings = () => {
       <div className="space-y-6">
         {/* Tab Navigation - Centered */}
         <div className="flex justify-center">
-          <div className="inline-flex bg-gray-100 rounded-xl p-1.5 gap-1">
+          <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1.5 gap-1">
             <button
               onClick={() => setActiveInfoTab('home')}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'home'
                   ? 'bg-button-500 text-white shadow-md'
-                  : 'text-gray-600 hover:bg-gray-200'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-gray-600'
               }`}
             >
               <Home size={16} />
@@ -1519,7 +1519,7 @@ const Settings = () => {
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'about'
                   ? 'bg-button-500 text-white shadow-md'
-                  : 'text-gray-600 hover:bg-gray-200'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-gray-600'
               }`}
             >
               <FileText size={16} />
@@ -1532,16 +1532,16 @@ const Settings = () => {
         {activeInfoTab === 'home' && (
           <div className="space-y-6">
             {/* Hero Section */}
-            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl border-2 border-primary-200">
-              <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                <Target size={18} className="text-primary-600" />
+            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Target size={18} className="text-primary-600 dark:text-primary-400" />
                 Hero Section
               </h4>
               
               {/* Hero Image Upload */}
-              <div className="mb-4 p-4 bg-white rounded-xl border-2 border-dashed border-primary-300">
+              <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-xl border-2 border-dashed border-primary-300 dark:border-primary-700">
                 <div className="flex items-center gap-4">
-                  <div className="w-32 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                  <div className="w-32 h-20 bg-gray-100 dark:bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
                     {homeContent.heroImage ? (
                       <img src={homeContent.heroImage} alt="Hero" className="w-full h-full object-cover" />
                     ) : (
@@ -1549,8 +1549,8 @@ const Settings = () => {
                     )}
                   </div>
                   <div className="flex-1">
-                    <h5 className="font-medium text-gray-700 mb-1">Hero Background Image</h5>
-                    <p className="text-xs text-gray-500 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
+                    <h5 className="font-medium text-gray-700 dark:text-gray-200 mb-1">Hero Background Image</h5>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
                     <label className="cursor-pointer">
                       <input
                         type="file"
@@ -1603,9 +1603,9 @@ const Settings = () => {
             </div>
 
             {/* Statistics */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-              <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                <Award size={18} className="text-primary-600" />
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Award size={18} className="text-primary-600 dark:text-primary-400" />
                 Statistics
               </h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1635,10 +1635,10 @@ const Settings = () => {
             </div>
 
             {/* Features */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-                  <Shield size={18} className="text-primary-600" />
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Shield size={18} className="text-primary-600 dark:text-primary-400" />
                   Features ({homeContent.features.length})
                 </h4>
                 <Button size="sm" variant="outline" onClick={handleAddFeature}>
@@ -1647,10 +1647,10 @@ const Settings = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {homeContent.features.map((feature, index) => (
-                  <div key={index} className="p-4 bg-white rounded-lg border border-primary-200 relative">
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
                       onClick={() => handleRemoveFeature(index)}
-                      className="absolute top-2 right-2 p-1 hover:bg-red-100 rounded text-red-500"
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
                       <X size={14} />
                     </button>
@@ -1671,10 +1671,10 @@ const Settings = () => {
             </div>
 
             {/* Testimonials */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-                  <Users size={18} className="text-primary-600" />
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Users size={18} className="text-primary-600 dark:text-primary-400" />
                   Testimonials ({homeContent.testimonials.length})
                 </h4>
                 <Button size="sm" variant="outline" onClick={handleAddTestimonial}>
@@ -1683,10 +1683,10 @@ const Settings = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {homeContent.testimonials.map((testimonial, index) => (
-                  <div key={index} className="p-4 bg-white rounded-lg border border-primary-200 relative">
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
                       onClick={() => handleRemoveTestimonial(index)}
-                      className="absolute top-2 right-2 p-1 hover:bg-red-100 rounded text-red-500"
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
                       <X size={14} />
                     </button>
@@ -1724,9 +1724,9 @@ const Settings = () => {
             </div>
 
             {/* About Preview Section */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-              <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                <Eye size={18} className="text-primary-600" />
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Eye size={18} className="text-primary-600 dark:text-primary-400" />
                 About Preview Section (on Home)
               </h4>
               <FormInput 
@@ -1741,7 +1741,7 @@ const Settings = () => {
                 rows={3}
               />
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">About Points</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">About Points</label>
                 {homeContent.aboutPoints.map((point, index) => (
                   <div key={index} className="flex gap-2 mb-2">
                     <input
@@ -1752,14 +1752,14 @@ const Settings = () => {
                         updated[index] = e.target.value;
                         setHomeContent({ ...homeContent, aboutPoints: updated });
                       }}
-                      className="flex-1 px-3 py-2 border-2 border-primary-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-button-500"
+                      className="flex-1 px-3 py-2 border-2 border-primary-200 dark:border-primary-700 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-button-500"
                     />
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-primary-200">
+            <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
               <Button onClick={handleSaveHome} disabled={savingHome}>
                 {savingHome ? (
                   <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
@@ -1775,16 +1775,16 @@ const Settings = () => {
         {activeInfoTab === 'about' && (
           <div className="space-y-6">
             {/* Hero Section */}
-            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl border-2 border-primary-200">
-              <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                <Target size={18} className="text-primary-600" />
+            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Target size={18} className="text-primary-600 dark:text-primary-400" />
                 About Hero Section
               </h4>
               
               {/* Hero Image Upload */}
-              <div className="mb-4 p-4 bg-white rounded-xl border-2 border-dashed border-primary-300">
+              <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-xl border-2 border-dashed border-primary-300 dark:border-primary-700">
                 <div className="flex items-center gap-4">
-                  <div className="w-32 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                  <div className="w-32 h-20 bg-gray-100 dark:bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
                     {aboutContent.heroImage ? (
                       <img src={aboutContent.heroImage} alt="Hero" className="w-full h-full object-cover" />
                     ) : (
@@ -1792,8 +1792,8 @@ const Settings = () => {
                     )}
                   </div>
                   <div className="flex-1">
-                    <h5 className="font-medium text-gray-700 mb-1">Hero Background Image</h5>
-                    <p className="text-xs text-gray-500 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
+                    <h5 className="font-medium text-gray-700 dark:text-gray-200 mb-1">Hero Background Image</h5>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
                     <label className="cursor-pointer">
                       <input
                         type="file"
@@ -1842,9 +1842,9 @@ const Settings = () => {
 
             {/* Mission & Vision */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-                <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                  <Target size={18} className="text-primary-600" />
+              <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <Target size={18} className="text-primary-600 dark:text-primary-400" />
                   Mission
                 </h4>
                 <FormInput 
@@ -1859,7 +1859,7 @@ const Settings = () => {
                   rows={3}
                 />
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Mission Points</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Mission Points</label>
                   {aboutContent.missionPoints.map((point, index) => (
                     <input
                       key={index}
@@ -1870,15 +1870,15 @@ const Settings = () => {
                         updated[index] = e.target.value;
                         setAboutContent({ ...aboutContent, missionPoints: updated });
                       }}
-                      className="w-full px-3 py-2 mb-2 border-2 border-primary-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-button-500"
+                      className="w-full px-3 py-2 mb-2 border-2 border-primary-200 dark:border-primary-700 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-button-500"
                     />
                   ))}
                 </div>
               </div>
 
-              <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-                <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                  <Eye size={18} className="text-primary-600" />
+              <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                  <Eye size={18} className="text-primary-600 dark:text-primary-400" />
                   Vision
                 </h4>
                 <FormInput 
@@ -1893,7 +1893,7 @@ const Settings = () => {
                   rows={3}
                 />
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Vision Points</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Vision Points</label>
                   {aboutContent.visionPoints.map((point, index) => (
                     <input
                       key={index}
@@ -1904,7 +1904,7 @@ const Settings = () => {
                         updated[index] = e.target.value;
                         setAboutContent({ ...aboutContent, visionPoints: updated });
                       }}
-                      className="w-full px-3 py-2 mb-2 border-2 border-primary-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-button-500"
+                      className="w-full px-3 py-2 mb-2 border-2 border-primary-200 dark:border-primary-700 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-button-500"
                     />
                   ))}
                 </div>
@@ -1912,10 +1912,10 @@ const Settings = () => {
             </div>
 
             {/* Core Values */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-                  <Heart size={18} className="text-primary-600" />
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Heart size={18} className="text-primary-600 dark:text-primary-400" />
                   Core Values ({aboutContent.values.length})
                 </h4>
                 <Button size="sm" variant="outline" onClick={handleAddValue}>
@@ -1924,10 +1924,10 @@ const Settings = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {aboutContent.values.map((value, index) => (
-                  <div key={index} className="p-4 bg-white rounded-lg border border-primary-200 relative">
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
                       onClick={() => handleRemoveValue(index)}
-                      className="absolute top-2 right-2 p-1 hover:bg-red-100 rounded text-red-500"
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
                       <X size={14} />
                     </button>
@@ -1956,10 +1956,10 @@ const Settings = () => {
             </div>
 
             {/* Timeline */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-sm text-gray-800 flex items-center gap-2">
-                  <Calendar size={18} className="text-primary-600" />
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Calendar size={18} className="text-primary-600 dark:text-primary-400" />
                   Company Timeline ({aboutContent.timeline.length})
                 </h4>
                 <Button size="sm" variant="outline" onClick={handleAddTimeline}>
@@ -1968,10 +1968,10 @@ const Settings = () => {
               </div>
               <div className="space-y-4">
                 {aboutContent.timeline.map((item, index) => (
-                  <div key={index} className="p-4 bg-white rounded-lg border border-primary-200 relative">
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
                       onClick={() => handleRemoveTimeline(index)}
-                      className="absolute top-2 right-2 p-1 hover:bg-red-100 rounded text-red-500"
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
                       <X size={14} />
                     </button>
@@ -2012,14 +2012,14 @@ const Settings = () => {
             </div>
 
             {/* Team Members */}
-            <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-              <h4 className="font-semibold text-sm text-gray-800 mb-4 flex items-center gap-2">
-                <Users size={18} className="text-primary-600" />
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Users size={18} className="text-primary-600 dark:text-primary-400" />
                 Team Members
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {aboutContent.team.map((member, index) => (
-                  <div key={index} className="p-4 bg-white rounded-lg border border-primary-200">
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700">
                     <FormInput 
                       label="Name" 
                       value={member.name} 
@@ -2043,7 +2043,7 @@ const Settings = () => {
               </div>
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-primary-200">
+            <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
               <Button onClick={handleSaveAbout} disabled={savingAbout}>
                 {savingAbout ? (
                   <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
@@ -2063,6 +2063,22 @@ const Settings = () => {
     const [dbInfo, setDbInfo] = useState(null);
     const [loadingInfo, setLoadingInfo] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [exportingCsv, setExportingCsv] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const importFileRef = useRef(null);
+    const [importTable, setImportTable] = useState('products');
+
+    const importableTables = [
+      { value: 'products', label: 'Products' },
+      { value: 'varieties', label: 'Varieties' },
+      { value: 'customers', label: 'Clients' },
+      { value: 'suppliers', label: 'Suppliers' },
+      { value: 'procurements', label: 'Procurements' },
+      { value: 'processings', label: 'Processings' },
+      { value: 'drying_processes', label: 'Drying Processes' },
+      { value: 'stock_logs', label: 'Stock Logs' },
+      { value: 'orders', label: 'Orders' },
+    ];
 
     const fetchDatabaseInfo = async () => {
       setLoadingInfo(true);
@@ -2104,14 +2120,13 @@ const Settings = () => {
         if (response.ok) {
           const blob = await response.blob();
           const contentDisposition = response.headers.get('Content-Disposition');
-          let filename = 'KjpRicemill_backup.sql';
+          let filename = 'backup.sql';
           
           if (contentDisposition) {
             const match = contentDisposition.match(/filename="(.+)"/);
             if (match) filename = match[1];
           }
           
-          // Create download link
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -2133,6 +2148,87 @@ const Settings = () => {
       }
     };
 
+    const handleExportCSV = async () => {
+      setExportingCsv(true);
+      toast.info('Export Started', 'Preparing CSV export...');
+      
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`${API_BASE_URL}/database/export-csv`, {
+          headers: {
+            'Accept': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const contentDisposition = response.headers.get('Content-Disposition');
+          let filename = 'data_export.zip';
+          
+          if (contentDisposition) {
+            const match = contentDisposition.match(/filename="(.+)"/);
+            if (match) filename = match[1];
+          }
+          
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          toast.success('Export Complete', `CSV data exported as ${filename}`);
+        } else {
+          toast.error('Export Failed', 'Could not export CSV data');
+        }
+      } catch (error) {
+        console.error('CSV export error:', error);
+        toast.error('Export Failed', 'An error occurred during CSV export');
+      } finally {
+        setExportingCsv(false);
+      }
+    };
+
+    const handleImportCSV = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      setImporting(true);
+      toast.info('Import Started', `Importing ${file.name} into ${importTable}...`);
+      
+      try {
+        const token = localStorage.getItem('auth_token');
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('table', importTable);
+        
+        const response = await fetch(`${API_BASE_URL}/database/import-csv`, {
+          method: 'POST',
+          headers: {
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+          body: formData,
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          toast.success('Import Complete', data.message);
+        } else {
+          toast.error('Import Failed', data.message || 'Could not import data');
+        }
+      } catch (error) {
+        console.error('Import error:', error);
+        toast.error('Import Failed', 'An error occurred during import');
+      } finally {
+        setImporting(false);
+        if (importFileRef.current) importFileRef.current.value = '';
+      }
+    };
+
     // Fetch database info on mount
     useEffect(() => {
       fetchDatabaseInfo();
@@ -2141,37 +2237,37 @@ const Settings = () => {
     return (
       <div className="space-y-6">
         {/* Database Backup */}
-        <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl border-2 border-primary-200">
+        <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
           <div className="flex items-start gap-4">
             <div className="p-3 bg-primary-500 rounded-xl">
               <Database size={28} className="text-white" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-gray-800 mb-1">Database Backup (.SQL)</h4>
-              <p className="text-sm text-gray-600 mb-4">
+              <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Database Backup (.SQL)</h4>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
                 Export your entire database as a .sql file. This backup includes all tables, 
                 structure, and data which can be restored using phpMyAdmin or MySQL command line.
               </p>
               
               {/* Database Info */}
               {dbInfo && (
-                <div className="mb-4 p-3 bg-white/70 rounded-lg border border-primary-200">
+                <div className="mb-4 p-3 bg-white/70 dark:bg-gray-700/70 rounded-lg border border-primary-200 dark:border-primary-700">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <div>
-                      <span className="text-gray-500">Database:</span>
-                      <p className="font-medium text-gray-800">{dbInfo.database}</p>
+                      <span className="text-gray-500 dark:text-gray-400">Database:</span>
+                      <p className="font-medium text-gray-800 dark:text-gray-100">{dbInfo.database}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Tables:</span>
-                      <p className="font-medium text-gray-800">{dbInfo.tables_count}</p>
+                      <span className="text-gray-500 dark:text-gray-400">Tables:</span>
+                      <p className="font-medium text-gray-800 dark:text-gray-100">{dbInfo.tables_count}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Total Rows:</span>
-                      <p className="font-medium text-gray-800">{dbInfo.total_rows?.toLocaleString()}</p>
+                      <span className="text-gray-500 dark:text-gray-400">Total Rows:</span>
+                      <p className="font-medium text-gray-800 dark:text-gray-100">{dbInfo.total_rows?.toLocaleString()}</p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Size:</span>
-                      <p className="font-medium text-gray-800">{dbInfo.total_size}</p>
+                      <span className="text-gray-500 dark:text-gray-400">Size:</span>
+                      <p className="font-medium text-gray-800 dark:text-gray-100">{dbInfo.total_size}</p>
                     </div>
                   </div>
                 </div>
@@ -2212,34 +2308,60 @@ const Settings = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-            <Download size={32} className="text-primary-600 mb-3" />
-            <h4 className="font-semibold text-gray-800 mb-1">Export Data (CSV)</h4>
-            <p className="text-sm text-gray-500 mb-4">Download all your data as CSV or Excel file</p>
-            <Button variant="outline" onClick={() => toast.info('Export Started', 'Your data is being prepared for download.')}>
-              <Download size={16} className="mr-1.5" />
-              Export as CSV
+          {/* CSV Export */}
+          <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+            <Download size={32} className="text-primary-600 dark:text-primary-400 mb-3" />
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Export Data (CSV)</h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Download all business data as a ZIP of CSV files</p>
+            <Button variant="outline" onClick={handleExportCSV} disabled={exportingCsv}>
+              {exportingCsv ? (
+                <>
+                  <Loader2 size={16} className="mr-1.5 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download size={16} className="mr-1.5" />
+                  Export as CSV
+                </>
+              )}
             </Button>
           </div>
-          <div className="p-6 bg-gray-50 rounded-xl border-2 border-primary-200">
-            <Upload size={32} className="text-blue-600 mb-3" />
-            <h4 className="font-semibold text-gray-800 mb-1">Import Data</h4>
-            <p className="text-sm text-gray-500 mb-4">Import data from CSV or Excel file</p>
-            <Button variant="outline" onClick={() => toast.info('Import', 'Select a file to import data.')}>
-              <Upload size={16} className="mr-1.5" />
-              Import Data
-            </Button>
-          </div>
-        </div>
 
-        <div className="p-6 bg-red-50 dark:bg-red-500/10 rounded-xl border-2 border-red-200 dark:border-red-500/30">
-          <Trash2 size={32} className="text-red-600 dark:text-red-400 mb-3" />
-          <h4 className="font-semibold text-red-800 dark:text-red-300 mb-1">Danger Zone</h4>
-          <p className="text-sm text-red-600 dark:text-red-400 mb-4">Once you delete your data, there is no going back. Please be certain.</p>
-          <Button variant="danger" onClick={() => toast.error('Action Required', 'Please contact administrator to delete data.')}>
-            <Trash2 size={16} className="mr-1.5" />
-            Delete All Data
-          </Button>
+          {/* CSV Import */}
+          <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+            <Upload size={32} className="text-blue-600 dark:text-blue-400 mb-3" />
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Import Data</h4>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Import data from a CSV file into a table</p>
+            <div className="mb-3">
+              <FormSelect
+                label="Target Table"
+                value={importTable}
+                onChange={(e) => setImportTable(e.target.value)}
+                options={importableTables}
+              />
+            </div>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv"
+              onChange={handleImportCSV}
+              className="hidden"
+            />
+            <Button variant="outline" onClick={() => importFileRef.current?.click()} disabled={importing}>
+              {importing ? (
+                <>
+                  <Loader2 size={16} className="mr-1.5 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} className="mr-1.5" />
+                  Select CSV File
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -2277,10 +2399,10 @@ const Settings = () => {
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 ${
                   activeSection === section.id 
                     ? 'bg-button-500 text-white shadow-md' 
-                    : 'text-gray-600 hover:bg-button-100 hover:text-button-700'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-button-100 hover:text-button-700 dark:text-button-300'
                 }`}
               >
-                <section.icon size={18} className={activeSection === section.id ? 'text-white' : 'text-gray-400 group-hover:text-button-600'} />
+                <section.icon size={18} className={activeSection === section.id ? 'text-white' : 'text-gray-400 dark:text-gray-500 dark:text-gray-400 group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400'} />
                 <span className="font-medium text-sm">{section.title}</span>
               </button>
             ))}
@@ -2295,13 +2417,13 @@ const Settings = () => {
       ) : (
       <Card>
         <CardContent className="p-6">
-          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-primary-200">
-            <div className="p-2.5 bg-primary-50 rounded-xl">
-              <currentSection.icon size={24} className="text-primary-600" />
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-primary-200 dark:border-primary-700">
+            <div className="p-2.5 bg-primary-50 dark:bg-gray-700 rounded-xl">
+              <currentSection.icon size={24} className="text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h3 className="font-bold text-lg text-gray-800">{currentSection.title}</h3>
-              <p className="text-sm text-gray-500">{currentSection.description}</p>
+              <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{currentSection.title}</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{currentSection.description}</p>
             </div>
           </div>
           {renderContent()}

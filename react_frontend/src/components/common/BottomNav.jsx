@@ -15,7 +15,7 @@ import {
   Truck,
   UserCheck,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -61,7 +61,7 @@ const BottomNav = () => {
       submenuId: 'partners',
       submenu: [
         { icon: Truck, label: 'Supplier', to: `${basePath}/partners/supplier` },
-        { icon: UserCheck, label: 'Customer', to: `${basePath}/partners/customer` },
+        { icon: UserCheck, label: 'Client', to: `${basePath}/partners/client` },
       ]
     },
     { icon: UserCog, label: 'Staff', to: `${basePath}/staff-management` },
@@ -102,14 +102,14 @@ const BottomNav = () => {
           className="fixed bottom-[66px] left-0 right-0 z-50 md:hidden animate-slide-up"
           style={{ backgroundColor: 'var(--color-bg-sidebar)' }}
         >
-          <div className="border-t-2 border-primary-300 py-2 px-4">
+          <div className="border-t-2 border-primary-300 dark:border-primary-700 py-2 px-4">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                 {navItems.find(item => item.submenuId === expandedMenu)?.label}
               </h3>
               <button 
                 onClick={toggleSubmenu}
-                className="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                className="p-1 rounded-lg hover:bg-gray-200 dark:bg-gray-600 dark:hover:bg-gray-700"
               >
                 <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
               </button>
@@ -127,7 +127,7 @@ const BottomNav = () => {
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all duration-200
                         ${isActive 
                           ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-md' 
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 active:bg-gray-200 dark:active:bg-gray-700'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 active:bg-gray-200 dark:bg-gray-600 dark:active:bg-gray-700'
                         }`}
                     >
                       <subItem.icon size={18} />
@@ -141,7 +141,7 @@ const BottomNav = () => {
       )}
 
       <nav 
-        className="fixed bottom-0 left-0 right-0 border-t-2 border-primary-300 z-50 md:hidden safe-area-bottom"
+        className="fixed bottom-0 left-0 right-0 border-t-2 border-primary-300 dark:border-primary-700 z-50 md:hidden safe-area-bottom"
         style={{ backgroundColor: 'var(--color-bg-sidebar)' }}
       >
         {/* Scrollable nav items - naturally scrollable with touch */}
@@ -166,7 +166,7 @@ const BottomNav = () => {
                   className={`flex flex-col items-center justify-center min-w-[64px] px-3 py-2 rounded-xl transition-all duration-200 flex-shrink-0 relative
                     ${isActive 
                       ? 'bg-gradient-to-t from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25' 
-                      : 'text-gray-500 dark:text-gray-400 active:bg-primary-100 dark:active:bg-gray-700'
+                      : 'text-gray-500 dark:text-gray-400 active:bg-primary-100 dark:bg-primary-900/30 dark:active:bg-gray-700'
                     }`}
                   style={{ scrollSnapAlign: 'start' }}
                 >
@@ -194,7 +194,7 @@ const BottomNav = () => {
                 className={`flex flex-col items-center justify-center min-w-[64px] px-3 py-2 rounded-xl transition-all duration-200 flex-shrink-0
                   ${isActive 
                     ? 'bg-gradient-to-t from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25' 
-                    : 'text-gray-500 dark:text-gray-400 active:bg-primary-100 dark:active:bg-gray-700'
+                    : 'text-gray-500 dark:text-gray-400 active:bg-primary-100 dark:bg-primary-900/30 dark:active:bg-gray-700'
                   }`}
                 style={{ scrollSnapAlign: 'start' }}
               >

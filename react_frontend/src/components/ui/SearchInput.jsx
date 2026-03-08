@@ -14,7 +14,7 @@ const SearchInput = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-10 pr-4 py-2 border-2 border-primary-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-400 transition-all"
+        className="w-full pl-10 pr-4 py-2 border-2 border-primary-200 dark:border-primary-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-400 transition-all"
       />
     </div>
   );

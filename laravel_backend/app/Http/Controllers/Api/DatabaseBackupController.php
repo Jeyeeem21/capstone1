@@ -21,7 +21,13 @@ class DatabaseBackupController extends Controller
         $database = config('database.connections.mysql.database');
         $tables = $this->getTables();
         
-        $filename = 'KjpRicemill_backup_' . date('Y-m-d_His') . '.sql';
+        // Use business name from settings for filename
+        $businessName = DB::table('business_settings')
+            ->where('key', 'business_name')
+            ->value('value') ?? 'KjpRicemill';
+        $safeName = preg_replace('/[^a-zA-Z0-9]/', '', $businessName);
+        $dateStr = date('F_j_Y');
+        $filename = "{$safeName}_{$dateStr}_backup.sql";
 
         $this->logAudit('EXPORT', 'Database', "Exported database backup: {$filename}", [
             'filename' => $filename,
@@ -154,6 +160,140 @@ class DatabaseBackupController extends Controller
             'total_rows' => $totalRows,
             'total_size' => round($totalSize, 2) . ' MB',
             'tables' => $tableInfo,
+        ]);
+    }
+
+    /**
+     * Export all business data as a ZIP of CSV files
+     */
+    public function exportCsv(Request $request)
+    {
+        $businessName = DB::table('business_settings')
+            ->where('key', 'business_name')
+            ->value('value') ?? 'KjpRicemill';
+        $safeName = preg_replace('/[^a-zA-Z0-9]/', '', $businessName);
+        $dateStr = date('F_j_Y');
+
+        // Tables to export as CSV (business data only)
+        $exportTables = [
+            'products', 'varieties', 'customers', 'suppliers',
+            'procurements', 'processings', 'drying_processes',
+            'stock_logs', 'orders', 'order_items', 
+            'users',
+        ];
+
+        $availableTables = $this->getTables();
+        $exportTables = array_filter($exportTables, fn($t) => in_array($t, $availableTables));
+
+        $zipFilename = "{$safeName}_{$dateStr}_csv_export.zip";
+        $tempPath = storage_path("app/{$zipFilename}");
+
+        $zip = new \ZipArchive();
+        if ($zip->open($tempPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return response()->json(['message' => 'Could not create ZIP file'], 500);
+        }
+
+        foreach ($exportTables as $table) {
+            $rows = DB::table($table)->get();
+            if ($rows->isEmpty()) continue;
+
+            $csv = fopen('php://temp', 'r+');
+            // Header row
+            $columns = array_keys((array) $rows->first());
+            fputcsv($csv, $columns);
+            // Data rows
+            foreach ($rows as $row) {
+                fputcsv($csv, array_values((array) $row));
+            }
+            rewind($csv);
+            $csvContent = stream_get_contents($csv);
+            fclose($csv);
+
+            $zip->addFromString("{$table}.csv", $csvContent);
+        }
+
+        $zip->close();
+
+        $this->logAudit('EXPORT', 'CSV', "Exported CSV data: {$zipFilename}", [
+            'filename' => $zipFilename,
+            'tables' => array_values($exportTables),
+        ]);
+
+        return response()->download($tempPath, $zipFilename, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Import data from CSV file into a specific table
+     */
+    public function importCsv(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt',
+            'table' => 'required|string',
+        ]);
+
+        $table = $request->input('table');
+        $availableTables = $this->getTables();
+
+        if (!in_array($table, $availableTables)) {
+            return response()->json(['message' => 'Invalid table name'], 422);
+        }
+
+        $file = $request->file('file');
+        $handle = fopen($file->getRealPath(), 'r');
+        
+        if (!$handle) {
+            return response()->json(['message' => 'Could not read file'], 422);
+        }
+
+        $headers = fgetcsv($handle);
+        if (!$headers) {
+            fclose($handle);
+            return response()->json(['message' => 'CSV file is empty or has no headers'], 422);
+        }
+
+        $imported = 0;
+        $errors = 0;
+
+        DB::beginTransaction();
+        try {
+            while (($row = fgetcsv($handle)) !== false) {
+                if (count($row) !== count($headers)) {
+                    $errors++;
+                    continue;
+                }
+                $data = array_combine($headers, $row);
+                // Convert 'NULL' strings to actual null
+                $data = array_map(fn($v) => $v === 'NULL' || $v === '' ? null : $v, $data);
+                
+                try {
+                    DB::table($table)->insert($data);
+                    $imported++;
+                } catch (\Exception $e) {
+                    $errors++;
+                }
+            }
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            fclose($handle);
+            return response()->json(['message' => 'Import failed: ' . $e->getMessage()], 500);
+        }
+
+        fclose($handle);
+
+        $this->logAudit('IMPORT', 'CSV', "Imported CSV data into {$table}: {$imported} rows", [
+            'table' => $table,
+            'imported' => $imported,
+            'errors' => $errors,
+        ]);
+
+        return response()->json([
+            'message' => "Imported {$imported} rows into {$table}" . ($errors > 0 ? " ({$errors} rows skipped)" : ''),
+            'imported' => $imported,
+            'errors' => $errors,
         ]);
     }
 }

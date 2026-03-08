@@ -109,11 +109,11 @@ const Dashboard = () => {
 
   // Pipeline items for the flow bar
   const pipelineItems = useMemo(() => [
-    { label: 'Procurement', count: pipeline.procurement_pending || 0, icon: ShoppingCart, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-500/10', path: `${basePath}/procurement` },
-    { label: 'Drying', count: pipeline.drying_active || 0, icon: Droplets, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-500/10', path: `${basePath}/drying` },
-    { label: 'Processing', count: pipeline.processing_active || 0, icon: Settings2, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-500/10', path: `${basePath}/processing` },
-    { label: 'Orders', count: pipeline.orders_pending || 0, icon: ShoppingBag, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-500/10', path: `${basePath}/orders` },
-    { label: 'Deliveries', count: pipeline.deliveries_active || 0, icon: Truck, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-500/10', path: `${basePath}/orders` },
+    { label: 'Procurement', count: pipeline.procurement_pending || 0, icon: ShoppingCart, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20', path: `${basePath}/procurement` },
+    { label: 'Drying', count: pipeline.drying_active || 0, icon: Droplets, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', path: `${basePath}/drying` },
+    { label: 'Processing', count: pipeline.processing_active || 0, icon: Settings2, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/20', path: `${basePath}/processing` },
+    { label: 'Orders', count: pipeline.orders_pending || 0, icon: ShoppingBag, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/20', path: `${basePath}/orders` },
+    { label: 'Deliveries', count: pipeline.deliveries_active || 0, icon: Truck, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', path: `${basePath}/orders` },
   ], [pipeline, basePath]);
 
   // Top products bar chart data
@@ -136,7 +136,7 @@ const Dashboard = () => {
   // Recent sales columns
   const recentSalesColumns = [
     { header: 'Transaction', accessor: 'transaction_id' },
-    { header: 'Customer', accessor: 'customer' },
+    { header: 'Client', accessor: 'customer' },
     { header: 'Amount', accessor: 'total', cell: (row) => fmt(row.total) },
     { header: 'Payment', accessor: 'payment_method' },
     { header: 'Date', accessor: 'date' },
@@ -155,7 +155,7 @@ const Dashboard = () => {
     },
     { header: 'Variety', accessor: 'variety' },
     { header: 'Stock', accessor: 'stocks', cell: (row) => (
-      <span className={`font-bold ${row.stocks <= 0 ? 'text-red-600' : 'text-yellow-600'}`}>
+      <span className={`font-bold ${row.stocks <= 0 ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
         {row.stocks}
       </span>
     )},
@@ -166,9 +166,13 @@ const Dashboard = () => {
   // Activity icon map
   const getActivityIcon = (action) => {
     switch (action) {
-      case 'CREATE': return <div className="w-7 h-7 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center"><TrendingUp size={13} className="text-green-600 dark:text-green-400" /></div>;
-      case 'UPDATE': return <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center"><Activity size={13} className="text-blue-600 dark:text-blue-400" /></div>;
-      case 'DELETE': return <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-red-600 dark:text-red-400" /></div>;
+      case 'CREATE': return <div className="w-7 h-7 rounded-full bg-green-100 dark:bg-green-900/30 dark:bg-green-500/20 flex items-center justify-center"><TrendingUp size={13} className="text-green-600 dark:text-green-400" /></div>;
+      case 'UPDATE': return <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 dark:bg-blue-500/20 flex items-center justify-center"><Activity size={13} className="text-blue-600 dark:text-blue-400" /></div>;
+      case 'DELETE': return <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/30 dark:bg-red-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-red-600 dark:text-red-400" /></div>;
+      case 'ARCHIVE': return <div className="w-7 h-7 rounded-full bg-yellow-100 dark:bg-yellow-900/30 dark:bg-yellow-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-yellow-600 dark:text-yellow-400" /></div>;
+      case 'RESTORE': return <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 dark:bg-emerald-500/20 flex items-center justify-center"><TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" /></div>;
+      case 'SOFT_DELETE': case 'SOFT_DELETE_ALL': return <div className="w-7 h-7 rounded-full bg-orange-100 dark:bg-orange-900/30 dark:bg-orange-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-orange-600 dark:text-orange-400" /></div>;
+      case 'RETURN': return <div className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/30 dark:bg-teal-500/20 flex items-center justify-center"><Activity size={13} className="text-teal-600 dark:text-teal-400" /></div>;
       default: return <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center"><Clock size={13} className="text-gray-600 dark:text-gray-400" /></div>;
     }
   };
@@ -186,7 +190,7 @@ const Dashboard = () => {
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-button-600 bg-white border border-gray-200 rounded-lg hover:border-button-300 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 bg-white dark:bg-gray-700 border border-primary-200 dark:border-primary-700 rounded-lg hover:border-button-300 dark:border-button-700 transition-all disabled:opacity-50"
         >
           <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
           {refreshing ? 'Refreshing...' : 'Refresh'}
@@ -217,7 +221,7 @@ const Dashboard = () => {
             trendLabel="vs last month"
           />
           <StatsCard
-            label="Customers"
+            label="Clients"
             value={overview.total_customers || 0}
             unit={`+${overview.new_customers_this_month || 0} this month`}
             icon={Users}
@@ -237,14 +241,14 @@ const Dashboard = () => {
 
       {/* ==================== PIPELINE FLOW ==================== */}
       {loading ? (
-        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-100">
+        <div className="mb-6 p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
           <Skeleton variant="title" width="w-40" className="mb-4" />
           <div className="flex items-center gap-3">
             {[1,2,3,4,5].map(i => <Skeleton key={i} variant="custom" className="h-16 flex-1 rounded-lg" />)}
           </div>
         </div>
       ) : (
-        <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50">
+        <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30">
           <h3 className="text-sm font-bold text-content mb-3 flex items-center gap-2">
             <Layers size={15} className="text-button-500" />
             Active Pipeline
@@ -274,11 +278,11 @@ const Dashboard = () => {
       {/* ==================== REVENUE & PAYMENT CHARTS ==================== */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2 p-4 bg-white rounded-xl border border-gray-100">
+          <div className="lg:col-span-2 p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
             <Skeleton variant="title" width="w-32" className="mb-4" />
             <Skeleton variant="custom" className="h-[280px] w-full rounded-lg" />
           </div>
-          <div className="p-4 bg-white rounded-xl border border-gray-100">
+          <div className="p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
             <Skeleton variant="title" width="w-24" className="mb-4" />
             <div className="flex items-center justify-center py-4">
               <Skeleton variant="circle" width="w-[180px]" height="h-[180px]" />
@@ -303,7 +307,7 @@ const Dashboard = () => {
                   <select
                     value={period}
                     onChange={(e) => { setPeriod(e.target.value); setActiveChartPoint(null); }}
-                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -313,31 +317,31 @@ const Dashboard = () => {
                   </select>
                   {period === 'daily' && (
                     <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {period === 'weekly' && (
                     <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {period === 'monthly' && (
                     <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000" max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {period === 'bi-annually' && (
                     <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000" max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {period === 'annually' && (
                     <div className="flex items-center gap-1">
                       <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
                         min="2000" max={chartYearTo}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                       <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
                       <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
                         min={chartYearFrom} max={new Date().getFullYear()}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                     </div>
                   )}
                 </div>
@@ -345,9 +349,9 @@ const Dashboard = () => {
               onDotClick={setActiveChartPoint}
               activePoint={activeChartPoint}
               summaryStats={[
-                { label: 'This Month', value: fmt(overview.current_month_revenue), color: 'text-primary-600' },
-                { label: 'Avg Order', value: fmt(overview.avg_order_value), color: 'text-primary-600' },
-                { label: 'Items Sold', value: (overview.total_items_sold || 0).toLocaleString(), color: 'text-green-600' },
+                { label: 'This Month', value: fmt(overview.current_month_revenue), color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Avg Order', value: fmt(overview.avg_order_value), color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Items Sold', value: (overview.total_items_sold || 0).toLocaleString(), color: 'text-green-600 dark:text-green-400' },
               ]}
             />
           </div>
@@ -385,11 +389,11 @@ const Dashboard = () => {
       {/* ==================== PROCESSING & INVENTORY ==================== */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2 p-4 bg-white rounded-xl border border-gray-100">
+          <div className="lg:col-span-2 p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
             <Skeleton variant="title" width="w-32" className="mb-4" />
             <Skeleton variant="custom" className="h-[260px] w-full rounded-lg" />
           </div>
-          <div className="p-4 bg-white rounded-xl border border-gray-100">
+          <div className="p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
             <Skeleton variant="title" width="w-24" className="mb-4" />
             <div className="flex items-center justify-center py-4">
               <Skeleton variant="circle" width="w-[160px]" height="h-[160px]" />
@@ -410,9 +414,9 @@ const Dashboard = () => {
               height={260}
               yAxisUnit="kg"
               summaryStats={[
-                { label: 'Total Input', value: `${(processingData.total_input || 0).toLocaleString()} kg`, color: 'text-yellow-600' },
-                { label: 'Total Output', value: `${(processingData.total_output || 0).toLocaleString()} kg`, color: 'text-primary-600' },
-                { label: 'Avg Yield', value: `${processingData.avg_yield || 0}%`, color: 'text-green-600' },
+                { label: 'Total Input', value: `${(processingData.total_input || 0).toLocaleString()} kg`, color: 'text-yellow-600 dark:text-yellow-400' },
+                { label: 'Total Output', value: `${(processingData.total_output || 0).toLocaleString()} kg`, color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Avg Yield', value: `${processingData.avg_yield || 0}%`, color: 'text-green-600 dark:text-green-400' },
               ]}
             />
           </div>
@@ -431,7 +435,7 @@ const Dashboard = () => {
               compactLegend={true}
             />
             {/* Procurement summary card */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4">
               <h3 className="text-sm font-bold text-content mb-3 flex items-center gap-2">
                 <ShoppingCart size={15} className="text-button-500" />
                 Procurement
@@ -451,11 +455,11 @@ const Dashboard = () => {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-secondary">Active Suppliers</span>
-                  <span className="text-sm font-bold text-green-600">{procurement.active_suppliers || 0}</span>
+                  <span className="text-sm font-bold text-green-600 dark:text-green-400">{procurement.active_suppliers || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-secondary">Pending</span>
-                  <span className="text-sm font-bold text-yellow-600">{procurement.pending || 0}</span>
+                  <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{procurement.pending || 0}</span>
                 </div>
               </div>
             </div>
@@ -503,7 +507,7 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           {/* Recent Activity */}
           {activity.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4">
               <h3 className="text-sm font-bold text-content mb-4 flex items-center gap-2">
                 <Activity size={15} className="text-button-500" />
                 Recent Activity
@@ -523,10 +527,14 @@ const Dashboard = () => {
                       </div>
                     </div>
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                      item.action === 'CREATE' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
-                      item.action === 'UPDATE' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
-                      item.action === 'DELETE' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
-                      'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                      item.action === 'CREATE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                      item.action === 'UPDATE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
+                      item.action === 'DELETE' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                      item.action === 'ARCHIVE' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
+                      item.action === 'RESTORE' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
+                      (item.action === 'SOFT_DELETE' || item.action === 'SOFT_DELETE_ALL') ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' :
+                      item.action === 'RETURN' ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:bg-teal-500/20 dark:text-teal-400' :
+                      'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 dark:bg-gray-700 dark:text-gray-300'
                     }`}>
                       {item.action}
                     </span>
@@ -549,13 +557,13 @@ const Dashboard = () => {
                 defaultItemsPerPage={5}
               />
             ) : (
-              <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-6">
                 <h3 className="text-sm font-bold text-content mb-2 flex items-center gap-2">
                   <AlertTriangle size={15} className="text-button-500" />
                   Low Stock Alerts
                 </h3>
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 dark:bg-green-500/20 flex items-center justify-center mb-3">
                     <Package size={20} className="text-green-600 dark:text-green-400" />
                   </div>
                   <p className="text-sm font-medium text-content">All products are well-stocked!</p>

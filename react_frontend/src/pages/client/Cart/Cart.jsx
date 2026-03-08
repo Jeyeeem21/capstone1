@@ -135,7 +135,7 @@ const Cart = () => {
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="bg-white rounded-xl p-4 flex gap-4" style={{ border: `1px solid ${theme.border_color}` }}>
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 flex gap-4" style={{ border: `1px solid ${theme.border_color}` }}>
                 <Skeleton variant="image" className="w-20 h-20 rounded-lg flex-shrink-0" />
                 <div className="flex-1 space-y-2">
                   <Skeleton variant="title" width="w-40" />
@@ -149,7 +149,7 @@ const Cart = () => {
               </div>
             ))}
           </div>
-          <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
             <Skeleton variant="title" width="w-32" className="mb-4" />
             <div className="space-y-3">
               {[...Array(4)].map((_, i) => (
@@ -171,7 +171,7 @@ const Cart = () => {
             return (
               <div 
                 key={item.id}
-                className="bg-white rounded-xl p-4 flex gap-4"
+                className="bg-white dark:bg-gray-800 rounded-xl p-4 flex gap-4"
                 style={{ border: `1px solid ${theme.border_color}` }}
               >
                 <img 
@@ -189,7 +189,7 @@ const Cart = () => {
                     </div>
                     <button
                       onClick={() => handleRemove(item.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
+                      className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600 dark:text-red-400 transition-colors flex-shrink-0"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -202,7 +202,7 @@ const Cart = () => {
                       <div className="flex items-center rounded-lg" style={{ border: `1px solid ${theme.border_color}` }}>
                         <button
                           onClick={() => handleUpdateQuantity(item.id, -1)}
-                          className="p-1.5 hover:bg-gray-100 rounded-l-lg transition-colors"
+                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-l-lg transition-colors"
                           disabled={qty <= 1}
                         >
                           <Minus size={14} style={{ color: qty <= 1 ? '#d1d5db' : theme.text_primary }} />
@@ -219,7 +219,7 @@ const Cart = () => {
                         />
                         <button
                           onClick={() => handleUpdateQuantity(item.id, 1)}
-                          className="p-1.5 hover:bg-gray-100 rounded-r-lg transition-colors"
+                          className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-r-lg transition-colors"
                           disabled={qty >= item.stocks}
                         >
                           <Plus size={14} style={{ color: qty >= item.stocks ? '#d1d5db' : theme.text_primary }} />
@@ -244,7 +244,7 @@ const Cart = () => {
 
         {/* Order Summary */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl p-5 sticky top-24" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 sticky top-24" style={{ border: `1px solid ${theme.border_color}` }}>
             <h2 className="text-lg font-semibold mb-4" style={{ color: theme.text_primary }}>Order Summary</h2>
             
             {/* Promo Code */}
@@ -259,7 +259,7 @@ const Cart = () => {
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value)}
                     disabled={promoApplied}
-                    className="w-full pl-8 pr-3 py-2 text-sm rounded-lg focus:outline-none disabled:bg-gray-50"
+                    className="w-full pl-8 pr-3 py-2 text-sm rounded-lg focus:outline-none disabled:bg-gray-50 dark:bg-gray-700/50"
                     style={{ border: `2px solid ${promoApplied ? '#22c55e' : theme.border_color}`, color: theme.text_primary }}
                   />
                 </div>
@@ -276,7 +276,7 @@ const Cart = () => {
                 </button>
               </div>
               {promoApplied && (
-                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-1">
                   <Check size={12} /> 5% discount applied!
                 </p>
               )}
@@ -290,7 +290,7 @@ const Cart = () => {
                 <span style={{ color: theme.text_primary }}>₱{subtotal.toLocaleString()}</span>
               </div>
               {discount > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
+                <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                   <span>Discount (5%)</span>
                   <span>-₱{discount.toLocaleString()}</span>
                 </div>
@@ -342,7 +342,7 @@ const Cart = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowCheckoutModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
               style={{ border: `2px solid ${theme.border_color}` }}>
               {/* Success Header */}
               <div className="p-6 text-white text-center"
@@ -368,7 +368,7 @@ const Cart = () => {
                   {checkoutDetails.discount > 0 && (
                     <div className="flex justify-between text-sm">
                       <span style={{ color: theme.text_secondary }}>Discount</span>
-                      <span className="font-medium text-green-600">-₱{checkoutDetails.discount.toLocaleString()}</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">-₱{checkoutDetails.discount.toLocaleString()}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">

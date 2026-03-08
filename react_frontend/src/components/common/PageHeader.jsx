@@ -1,6 +1,6 @@
 const PageHeader = ({ title, description, icon: Icon }) => {
   return (
-    <div className="mb-8 pb-6 border-b-2 border-primary-200">
+    <div className="mb-8 pb-6 border-b-2 border-primary-200 dark:border-primary-700">
       <div className="flex items-center gap-3">
         {Icon && (
           <div className="p-2.5 bg-gradient-to-br from-button-500 to-button-600 rounded-xl shadow-lg shadow-button-500/25">

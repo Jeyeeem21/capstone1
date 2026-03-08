@@ -18,6 +18,31 @@ const cacheTimestamps = new Map();
 const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for memory cache
 const STALE_TTL = 10 * 1000; // 10 seconds before background refresh
 
+// ── Visibility-based refetch (real-time across tabs/browsers) ──
+// When user switches back to this tab, all active hooks refetch if stale.
+const REFETCH_ON_FOCUS_STALE = 5 * 1000; // 5s — refetch if data older than this on tab focus
+const activeHooks = new Set(); // stores refetch callbacks of mounted hooks
+
+let visibilityListenerAttached = false;
+const attachVisibilityListener = () => {
+  if (visibilityListenerAttached) return;
+  visibilityListenerAttached = true;
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      // Tab just became visible — refetch all stale hooks
+      activeHooks.forEach(fn => fn());
+    }
+  };
+
+  const handleWindowFocus = () => {
+    activeHooks.forEach(fn => fn());
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('focus', handleWindowFocus);
+};
+
 /**
  * Get data from memory cache
  */
@@ -44,7 +69,9 @@ const setToMemoryCache = (key, data) => {
 };
 
 /**
- * Clear specific cache key from all cache layers
+ * Clear specific cache key from all cache layers.
+ * Also clears dashboard frontend cache so Dashboard stats refresh
+ * immediately after any data change (archive, restore, soft-delete, etc.).
  */
 export const invalidateCache = (key) => {
   // Clear from hook's memory cache
@@ -60,6 +87,10 @@ export const invalidateCache = (key) => {
   
   // Clear from apiClient's memory cache too
   apiClient.cache.remove(key);
+
+  // Clear dashboard frontend cache so stats update after archive/restore/delete
+  apiClient.cache.removeByPrefix('dashboard-stats');
+  apiClient.cache.removeByPrefix('dashboard-activity');
 };
 
 /**
@@ -141,7 +172,7 @@ export const useDataFetch = (endpoint, options = {}) => {
     }
     
     try {
-      // When forceNetwork is true, don't use cache
+      // When forceNetwork is true, don't use cache for retrieval
       const response = await apiClient.get(endpoint, {
         useCache: !forceNetwork,
         cacheKey: cacheKey,
@@ -154,8 +185,11 @@ export const useDataFetch = (endpoint, options = {}) => {
         setData(transformedData);
         setError(null);
         
-        // Update memory cache
+        // Update hook memory cache
         setToMemoryCache(cacheKey, response.data);
+        
+        // Also update apiClient cache so subsequent page visits are fast
+        apiClient.cache.set(cacheKey, response.data);
         
         // Also persist to localStorage for fast page refresh
         try {
@@ -182,6 +216,7 @@ export const useDataFetch = (endpoint, options = {}) => {
               const freshTransformed = transformData(freshResponse.data);
               setData(freshTransformed);
               setToMemoryCache(cacheKey, freshResponse.data);
+              apiClient.cache.set(cacheKey, freshResponse.data);
               try {
                 localStorage.setItem(`kjp-${cacheKey}`, JSON.stringify({
                   data: freshResponse.data,
@@ -247,6 +282,30 @@ export const useDataFetch = (endpoint, options = {}) => {
       isMounted.current = false;
     };
   }, [enabled, cacheKey]); // Removed fetchData from deps to prevent infinite loop
+
+  // ── Visibility / focus refetch ──
+  // When the user switches BACK to this browser tab, automatically refetch
+  // if the cached data is older than REFETCH_ON_FOCUS_STALE (5 s).
+  useEffect(() => {
+    if (!enabled) return;
+
+    attachVisibilityListener();
+
+    const refetchIfStale = () => {
+      const ts = cacheTimestamps.get(cacheKey) || 0;
+      if (Date.now() - ts > REFETCH_ON_FOCUS_STALE) {
+        // Data is stale — do a silent background refetch
+        fetchInProgress.current = false; // allow new fetch
+        fetchData(false, true, true);    // silent, background, force network
+      }
+    };
+
+    activeHooks.add(refetchIfStale);
+
+    return () => {
+      activeHooks.delete(refetchIfStale);
+    };
+  }, [enabled, cacheKey, fetchData]);
 
   // Manual refetch function - forces fresh data from server
   const refetch = useCallback(async () => {

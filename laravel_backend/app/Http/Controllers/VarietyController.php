@@ -124,7 +124,7 @@ class VarietyController extends Controller
 
         $this->varietyService->deleteVariety($variety);
 
-        $this->logAudit('DELETE', 'Varieties', "Archived variety: {$variety->name}", [
+        $this->logAudit('ARCHIVE', 'Varieties', "Archived variety: {$variety->name}", [
             'variety_id' => $variety->id,
             'name' => $variety->name,
         ]);

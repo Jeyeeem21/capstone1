@@ -74,15 +74,15 @@ const Modal = ({
     >
       <div 
         ref={modalRef}
-        className={`${sizes[size]} w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transform transition-all animate-slideUp border-2 border-primary-300`}
+        className={`${sizes[size]} w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transform transition-all animate-slideUp border-2 border-primary-300 dark:border-primary-700`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-primary-200 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-t-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-primary-200 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-t-2xl">
           <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{title}</h2>
           {showCloseButton && (
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 rounded-lg transition-colors"
             >
               <X size={20} />
             </button>
@@ -96,7 +96,7 @@ const Modal = ({
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t-2 border-primary-200 bg-primary-50/30 dark:bg-gray-700/30 rounded-b-2xl">
+          <div className="px-6 py-4 border-t-2 border-primary-200 dark:border-primary-700 bg-primary-50/30 dark:bg-gray-700/30 rounded-b-2xl">
             {footer}
           </div>
         )}
@@ -120,11 +120,11 @@ const ConfirmModal = ({
   isLoading = false,
 }) => {
   const variants = {
-    danger: { iconBg: 'bg-red-100', iconColor: 'text-red-600', buttonVariant: 'danger' },
-    warning: { iconBg: 'bg-yellow-100', iconColor: 'text-yellow-600', buttonVariant: 'warning' },
-    info: { iconBg: 'bg-blue-100', iconColor: 'text-blue-600', buttonVariant: 'info' },
-    success: { iconBg: 'bg-green-100', iconColor: 'text-green-600', buttonVariant: 'success' },
-    primary: { iconBg: 'bg-button-100', iconColor: 'text-button-600', buttonVariant: 'primary' },
+    danger: { iconBg: 'bg-red-100 dark:bg-red-900/30', iconColor: 'text-red-600 dark:text-red-400', buttonVariant: 'danger' },
+    warning: { iconBg: 'bg-yellow-100 dark:bg-yellow-900/30', iconColor: 'text-yellow-600 dark:text-yellow-400', buttonVariant: 'warning' },
+    info: { iconBg: 'bg-blue-100 dark:bg-blue-900/30', iconColor: 'text-blue-600 dark:text-blue-400', buttonVariant: 'info' },
+    success: { iconBg: 'bg-green-100 dark:bg-green-900/30', iconColor: 'text-green-600 dark:text-green-400', buttonVariant: 'success' },
+    primary: { iconBg: 'bg-button-100 dark:bg-button-900/30', iconColor: 'text-button-600 dark:text-button-400', buttonVariant: 'primary' },
   };
 
   const variantStyle = variants[variant] || variants.danger;
@@ -137,7 +137,7 @@ const ConfirmModal = ({
             <Icon size={32} className={variantStyle.iconColor} />
           </div>
         )}
-        <p className="text-gray-600 mb-6">{message}</p>
+        <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
         <div className="flex gap-3 justify-center">
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
             {cancelText}

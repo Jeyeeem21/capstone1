@@ -601,27 +601,47 @@ class DashboardService
      */
     public function clearCache(): void
     {
+        static::clearStatsCache();
+    }
+
+    /**
+     * Static helper to clear all dashboard stats cache.
+     * Can be called from any service or controller without needing an instance.
+     */
+    public static function clearStatsCache(): void
+    {
+        $cacheKey = 'dashboard_stats';
+
         // Clear known base keys
         $periods = ['daily', 'weekly', 'monthly', 'bi-annually', 'annually'];
         $emptyParamKey = md5(json_encode(['month' => null, 'year' => null, 'year_from' => null, 'year_to' => null]));
         foreach ($periods as $p) {
-            Cache::forget(self::CACHE_KEY . "_{$p}_{$emptyParamKey}");
+            Cache::forget("{$cacheKey}_{$p}_{$emptyParamKey}");
         }
         // Also clear legacy keys
-        Cache::forget(self::CACHE_KEY . '_daily');
-        Cache::forget(self::CACHE_KEY . '_monthly');
-        Cache::forget(self::CACHE_KEY . '_yearly');
+        Cache::forget("{$cacheKey}_daily");
+        Cache::forget("{$cacheKey}_monthly");
+        Cache::forget("{$cacheKey}_yearly");
         Cache::forget('dashboard_recent_activity');
 
-        // Flush all dashboard_stats keys if using tagged cache or file driver
+        // For file cache driver: clear ALL dashboard_stats keys by scanning cache directory
         try {
-            $cacheStore = Cache::getStore();
-            if (method_exists($cacheStore, 'flush')) {
-                // For file/array drivers, use pattern-based approach via cache prefix
-                // This is safe — just clears the specific keys we know about
+            $cachePath = storage_path('framework/cache/data');
+            if (is_dir($cachePath)) {
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($cachePath, \RecursiveDirectoryIterator::SKIP_DOTS)
+                );
+                foreach ($iterator as $file) {
+                    if ($file->isFile()) {
+                        $contents = @file_get_contents($file->getPathname());
+                        if ($contents && str_contains($contents, $cacheKey)) {
+                            @unlink($file->getPathname());
+                        }
+                    }
+                }
             }
         } catch (\Throwable $e) {
-            // Ignore
+            // Ignore — fallback keys above should handle most cases
         }
     }
 }

@@ -31,8 +31,11 @@ Total Tables: 28
 │ two_factor_confirmed_at    timestamp  NULLABLE                   │
 │ remember_token      varchar(100)      NULLABLE                   │
 │ truck_plate_number  varchar(20)       NULLABLE                   │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
+│ deleted_at          timestamp         NULLABLE (soft deletes)    │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
@@ -97,6 +100,8 @@ Total Tables: 28
 │ color               varchar(20)       default '#22c55e'          │
 │ status              enum('Active','Inactive')  default 'Active'  │
 │ products_count      integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │ deleted_at          timestamp         NULLABLE (soft deletes)    │
@@ -116,8 +121,12 @@ Total Tables: 28
 │ stock_floor         integer           default 0                  │
 │ unit                varchar(255)      default 'kg'               │
 │ weight              decimal(10,2)     NULLABLE                   │
+│ image               varchar(255)      NULLABLE                   │
+│ stock_floor         integer           default 0                  │
 │ status              enum('active','inactive')  default 'active'  │
 │ is_deleted          boolean           default false               │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │                                                                  │
@@ -147,6 +156,8 @@ Total Tables: 28
 │ address             text              NULLABLE                   │
 │ status              enum('Active','Inactive')  default 'Active'  │
 │ products            integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │ deleted_at          timestamp         NULLABLE (soft deletes)    │
@@ -199,6 +210,8 @@ Total Tables: 28
 │ total_cost          decimal(14,2)     default 0                  │
 │ status              enum('Pending','Drying','Dried',             │
 │                      'Completed','Cancelled')  default 'Pending' │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │ deleted_at          timestamp         NULLABLE (soft deletes)    │
@@ -234,6 +247,8 @@ Total Tables: 28
 │ total_price         decimal(14,2)     default 0                  │
 │ status              enum('Drying','Dried','Cancelled')           │
 │                                       default 'Drying'           │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ dried_at            timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
@@ -293,6 +308,8 @@ Total Tables: 28
 │ operator_name       varchar(255)      NULLABLE                   │
 │ status              enum('Pending','Processing','Completed')     │
 │                                       default 'Pending'          │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ processing_date     date              NOT NULL                   │
 │ completed_date      date              NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
@@ -345,6 +362,7 @@ Total Tables: 28
 │ source_type         varchar(255)      NULLABLE                   │
 │ source_id           bigint unsigned   NULLABLE                   │
 │ notes               varchar(255)      NULLABLE                   │
+│ source_processing_ids json             NULLABLE                   │
 │ procurement_cost    decimal(14,2)     NULLABLE                   │
 │ drying_cost         decimal(14,2)     NULLABLE                   │
 │ total_cost          decimal(14,2)     NULLABLE                   │
@@ -377,6 +395,8 @@ Total Tables: 28
 │ address             text              NULLABLE                   │
 │ status              enum('Active','Inactive')  default 'Active'  │
 │ orders              integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │ deleted_at          timestamp         NULLABLE (soft deletes)    │
@@ -398,15 +418,24 @@ Total Tables: 28
 │ amount_tendered     decimal(12,2)     default 0                  │
 │ change_amount       decimal(12,2)     default 0                  │
 │ payment_method      varchar(20)       default 'cash'             │
+│ payment_status      varchar(20)       default 'paid'             │
 │ reference_number    varchar(255)      NULLABLE                   │
+│ payment_proof       text              NULLABLE                   │
+│ paid_at             timestamp         NULLABLE                   │
 │ status              varchar(20)       default 'completed'        │
 │ notes               text              NULLABLE                   │
+│ voided_by           varchar(255)      NULLABLE                   │
+│ authorized_by       varchar(255)      NULLABLE                   │
 │ delivery_address    varchar(255)      NULLABLE                   │
 │ distance_km         decimal(8,2)      NULLABLE                   │
 │ driver_name         varchar(255)      NULLABLE                   │
 │ driver_plate_number varchar(20)       NULLABLE                   │
 │ return_reason       varchar(255)      NULLABLE                   │
 │ return_notes        text              NULLABLE                   │
+│ return_proof        text              NULLABLE                   │
+│ return_pickup_driver varchar(255)     NULLABLE                   │
+│ return_pickup_plate varchar(20)       NULLABLE                   │
+│ return_pickup_date  date              NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │                                                                  │
@@ -425,6 +454,7 @@ Total Tables: 28
 │ quantity            integer           default 1                  │
 │ unit_price          decimal(12,2)     default 0                  │
 │ subtotal            decimal(12,2)     default 0                  │
+│ restocked           boolean           default false               │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │                                                                  │
@@ -454,6 +484,8 @@ Total Tables: 28
 │ status              enum('Active','Inactive','On Leave')         │
 │                                       default 'Active'           │
 │ total_deliveries    integer           default 0                  │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │
 │ updated_at          timestamp         NULLABLE                   │
 │ deleted_at          timestamp         NULLABLE (soft deletes)    │
@@ -480,6 +512,8 @@ Total Tables: 28
 │ notes               text              NULLABLE                   │
 │ driver_notes        text              NULLABLE                   │
 │ proof_of_delivery   varchar(255)      NULLABLE                   │
+│ is_archived         boolean           default false               │
+│ archived_at         timestamp         NULLABLE                   │
 │ picked_up_at        timestamp         NULLABLE                   │
 │ delivered_at        timestamp         NULLABLE                   │
 │ created_at          timestamp         NULLABLE                   │

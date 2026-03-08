@@ -201,7 +201,7 @@ class DeliveryAssignmentController extends Controller
             return $this->notFoundResponse('Delivery not found');
         }
 
-        $this->logAudit('DELETE', 'Deliveries', "Deleted delivery to {$delivery->destination}", [
+        $this->logAudit('ARCHIVE', 'Deliveries', "Archived delivery to {$delivery->destination}", [
             'delivery_id' => $delivery->id,
             'destination' => $delivery->destination,
             'driver_id' => $delivery->driver_id,
@@ -209,7 +209,7 @@ class DeliveryAssignmentController extends Controller
 
         $this->deliveryService->deleteDelivery($delivery);
 
-        return $this->successResponse(null, 'Delivery deleted successfully');
+        return $this->successResponse(null, 'Delivery archived successfully');
     }
 
     /**

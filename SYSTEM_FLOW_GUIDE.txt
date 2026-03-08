@@ -323,12 +323,19 @@
      │Cancelled │  │Cancelled │    │Cancelled │   │Return Requested│
      └──────────┘  │(+restore │    │(+restore │   └───────┬────────┘
                    │ stock)   │    │ stock)   │           │
-                   └──────────┘    └──────────┘           ▼
-                                                  ┌──────────────┐
-                                                  │   Returned   │
-                                                  │ (+restore    │
-                                                  │  stock)      │
-                                                  └──────────────┘
+                   └──────────┘    └──────────┘      ┌────┴────┐
+                                                     ▼         ▼
+                                               ┌───────────┐ ┌────────┐
+                                               │Picking Up │ │Rejected│
+                                               │(+driver   │ │(→back  │
+                                               │ assigned) │ │to deliv│
+                                               └─────┬─────┘ └────────┘
+                                                     ▼
+                                               ┌──────────────┐
+                                               │   Returned   │
+                                               │ (+restore    │
+                                               │  stock)      │
+                                               └──────────────┘
 
      STOCK DEDUCTION: Happens at Pending → Processing transition
      STOCK RESTORE:   Happens on Cancel (if stock was deducted),
@@ -338,13 +345,39 @@
   - Only super_admin can void directly
   - Admin/staff must enter super_admin password to void
   - Restores stock, creates void StockLog, decrements customer order count
+  - voided_by and authorized_by recorded on the sale record
+
+  RESTOCK FROM VOID/RETURN:
+  - POST /api/sales/{id}/restock with items: [{id, quantity}]
+  - Selectively restock individual sale items back to inventory
+  - Each sale_item has a `restocked` boolean flag to track status
+  - Prevents double-restocking of the same item
+
+  RETURN FLOW (Complete):
+  ──────────────────────
+  1. Request Return: Admin submits return_reason, return_notes,
+     return_proof (multi-image upload). Status → "return_requested"
+  2. Accept Return: Admin assigns return_pickup_driver,
+     return_pickup_plate, return_pickup_date. Status → "picking_up"
+  3. Mark Returned: Pickup complete. Status → "returned"
+     Stock automatically restored to products
+  4. Reject Return: Admin rejects return request.
+     Status → "delivered" (reverted)
+
+  PAYMENT TRACKING:
+  ─────────────────
+  - Sales have payment_status (paid/not_paid) + paid_at timestamp
+  - Admin can mark unpaid orders as paid via POST /api/sales/{id}/pay
+  - Payment proof can be uploaded (images stored as JSON array)
+  - /api/sales/check-reference validates GCash reference uniqueness
 
   DATA CREATED:
   - sales row: transaction_id, customer_id, subtotal, discount, delivery_fee,
     total, amount_tendered, change_amount, payment_method, status, notes,
     delivery_address, distance_km, driver_name, driver_plate_number,
     return_reason, return_notes
-  - sale_items rows: sale_id, product_id, quantity, unit_price, subtotal
+  - sale_items rows: sale_id, product_id, quantity, unit_price, subtotal,
+    restocked (boolean, tracks if item was restocked after void/return)
   - stock_logs rows: one per product (type='out' or type='in' for returns)
 
   INLINE CREATION & AUDIT TRAILS:
@@ -445,6 +478,8 @@
      - Has weight (kg per unit, e.g., 5.00), price, stock count
      - Unit label auto-generated from weight (e.g., "5kg")
      - stock_floor = minimum threshold before "low stock" alert
+     - image = product photo (uploaded via FormData, stored in storage/)
+     - Public pages show product image with business logo as fallback
      - Status: active/inactive (toggle-able)
      - Soft-deletable via is_deleted flag
 
@@ -862,12 +897,18 @@
   ┌─ SALES ────────────────────────────────────────────────────────────────┐
   │ GET    /api/sales                          List all                    │
   │ POST   /api/sales/order                    Create POS/order            │
+  │ POST   /api/sales/check-reference          Validate GCash ref unique   │
   │ GET    /api/sales/stats                    Revenue & counts            │
-  │ GET    /api/sales/product-growth           Per-product growth (?period) │
+  │ GET    /api/sales/product-growth           Per-product growth (?period)│
   │ GET    /api/sales/{id}                     Show                       │
   │ POST   /api/sales/{id}/void               Void (needs SA password)    │
   │ PUT    /api/sales/{id}/status              Change order status         │
-  │ POST   /api/sales/{id}/return              Process return              │
+  │ POST   /api/sales/{id}/return              Request return              │
+  │ POST   /api/sales/{id}/return/accept       Accept return + pickup info │
+  │ POST   /api/sales/{id}/return/reject       Reject return               │
+  │ POST   /api/sales/{id}/return/complete     Mark returned (pickup done) │
+  │ POST   /api/sales/{id}/restock            Restock items selectively   │
+  │ POST   /api/sales/{id}/pay                Mark unpaid order as paid    │
   └────────────────────────────────────────────────────────────────────────┘
 
   ┌─ SALES PREDICTIONS ────────────────────────────────────────────────────┐
@@ -932,6 +973,8 @@
   ┌─ DATABASE ─────────────────────────────────────────────────────────────┐
   │ GET    /api/database/export                Download SQL backup         │
   │ GET    /api/database/info                  DB size & table info        │
+  │ GET    /api/database/export-csv            Download CSV ZIP export     │
+  │ POST   /api/database/import-csv            Import CSV file to table    │
   └────────────────────────────────────────────────────────────────────────┘
 
 

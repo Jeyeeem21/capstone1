@@ -25,6 +25,7 @@ class StockLogResource extends JsonResource
             'kg_amount' => $this->kg_amount ? (float) $this->kg_amount : null,
             'source_type' => $this->source_type,
             'source_id' => $this->source_id,
+            'source_processing_ids' => $this->source_processing_ids,
             'notes' => $this->notes,
             'procurement_cost' => $this->procurement_cost ? (float) $this->procurement_cost : null,
             'drying_cost' => $this->drying_cost ? (float) $this->drying_cost : null,

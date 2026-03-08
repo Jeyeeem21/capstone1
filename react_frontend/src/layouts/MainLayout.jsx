@@ -36,7 +36,7 @@ const MainLayout = () => {
       `}>
         <div className="p-4 md:p-6 lg:p-8 flex-1">
           <div 
-            className="rounded-2xl shadow-xl border-2 border-primary-300 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
+            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
             style={{ 
               backgroundColor: 'var(--color-bg-content)', 
               color: 'var(--color-text-content)',
@@ -47,8 +47,8 @@ const MainLayout = () => {
           </div>
         </div>
         
-        {/* Footer - hidden on mobile */}
-        <div className="px-4 pb-4 md:px-6 md:pb-6 lg:px-8 lg:pb-8 hidden md:block">
+        {/* Footer */}
+        <div className="px-4 pb-4 md:px-6 md:pb-6 lg:px-8 lg:pb-8">
           <Footer />
         </div>
       </main>

@@ -95,7 +95,7 @@ const Deliveries = () => {
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
               <Skeleton variant="title" width="w-12" className="mb-1" />
               <Skeleton variant="text" width="w-20" />
             </div>
@@ -109,7 +109,7 @@ const Deliveries = () => {
           { label: 'In Transit', value: stats.inTransit, color: '#3b82f6' },
           { label: 'Delivered', value: stats.delivered, color: '#22c55e' },
         ].map(stat => (
-          <div key={stat.label} className="bg-white rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
             <p className="text-xs" style={{ color: theme.text_secondary }}>{stat.label}</p>
           </div>
@@ -119,7 +119,7 @@ const Deliveries = () => {
 
       {/* Filters */}
       {loading ? (
-        <div className="bg-white rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex flex-col sm:flex-row gap-3">
             <Skeleton variant="input" className="flex-1" />
             <div className="flex gap-1">
@@ -128,13 +128,13 @@ const Deliveries = () => {
           </div>
         </div>
       ) : (
-      <div className="bg-white rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: theme.text_secondary }} />
             <input
               type="text"
-              placeholder="Search by delivery #, destination, or customer..."
+              placeholder="Search by delivery #, destination, or client..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 text-sm border-2 rounded-xl focus:outline-none transition-all"
@@ -169,7 +169,7 @@ const Deliveries = () => {
       {loading ? (
         <div className="columns-1 md:columns-2 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-5 mb-4 break-inside-avoid" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 break-inside-avoid" style={{ border: `1px solid ${theme.border_color}` }}>
               <div className="flex items-center justify-between mb-3">
                 <Skeleton variant="text" width="w-44" />
                 <Skeleton variant="button" width="w-24" />
@@ -183,7 +183,7 @@ const Deliveries = () => {
           ))}
         </div>
       ) : filteredDeliveries.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
           <Truck size={48} className="mx-auto mb-4" style={{ color: theme.text_secondary }} />
           <h3 className="text-lg font-semibold" style={{ color: theme.text_primary }}>No deliveries found</h3>
           <p className="text-sm mt-1" style={{ color: theme.text_secondary }}>
@@ -203,13 +203,13 @@ const Deliveries = () => {
             return (
               <div 
                 key={delivery.id}
-                className="bg-white rounded-xl overflow-hidden transition-all mb-4 break-inside-avoid"
+                className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-all mb-4 break-inside-avoid"
                 style={{ border: `1px solid ${theme.border_color}` }}
               >
                 {/* Delivery Header */}
                 <button
                   onClick={() => setExpandedDelivery(isExpanded ? null : delivery.id)}
-                  className="w-full p-4 hover:bg-gray-50/50 transition-colors"
+                  className="w-full p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2.5">
@@ -351,7 +351,7 @@ const Deliveries = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setActionModal(null)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" style={{ border: `2px solid ${theme.border_color}` }}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" style={{ border: `2px solid ${theme.border_color}` }}>
               <div className="p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div 

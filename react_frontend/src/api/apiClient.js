@@ -170,6 +170,25 @@ const cache = {
     const cacheKey = `${CACHE_CONFIG.PREFIX}${key}`;
     localStorage.removeItem(cacheKey);
   },
+
+  /**
+   * Remove all cache entries whose key starts with the given prefix.
+   * Useful for clearing dashboard-stats-* or any group of related keys.
+   */
+  removeByPrefix: (prefix) => {
+    // Clear from memory cache
+    for (const key of [...memoryCache.keys()]) {
+      if (key.startsWith(prefix)) {
+        memoryCache.delete(key);
+        memoryCacheTimestamps.delete(key);
+      }
+    }
+    // Clear from localStorage
+    const lsPrefix = `${CACHE_CONFIG.PREFIX}${prefix}`;
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(lsPrefix))
+      .forEach(k => localStorage.removeItem(k));
+  },
   
   clear: () => {
     // Clear memory cache

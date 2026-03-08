@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+﻿import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Warehouse, Package, AlertTriangle, XCircle, Box, Tag, Scale, Hash, DollarSign, Calendar, Trash2, ShoppingCart, Settings2, TrendingUp, TrendingDown, ArrowDownUp, BarChart3, Layers, Minus, Plus, RotateCcw, ArrowUpRight, ArrowDownRight, Receipt, Percent } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
@@ -54,7 +54,7 @@ const Inventory = () => {
   const [isFloorModalOpen, setIsFloorModalOpen] = useState(false);
   const [isCostDetailOpen, setIsCostDetailOpen] = useState(false);
   const [selectedCostRecord, setSelectedCostRecord] = useState(null);
-  const [processingDetail, setProcessingDetail] = useState(null);
+  const [processingDetails, setProcessingDetails] = useState([]);
   const [loadingProcessingDetail, setLoadingProcessingDetail] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({
@@ -80,7 +80,8 @@ const Inventory = () => {
     data: products,
     loading,
     isRefreshing,
-    refetch
+    refetch,
+    optimisticUpdate,
   } = useDataFetch('/products', {
     cacheKey: CACHE_KEY,
     initialData: [],
@@ -407,10 +408,10 @@ const Inventory = () => {
       if (response.success && response.data) {
         const productName = formData.product_name;
         setIsAddModalOpen(false);
+        toast.success('Product Added', `${productName} has been added to inventory.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Product Added', `${productName} has been added to inventory.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -450,10 +451,10 @@ const Inventory = () => {
       if (response.success && response.data) {
         const productName = formData.product_name;
         setIsEditModalOpen(false);
+        toast.success('Product Updated', `${productName} has been updated.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Product Updated', `${productName} has been updated.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -481,18 +482,21 @@ const Inventory = () => {
       const response = await apiClient.delete(`/products/${selectedItem.product_id}`);
       if (response.success) {
         const productName = selectedItem.product_name;
+        const archivedId = selectedItem.product_id;
         setIsDeleteModalOpen(false);
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(p => p.product_id !== archivedId));
+        toast.success('Product Archived', `${productName} has been archived.`);
+        // Refetch in background to confirm
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Product Archived', `${productName} has been archived.`);
-        });
+        refetch();
         return;
       } else {
-        throw new Error(response.error || 'Failed to archive');
+        throw new Error(response.message || response.error || 'Failed to archive');
       }
     } catch (error) {
       console.error('Error archiving product:', error);
-      toast.error('Error', 'Failed to archive product');
+      toast.error('Cannot Archive', error.message || 'Failed to archive product');
       refetch();
     } finally {
       setSaving(false);
@@ -514,14 +518,14 @@ const Inventory = () => {
         const units = response.data?.total_units_added || computedStockUnits.units;
         const excess = response.data?.excess_kg || 0;
         setIsAddStockModalOpen(false);
+        let msg = `Added ${units} unit(s) to ${productName}.`;
+        if (excess > 0) msg += ` ${excess} kg excess returned.`;
+        toast.success('Stock Distributed', msg);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache('/stock-logs');
-        refetch().then(() => {
-          refetchStockLogs();
-          let msg = `Added ${units} unit(s) to ${productName}.`;
-          if (excess > 0) msg += ` ${excess} kg excess returned.`;
-          toast.success('Stock Distributed', msg);
-        });
+        refetch();
+        refetchStockLogs();
       } else {
         throw new Error(response.message || 'Failed to distribute stock');
       }
@@ -543,10 +547,10 @@ const Inventory = () => {
       if (response.success) {
         const productName = selectedItem.product_name;
         setIsFloorModalOpen(false);
+        toast.success('Floor Updated', `${productName} low-stock threshold set to ${parseInt(floorValue) || 0} units.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Floor Updated', `${productName} low-stock threshold set to ${parseInt(floorValue) || 0} units.`);
-        });
+        refetch();
       } else {
         throw new Error(response.message || 'Failed to update floor');
       }
@@ -1052,14 +1056,14 @@ const Inventory = () => {
       header: 'Price',
       accessor: 'price_formatted',
       cell: (row) => (
-        <span className="font-semibold text-green-600">{row.price_formatted}</span>
+        <span className="font-semibold text-green-600 dark:text-green-400">{row.price_formatted}</span>
       )
     },
     {
       header: 'Weight',
       accessor: 'weight',
       cell: (row) => (
-        <span className="text-gray-600">{row.weight ? `${parseFloat(row.weight).toLocaleString()} kg` : '-'}</span>
+        <span className="text-gray-600 dark:text-gray-300">{row.weight ? `${parseFloat(row.weight).toLocaleString()} kg` : '-'}</span>
       )
     },
     {
@@ -1071,11 +1075,11 @@ const Inventory = () => {
             <span className={`font-medium ${
               row.stock_status === 'Out of Stock' ? 'text-red-500' :
               row.stock_status === 'Low Stock' ? 'text-orange-500' :
-              'text-blue-600'
+              'text-blue-600 dark:text-blue-400'
             }`}>
               {(row.stocks || 0).toLocaleString()}
             </span>
-            <span className="text-xs text-gray-500">{row.unit}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{row.unit}</span>
           </div>
           {row.weight && row.stocks > 0 && (
             <p className="text-[10px] text-gray-400">{((row.stocks || 0) * parseFloat(row.weight)).toLocaleString()} kg total</p>
@@ -1089,7 +1093,7 @@ const Inventory = () => {
       cell: (row) => (
         <button
           onClick={(e) => { e.stopPropagation(); handleOpenFloor(row); }}
-          className="text-sm font-medium text-gray-600 hover:text-button-600 hover:underline cursor-pointer"
+          className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 hover:underline cursor-pointer"
           title="Click to set floor quantity"
         >
           {(row.stock_floor || 0).toLocaleString()}
@@ -1111,14 +1115,14 @@ const Inventory = () => {
         <div className="flex items-center gap-1">
           <button
             onClick={(e) => { e.stopPropagation(); handleOpenAddStock(row); }}
-            className="p-1.5 rounded-md hover:bg-green-50 text-green-500 hover:text-green-700 transition-colors"
+            className="p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 hover:text-green-700 dark:text-green-400 transition-colors"
             title="Add Stock"
           >
             <Box size={15} />
           </button>
           <ActionButtons
             onEdit={() => handleEdit(row)}
-            onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined}
+            onArchive={isSuperAdmin() && (row.stocks || 0) === 0 && !row.has_pending_orders ? () => handleDelete(row) : undefined}
           />
         </div>
       )
@@ -1128,13 +1132,13 @@ const Inventory = () => {
   // ─── View Detail Item ────────────────────────────────────────
 
   const ViewDetailItem = ({ icon: Icon, label, value, iconColor = 'text-button-500', compact = false }) => (
-    <div className={`flex items-start gap-2 ${compact ? 'p-2' : 'p-3'} bg-primary-50/30 rounded-xl border-2 border-primary-200`}>
-      <div className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white shadow-sm ${iconColor}`}>
+    <div className={`flex items-start gap-2 ${compact ? 'p-2' : 'p-3'} bg-primary-50 dark:bg-primary-900/20 rounded-xl border-2 border-primary-200 dark:border-primary-700`}>
+      <div className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white dark:bg-gray-700 shadow-sm ${iconColor}`}>
         <Icon size={compact ? 14 : 18} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500 uppercase tracking-wide truncate`}>{label}</p>
-        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-800 mt-0.5 truncate`}>{value}</p>
+        <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate`}>{label}</p>
+        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-800 dark:text-gray-100 mt-0.5 truncate`}>{value}</p>
       </div>
     </div>
   );
@@ -1155,20 +1159,20 @@ const Inventory = () => {
         description="Track and manage your product stock levels"
         icon={Warehouse}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
       {/* Tab Navigation */}
-      <div className="flex border-b-2 border-primary-200 mb-6">
+      <div className="flex border-b-2 border-primary-200 dark:border-primary-700 mb-6">
         {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`px-6 py-3 text-sm font-semibold transition-all relative
               ${activeTab === tab.key
-                ? 'text-primary-600 border-b-2 border-primary-500 -mb-[2px] bg-primary-50/50'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-500 -mb-[2px] bg-primary-50 dark:bg-primary-900/20'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50'
               }
             `}
           >
@@ -1306,7 +1310,7 @@ const Inventory = () => {
                     <select
                       value={chartPeriod}
                       onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
                       <option value="daily">Daily</option>
                       <option value="weekly">Weekly</option>
@@ -1319,7 +1323,7 @@ const Inventory = () => {
                         type="month"
                         value={chartMonth}
                         onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                        className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     )}
                     {(chartPeriod === 'monthly' || chartPeriod === 'bi-annually') && (
@@ -1329,7 +1333,7 @@ const Inventory = () => {
                         onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                         min="2000"
                         max={new Date().getFullYear()}
-                        className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                        className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
                       />
                     )}
                     {chartPeriod === 'annually' && (
@@ -1340,7 +1344,7 @@ const Inventory = () => {
                           onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
                           min="2000"
                           max={chartYearTo}
-                          className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                          className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
                         />
                         <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
                         <input
@@ -1349,7 +1353,7 @@ const Inventory = () => {
                           onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
                           min={chartYearFrom}
                           max={new Date().getFullYear()}
-                          className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                          className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
                         />
                       </div>
                     )}
@@ -1359,9 +1363,9 @@ const Inventory = () => {
                 activePoint={activeChartPoint}
                 yAxisUnit=" units"
                 summaryStats={[
-                  { label: 'Total In', value: inOutStats.totalIn.toLocaleString(), color: 'text-green-600' },
-                  { label: 'Total Out', value: inOutStats.totalOut.toLocaleString(), color: 'text-red-600' },
-                  { label: 'Net', value: `${inOutStats.netChange >= 0 ? '+' : ''}${inOutStats.netChange.toLocaleString()}`, color: inOutStats.netChange >= 0 ? 'text-blue-600' : 'text-orange-600' },
+                  { label: 'Total In', value: inOutStats.totalIn.toLocaleString(), color: 'text-green-600 dark:text-green-400' },
+                  { label: 'Total Out', value: inOutStats.totalOut.toLocaleString(), color: 'text-red-600 dark:text-red-400' },
+                  { label: 'Net', value: `${inOutStats.netChange >= 0 ? '+' : ''}${inOutStats.netChange.toLocaleString()}`, color: inOutStats.netChange >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400' },
                 ]}
               />
             </div>
@@ -1406,7 +1410,7 @@ const Inventory = () => {
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.variety_color || '#6b7280' }} />
                     <div>
-                      <span className="font-medium text-gray-800">{row.product_name}</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{row.product_name}</span>
                       <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: `${row.variety_color}20`, color: row.variety_color }}>
                         {row.variety_name}
                       </span>
@@ -1420,8 +1424,8 @@ const Inventory = () => {
                 cell: (row) => (
                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
                     row.type === 'in'
-                      ? 'bg-green-100 text-green-700 border border-green-200'
-                      : 'bg-red-100 text-red-700 border border-red-200'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700'
+                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700'
                   }`}>
                     {row.type === 'in' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
                     {row.type === 'in' ? 'IN' : 'OUT'}
@@ -1433,7 +1437,7 @@ const Inventory = () => {
                 accessor: 'quantity_change',
                 cell: (row) => (
                   <div>
-                    <span className={`font-bold ${row.type === 'in' ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className={`font-bold ${row.type === 'in' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {row.type === 'in' ? '+' : '-'}{row.quantity_change.toLocaleString()}
                     </span>
                     {row.kg_amount && (
@@ -1449,7 +1453,7 @@ const Inventory = () => {
                   <div className="text-xs">
                     <span className="text-gray-400">{row.quantity_before.toLocaleString()}</span>
                     <span className="mx-1 text-gray-300">→</span>
-                    <span className="font-bold text-blue-600">{row.quantity_after.toLocaleString()}</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">{row.quantity_after.toLocaleString()}</span>
                   </div>
                 )
               },
@@ -1457,7 +1461,7 @@ const Inventory = () => {
                 header: 'Date & Time',
                 accessor: 'date_formatted',
                 cell: (row) => (
-                  <span className="text-xs text-gray-600">{row.date_formatted}</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">{row.date_formatted}</span>
                 )
               },
             ]}
@@ -1492,7 +1496,7 @@ const Inventory = () => {
                   <select
                     value={growthChartPeriod}
                     onChange={(e) => { setGrowthChartPeriod(e.target.value); setActiveGrowthChartPoint(null); }}
-                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -1505,7 +1509,7 @@ const Inventory = () => {
                       type="month"
                       value={growthChartMonth}
                       onChange={(e) => { setGrowthChartMonth(e.target.value); setActiveGrowthChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
                   {(growthChartPeriod === 'monthly' || growthChartPeriod === 'bi-annually') && (
@@ -1515,7 +1519,7 @@ const Inventory = () => {
                       onChange={(e) => { setGrowthChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveGrowthChartPoint(null); }}
                       min="2000"
                       max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
                     />
                   )}
                   {growthChartPeriod === 'annually' && (
@@ -1526,7 +1530,7 @@ const Inventory = () => {
                         onChange={(e) => { const v = parseInt(e.target.value) || 2000; setGrowthChartYearFrom(v); setActiveGrowthChartPoint(null); }}
                         min="2000"
                         max={growthChartYearTo}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
                       />
                       <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
                       <input
@@ -1535,7 +1539,7 @@ const Inventory = () => {
                         onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setGrowthChartYearTo(v); setActiveGrowthChartPoint(null); }}
                         min={growthChartYearFrom}
                         max={new Date().getFullYear()}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
                       />
                     </div>
                   )}
@@ -1544,9 +1548,9 @@ const Inventory = () => {
               onDotClick={setActiveGrowthChartPoint}
               activePoint={activeGrowthChartPoint}
               summaryStats={[
-                { label: 'Transactions', value: filteredGrowthSales.length.toString(), color: 'text-primary-600' },
-                { label: 'Avg Sale', value: `₱${filteredGrowthSales.length > 0 ? Math.round(filteredGrowthSales.reduce((s, sale) => s + (sale.total || 0), 0) / filteredGrowthSales.length).toLocaleString() : 0}`, color: 'text-primary-600' },
-                { label: 'Units Sold', value: `${filteredGrowthSales.reduce((s, sale) => s + (sale.total_quantity || 0), 0).toLocaleString()}`, color: 'text-green-600' },
+                { label: 'Transactions', value: filteredGrowthSales.length.toString(), color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Avg Sale', value: `₱${filteredGrowthSales.length > 0 ? Math.round(filteredGrowthSales.reduce((s, sale) => s + (sale.total || 0), 0) / filteredGrowthSales.length).toLocaleString() : 0}`, color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Units Sold', value: `${filteredGrowthSales.reduce((s, sale) => s + (sale.total_quantity || 0), 0).toLocaleString()}`, color: 'text-green-600 dark:text-green-400' },
               ]}
             />
           </div>
@@ -1585,7 +1589,7 @@ const Inventory = () => {
                 {
                   header: 'Stock Before',
                   accessor: 'stock_before',
-                  cell: (row) => <span className="font-semibold text-gray-600">{(row.stock_before ?? 0).toLocaleString()}</span>
+                  cell: (row) => <span className="font-semibold text-gray-600 dark:text-gray-300">{(row.stock_before ?? 0).toLocaleString()}</span>
                 },
                 {
                   header: 'Units Sold',
@@ -1601,7 +1605,7 @@ const Inventory = () => {
                   header: 'Current Stock',
                   accessor: 'current_stock',
                   cell: (row) => (
-                    <span className={`font-bold ${row.current_stock <= 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                    <span className={`font-bold ${row.current_stock <= 0 ? 'text-red-500' : 'text-blue-600 dark:text-blue-400'}`}>
                       {row.current_stock.toLocaleString()}
                     </span>
                   )
@@ -1611,7 +1615,7 @@ const Inventory = () => {
                   accessor: 'qty_growth',
                   cell: (row) => (
                     <div className={`flex items-center gap-1 ${
-                      row.trend === 'up' ? 'text-green-600' : row.trend === 'down' ? 'text-red-500' : 'text-gray-400'
+                      row.trend === 'up' ? 'text-green-600 dark:text-green-400' : row.trend === 'down' ? 'text-red-500' : 'text-gray-400'
                     }`}>
                       {row.trend === 'up' && <TrendingUp size={14} />}
                       {row.trend === 'down' && <TrendingDown size={14} />}
@@ -1627,7 +1631,7 @@ const Inventory = () => {
                   accessor: 'current_revenue',
                   cell: (row) => (
                     <div>
-                      <span className="font-bold text-green-600">₱{Number(row.current_revenue).toLocaleString()}</span>
+                      <span className="font-bold text-green-600 dark:text-green-400">₱{Number(row.current_revenue).toLocaleString()}</span>
                       <p className="text-[10px] text-secondary">prev: ₱{Number(row.previous_revenue).toLocaleString()}</p>
                     </div>
                   )
@@ -1637,7 +1641,7 @@ const Inventory = () => {
                   accessor: 'revenue_growth',
                   cell: (row) => (
                     <div className={`flex items-center gap-1 ${
-                      row.revenue_growth > 0 ? 'text-green-600' : row.revenue_growth < 0 ? 'text-red-500' : 'text-gray-400'
+                      row.revenue_growth > 0 ? 'text-green-600 dark:text-green-400' : row.revenue_growth < 0 ? 'text-red-500' : 'text-gray-400'
                     }`}>
                       {row.revenue_growth > 0 && <TrendingUp size={14} />}
                       {row.revenue_growth < 0 && <TrendingDown size={14} />}
@@ -1653,9 +1657,9 @@ const Inventory = () => {
                   accessor: 'trend',
                   cell: (row) => (
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                      row.trend === 'up' ? 'bg-green-100 text-green-700 border border-green-200 dark:bg-green-500/20 dark:text-green-400' :
-                      row.trend === 'down' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-500/20 dark:text-red-400' :
-                      'bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-400'
+                      row.trend === 'up' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700 dark:bg-green-500/20 dark:text-green-400' :
+                      row.trend === 'down' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700 dark:bg-red-500/20 dark:text-red-400' :
+                      'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400'
                     }`}>
                       {row.trend === 'up' && <TrendingUp size={12} />}
                       {row.trend === 'down' && <TrendingDown size={12} />}
@@ -1693,8 +1697,8 @@ const Inventory = () => {
                         onClick={() => { setGrowthChartPeriod(opt.value); }}
                         className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
                           growthChartPeriod === opt.value
-                            ? 'bg-white dark:bg-gray-600 text-button-600 dark:text-button-400 shadow-sm'
-                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                            ? 'bg-white dark:bg-gray-800 text-button-600 dark:text-button-400 shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200'
                         }`}
                       >
                         {opt.label}
@@ -1708,14 +1712,14 @@ const Inventory = () => {
                         type="date"
                         value={growthCustomStart}
                         onChange={(e) => setGrowthCustomStart(e.target.value)}
-                        className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-content focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                        className="text-xs border border-primary-300 dark:border-primary-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-content focus:ring-2 focus:ring-button-500 focus:border-button-500"
                       />
                       <span className="text-xs text-secondary">to</span>
                       <input
                         type="date"
                         value={growthCustomEnd}
                         onChange={(e) => setGrowthCustomEnd(e.target.value)}
-                        className="text-xs border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-content focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                        className="text-xs border border-primary-300 dark:border-primary-700 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 text-content focus:ring-2 focus:ring-button-500 focus:border-button-500"
                       />
                     </div>
                   )}
@@ -1773,7 +1777,7 @@ const Inventory = () => {
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: row.variety_color || '#6b7280' }} />
                     <div>
-                      <span className="font-medium text-gray-800">{row.product_name}</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{row.product_name}</span>
                       <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: `${row.variety_color}20`, color: row.variety_color }}>
                         {row.variety_name}
                       </span>
@@ -1786,9 +1790,12 @@ const Inventory = () => {
                 accessor: 'quantity_change',
                 cell: (row) => (
                   <div>
-                    <span className="font-bold text-gray-700">{row.quantity_change.toLocaleString()}</span>
+                    <span className="font-bold text-gray-700 dark:text-gray-200">{row.quantity_change.toLocaleString()}</span>
                     {row.kg_amount && (
-                      <p className="text-[10px] text-gray-400">{parseFloat(row.kg_amount).toLocaleString()} kg</p>
+                      <p className="text-[10px] text-gray-400">{parseFloat(row.kg_amount).toLocaleString()} kg total</p>
+                    )}
+                    {row.product_weight && (
+                      <p className="text-[10px] text-gray-400">{row.product_weight} kg/sacks</p>
                     )}
                   </div>
                 )
@@ -1797,42 +1804,42 @@ const Inventory = () => {
                 header: 'Procurement',
                 accessor: 'procurement_cost',
                 cell: (row) => row.procurement_cost ? (
-                  <span className="text-sm font-medium text-gray-600">₱{parseFloat(row.procurement_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">₱{parseFloat(row.procurement_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 ) : <span className="text-gray-300 text-xs">—</span>
               },
               {
                 header: 'Drying',
                 accessor: 'drying_cost',
                 cell: (row) => row.drying_cost ? (
-                  <span className="text-sm font-medium text-gray-600">₱{parseFloat(row.drying_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">₱{parseFloat(row.drying_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 ) : <span className="text-gray-300 text-xs">—</span>
               },
               {
                 header: 'Total Cost',
                 accessor: 'total_cost',
                 cell: (row) => (
-                  <span className="font-bold text-gray-800">₱{parseFloat(row.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-bold text-gray-800 dark:text-gray-100">₱{parseFloat(row.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 )
               },
               {
                 header: 'Cost / Unit',
                 accessor: 'cost_per_unit',
                 cell: (row) => (
-                  <span className="font-semibold text-blue-600">₱{parseFloat(row.cost_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">₱{parseFloat(row.cost_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 )
               },
               {
                 header: 'Sell Price',
                 accessor: 'selling_price',
                 cell: (row) => row.selling_price > 0 ? (
-                  <span className="font-semibold text-gray-700">₱{parseFloat(row.selling_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">₱{parseFloat(row.selling_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 ) : <span className="text-gray-300 text-xs">—</span>
               },
               {
                 header: 'Profit / Unit',
                 accessor: 'profit_per_unit',
                 cell: (row) => row.profit_per_unit !== null && row.profit_per_unit !== undefined ? (
-                  <span className={`font-bold ${parseFloat(row.profit_per_unit) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`font-bold ${parseFloat(row.profit_per_unit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {parseFloat(row.profit_per_unit) >= 0 ? '+' : ''}₱{parseFloat(row.profit_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 ) : <span className="text-gray-300 text-xs">—</span>
@@ -1842,9 +1849,9 @@ const Inventory = () => {
                 accessor: 'profit_margin',
                 cell: (row) => row.profit_margin !== null && row.profit_margin !== undefined ? (
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
-                    parseFloat(row.profit_margin) >= 20 ? 'bg-green-100 text-green-700' :
-                    parseFloat(row.profit_margin) >= 0 ? 'bg-amber-100 text-amber-700' :
-                    'bg-red-100 text-red-700'
+                    parseFloat(row.profit_margin) >= 20 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                    parseFloat(row.profit_margin) >= 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
                   }`}>
                     {parseFloat(row.profit_margin).toFixed(1)}%
                   </span>
@@ -1854,7 +1861,7 @@ const Inventory = () => {
                 header: 'Date',
                 accessor: 'date_formatted',
                 cell: (row) => (
-                  <span className="text-xs text-gray-600">{row.date_formatted}</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">{row.date_formatted}</span>
                 )
               },
             ]}
@@ -1866,14 +1873,34 @@ const Inventory = () => {
             onRowDoubleClick={async (row) => {
               setSelectedCostRecord(row);
               setIsCostDetailOpen(true);
-              setProcessingDetail(null);
-              if (row.source_type === 'processing_distribution' && row.source_id) {
+              setProcessingDetails([]);
+              if (row.source_type === 'processing_distribution') {
                 setLoadingProcessingDetail(true);
                 try {
-                  const res = await apiClient.get(`/processings/${row.source_id}`);
-                  setProcessingDetail(res.success ? (res.data || null) : null);
+                  // source_processing_ids can be:
+                  //   New format: [{processing_id: 4, kg_taken: 2090}, ...]
+                  //   Legacy format: [4, 2, ...] (plain IDs)
+                  //   Empty/null: fall back to source_id
+                  const rawIds = (row.source_processing_ids && row.source_processing_ids.length > 0)
+                    ? row.source_processing_ids
+                    : (row.source_id ? [row.source_id] : []);
+                  // Normalize to objects with {processing_id, kg_taken}
+                  const sources = rawIds.map(item =>
+                    typeof item === 'object' && item !== null
+                      ? { processing_id: item.processing_id, kg_taken: item.kg_taken }
+                      : { processing_id: item, kg_taken: null }
+                  );
+                  if (sources.length > 0) {
+                    const results = await Promise.all(
+                      sources.map(s => apiClient.get(`/processings/${s.processing_id}`).catch(() => null))
+                    );
+                    const details = results
+                      .map((r, i) => r?.success && r.data ? { ...r.data, _kg_taken: sources[i].kg_taken } : null)
+                      .filter(Boolean);
+                    setProcessingDetails(details);
+                  }
                 } catch {
-                  setProcessingDetail(null);
+                  setProcessingDetails([]);
                 } finally {
                   setLoadingProcessingDetail(false);
                 }
@@ -1886,288 +1913,368 @@ const Inventory = () => {
       {/* ─── Cost Record Detail Modal ──────────────────────── */}
       <Modal
         isOpen={isCostDetailOpen}
-        onClose={() => { setIsCostDetailOpen(false); setSelectedCostRecord(null); setProcessingDetail(null); }}
+        onClose={() => { setIsCostDetailOpen(false); setSelectedCostRecord(null); setProcessingDetails([]); }}
         title="Cost Record Details"
-        size="xl"
+        size={processingDetails.length > 1 ? 'full' : '2xl'}
       >
         {selectedCostRecord && (() => {
           const r = selectedCostRecord;
-          const p = processingDetail;
+          const pList = processingDetails; // array of processing objects (each has _kg_taken)
           const fmt = (v) => v != null ? `₱${parseFloat(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
           const profitColor = parseFloat(r.profit_per_unit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
           const marginColor = parseFloat(r.profit_margin) >= 20 ? 'text-green-600 dark:text-green-400' : parseFloat(r.profit_margin) >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+          const showNumber = pList.length > 1;
+
+          /* Helper to render a single processing source card */
+          const renderSourceCard = (p, idx) => {
+            const kgTaken = p._kg_taken;
+            const totalOutput = p.output_kg ? parseFloat(p.output_kg) : null;
+            const hasPartialTake = kgTaken != null && totalOutput != null && kgTaken < totalOutput;
+
+            return (
+              <div key={p.id || idx} className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-primary-200 dark:border-primary-700">
+                {/* Source number badge */}
+                {showNumber && (
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-button-500 text-white text-xs font-bold">{idx + 1}</span>
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Source {idx + 1}</span>
+                    {p.processing_date && <span className="text-xs text-gray-400 ml-auto">{p.processing_date}</span>}
+                  </div>
+                )}
+
+                {/* Kg Taken highlight banner — ALWAYS show prominently */}
+                {kgTaken != null && (
+                  <div className={`px-4 py-3 rounded-lg border-2 ${hasPartialTake ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-400 dark:border-amber-600' : 'bg-green-50 dark:bg-green-900/30 border-green-400 dark:border-green-600'}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${hasPartialTake ? 'bg-amber-100 dark:bg-amber-800/50' : 'bg-green-100 dark:bg-green-800/50'}`}>
+                        <svg className={`w-4 h-4 ${hasPartialTake ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                      <div>
+                        <p className={`text-base font-extrabold ${hasPartialTake ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-300'}`}>
+                          {parseFloat(kgTaken).toLocaleString()} kg taken
+                        </p>
+                        {hasPartialTake && totalOutput && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                            Only {((kgTaken / totalOutput) * 100).toFixed(1)}% of {totalOutput.toLocaleString()} kg total output
+                          </p>
+                        )}
+                        {!hasPartialTake && totalOutput && (
+                          <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                            100% of {totalOutput.toLocaleString()} kg total output
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Procurement */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+                    <ShoppingCart size={12} /> Procurement
+                  </h4>
+                  {p.procurement_info ? (
+                    <div className="bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 divide-y divide-gray-100 dark:divide-gray-600">
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Supplier</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{p.procurement_info.supplier_name}</span>
+                      </div>
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Quantity</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{parseFloat(p.procurement_info.quantity_kg).toLocaleString()} kg</span>
+                      </div>
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Sacks</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{p.procurement_info.sacks}</span>
+                      </div>
+                      {p.procurement_info.price_per_kg && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Price/kg</span>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(p.procurement_info.price_per_kg)}</span>
+                        </div>
+                      )}
+                      {p.procurement_info.total_cost && (
+                        <div className="flex justify-between items-center px-3 py-2 bg-gray-50 dark:bg-gray-600/50">
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Total Cost</span>
+                          <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{fmt(p.procurement_info.total_cost)}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 text-center">
+                      <p className="text-xs text-gray-400">No procurement data</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Drying */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+                    <Layers size={12} /> Drying
+                  </h4>
+                  {p.drying_sources && p.drying_sources.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {p.drying_sources.map((ds, di) => (
+                        <div key={di} className="bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 divide-y divide-gray-100 dark:divide-gray-600">
+                          <div className="flex justify-between items-center px-3 py-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Source</span>
+                            <span className="text-xs font-semibold text-gray-800 dark:text-gray-100 text-right max-w-[60%] truncate">
+                              {ds.supplier_name}{ds.batch_number ? ` (Batch #${ds.batch_number})` : ''}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center px-3 py-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Qty Used</span>
+                            <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{parseFloat(ds.quantity_kg_taken).toLocaleString()} kg</span>
+                          </div>
+                          <div className="flex justify-between items-center px-3 py-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Total Dried</span>
+                            <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{parseFloat(ds.total_quantity_kg).toLocaleString()} kg</span>
+                          </div>
+                          {ds.days > 0 && (
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Days</span>
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{ds.days} {ds.days === 1 ? 'day' : 'days'}</span>
+                            </div>
+                          )}
+                          {ds.sacks > 0 && (
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Sacks</span>
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{ds.sacks}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {/* Drying cost totals from cost record */}
+                      {r.drying_cost > 0 && (
+                        <div className="bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 divide-y divide-gray-100 dark:divide-gray-600 mt-1.5">
+                          {r.kg_amount > 0 && (
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Drying Cost/kg</span>
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.drying_cost / r.kg_amount)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 dark:bg-gray-600/50">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Total Drying Cost</span>
+                            <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{fmt(r.drying_cost)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : p.drying_process_info ? (
+                    <div className="bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 divide-y divide-gray-100 dark:divide-gray-600">
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Source</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{p.drying_process_info.supplier_name}</span>
+                      </div>
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Quantity</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{parseFloat(p.drying_process_info.quantity_kg).toLocaleString()} kg</span>
+                      </div>
+                      {p.drying_process_info.days > 0 && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">Days</span>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{p.drying_process_info.days} days</span>
+                        </div>
+                      )}
+                      {/* Drying cost totals */}
+                      {r.drying_cost > 0 && (
+                        <div className="bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 divide-y divide-gray-100 dark:divide-gray-600 mt-1.5">
+                          {r.kg_amount > 0 && (
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">Drying Cost/kg</span>
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.drying_cost / r.kg_amount)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center px-3 py-2 bg-gray-50 dark:bg-gray-600/50">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Total Drying Cost</span>
+                            <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{fmt(r.drying_cost)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-gray-50 dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 text-center">
+                      <p className="text-xs text-gray-400">No drying data</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Processing */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 uppercase tracking-wide flex items-center gap-1.5">
+                    <Settings2 size={12} /> Processing
+                  </h4>
+                  <div className="bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 divide-y divide-gray-100 dark:divide-gray-600">
+                    <div className="flex justify-between items-center px-3 py-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Input</span>
+                      <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{parseFloat(p.input_kg).toLocaleString()} kg</span>
+                    </div>
+                    {p.output_kg && (
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Output</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{parseFloat(p.output_kg).toLocaleString()} kg</span>
+                      </div>
+                    )}
+                    {p.husk_kg && (
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Husk/Waste</span>
+                        <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{parseFloat(p.husk_kg).toLocaleString()} kg</span>
+                      </div>
+                    )}
+                    {p.yield_percent && (
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Yield</span>
+                        <span className="text-xs font-semibold text-green-600 dark:text-green-400">{parseFloat(p.yield_percent).toFixed(1)}%</span>
+                      </div>
+                    )}
+                    {p.operator_name && (
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Operator</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{p.operator_name}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center px-3 py-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Status</span>
+                      <span className={`text-xs font-semibold ${p.status === 'Completed' ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{p.status}</span>
+                    </div>
+                    {p.processing_date && (
+                      <div className="flex justify-between items-center px-3 py-2">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Date</span>
+                        <span className="text-xs text-gray-600 dark:text-gray-300">{p.processing_date}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          };
 
           return (
-            <div className="space-y-5">
-              {/* Product Header */}
-              <div className="flex items-center gap-3 p-4 bg-primary-50 dark:bg-primary-900/30 rounded-xl border border-primary-200 dark:border-primary-700">
-                <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: r.variety_color || '#6b7280' }} />
-                <div>
-                  <h3 className="font-bold text-gray-800 dark:text-gray-100 text-lg">{r.product_name}</h3>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: `${r.variety_color}20`, color: r.variety_color }}>
-                    {r.variety_name}
-                  </span>
-                </div>
-                {r.product_weight && (
-                  <span className="ml-auto text-sm font-medium text-gray-500 dark:text-gray-400">{r.product_weight}kg per unit</span>
-                )}
-              </div>
-
-              {/* Two-column layout */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* ── Left Column: Production Chain ── */}
-                <div className="space-y-4">
-                  {/* Procurement Info */}
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
-                      <ShoppingCart size={14} /> Procurement
-                    </h4>
-                    {loadingProcessingDetail ? (
-                      <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-center">
-                        <div className="animate-spin w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full mx-auto" />
-                        <p className="text-xs text-gray-400 mt-2">Loading...</p>
+            <div style={{ height: 'calc(90vh - 180px)' }} className="flex gap-3">
+              {/* LEFT PANEL: Summary (fixed width, scrollable) */}
+              <div className="w-[260px] flex-shrink-0 flex flex-col gap-2.5 overflow-y-auto pr-1">
+                  {/* Product Header inside left panel */}
+                  <div className="flex items-start gap-2 px-3 py-2.5 bg-gray-100 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="w-2.5 h-2.5 rounded-full mt-0.5 flex-shrink-0" style={{ backgroundColor: r.variety_color || '#6b7280' }} />
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm leading-tight truncate">{r.product_name}</h3>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: `${r.variety_color}20`, color: r.variety_color }}>{r.variety_name}</span>
+                        {r.product_weight && <span className="text-xs text-gray-500 dark:text-gray-400">{r.product_weight}kg/unit</span>}
+                        {showNumber && <span className="text-xs font-medium text-primary-500">{pList.length} sources</span>}
                       </div>
-                    ) : p?.procurement_info ? (
-                      <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-100 dark:divide-gray-600">
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Supplier</span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{p.procurement_info.supplier_name}</span>
-                        </div>
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Quantity Procured</span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{parseFloat(p.procurement_info.quantity_kg).toLocaleString()} kg</span>
-                        </div>
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Sacks</span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{p.procurement_info.sacks}</span>
-                        </div>
-                        {p.procurement_info.price_per_kg && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Price per kg</span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(p.procurement_info.price_per_kg)}</span>
-                          </div>
-                        )}
-                        {p.procurement_info.total_cost && (
-                          <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 dark:bg-gray-600/50">
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Procurement Cost</span>
-                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(p.procurement_info.total_cost)}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-center">
-                        <p className="text-sm text-gray-400">No procurement data available</p>
-                      </div>
-                    )}
+                    </div>
                   </div>
-
-                  {/* Drying Info */}
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
-                      <Layers size={14} /> Drying
-                    </h4>
-                    {loadingProcessingDetail ? (
-                      <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-center">
-                        <div className="animate-spin w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full mx-auto" />
-                      </div>
-                    ) : p?.drying_sources && p.drying_sources.length > 0 ? (
-                      <div className="space-y-2">
-                        {p.drying_sources.map((ds, i) => (
-                          <div key={i} className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-100 dark:divide-gray-600">
-                            <div className="flex justify-between items-center px-4 py-2.5">
-                              <span className="text-sm text-gray-500 dark:text-gray-400">Source</span>
-                              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                                {ds.supplier_name}{ds.batch_number ? ` (Batch #${ds.batch_number})` : ''}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center px-4 py-2.5">
-                              <span className="text-sm text-gray-500 dark:text-gray-400">Quantity Used</span>
-                              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{parseFloat(ds.quantity_kg_taken).toLocaleString()} kg</span>
-                            </div>
-                            <div className="flex justify-between items-center px-4 py-2.5">
-                              <span className="text-sm text-gray-500 dark:text-gray-400">Total Dried</span>
-                              <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{parseFloat(ds.total_quantity_kg).toLocaleString()} kg</span>
-                            </div>
-                            {ds.days > 0 && (
-                              <div className="flex justify-between items-center px-4 py-2.5">
-                                <span className="text-sm text-gray-500 dark:text-gray-400">Drying Days</span>
-                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ds.days} {ds.days === 1 ? 'day' : 'days'}</span>
-                              </div>
-                            )}
-                            {ds.sacks > 0 && (
-                              <div className="flex justify-between items-center px-4 py-2.5">
-                                <span className="text-sm text-gray-500 dark:text-gray-400">Sacks</span>
-                                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{ds.sacks}</span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : p?.drying_process_info ? (
-                      <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-100 dark:divide-gray-600">
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Source</span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{p.drying_process_info.supplier_name}</span>
-                        </div>
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Quantity</span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{parseFloat(p.drying_process_info.quantity_kg).toLocaleString()} kg</span>
-                        </div>
-                        {p.drying_process_info.days > 0 && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Drying Days</span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{p.drying_process_info.days} days</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-center">
-                        <p className="text-sm text-gray-400">No drying data available</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Processing Info */}
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide flex items-center gap-2">
-                      <Settings2 size={14} /> Processing
-                    </h4>
-                    {loadingProcessingDetail ? (
-                      <div className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-center">
-                        <div className="animate-spin w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full mx-auto" />
-                      </div>
-                    ) : p ? (
-                      <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-100 dark:divide-gray-600">
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Input</span>
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{parseFloat(p.input_kg).toLocaleString()} kg</span>
-                        </div>
-                        {p.output_kg && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Output</span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{parseFloat(p.output_kg).toLocaleString()} kg</span>
-                          </div>
-                        )}
-                        {p.husk_kg && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Husk/Waste</span>
-                            <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">{parseFloat(p.husk_kg).toLocaleString()} kg</span>
-                          </div>
-                        )}
-                        {p.yield_percent && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Yield</span>
-                            <span className="text-sm font-semibold text-green-600 dark:text-green-400">{parseFloat(p.yield_percent).toFixed(1)}%</span>
-                          </div>
-                        )}
-                        {p.operator_name && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Operator</span>
-                            <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{p.operator_name}</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between items-center px-4 py-2.5">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
-                          <span className={`text-sm font-semibold ${p.status === 'Completed' ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>{p.status}</span>
-                        </div>
-                        {p.processing_date && (
-                          <div className="flex justify-between items-center px-4 py-2.5">
-                            <span className="text-sm text-gray-500 dark:text-gray-400">Date</span>
-                            <span className="text-sm text-gray-600 dark:text-gray-300">{p.processing_date}</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-center">
-                        <p className="text-sm text-gray-400">No processing data available</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* ── Right Column: Costs & Profit ── */}
-                <div className="space-y-4">
-                  {/* Distribution Info */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
-                      <p className="text-xs text-blue-500 dark:text-blue-400 font-medium uppercase tracking-wide">Units Distributed</p>
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                      <p className="text-xs text-blue-500 dark:text-blue-400 font-medium uppercase tracking-wide">Units Dist.</p>
                       <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{r.quantity_change?.toLocaleString()}</p>
                       {r.kg_amount && <p className="text-xs text-blue-400 mt-0.5">{parseFloat(r.kg_amount).toLocaleString()} kg total</p>}
                     </div>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div className="p-2.5 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
                       <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wide">Stock Change</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{r.quantity_before?.toLocaleString()} → <span className="font-bold text-gray-800 dark:text-gray-100">{r.quantity_after?.toLocaleString()}</span></p>
-                      <p className="text-xs text-gray-400 mt-0.5">+{r.quantity_change?.toLocaleString()} units added</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 mt-0.5">{r.quantity_before?.toLocaleString()} → <span className="font-bold text-gray-800 dark:text-gray-100">{r.quantity_after?.toLocaleString()}</span></p>
+                      <p className="text-xs text-gray-400">+{r.quantity_change?.toLocaleString()} added</p>
                     </div>
                   </div>
 
                   {/* Cost Breakdown */}
                   <div>
-                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Cost Breakdown</h4>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Cost Breakdown</p>
                     <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 divide-y divide-gray-100 dark:divide-gray-600">
-                      <div className="flex justify-between items-center px-4 py-3">
+                      <div className="flex justify-between items-center px-3 py-2">
                         <div>
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Procurement Cost</p>
-                          <p className="text-xs text-gray-400">Raw material purchase cost</p>
+                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Procurement</p>
+                          <p className="text-[10px] text-gray-400">Raw material</p>
                         </div>
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(r.procurement_cost)}</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.procurement_cost)}</span>
                       </div>
-                      <div className="flex justify-between items-center px-4 py-3">
+                      <div className="flex justify-between items-center px-3 py-2">
                         <div>
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Drying Cost</p>
-                          <p className="text-xs text-gray-400">Drying process expense</p>
+                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Drying</p>
+                          <p className="text-[10px] text-gray-400">Process expense</p>
                         </div>
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{fmt(r.drying_cost)}</span>
+                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.drying_cost)}</span>
                       </div>
-                      <div className="flex justify-between items-center px-4 py-3 bg-gray-50 dark:bg-gray-600/50">
-                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">Total Production Cost</p>
-                        <span className="text-base font-bold text-gray-900 dark:text-gray-100">{fmt(r.total_cost)}</span>
+                      <div className="flex justify-between items-center px-3 py-2 bg-gray-50 dark:bg-gray-600/50 rounded-b-lg">
+                        <p className="text-xs font-bold text-gray-800 dark:text-gray-100">Total Production</p>
+                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(r.total_cost)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Pricing & Profit */}
                   <div>
-                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 uppercase tracking-wide">Pricing & Profit</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
-                        <p className="text-xs text-blue-500 dark:text-blue-400 font-medium">Cost per Unit</p>
-                        <p className="text-lg font-bold text-blue-700 dark:text-blue-300">{fmt(r.cost_per_unit)}</p>
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Pricing & Profit</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">Cost/Unit</p>
+                        <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{fmt(r.cost_per_unit)}</p>
                       </div>
-                      <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Selling Price</p>
-                        <p className="text-lg font-bold text-gray-800 dark:text-gray-200">{fmt(r.selling_price)}</p>
+                      <div className="p-2 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Selling</p>
+                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{fmt(r.selling_price)}</p>
                       </div>
-                      <div className={`p-3 rounded-lg border ${parseFloat(r.profit_per_unit) >= 0 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'}`}>
-                        <p className={`text-xs font-medium ${profitColor}`}>Profit per Unit</p>
-                        <p className={`text-lg font-bold ${profitColor}`}>{parseFloat(r.profit_per_unit) >= 0 ? '+' : ''}{fmt(r.profit_per_unit)}</p>
+                      <div className={`p-2 rounded-lg border ${parseFloat(r.profit_per_unit) >= 0 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'}`}>
+                        <p className={`text-[10px] font-medium ${profitColor}`}>Profit/Unit</p>
+                        <p className={`text-sm font-bold ${profitColor}`}>{parseFloat(r.profit_per_unit) >= 0 ? '+' : ''}{fmt(r.profit_per_unit)}</p>
                       </div>
-                      <div className={`p-3 rounded-lg border ${parseFloat(r.profit_margin) >= 20 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : parseFloat(r.profit_margin) >= 0 ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'}`}>
-                        <p className={`text-xs font-medium ${marginColor}`}>Profit Margin</p>
-                        <p className={`text-lg font-bold ${marginColor}`}>{parseFloat(r.profit_margin).toFixed(1)}%</p>
+                      <div className={`p-2 rounded-lg border ${parseFloat(r.profit_margin) >= 20 ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700' : parseFloat(r.profit_margin) >= 0 ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'}`}>
+                        <p className={`text-[10px] font-medium ${marginColor}`}>Margin</p>
+                        <p className={`text-sm font-bold ${marginColor}`}>{parseFloat(r.profit_margin).toFixed(1)}%</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Source & Notes */}
-                  <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Source Info</h4>
+                  {/* Source Info */}
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700/80 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Source Info</p>
                     {r.source_type && (
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                      <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">
                         <span className="font-medium">Source:</span>{' '}
                         {r.source_type === 'processing_distribution' ? 'Processing Distribution' : r.source_type.replace(/_/g, ' ')}
-                        {r.source_id && <span className="text-gray-400 ml-1">#{r.source_id}</span>}
+                        {!showNumber && r.source_id && <span className="text-gray-400 ml-1">#{r.source_id}</span>}
                       </p>
                     )}
-                    {r.notes && <p className="text-sm text-gray-600 dark:text-gray-300"><span className="font-medium">Notes:</span> {r.notes}</p>}
-                    <p className="text-xs text-gray-400 mt-2">{r.date_formatted}</p>
+                    {r.notes && <p className="text-xs text-gray-600 dark:text-gray-300"><span className="font-medium">Notes:</span> {r.notes}</p>}
+                    <p className="text-xs text-gray-400 mt-1.5">{r.date_formatted}</p>
                   </div>
                 </div>
-              </div>
+
+                {/* Vertical Divider */}
+                <div className="w-px bg-gray-200 dark:bg-gray-600 flex-shrink-0" />
+
+                {/* RIGHT PANEL: Processing Sources */}
+                <div className="flex-1 min-w-0 flex flex-col gap-2 overflow-y-auto">
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
+                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      {showNumber ? 'Processing Sources' : 'Production Chain'}
+                    </span>
+                    <div className="flex-1 border-t border-gray-200 dark:border-gray-600" />
+                  </div>
+                  {loadingProcessingDetail ? (
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="animate-spin w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full mx-auto" />
+                        <p className="text-xs text-gray-400 mt-3">Loading production chain...</p>
+                      </div>
+                    </div>
+                  ) : pList.length > 0 ? (
+                    <div className={`grid gap-3 ${pList.length === 1 ? 'grid-cols-1' : pList.length === 2 ? 'grid-cols-2' : pList.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                      {pList.map((p, idx) => renderSourceCard(p, idx))}
+                    </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-sm text-gray-400">No production chain data available</p>
+                </div>
+              )}
+                </div>
             </div>
           );
         })()}
-      </Modal>}
+      </Modal>
 
       {/* ─── Add Product Modal ──────────────────────────────── */}
       <FormModal
@@ -2291,8 +2398,8 @@ const Inventory = () => {
                   submitted={submitted}
                 />
                 {costAnalysis?.has_data && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Unit Cost: <span className="font-semibold text-gray-700">₱{costAnalysis.avg_cost_per_unit.toLocaleString()}</span>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Unit Cost: <span className="font-semibold text-gray-700 dark:text-gray-200">₱{costAnalysis.avg_cost_per_unit.toLocaleString()}</span>
                   </p>
                 )}
               </div>
@@ -2358,15 +2465,15 @@ const Inventory = () => {
         {selectedItem && (
           <div className="space-y-5">
             {/* Product Info Header */}
-            <div className="p-4 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="p-4 rounded-xl border border-blue-200 dark:border-blue-700 bg-gradient-to-r from-blue-50 dark:from-gray-700 to-indigo-50 dark:to-gray-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${selectedItem.variety_color}20` }}>
                     <Package size={20} style={{ color: selectedItem.variety_color }} />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-800">{selectedItem.product_name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{selectedItem.product_name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {(selectedItem.stocks || 0).toLocaleString()} units in stock
                       {selectedItem.weight ? ` • ${parseFloat(selectedItem.weight)} kg per unit` : ''}
                     </p>
@@ -2384,14 +2491,14 @@ const Inventory = () => {
             {/* Processing Sources */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-semibold text-gray-700">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">
                   Source Processings
                 </label>
                 {availableProcessings.length > 1 && (
                   <button
                     type="button"
                     onClick={handleSelectAll}
-                    className="text-xs font-medium text-button-600 hover:text-button-700 transition-colors"
+                    className="text-xs font-medium text-button-600 hover:text-button-700 dark:text-button-300 transition-colors"
                   >
                     {availableProcessings.length === selectedProcessings.length ? 'Deselect All' : 'Select All'}
                   </button>
@@ -2404,9 +2511,9 @@ const Inventory = () => {
                   <p className="text-sm">Loading processings...</p>
                 </div>
               ) : availableProcessings.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                <div className="py-10 text-center text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-dashed border-primary-300 dark:border-primary-700">
                   <Package size={36} className="mx-auto mb-3 opacity-40" />
-                  <p className="text-sm font-semibold text-gray-500">No processings available</p>
+                  <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">No processings available</p>
                   <p className="text-xs mt-1 text-gray-400">No completed <strong>{selectedItem.variety_name}</strong> processings with remaining stock.</p>
                 </div>
               ) : (
@@ -2417,8 +2524,8 @@ const Inventory = () => {
                       {groupedProcessings.length > 1 && (
                         <div className="flex items-center gap-2 mb-2">
                           <Layers size={13} className="text-gray-400" />
-                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{group.label}</span>
-                          <div className="flex-1 h-px bg-gray-200" />
+                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{group.label}</span>
+                          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600" />
                         </div>
                       )}
 
@@ -2435,8 +2542,8 @@ const Inventory = () => {
                               key={proc.id}
                               className={`rounded-xl border-2 transition-all ${
                                 isSelected
-                                  ? 'border-button-400 bg-button-50/50 shadow-sm'
-                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                                  ? 'border-button-400 dark:border-button-600 bg-button-50 dark:bg-button-900/20 shadow-sm'
+                                  : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-500 dark:border-gray-600'
                               }`}
                             >
                               {/* Header — toggle area */}
@@ -2446,21 +2553,21 @@ const Inventory = () => {
                               >
                                 {/* Toggle switch */}
                                 <div className={`relative w-10 h-[22px] rounded-full transition-colors flex-shrink-0 ${
-                                  isSelected ? 'bg-button-500' : 'bg-gray-300'
+                                  isSelected ? 'bg-button-500' : 'bg-gray-300 dark:bg-gray-600'
                                 }`}>
-                                  <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                                  <div className={`absolute top-[3px] w-4 h-4 bg-white dark:bg-gray-700 rounded-full shadow transition-transform ${
                                     isSelected ? 'translate-x-[22px]' : 'translate-x-[3px]'
                                   }`} />
                                 </div>
 
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-sm font-bold text-gray-800">Processing #{proc.id}</span>
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">
+                                    <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Processing #{proc.id}</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
                                       {proc.remaining_stock.toLocaleString()} kg
                                     </span>
                                     {costPerKg > 0 && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
                                         ₱{costPerKg.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kg
                                       </span>
                                     )}
@@ -2482,15 +2589,15 @@ const Inventory = () => {
                               {/* Expanded: Quantity control */}
                               {isSelected && selectedEntry && (
                                 <div className="px-3.5 pb-3.5 pt-0" onClick={(e) => e.stopPropagation()}>
-                                  <div className="p-3 bg-white rounded-lg border border-gray-200">
+                                  <div className="p-3 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700">
                                     {/* Quantity label */}
                                     <div className="flex items-center justify-between mb-2.5">
-                                      <span className="text-xs font-medium text-gray-600">Quantity to distribute</span>
+                                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Quantity to distribute</span>
                                       <div className="flex items-center gap-1">
                                         <button
                                           type="button"
                                           onClick={() => resetProcessingKg(proc.id)}
-                                          className="text-[10px] px-2 py-0.5 rounded-md bg-button-100 text-button-600 hover:bg-button-200 font-medium transition-colors"
+                                          className="text-[10px] px-2 py-0.5 rounded-md bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400 hover:bg-button-200 font-medium transition-colors"
                                           title="Use all remaining"
                                         >
                                           Use All
@@ -2506,7 +2613,7 @@ const Inventory = () => {
                                       step={Math.max(1, Math.floor(proc.remaining_stock / 1000))}
                                       value={selectedEntry.kg_to_take}
                                       onChange={(e) => updateProcessingKg(proc.id, e.target.value)}
-                                      className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-button-500 mb-2"
+                                      className="w-full h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full appearance-none cursor-pointer accent-button-500 mb-2"
                                     />
 
                                     {/* Numeric input with +/- buttons */}
@@ -2518,7 +2625,7 @@ const Inventory = () => {
                                           const newVal = Math.max(0, selectedEntry.kg_to_take - step);
                                           updateProcessingKg(proc.id, newVal);
                                         }}
-                                        className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+                                        className="w-8 h-8 rounded-lg border border-primary-300 dark:border-primary-700 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 transition-colors"
                                       >
                                         <Minus size={14} />
                                       </button>
@@ -2527,7 +2634,7 @@ const Inventory = () => {
                                           type="number"
                                           value={selectedEntry.kg_to_take}
                                           onChange={(e) => updateProcessingKg(proc.id, e.target.value)}
-                                          className="w-full px-3 py-1.5 text-center text-sm font-semibold border border-gray-300 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                                          className="w-full px-3 py-1.5 text-center text-sm font-semibold border border-primary-300 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-button-500 focus:border-button-500"
                                           min="0"
                                           max={proc.remaining_stock}
                                           step="0.01"
@@ -2541,7 +2648,7 @@ const Inventory = () => {
                                           const newVal = Math.min(proc.remaining_stock, selectedEntry.kg_to_take + step);
                                           updateProcessingKg(proc.id, newVal);
                                         }}
-                                        className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
+                                        className="w-8 h-8 rounded-lg border border-primary-300 dark:border-primary-700 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 transition-colors"
                                       >
                                         <Plus size={14} />
                                       </button>
@@ -2567,42 +2674,42 @@ const Inventory = () => {
 
             {/* ─── Big Calculation Summary ─── */}
             {selectedProcessings.length > 0 && computedStockUnits && (
-              <div className="rounded-xl overflow-hidden border-2 border-green-300 bg-gradient-to-br from-green-50 to-emerald-50">
+              <div className="rounded-xl overflow-hidden border-2 border-green-300 dark:border-green-600 bg-gradient-to-br from-green-50 dark:from-gray-700 to-emerald-50 dark:to-gray-700">
                 <div className="p-4">
                   {/* Main calculation */}
                   <div className="text-center mb-3">
                     <p className="text-[10px] uppercase tracking-widest text-green-500 font-bold mb-1">Stock Distribution Summary</p>
-                    <div className="flex items-center justify-center gap-2 text-green-800">
+                    <div className="flex items-center justify-center gap-2 text-green-800 dark:text-green-300">
                       <span className="text-lg font-bold">{computedStockUnits.totalKg.toLocaleString()} kg</span>
                       <span className="text-sm text-green-500">÷</span>
                       <span className="text-lg font-bold">{computedStockUnits.weight} kg</span>
                       <span className="text-sm text-green-500">=</span>
-                      <span className="text-2xl font-black text-green-700">{computedStockUnits.units.toLocaleString()}</span>
-                      <span className="text-sm font-medium text-green-600">units</span>
+                      <span className="text-2xl font-black text-green-700 dark:text-green-300">{computedStockUnits.units.toLocaleString()}</span>
+                      <span className="text-sm font-medium text-green-600 dark:text-green-400">units</span>
                     </div>
                   </div>
 
                   {/* Details grid */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Current Stock</p>
-                      <p className="text-base font-bold text-gray-700">{(selectedItem.stocks || 0).toLocaleString()}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Current Stock</p>
+                      <p className="text-base font-bold text-gray-700 dark:text-gray-200">{(selectedItem.stocks || 0).toLocaleString()}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-green-600 font-medium">Adding</p>
-                      <p className="text-base font-bold text-green-600">+{computedStockUnits.units.toLocaleString()}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-green-600 dark:text-green-400 font-medium">Adding</p>
+                      <p className="text-base font-bold text-green-600 dark:text-green-400">+{computedStockUnits.units.toLocaleString()}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">New Total</p>
-                      <p className="text-base font-bold text-button-600">{((selectedItem.stocks || 0) + computedStockUnits.units).toLocaleString()}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">New Total</p>
+                      <p className="text-base font-bold text-button-600 dark:text-button-400">{((selectedItem.stocks || 0) + computedStockUnits.units).toLocaleString()}</p>
                     </div>
                   </div>
 
                   {/* Remainder notice */}
                   {computedStockUnits.remainder > 0 && (
-                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700">
                       <RotateCcw size={14} className="text-amber-500 flex-shrink-0" />
-                      <p className="text-xs text-amber-700">
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
                         <strong>{computedStockUnits.remainder} kg</strong> remainder stays in processing (not enough for 1 unit)
                       </p>
                     </div>
@@ -2613,39 +2720,39 @@ const Inventory = () => {
 
             {/* ─── Cost & Profit Analysis ─── */}
             {selectedProcessings.length > 0 && computedCostBreakdown && computedCostBreakdown.totalCost > 0 && (
-              <div className="rounded-xl overflow-hidden border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50">
+              <div className="rounded-xl overflow-hidden border-2 border-blue-300 dark:border-blue-600 bg-gradient-to-br from-blue-50 dark:from-gray-700 to-indigo-50 dark:to-gray-700">
                 <div className="p-4">
                   <p className="text-[10px] uppercase tracking-widest text-blue-500 font-bold mb-3 text-center">Cost & Profit Analysis</p>
 
                   {/* Cost breakdown */}
                   <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Procurement</p>
-                      <p className="text-sm font-bold text-gray-700">₱{computedCostBreakdown.totalProcurementCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Procurement</p>
+                      <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalProcurementCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Drying</p>
-                      <p className="text-sm font-bold text-gray-700">₱{computedCostBreakdown.totalDryingCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Drying</p>
+                      <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalDryingCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-blue-600 font-medium">Total Cost</p>
-                      <p className="text-sm font-bold text-blue-700">₱{computedCostBreakdown.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">Total Cost</p>
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-300">₱{computedCostBreakdown.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                   </div>
 
                   {/* Per-unit breakdown */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Cost/Unit</p>
-                      <p className="text-sm font-bold text-red-600">₱{computedCostBreakdown.costPerUnit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Cost/Unit</p>
+                      <p className="text-sm font-bold text-red-600 dark:text-red-400">₱{computedCostBreakdown.costPerUnit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Selling Price</p>
-                      <p className="text-sm font-bold text-green-600">₱{computedCostBreakdown.sellingPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Selling Price</p>
+                      <p className="text-sm font-bold text-green-600 dark:text-green-400">₱{computedCostBreakdown.sellingPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Profit/Unit</p>
-                      <p className={`text-sm font-bold ${computedCostBreakdown.profitPerUnit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Profit/Unit</p>
+                      <p className={`text-sm font-bold ${computedCostBreakdown.profitPerUnit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {computedCostBreakdown.profitPerUnit >= 0 ? '+' : ''}₱{computedCostBreakdown.profitPerUnit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
@@ -2653,19 +2760,19 @@ const Inventory = () => {
 
                   {/* Profit margin indicator */}
                   <div className={`mt-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg ${
-                    computedCostBreakdown.profitMargin >= 20 ? 'bg-green-100 border border-green-200' :
-                    computedCostBreakdown.profitMargin >= 0 ? 'bg-amber-50 border border-amber-200' :
-                    'bg-red-50 border border-red-200'
+                    computedCostBreakdown.profitMargin >= 20 ? 'bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700' :
+                    computedCostBreakdown.profitMargin >= 0 ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700' :
+                    'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700'
                   }`}>
                     {computedCostBreakdown.profitMargin >= 0 ? (
-                      <TrendingUp size={14} className={computedCostBreakdown.profitMargin >= 20 ? 'text-green-600' : 'text-amber-600'} />
+                      <TrendingUp size={14} className={computedCostBreakdown.profitMargin >= 20 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'} />
                     ) : (
-                      <TrendingDown size={14} className="text-red-600" />
+                      <TrendingDown size={14} className="text-red-600 dark:text-red-400" />
                     )}
                     <p className={`text-xs font-semibold ${
-                      computedCostBreakdown.profitMargin >= 20 ? 'text-green-700' :
-                      computedCostBreakdown.profitMargin >= 0 ? 'text-amber-700' :
-                      'text-red-700'
+                      computedCostBreakdown.profitMargin >= 20 ? 'text-green-700 dark:text-green-400' :
+                      computedCostBreakdown.profitMargin >= 0 ? 'text-amber-700 dark:text-amber-300' :
+                      'text-red-700 dark:text-red-300'
                     }`}>
                       {computedCostBreakdown.profitMargin >= 0 ? '' : ''}{computedCostBreakdown.profitMargin.toFixed(1)}% Profit Margin
                       {computedCostBreakdown.profitMargin < 0 && ' — Selling below cost!'}
@@ -2702,15 +2809,15 @@ const Inventory = () => {
       >
         {selectedItem && (
           <div className="space-y-4">
-            <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
-              <p className="text-sm font-semibold text-orange-800">{selectedItem.product_name}</p>
-              <p className="text-xs text-orange-600 mt-1">
+            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-700">
+              <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">{selectedItem.product_name}</p>
+              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
                 Current stock: <strong>{(selectedItem.stocks || 0).toLocaleString()}</strong> • Current floor: <strong>{(selectedItem.stock_floor || 0).toLocaleString()}</strong>
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                 Floor Quantity (units)
               </label>
               <input
@@ -2718,13 +2825,13 @@ const Inventory = () => {
                 value={floorValue}
                 onChange={(e) => setFloorValue(e.target.value)}
                 placeholder="e.g. 10"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                className="w-full px-3 py-2 border border-primary-300 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-button-500 focus:border-button-500"
                 min="0"
               />
-              <p className="text-xs text-gray-500 mt-1">When stock is at or below this number, it will be flagged as &quot;Low Stock&quot;</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">When stock is at or below this number, it will be flagged as &quot;Low Stock&quot;</p>
             </div>
 
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
               <Button variant="outline" onClick={() => setIsFloorModalOpen(false)} className="flex-1" disabled={saving}>
                 Cancel
               </Button>
@@ -2759,7 +2866,7 @@ const Inventory = () => {
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -2769,10 +2876,10 @@ const Inventory = () => {
         {selectedItem && (
           <div className="space-y-3">
             {/* Header with Status */}
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200">
+            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 dark:from-gray-700 to-primary-100 dark:to-gray-800 rounded-xl border border-primary-200 dark:border-primary-700">
               <div>
-                <h3 className="text-lg font-bold text-gray-800">{selectedItem.product_name}</h3>
-                <p className="text-xs text-gray-500">Product ID: #{String(selectedItem.product_id).padStart(4, '0')}</p>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{selectedItem.product_name}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Product ID: #{String(selectedItem.product_id).padStart(4, '0')}</p>
               </div>
               <StatusBadge status={selectedItem.stock_status} />
             </div>
@@ -2786,28 +2893,28 @@ const Inventory = () => {
               <ViewDetailItem icon={Scale} label="Weight/Unit" value={selectedItem.weight ? `${parseFloat(selectedItem.weight).toLocaleString()} kg` : 'N/A'} iconColor="text-purple-500" compact />
               <ViewDetailItem icon={AlertTriangle} label="Floor Qty" value={`${(selectedItem.stock_floor || 0).toLocaleString()} units`} iconColor="text-orange-500" compact />
               <ViewDetailItem icon={ShoppingCart} label="Stock Status" value={selectedItem.stock_status} iconColor={selectedItem.stock_status === 'In Stock' ? 'text-green-500' : selectedItem.stock_status === 'Low Stock' ? 'text-orange-500' : 'text-red-500'} compact />
-              <ViewDetailItem icon={Settings2} label="Product Status" value={selectedItem.status === 'active' ? 'Active' : 'Inactive'} iconColor="text-gray-500" compact />
-              <ViewDetailItem icon={Calendar} label="Created" value={selectedItem.created_date || 'N/A'} iconColor="text-gray-500" compact />
+              <ViewDetailItem icon={Settings2} label="Product Status" value={selectedItem.status === 'active' ? 'Active' : 'Inactive'} iconColor="text-gray-500 dark:text-gray-400" compact />
+              <ViewDetailItem icon={Calendar} label="Created" value={selectedItem.created_date || 'N/A'} iconColor="text-gray-500 dark:text-gray-400" compact />
             </div>
 
             {/* Price Summary */}
-            <div className="p-3 bg-green-50 rounded-xl border border-green-200">
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-700">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-green-700">Unit Price</span>
-                <span className="text-xl font-bold text-green-600">{selectedItem.price_formatted}</span>
+                <span className="text-sm font-medium text-green-700 dark:text-green-300">Unit Price</span>
+                <span className="text-xl font-bold text-green-600 dark:text-green-400">{selectedItem.price_formatted}</span>
               </div>
               {selectedItem.stocks > 0 && (
-                <div className="mt-1 text-xs text-gray-600">
-                  Total Value: <strong className="text-green-600">₱{(selectedItem.price * selectedItem.stocks).toLocaleString()}</strong>
+                <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                  Total Value: <strong className="text-green-600 dark:text-green-400">₱{(selectedItem.price * selectedItem.stocks).toLocaleString()}</strong>
                 </div>
               )}
             </div>
 
             {/* Cost & Profit Analysis */}
-            <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
               <div className="flex items-center gap-2 mb-2">
-                <DollarSign size={14} className="text-blue-600" />
-                <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">Production Cost Analysis</span>
+                <DollarSign size={14} className="text-blue-600 dark:text-blue-400" />
+                <span className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Production Cost Analysis</span>
               </div>
               {loadingCostAnalysis ? (
                 <div className="py-3 text-center">
@@ -2817,45 +2924,45 @@ const Inventory = () => {
               ) : costAnalysis?.has_data ? (
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2 bg-white/70 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Avg. Cost/Unit</p>
-                      <p className="text-sm font-bold text-red-600">₱{costAnalysis.avg_cost_per_unit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Avg. Cost/Unit</p>
+                      <p className="text-sm font-bold text-red-600 dark:text-red-400">₱{costAnalysis.avg_cost_per_unit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="p-2 bg-white/70 rounded-lg">
-                      <p className="text-[10px] text-gray-500 font-medium">Profit/Unit</p>
-                      <p className={`text-sm font-bold ${costAnalysis.profit_per_unit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Profit/Unit</p>
+                      <p className={`text-sm font-bold ${costAnalysis.profit_per_unit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {costAnalysis.profit_per_unit >= 0 ? '+' : ''}₱{costAnalysis.profit_per_unit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="p-2 bg-white/70 rounded-lg text-center">
-                      <p className="text-[10px] text-gray-500 font-medium">Procurement</p>
-                      <p className="text-xs font-bold text-gray-700">₱{costAnalysis.total_procurement_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg text-center">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Procurement</p>
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_procurement_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="p-2 bg-white/70 rounded-lg text-center">
-                      <p className="text-[10px] text-gray-500 font-medium">Drying</p>
-                      <p className="text-xs font-bold text-gray-700">₱{costAnalysis.total_drying_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg text-center">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Drying</p>
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_drying_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="p-2 bg-white/70 rounded-lg text-center">
-                      <p className="text-[10px] text-gray-500 font-medium">Total Cost</p>
-                      <p className="text-xs font-bold text-blue-700">₱{costAnalysis.total_production_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg text-center">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Total Cost</p>
+                      <p className="text-xs font-bold text-blue-700 dark:text-blue-300">₱{costAnalysis.total_production_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                   <div className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg ${
-                    costAnalysis.profit_margin >= 20 ? 'bg-green-100 border border-green-200' :
-                    costAnalysis.profit_margin >= 0 ? 'bg-amber-50 border border-amber-200' :
-                    'bg-red-50 border border-red-200'
+                    costAnalysis.profit_margin >= 20 ? 'bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-700' :
+                    costAnalysis.profit_margin >= 0 ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700' :
+                    'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700'
                   }`}>
                     {costAnalysis.profit_margin >= 0 ? (
-                      <TrendingUp size={12} className={costAnalysis.profit_margin >= 20 ? 'text-green-600' : 'text-amber-600'} />
+                      <TrendingUp size={12} className={costAnalysis.profit_margin >= 20 ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'} />
                     ) : (
-                      <TrendingDown size={12} className="text-red-600" />
+                      <TrendingDown size={12} className="text-red-600 dark:text-red-400" />
                     )}
                     <span className={`text-xs font-semibold ${
-                      costAnalysis.profit_margin >= 20 ? 'text-green-700' :
-                      costAnalysis.profit_margin >= 0 ? 'text-amber-700' :
-                      'text-red-700'
+                      costAnalysis.profit_margin >= 20 ? 'text-green-700 dark:text-green-400' :
+                      costAnalysis.profit_margin >= 0 ? 'text-amber-700 dark:text-amber-300' :
+                      'text-red-700 dark:text-red-300'
                     }`}>
                       {costAnalysis.profit_margin.toFixed(1)}% Profit Margin
                     </span>

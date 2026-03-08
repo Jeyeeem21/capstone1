@@ -46,6 +46,7 @@ const Processing = () => {
     loading: loadingActive, 
     isRefreshing: refreshingActive,
     refetch: refetchActive,
+    optimisticUpdate: optimisticUpdateActive,
   } = useDataFetch('/processings/active', {
     cacheKey: ACTIVE_CACHE_KEY,
     initialData: [],
@@ -56,6 +57,7 @@ const Processing = () => {
     loading: loadingCompleted, 
     isRefreshing: refreshingCompleted,
     refetch: refetchCompleted,
+    optimisticUpdate: optimisticUpdateCompleted,
   } = useDataFetch('/processings/completed', {
     cacheKey: COMPLETED_CACHE_KEY,
     initialData: [],
@@ -303,10 +305,9 @@ const Processing = () => {
         const recordId = selectedItem.id;
         // Close modal first
         setIsReturnModalOpen(false);
-        // Refetch and toast together
-        invalidateAndRefetch().then(() => {
-          toast.success('Returned to Processing', `Record #${String(recordId).padStart(4, '0')} has been returned to processing.`);
-        });
+        toast.success('Returned to Processing', `Record #${String(recordId).padStart(4, '0')} has been returned to processing.`);
+        // Refetch in background
+        invalidateAndRefetch();
         return;
       } else {
         throw new Error(response.message || 'Failed to return to processing');
@@ -394,9 +395,9 @@ const Processing = () => {
       
       if (response.success && response.data) {
         setIsAddModalOpen(false);
-        invalidateAndRefetch().then(() => {
-          toast.success('Processing Created', 'Processing record has been created.');
-        });
+        toast.success('Processing Created', 'Processing record has been created.');
+        // Refetch in background
+        invalidateAndRefetch();
         return;
       } else {
         throw response;
@@ -435,10 +436,9 @@ const Processing = () => {
       if (response.success && response.data) {
         // Close modal first
         setIsEditModalOpen(false);
-        // Refetch and toast together
-        invalidateAndRefetch().then(() => {
-          toast.success('Processing Updated', 'Processing record has been updated.');
-        });
+        toast.success('Processing Updated', 'Processing record has been updated.');
+        // Refetch in background
+        invalidateAndRefetch();
         return;
       } else {
         throw response;
@@ -486,10 +486,9 @@ const Processing = () => {
         const recordId = selectedItem.id;
         // Close modal first
         setIsCompleteModalOpen(false);
-        // Refetch and toast together
-        invalidateAndRefetch().then(() => {
-          toast.success('Processing Completed', `Record #${String(recordId).padStart(4, '0')} has been completed.`);
-        });
+        toast.success('Processing Completed', `Record #${String(recordId).padStart(4, '0')} has been completed.`);
+        // Refetch in background
+        invalidateAndRefetch();
         return;
       } else {
         throw response;
@@ -511,12 +510,15 @@ const Processing = () => {
       const response = await apiClient.delete(`/processings/${selectedItem.id}`);
       
       if (response.success) {
+        const archivedId = selectedItem.id;
         // Close modal first
         setIsDeleteModalOpen(false);
-        // Refetch and toast together
-        invalidateAndRefetch().then(() => {
-          toast.success('Processing Archived', 'Processing record has been archived.');
-        });
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdateActive(prev => prev.filter(p => p.id !== archivedId));
+        optimisticUpdateCompleted(prev => prev.filter(p => p.id !== archivedId));
+        toast.success('Processing Archived', 'Processing record has been archived.');
+        // Refetch in background to confirm
+        invalidateAndRefetch();
         return;
       } else {
         throw new Error(response.message || 'Failed to archive');
@@ -527,7 +529,7 @@ const Processing = () => {
     } finally {
       setSaving(false);
     }
-  }, [selectedItem, invalidateAndRefetch, toast, saving]);
+  }, [selectedItem, invalidateAndRefetch, optimisticUpdateActive, optimisticUpdateCompleted, toast, saving]);
 
   // ---- Chart helper functions ----
   const getWeeksInMonth = useCallback((year, month) => {
@@ -778,7 +780,7 @@ const Processing = () => {
     { 
       header: 'ID', 
       accessor: 'id',
-      cell: (row) => <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
+      cell: (row) => <span className="font-mono text-sm text-gray-600 dark:text-gray-300">#{String(row.id).padStart(4, '0')}</span>
     },
     { 
       header: 'Drying Source', 
@@ -792,14 +794,14 @@ const Processing = () => {
                 <>
                   <span>{sources[0].variety_name || sources[0].supplier_name}</span>
                   {sources[0].batch_number && (
-                    <span className="block text-xs text-indigo-600 font-medium">{sources[0].batch_number}</span>
+                    <span className="block text-xs text-indigo-600 dark:text-indigo-400 font-medium">{sources[0].batch_number}</span>
                   )}
                 </>
               ) : (
                 <>
                   <span className="font-medium">{sources.length} sources</span>
                   {sources.map((s, i) => (
-                    <span key={i} className="block text-xs text-indigo-600">
+                    <span key={i} className="block text-xs text-indigo-600 dark:text-indigo-400">
                       {s.variety_name || s.supplier_name}{s.batch_number ? ` (${s.batch_number})` : ''} — {s.quantity_kg_taken.toLocaleString()} kg
                     </span>
                   ))}
@@ -812,7 +814,7 @@ const Processing = () => {
           <div className="text-sm">
             <span>Drying #{String(row.drying_process_id).padStart(4, '0')} - {row.drying_process_info.supplier_name}</span>
             {row.drying_process_info.batch_number && (
-              <span className="block text-xs text-indigo-600 font-medium">{row.drying_process_info.batch_number}</span>
+              <span className="block text-xs text-indigo-600 dark:text-indigo-400 font-medium">{row.drying_process_info.batch_number}</span>
             )}
           </div>
         );
@@ -825,7 +827,7 @@ const Processing = () => {
     { 
       header: 'Input (kg)', 
       accessor: 'input_kg',
-      cell: (row) => <span className="font-semibold text-blue-600">{parseFloat(row.input_kg).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-blue-600 dark:text-blue-400">{parseFloat(row.input_kg).toLocaleString()}</span>
     },
     { header: 'Operator', accessor: 'operator_name', cell: (row) => row.operator_name || '-' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
@@ -836,7 +838,7 @@ const Processing = () => {
           <button
             onClick={() => handleStartProcessing(row)}
             disabled={saving}
-            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+            className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors disabled:opacity-50"
             title="Start Processing"
           >
             <Play size={16} />
@@ -846,7 +848,7 @@ const Processing = () => {
           <button
             onClick={() => handleOpenCompleteModal(row)}
             disabled={saving}
-            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+            className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors disabled:opacity-50"
             title="Complete Processing"
           >
             <CheckCircle size={16} />
@@ -865,7 +867,7 @@ const Processing = () => {
     { 
       header: 'ID', 
       accessor: 'id',
-      cell: (row) => <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
+      cell: (row) => <span className="font-mono text-sm text-gray-600 dark:text-gray-300">#{String(row.id).padStart(4, '0')}</span>
     },
     { 
       header: 'Drying Source', 
@@ -879,14 +881,14 @@ const Processing = () => {
                 <>
                   <span>{sources[0].variety_name || sources[0].supplier_name}</span>
                   {sources[0].batch_number && (
-                    <span className="block text-xs text-indigo-600 font-medium">{sources[0].batch_number}</span>
+                    <span className="block text-xs text-indigo-600 dark:text-indigo-400 font-medium">{sources[0].batch_number}</span>
                   )}
                 </>
               ) : (
                 <>
                   <span className="font-medium">{sources.length} sources</span>
                   {sources.map((s, i) => (
-                    <span key={i} className="block text-xs text-indigo-600">
+                    <span key={i} className="block text-xs text-indigo-600 dark:text-indigo-400">
                       {s.variety_name || s.supplier_name}{s.batch_number ? ` (${s.batch_number})` : ''} — {s.quantity_kg_taken.toLocaleString()} kg
                     </span>
                   ))}
@@ -899,7 +901,7 @@ const Processing = () => {
           <div className="text-sm">
             <span>Drying #{String(row.drying_process_id).padStart(4, '0')} - {row.drying_process_info.supplier_name}</span>
             {row.drying_process_info.batch_number && (
-              <span className="block text-xs text-indigo-600 font-medium">{row.drying_process_info.batch_number}</span>
+              <span className="block text-xs text-indigo-600 dark:text-indigo-400 font-medium">{row.drying_process_info.batch_number}</span>
             )}
           </div>
         );
@@ -912,27 +914,27 @@ const Processing = () => {
     { 
       header: 'Input (kg)', 
       accessor: 'input_kg',
-      cell: (row) => <span className="font-semibold text-blue-600">{parseFloat(row.input_kg).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-blue-600 dark:text-blue-400">{parseFloat(row.input_kg).toLocaleString()}</span>
     },
     { 
       header: 'Output (kg)', 
       accessor: 'output_kg',
-      cell: (row) => <span className="font-semibold text-green-600">{parseFloat(row.output_kg).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-green-600 dark:text-green-400">{parseFloat(row.output_kg).toLocaleString()}</span>
     },
     { 
       header: 'Stock Out (kg)', 
       accessor: 'stock_out',
-      cell: (row) => <span className="font-semibold text-indigo-600">{parseFloat(row.stock_out || 0).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-indigo-600 dark:text-indigo-400">{parseFloat(row.stock_out || 0).toLocaleString()}</span>
     },
     { 
       header: 'Husk (kg)', 
       accessor: 'husk_kg',
-      cell: (row) => <span className="font-semibold text-orange-600">{parseFloat(row.husk_kg).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-orange-600 dark:text-orange-400">{parseFloat(row.husk_kg).toLocaleString()}</span>
     },
     { 
       header: 'Yield', 
       accessor: 'yield_percent',
-      cell: (row) => <span className="font-semibold text-purple-600">{parseFloat(row.yield_percent).toFixed(1)}%</span>
+      cell: (row) => <span className="font-semibold text-purple-600 dark:text-purple-400">{parseFloat(row.yield_percent).toFixed(1)}%</span>
     },
     { 
       header: 'Stock Status', 
@@ -946,7 +948,7 @@ const Processing = () => {
           <button
             onClick={() => handleReturnToProcessing(row)}
             disabled={saving}
-            className="p-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors disabled:opacity-50"
+            className="p-1.5 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors disabled:opacity-50"
             title="Return to Processing"
           >
             <RotateCcw size={16} />
@@ -959,13 +961,13 @@ const Processing = () => {
 
   // View Detail Item component
   const ViewDetailItem = ({ icon: Icon, label, value, iconColor = 'text-primary-500', compact = false }) => (
-    <div className={`flex items-start gap-2 ${compact ? 'p-2' : 'p-4'} bg-primary-50/30 rounded-xl border-2 border-primary-200`}>
-      <div className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white shadow-sm ${iconColor}`}>
+    <div className={`flex items-start gap-2 ${compact ? 'p-2' : 'p-4'} bg-primary-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700`}>
+      <div className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white dark:bg-gray-600 shadow-sm ${iconColor}`}>
         <Icon size={compact ? 14 : 18} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500 uppercase tracking-wide truncate`}>{label}</p>
-        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-800 mt-0.5 truncate`}>{value}</p>
+        <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate`}>{label}</p>
+        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-800 dark:text-gray-100 mt-0.5 truncate`}>{value}</p>
       </div>
     </div>
   );
@@ -977,7 +979,7 @@ const Processing = () => {
         description="Track and manage rice processing operations" 
         icon={Settings2}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -996,19 +998,19 @@ const Processing = () => {
       {/* Charts - Show data immediately */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 h-[340px] animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
-            <div className="h-3 bg-gray-100 rounded w-1/4 mb-6"></div>
-            <div className="h-[240px] bg-gray-100 rounded"></div>
+          <div className="lg:col-span-2 bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-6 h-[340px] animate-pulse">
+            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/3 mb-2"></div>
+            <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
+            <div className="h-[240px] bg-gray-100 dark:bg-gray-700 rounded"></div>
           </div>
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-4 h-[162px] animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-[100px] bg-gray-100 rounded-full mx-auto w-[100px]"></div>
+            <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[162px] animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2"></div>
+              <div className="h-[100px] bg-gray-100 dark:bg-gray-700 rounded-full mx-auto w-[100px]"></div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-4 h-[162px] animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-[100px] bg-gray-100 rounded-full mx-auto w-[100px]"></div>
+            <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[162px] animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2"></div>
+              <div className="h-[100px] bg-gray-100 dark:bg-gray-700 rounded-full mx-auto w-[100px]"></div>
             </div>
           </div>
         </div>
@@ -1026,7 +1028,7 @@ const Processing = () => {
                   <select
                     value={chartPeriod}
                     onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
-                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -1036,31 +1038,31 @@ const Processing = () => {
                   </select>
                   {chartPeriod === 'daily' && (
                     <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {chartPeriod === 'weekly' && (
                     <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {chartPeriod === 'monthly' && (
                     <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000" max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {chartPeriod === 'bi-annually' && (
                     <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000" max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {chartPeriod === 'annually' && (
                     <div className="flex items-center gap-1">
                       <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
                         min="2000" max={chartYearTo}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                       <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
                       <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
                         min={chartYearFrom} max={new Date().getFullYear()}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                     </div>
                   )}
                 </div>
@@ -1068,9 +1070,9 @@ const Processing = () => {
               onDotClick={setActiveChartPoint}
               activePoint={activeChartPoint}
               summaryStats={[
-                { label: 'Total Output', value: `${stats.totalOutput.toLocaleString()} kg`, color: 'text-primary-600' }, 
-                { label: 'Avg per Day', value: `${avgPerDay.toLocaleString()} kg`, color: 'text-primary-600' }, 
-                { label: 'Yield', value: `${stats.avgYield}%`, color: 'text-green-600' }
+                { label: 'Total Output', value: `${stats.totalOutput.toLocaleString()} kg`, color: 'text-primary-600 dark:text-primary-400' }, 
+                { label: 'Avg per Day', value: `${avgPerDay.toLocaleString()} kg`, color: 'text-primary-600 dark:text-primary-400' }, 
+                { label: 'Yield', value: `${stats.avgYield}%`, color: 'text-green-600 dark:text-green-400' }
               ]} 
             />
           </div>
@@ -1143,10 +1145,10 @@ const Processing = () => {
         {selectedItem && (
           <div className="space-y-3">
             {/* Header with Status - Compact */}
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200">
+            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 dark:from-gray-700 to-primary-100 dark:to-gray-800 rounded-xl border border-primary-200 dark:border-primary-700">
               <div>
-                <h3 className="text-lg font-bold text-gray-800">Processing #{String(selectedItem.id).padStart(4, '0')}</h3>
-                <p className="text-xs text-gray-500">
+                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">Processing #{String(selectedItem.id).padStart(4, '0')}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {selectedItem.drying_sources && selectedItem.drying_sources.length > 1
                     ? `From ${selectedItem.drying_sources.length} drying sources`
                     : selectedItem.drying_sources && selectedItem.drying_sources.length === 1
@@ -1174,13 +1176,13 @@ const Processing = () => {
 
               {/* Multi-source drying info */}
               {selectedItem.drying_sources && selectedItem.drying_sources.length > 0 && (
-                <div className="col-span-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-xs font-semibold text-green-700 mb-1 flex items-center gap-1"><Layers className="w-3 h-3" /> Drying Sources ({selectedItem.drying_sources.length})</p>
+                <div className="col-span-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1 flex items-center gap-1"><Layers className="w-3 h-3" /> Drying Sources ({selectedItem.drying_sources.length})</p>
                   {selectedItem.drying_sources.map((s, i) => (
-                    <p key={i} className="text-xs text-gray-700">
+                    <p key={i} className="text-xs text-gray-700 dark:text-gray-200">
                       {s.variety_name || s.supplier_name}
-                      {s.batch_number && <span className="text-indigo-600"> ({s.batch_number})</span>}
-                      <span className="text-green-600 font-medium"> — {s.quantity_kg_taken.toLocaleString()} kg</span>
+                      {s.batch_number && <span className="text-indigo-600 dark:text-indigo-400"> ({s.batch_number})</span>}
+                      <span className="text-green-600 dark:text-green-400 font-medium"> — {s.quantity_kg_taken.toLocaleString()} kg</span>
                     </p>
                   ))}
                 </div>
@@ -1190,13 +1192,13 @@ const Processing = () => {
               {(!selectedItem.drying_sources || selectedItem.drying_sources.length === 0) && selectedItem.drying_process_info && (
                 <>
                   <ViewDetailItem icon={Package} label="Supplier" value={selectedItem.drying_process_info.supplier_name} iconColor="text-orange-500" compact />
-                  <ViewDetailItem icon={Layers} label="Drying Remaining" value={`${parseFloat(selectedItem.drying_process_info.remaining_kg).toLocaleString()} kg`} iconColor="text-gray-500" compact />
+                  <ViewDetailItem icon={Layers} label="Drying Remaining" value={`${parseFloat(selectedItem.drying_process_info.remaining_kg).toLocaleString()} kg`} iconColor="text-gray-500 dark:text-gray-400" compact />
                 </>
               )}
               {(!selectedItem.drying_sources || selectedItem.drying_sources.length === 0) && !selectedItem.drying_process_info && selectedItem.procurement_info && (
                 <>
                   <ViewDetailItem icon={Package} label="Supplier" value={selectedItem.procurement_info.supplier_name} iconColor="text-orange-500" compact />
-                  <ViewDetailItem icon={Layers} label="Sacks/Bags" value={`${parseInt(selectedItem.procurement_info.sacks || 0)} sacks (${parseFloat(selectedItem.procurement_info.quantity_kg).toLocaleString()} kg)`} iconColor="text-gray-500" compact />
+                  <ViewDetailItem icon={Layers} label="Sacks/Bags" value={`${parseInt(selectedItem.procurement_info.sacks || 0)} sacks (${parseFloat(selectedItem.procurement_info.quantity_kg).toLocaleString()} kg)`} iconColor="text-gray-500 dark:text-gray-400" compact />
                 </>
               )}
               
@@ -1214,23 +1216,23 @@ const Processing = () => {
 
             {/* Yield Summary for Completed - Compact */}
             {selectedItem.status === 'Completed' && (
-              <div className="p-3 bg-green-50 rounded-xl border border-green-200">
+              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-700">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-green-700">Processing Yield</span>
-                  <span className="text-lg font-bold text-green-600">
+                  <span className="text-sm font-medium text-green-700 dark:text-green-300">Processing Yield</span>
+                  <span className="text-lg font-bold text-green-600 dark:text-green-400">
                     {parseFloat(selectedItem.yield_percent).toFixed(1)}%
                   </span>
                 </div>
                 <div className="mt-1 flex gap-4 text-xs">
-                  <span className="text-gray-600">Input: <strong>{parseFloat(selectedItem.input_kg).toLocaleString()} kg</strong></span>
-                  <span className="text-gray-600">→ Rice: <strong className="text-green-600">{parseFloat(selectedItem.output_kg).toLocaleString()} kg</strong></span>
-                  <span className="text-gray-600">+ Husk: <strong className="text-orange-600">{parseFloat(selectedItem.husk_kg).toLocaleString()} kg</strong></span>
+                  <span className="text-gray-600 dark:text-gray-300">Input: <strong>{parseFloat(selectedItem.input_kg).toLocaleString()} kg</strong></span>
+                  <span className="text-gray-600 dark:text-gray-300">→ Rice: <strong className="text-green-600 dark:text-green-400">{parseFloat(selectedItem.output_kg).toLocaleString()} kg</strong></span>
+                  <span className="text-gray-600 dark:text-gray-300">+ Husk: <strong className="text-orange-600 dark:text-orange-400">{parseFloat(selectedItem.husk_kg).toLocaleString()} kg</strong></span>
                 </div>
               </div>
             )}
 
             {/* Action Buttons - Compact */}
-            <div className="flex gap-3 pt-3 border-t-2 border-primary-200">
+            <div className="flex gap-3 pt-3 border-t-2 border-primary-200 dark:border-primary-700">
               {selectedItem.status === 'Pending' && (
                 <Button variant="outline" onClick={() => { setIsViewModalOpen(false); handleEdit(selectedItem); }} className="flex-1">
                   Edit Record
@@ -1260,8 +1262,8 @@ const Processing = () => {
         {selectedItem && (
           <div className="space-y-4">
             {/* Info Header */}
-            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-              <p className="text-sm text-blue-700">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
                 <strong>Processing #{String(selectedItem.id).padStart(4, '0')}</strong>
                 {selectedItem.drying_sources && selectedItem.drying_sources.length > 0 ? (
                   <span> — {selectedItem.drying_sources.map(s => s.variety_name || s.supplier_name).join(', ')}</span>
@@ -1271,7 +1273,7 @@ const Processing = () => {
                   <span> - From {selectedItem.procurement_info.supplier_name}</span>
                 )}
               </p>
-              <p className="text-xs text-blue-600 mt-1">
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                 Input: <strong>{parseFloat(selectedItem.input_kg).toLocaleString()} kg</strong>
               </p>
             </div>
@@ -1295,19 +1297,19 @@ const Processing = () => {
             {/* Auto-calculated fields */}
             {completeFormData.output_kg && (
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
-                  <p className="text-xs text-orange-600 uppercase font-medium">Husk (Auto-calculated)</p>
-                  <p className="text-lg font-bold text-orange-700">{completeFormData.husk_kg.toLocaleString()} kg</p>
+                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-700">
+                  <p className="text-xs text-orange-600 dark:text-orange-400 uppercase font-medium">Husk (Auto-calculated)</p>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{completeFormData.husk_kg.toLocaleString()} kg</p>
                 </div>
-                <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
-                  <p className="text-xs text-purple-600 uppercase font-medium">Yield (Auto-calculated)</p>
-                  <p className="text-lg font-bold text-purple-700">{completeFormData.yield_percent}%</p>
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-200 dark:border-purple-700">
+                  <p className="text-xs text-purple-600 dark:text-purple-400 uppercase font-medium">Yield (Auto-calculated)</p>
+                  <p className="text-lg font-bold text-purple-700 dark:text-purple-300">{completeFormData.yield_percent}%</p>
                 </div>
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
               <Button variant="outline" onClick={() => setIsCompleteModalOpen(false)} className="flex-1" disabled={saving}>
                 Cancel
               </Button>
@@ -1352,7 +1354,7 @@ const Processing = () => {
           <>
             {/* Drying Sources with Add button */}
             <div className="mb-4">
-              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                 Drying Sources <span className="text-red-500">*</span>
               </label>
               
@@ -1386,7 +1388,7 @@ const Processing = () => {
                     setFormData(prev => ({ ...prev, input_kg: String(Math.round(total * 100) / 100) }));
                   }}
                   disabled={!pendingDryingId}
-                  className="px-5 py-3 border-2 border-green-600 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 hover:border-green-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
+                  className="px-5 py-3 border-2 border-green-600 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 hover:border-green-700 disabled:bg-gray-300 disabled:border-gray-300 dark:border-gray-600 disabled:cursor-not-allowed transition-colors font-medium shadow-sm"
                 >
                   Add
                 </button>
@@ -1396,16 +1398,16 @@ const Processing = () => {
               {selectedGroups.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {selectedGroups.map(opt => (
-                    <div key={opt.value} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <div key={opt.value} className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-800">{opt.varietyName}</span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-100">{opt.varietyName}</span>
                         {opt.batchNumber && (
-                          <span className="text-xs text-indigo-600">({opt.batchNumber})</span>
+                          <span className="text-xs text-indigo-600 dark:text-indigo-400">({opt.batchNumber})</span>
                         )}
                         {opt.driedAt && !opt.batchNumber && (
                           <span className="text-xs text-gray-400">· Dried {opt.driedAt}</span>
                         )}
-                        <span className="text-sm text-green-600 font-semibold">— {opt.remaining.toLocaleString()} kg</span>
+                        <span className="text-sm text-green-600 dark:text-green-400 font-semibold">— {opt.remaining.toLocaleString()} kg</span>
                         {opt.sourceCount > 1 && (
                           <span className="text-xs text-gray-400">({opt.sourceCount} sources)</span>
                         )}
@@ -1423,13 +1425,13 @@ const Processing = () => {
                           const total = remainingGroups.reduce((sum, g) => sum + g.remaining, 0);
                           setFormData(prev => ({ ...prev, input_kg: newIds.length > 0 ? String(Math.round(total * 100) / 100) : '' }));
                         }}
-                        className="text-red-500 hover:text-red-700 p-1"
+                        className="text-red-500 hover:text-red-700 dark:text-red-300 p-1"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
-                  <p className="text-xs text-green-600 mt-1">
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
                     {selectedGroups.length} source(s) — Total: <strong>{totalAvailableKg.toLocaleString()} kg</strong>
                   </p>
                 </div>

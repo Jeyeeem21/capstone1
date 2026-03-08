@@ -1,7 +1,7 @@
 ================================================================================
          KJP RICEMILL — ADMIN & SUPER ADMIN PAGE FUNCTIONS DOCUMENTATION
 ================================================================================
-                          Last Updated: March 1, 2026
+                          Last Updated: March 10, 2026
 ================================================================================
 
 
@@ -329,6 +329,7 @@ Functions & Features:
       - Variety (dropdown, only shows Active varieties)
       - Price
       - Weight
+      - Image upload (file picker, stored in storage/products/)
       - Status (Active/Inactive)
 
   • Cost Analysis:
@@ -545,9 +546,21 @@ Functions & Features:
       - Confirm modal to cancel an order
       - Stock is automatically restored
 
-  • Return Order:
-      - Modal with return_reason and return_notes fields
-      - Processes return and restores stock levels
+  • Return Order (Full Flow):
+      - Request Return: Modal with return_reason, return_notes,
+        return_proof (multi-image upload)
+      - Accept Return: Assign pickup driver, plate number,
+        estimated pickup date
+      - Reject Return: Reverts order status to delivered
+      - Mark as Returned: Pickup complete, stock restored
+
+  • Restock Items:
+      - Per-item quantity selection for restocking after void/return
+      - Each item tracks `restocked` status to prevent double-restock
+
+  • Record Payment:
+      - Mark unpaid orders as paid (cash or GCash + proof upload)
+      - Payment proof stored as JSON array of image paths
 
   • View Order Details:
       - Modal showing all order items, totals, customer info

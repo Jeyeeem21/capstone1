@@ -1,18 +1,23 @@
-import { Heart, Mail, Phone, MapPin, Clock, Zap, Package, ShoppingCart, TrendingUp, BarChart3, Facebook, Twitter, Instagram, Linkedin, Wheat } from 'lucide-react';
+import { Heart, Mail, Phone, MapPin, Clock, Zap, Package, ShoppingCart, TrendingUp, BarChart3, Facebook, Twitter, Instagram, Linkedin, Wheat, Monitor, ClipboardList, User } from 'lucide-react';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { useAuth } from '../../context/AuthContext';
 
 const Footer = ({ 
   className = ''
 }) => {
   const { settings } = useBusinessSettings();
+  const { basePath, isStaff } = useAuth();
   const currentYear = new Date().getFullYear();
 
-  const quickLinks = [
-    { icon: Package, label: 'Inventory Management', href: '/inventory' },
-    { icon: Wheat, label: 'Products', href: '/products' },
-    { icon: ShoppingCart, label: 'Sales & POS', href: '/pos' },
-    { icon: TrendingUp, label: 'Procurement', href: '/procurement' },
-    { icon: BarChart3, label: 'Reports & Analytics', href: '/dashboard' },
+  const quickLinks = isStaff() ? [
+    { icon: Monitor, label: 'Point of Sale', href: '/staff/pos' },
+    { icon: User, label: 'My Profile', href: '/staff/profile' },
+  ] : [
+    { icon: Package, label: 'Products', href: `${basePath}/products` },
+    { icon: Monitor, label: 'Point of Sale', href: `${basePath}/pos` },
+    { icon: ClipboardList, label: 'Orders', href: `${basePath}/orders` },
+    { icon: TrendingUp, label: 'Procurement', href: `${basePath}/procurement` },
+    { icon: BarChart3, label: 'Sales', href: `${basePath}/sales` },
   ];
 
   const contactInfo = [
@@ -120,7 +125,7 @@ const Footer = ({
             <p className="text-gray-400 text-sm">
               © {currentYear} {settings.business_name || 'KJP Rice Mill'} {settings.footer_copyright || 'Management System. All rights reserved.'}
             </p>
-            <p className="text-gray-500 text-xs mt-1">
+            <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
               Powered by <span className="text-button-400 font-medium">{frameworkText}</span>
               <Heart size={10} className="inline mx-1 text-red-500 fill-red-500" />
               Built at <span className="text-gray-400">{institutionText}</span>
@@ -143,7 +148,7 @@ const Footer = ({
                 </a>
               ))
             ) : (
-              <span className="text-gray-500 text-sm">No social links configured</span>
+              <span className="text-gray-500 dark:text-gray-400 text-sm">No social links configured</span>
             )}
           </div>
         </div>

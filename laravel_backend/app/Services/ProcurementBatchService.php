@@ -253,5 +253,6 @@ class ProcurementBatchService
     {
         Cache::forget(self::CACHE_KEY);
         Cache::forget(self::CACHE_KEY_OPEN);
+        DashboardService::clearStatsCache();
     }
 }

@@ -18,6 +18,7 @@ use App\Models\DeliveryAssignment;
 use App\Models\ProcurementBatch;
 use App\Models\User;
 use App\Models\AuditTrail;
+use App\Services\DashboardService;
 use Illuminate\Support\Facades\Cache;
 
 class ArchiveController extends Controller
@@ -37,7 +38,7 @@ class ArchiveController extends Controller
                 'idField' => 'product_id',
                 'usesCustomSoftDelete' => true,
                 'auditModule' => 'Products',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'product_id',
             ],
             'varieties' => [
@@ -46,7 +47,7 @@ class ArchiveController extends Controller
                 'nameField' => 'name',
                 'idField' => 'id',
                 'auditModule' => 'Varieties',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'variety_id',
             ],
             'suppliers' => [
@@ -55,16 +56,16 @@ class ArchiveController extends Controller
                 'nameField' => 'name',
                 'idField' => 'id',
                 'auditModule' => 'Supplier',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'supplier_id',
             ],
             'customers' => [
                 'model' => Customer::class,
-                'label' => 'Customer',
+                'label' => 'Client',
                 'nameField' => 'name',
                 'idField' => 'id',
                 'auditModule' => 'Customer',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'customer_id',
             ],
             'procurements' => [
@@ -73,7 +74,7 @@ class ArchiveController extends Controller
                 'nameField' => 'supplier_name',
                 'idField' => 'id',
                 'auditModule' => 'Procurement',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'procurement_id',
             ],
             'drying_processes' => [
@@ -91,7 +92,7 @@ class ArchiveController extends Controller
                 'nameField' => null,
                 'idField' => 'id',
                 'auditModule' => 'Processing',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'processing_id',
             ],
             'drivers' => [
@@ -100,7 +101,7 @@ class ArchiveController extends Controller
                 'nameField' => 'name',
                 'idField' => 'id',
                 'auditModule' => 'Drivers',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'driver_id',
             ],
             'deliveries' => [
@@ -109,7 +110,7 @@ class ArchiveController extends Controller
                 'nameField' => null,
                 'idField' => 'id',
                 'auditModule' => 'Deliveries',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'delivery_id',
             ],
             'users' => [
@@ -118,7 +119,7 @@ class ArchiveController extends Controller
                 'nameField' => 'name',
                 'idField' => 'id',
                 'auditModule' => 'Users',
-                'auditAction' => 'DELETE',
+                'auditAction' => 'ARCHIVE',
                 'auditDetailKey' => 'user_id',
             ],
         ];
@@ -309,6 +310,14 @@ class ArchiveController extends Controller
 
             $record->unarchive();
 
+            // Recalculate batch totals when restoring a procurement
+            if ($module === 'procurements' && $record->batch_id) {
+                $batch = \App\Models\ProcurementBatch::find($record->batch_id);
+                if ($batch) {
+                    $batch->recalculateTotals();
+                }
+            }
+
             // Clear relevant caches
             $this->clearModuleCache($module);
 
@@ -351,10 +360,21 @@ class ArchiveController extends Controller
             $nameField = $config['nameField'];
             $name = $nameField ? ($record->{$nameField} ?? $config['label']) : $config['label'] . ' #' . str_pad($id, 4, '0', STR_PAD_LEFT);
 
+            // Capture batch_id before deleting (for procurement batch recalc)
+            $batchId = ($module === 'procurements') ? $record->batch_id : null;
+
             if ($usesCustom) {
                 $record->softDelete(); // Product's custom method — sets is_deleted = true
             } else {
                 $record->delete(); // SoftDeletes — sets deleted_at
+            }
+
+            // Recalculate batch totals when soft-deleting a procurement
+            if ($batchId) {
+                $batch = \App\Models\ProcurementBatch::find($batchId);
+                if ($batch) {
+                    $batch->recalculateTotals();
+                }
             }
 
             // Clear relevant caches
@@ -396,11 +416,27 @@ class ArchiveController extends Controller
                 return $this->errorResponse('No archived records to delete', 404);
             }
 
+            // Collect batch IDs that need recalculation (for procurements)
+            $batchIds = [];
+            if ($module === 'procurements') {
+                $batchIds = $records->pluck('batch_id')->filter()->unique()->toArray();
+            }
+
             foreach ($records as $record) {
                 if ($usesCustom) {
                     $record->softDelete();
                 } else {
                     $record->delete();
+                }
+            }
+
+            // Recalculate batch totals for any affected batches
+            if (!empty($batchIds)) {
+                foreach ($batchIds as $batchId) {
+                    $batch = \App\Models\ProcurementBatch::find($batchId);
+                    if ($batch) {
+                        $batch->recalculateTotals();
+                    }
                 }
             }
 
@@ -484,5 +520,22 @@ class ArchiveController extends Controller
         if (isset($cacheKeys[$module])) {
             Cache::forget($cacheKeys[$module]);
         }
+
+        // Also clear related caches for modules with cross-dependencies
+        if (in_array($module, ['procurements', 'drying_processes'])) {
+            Cache::forget('procurement_batches_all');
+            Cache::forget('procurement_batches_open');
+        }
+        if ($module === 'processings') {
+            Cache::forget('procurements_all');
+            Cache::forget('drying_processes_all');
+        }
+        if ($module === 'products') {
+            Cache::forget('products_featured');
+            Cache::forget('varieties_all');
+        }
+
+        // Always clear dashboard stats cache so counts/sums update immediately
+        DashboardService::clearStatsCache();
     }
 }

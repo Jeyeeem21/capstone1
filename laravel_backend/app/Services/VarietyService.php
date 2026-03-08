@@ -72,6 +72,7 @@ class VarietyService
     public function clearCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        DashboardService::clearStatsCache();
     }
 
     /**

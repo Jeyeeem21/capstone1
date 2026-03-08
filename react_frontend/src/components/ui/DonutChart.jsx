@@ -8,12 +8,12 @@ const getCSSVariable = (name) => {
 
 // Helper to detect dark mode
 const useIsDarkMode = () => {
-  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setIsDark(document.body.classList.contains('dark-mode'));
+      setIsDark(document.documentElement.classList.contains('dark'));
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
   return isDark;
@@ -60,7 +60,7 @@ const DonutChart = ({
   const isCompact = compact || height <= 120;
 
   return (
-    <div className={`bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 outline-none [&_*]:outline-none ${isCompact ? 'p-3' : 'p-4'}`}>
+    <div className={`bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 outline-none [&_*]:outline-none ${isCompact ? 'p-3' : 'p-4'}`}>
       {/* Header */}
       <div className={isCompact ? 'mb-1' : 'mb-2'}>
         <h3 className={`font-bold text-gray-800 dark:text-gray-100 ${isCompact ? 'text-sm' : 'text-lg'}`}>{title}</h3>
@@ -129,7 +129,7 @@ const DonutChart = ({
                   <p className={`text-gray-600 dark:text-gray-300 truncate ${compactLegend || data.length > 5 ? 'text-[11px] leading-tight' : 'text-xs'}`} title={item.name}>{item.name}</p>
                   <p className={`font-semibold text-gray-800 dark:text-gray-100 ${compactLegend || data.length > 5 ? 'text-xs leading-tight' : 'text-sm'}`}>
                     {item.value.toLocaleString()}{valueUnit}
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-0.5">
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 dark:text-gray-400 ml-0.5">
                       ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
                     </span>
                   </p>
@@ -197,7 +197,7 @@ const DonutChart = ({
                     style={{ backgroundColor: item.color || themeColors[index % themeColors.length] }}
                   />
                   <span 
-                    className="text-[9px] text-gray-500 truncate max-w-[50px] cursor-help" 
+                    className="text-[9px] text-gray-500 dark:text-gray-400 truncate max-w-[50px] cursor-help" 
                     title={`${item.name} - ${item.value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)`}
                   >
                     {item.name.length > 8 ? item.name.substring(0, 8) + '...' : item.name}
@@ -224,7 +224,7 @@ const DonutChart = ({
                     <p className="text-xs text-gray-600 dark:text-gray-300">{item.name}</p>
                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                       {item.value.toLocaleString()}{valueUnit}
-                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 ml-1">
                         ({total > 0 ? ((item.value / total) * 100).toFixed(1) : 0}%)
                       </span>
                     </p>

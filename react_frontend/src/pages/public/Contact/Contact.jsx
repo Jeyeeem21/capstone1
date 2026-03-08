@@ -52,25 +52,25 @@ const Contact = () => {
       icon: MapPin,
       title: 'Visit Us',
       details: ['Barangay San Pedro', 'Rosario, Batangas 4225', 'Philippines'],
-      color: 'bg-red-100 text-red-600',
+      color: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
     },
     {
       icon: Phone,
       title: 'Call Us',
       details: ['+63 917 123 4567', '+63 (043) 123-4567'],
-      color: 'bg-button-100 text-button-600',
+      color: 'bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400',
     },
     {
       icon: Mail,
       title: 'Email Us',
       details: ['info@kjpricemill.com', 'orders@kjpricemill.com'],
-      color: 'bg-blue-100 text-blue-600',
+      color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
     },
     {
       icon: Clock,
       title: 'Business Hours',
       details: ['Monday - Saturday: 7AM - 6PM', 'Sunday: 8AM - 12PM'],
-      color: 'bg-purple-100 text-purple-600',
+      color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
     },
   ];
 
@@ -100,15 +100,15 @@ const Contact = () => {
   if (isSubmitted) {
     return (
       <div className="overflow-hidden">
-        <section className="min-h-screen pt-32 pb-16 bg-gradient-to-b from-white to-primary-50 flex items-center">
+        <section className="min-h-screen pt-32 pb-16 bg-gradient-to-b from-white dark:from-gray-800 to-primary-50 dark:to-gray-700 flex items-center">
           <div className="max-w-xl mx-auto px-4 text-center">
-            <div className="w-20 h-20 bg-button-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle size={48} className="text-button-600" />
+            <div className="w-20 h-20 bg-button-100 dark:bg-button-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle size={48} className="text-button-600 dark:text-button-400" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-4">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               Thank You for Reaching Out!
             </h1>
-            <p className="text-gray-600 mb-8">
+            <p className="text-gray-600 dark:text-gray-300 mb-8">
               We've received your message and will get back to you within 24 hours. 
               For urgent inquiries, please call us directly.
             </p>
@@ -156,20 +156,20 @@ const Contact = () => {
       </section>
 
       {/* Contact Info Cards */}
-      <section className="py-12 -mt-8">
+      <section className="py-12 -mt-8 dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {contactInfo.map((info) => (
               <div 
                 key={info.title}
-                className="bg-white rounded-xl p-6 shadow-lg shadow-primary-100/50 border-2 border-primary-300 hover:border-button-400 hover:shadow-xl transition-all"
+                className="bg-white dark:bg-gray-700 rounded-xl p-6 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400 hover:shadow-xl transition-all"
               >
                 <div className={`w-12 h-12 ${info.color} rounded-xl flex items-center justify-center mb-4`}>
                   <info.icon size={24} />
                 </div>
-                <h3 className="font-semibold text-gray-800 mb-2">{info.title}</h3>
+                <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">{info.title}</h3>
                 {info.details.map((detail, idx) => (
-                  <p key={idx} className="text-gray-600 text-sm">{detail}</p>
+                  <p key={idx} className="text-gray-600 dark:text-gray-300 text-sm">{detail}</p>
                 ))}
               </div>
             ))}
@@ -178,17 +178,17 @@ const Contact = () => {
       </section>
 
       {/* Main Content */}
-      <section className="py-16 bg-gradient-to-b from-white to-primary-50">
+      <section className="py-16 bg-gradient-to-b from-white dark:from-gray-800 to-primary-50 dark:to-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Contact Form */}
-            <div className="bg-white rounded-xl shadow-lg shadow-primary-100/50 border-2 border-primary-300 p-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">Send Us a Message</h2>
+            <div className="bg-white dark:bg-gray-700 rounded-xl shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 p-8">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Send Us a Message</h2>
               
               <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Inquiry Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                     Type of Inquiry
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -200,7 +200,7 @@ const Contact = () => {
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                           formData.inquiryType === type.value
                             ? 'bg-button-500 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                         }`}
                       >
                         {type.label}
@@ -211,7 +211,7 @@ const Contact = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                       Full Name *
                     </label>
                     <div className="relative">
@@ -222,13 +222,13 @@ const Contact = () => {
                         value={formData.name}
                         onChange={handleChange}
                         required
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white dark:focus:bg-gray-600 transition-all"
                         placeholder="Juan Dela Cruz"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                       Email Address *
                     </label>
                     <div className="relative">
@@ -239,7 +239,7 @@ const Contact = () => {
                         value={formData.email}
                         onChange={handleChange}
                         required
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white dark:focus:bg-gray-600 transition-all"
                         placeholder="juan@example.com"
                       />
                     </div>
@@ -248,7 +248,7 @@ const Contact = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                       Phone Number
                     </label>
                     <div className="relative">
@@ -258,13 +258,13 @@ const Contact = () => {
                         name="phone"
                         value={formData.phone}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white dark:focus:bg-gray-600 transition-all"
                         placeholder="+63 917 123 4567"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                       Company / Organization
                     </label>
                     <div className="relative">
@@ -274,7 +274,7 @@ const Contact = () => {
                         name="company"
                         value={formData.company}
                         onChange={handleChange}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white dark:focus:bg-gray-600 transition-all"
                         placeholder="Your company name"
                       />
                     </div>
@@ -282,7 +282,7 @@ const Contact = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                     Subject *
                   </label>
                   <input
@@ -291,13 +291,13 @@ const Contact = () => {
                     value={formData.subject}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all"
+                    className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white dark:focus:bg-gray-600 transition-all"
                     placeholder="What is this about?"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
                     Message *
                   </label>
                   <div className="relative">
@@ -308,7 +308,7 @@ const Contact = () => {
                       onChange={handleChange}
                       required
                       rows={5}
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white transition-all resize-none"
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:border-button-500 focus:bg-white dark:focus:bg-gray-600 transition-all resize-none"
                       placeholder="Tell us more about your inquiry..."
                     />
                   </div>
@@ -338,14 +338,14 @@ const Contact = () => {
             {/* Map & FAQ */}
             <div className="space-y-8">
               {/* Map */}
-              <div className="bg-white rounded-xl shadow-lg shadow-primary-100/50 border-2 border-primary-300 overflow-hidden">
-                <div className="p-6 border-b border-gray-100">
-                  <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                    <MapPin size={20} className="text-button-600" />
+              <div className="bg-white dark:bg-gray-700 rounded-xl shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                    <MapPin size={20} className="text-button-600 dark:text-button-400" />
                     Find Us on the Map
                   </h3>
                 </div>
-                <div className="h-64 bg-gray-200 relative">
+                <div className="h-64 bg-gray-200 dark:bg-gray-600 relative">
                   <iframe
                     title="KJP Rice Mill Location"
                     src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3878.9854426739024!2d121.2092!3d13.8428!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTPCsDUwJzM0LjEiTiAxMjHCsDEyJzMzLjEiRQ!5e0!3m2!1sen!2sph!4v1234567890"
@@ -358,27 +358,27 @@ const Contact = () => {
                     className="absolute inset-0"
                   />
                 </div>
-                <div className="p-4 bg-gray-50">
-                  <p className="text-sm text-gray-600 text-center">
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 text-center">
                     📍 Barangay San Pedro, Rosario, Batangas 4225
                   </p>
                 </div>
               </div>
 
               {/* FAQs */}
-              <div className="bg-white rounded-xl shadow-lg shadow-primary-100/50 border-2 border-primary-300 p-6">
-                <h3 className="font-semibold text-gray-800 mb-4">Frequently Asked Questions</h3>
+              <div className="bg-white dark:bg-gray-700 rounded-xl shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 p-6">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Frequently Asked Questions</h3>
                 <div className="space-y-4">
                   {faqs.map((faq, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-xl">
-                      <h4 className="font-medium text-gray-800 mb-2">{faq.question}</h4>
-                      <p className="text-sm text-gray-600">{faq.answer}</p>
+                    <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                      <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-2">{faq.question}</h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{faq.answer}</p>
                     </div>
                   ))}
                 </div>
                 <Link 
                   to="/about" 
-                  className="mt-4 text-button-600 hover:text-button-700 font-medium text-sm flex items-center gap-1 group"
+                  className="mt-4 text-button-600 hover:text-button-700 dark:text-button-300 font-medium text-sm flex items-center gap-1 group"
                 >
                   Learn more about us
                   <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />

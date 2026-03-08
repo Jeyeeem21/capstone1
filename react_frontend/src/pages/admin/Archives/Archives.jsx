@@ -25,16 +25,16 @@ const moduleIcons = {
 
 // Module color mapping
 const moduleColors = {
-  products: 'bg-blue-100 text-blue-600',
-  varieties: 'bg-indigo-100 text-indigo-600',
-  suppliers: 'bg-green-100 text-green-600',
-  customers: 'bg-cyan-100 text-cyan-600',
-  procurements: 'bg-orange-100 text-orange-600',
-  drying_processes: 'bg-yellow-100 text-yellow-600',
-  processings: 'bg-rose-100 text-rose-600',
-  drivers: 'bg-teal-100 text-teal-600',
-  deliveries: 'bg-purple-100 text-purple-600',
-  users: 'bg-violet-100 text-violet-600',
+  products: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+  varieties: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
+  suppliers: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+  customers: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
+  procurements: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+  drying_processes: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400',
+  processings: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400',
+  drivers: 'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400',
+  deliveries: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+  users: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400',
 };
 
 const Archives = () => {
@@ -46,7 +46,7 @@ const Archives = () => {
   const [saving, setSaving] = useState(false);
 
   // Fetch archives – add composite unique key (module:id) to avoid React key collisions
-  const { data: archivesRaw = [], loading, refetch, isRefreshing } = useDataFetch(CACHE_KEY);
+  const { data: archivesRaw = [], loading, refetch, isRefreshing, optimisticUpdate } = useDataFetch(CACHE_KEY);
   const { data: stats = { total: 0, by_module: [] } } = useDataFetch(STATS_CACHE_KEY);
 
   const archives = useMemo(() =>
@@ -76,14 +76,16 @@ const Archives = () => {
     try {
       const response = await apiClient.post(`/archives/${selectedItem.module}/${selectedItem._originalId}/restore`);
       if (response.success) {
+        const restoredId = selectedItem.id;
         setIsRestoreModalOpen(false);
-        // Invalidate both archives and the module's cache
+        // Immediately remove from archives list (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(a => a.id !== restoredId));
+        toast.success('Restored', `${selectedItem.name} has been restored successfully.`);
+        // Invalidate both archives and the module's cache, then refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache(STATS_CACHE_KEY);
         invalidateCache(`/${selectedItem.module.replace('_', '-')}`);
-        refetch().then(() => {
-          toast.success('Restored', `${selectedItem.name} has been restored successfully.`);
-        });
+        refetch();
         return;
       } else {
         throw new Error(response.error || 'Failed to restore');
@@ -102,12 +104,15 @@ const Archives = () => {
     try {
       const response = await apiClient.delete(`/archives/${selectedItem.module}/${selectedItem._originalId}`);
       if (response.success) {
+        const deletedId = selectedItem.id;
         setIsDeleteModalOpen(false);
+        // Immediately remove from archives list (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(a => a.id !== deletedId));
+        toast.success('Soft Deleted', 'Record has been soft deleted. It still exists in the database.');
+        // Refetch in background to confirm
         invalidateCache(CACHE_KEY);
         invalidateCache(STATS_CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Soft Deleted', 'Record has been soft deleted. It still exists in the database.');
-        });
+        refetch();
         return;
       } else {
         throw new Error(response.error || 'Failed to soft delete');
@@ -131,15 +136,15 @@ const Archives = () => {
       accessor: 'name',
       cell: (row) => {
         const Icon = moduleIcons[row.module] || Package;
-        const colorClass = moduleColors[row.module] || 'bg-gray-100 text-gray-600';
+        const colorClass = moduleColors[row.module] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
         return (
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${colorClass}`}>
               <Icon size={16} />
             </div>
             <div>
-              <p className="font-medium text-gray-800">{row.name}</p>
-              <p className="text-xs text-gray-500">ID: {row._originalId}</p>
+              <p className="font-medium text-gray-800 dark:text-gray-100">{row.name}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">ID: {row._originalId}</p>
             </div>
           </div>
         );
@@ -149,7 +154,7 @@ const Archives = () => {
       header: 'Module',
       accessor: 'module_label',
       cell: (row) => {
-        const colorClass = moduleColors[row.module] || 'bg-gray-100 text-gray-600';
+        const colorClass = moduleColors[row.module] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
         return (
           <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${colorClass}`}>
             {row.module_label}
@@ -166,10 +171,10 @@ const Archives = () => {
       accessor: 'archived_by',
       cell: (row) => row.archived_by ? (
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded-full bg-button-100">
-            <User size={12} className="text-button-600" />
+          <div className="p-1 rounded-full bg-button-100 dark:bg-button-900/30">
+            <User size={12} className="text-button-600 dark:text-button-400" />
           </div>
-          <span className="text-sm text-gray-700">{row.archived_by}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-200">{row.archived_by}</span>
         </div>
       ) : (
         <span className="text-sm text-gray-400">—</span>
@@ -183,14 +188,14 @@ const Archives = () => {
         <div className="flex items-center gap-1">
           <button
             onClick={(e) => { e.stopPropagation(); handleRestore(row); }}
-            className="p-1.5 rounded-md hover:bg-green-50 text-green-500 hover:text-green-700 transition-colors"
+            className="p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 hover:text-green-700 dark:text-green-300 transition-colors"
             title="Restore"
           >
             <RotateCcw size={15} />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); handleSoftDelete(row); }}
-            className="p-1.5 rounded-md hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+            className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600 dark:text-red-400 transition-colors"
             title="Soft Delete"
           >
             <Trash2 size={15} />
@@ -207,7 +212,7 @@ const Archives = () => {
         description="View and manage archived records across all modules"
         icon={Archive}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -246,12 +251,12 @@ const Archives = () => {
       {loading && archives.length === 0 ? (
         <SkeletonTable rows={8} columns={5} />
       ) : archives.length === 0 ? (
-        <div className="bg-white rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white dark:bg-gray-700 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
             <Archive size={32} className="text-gray-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">No Archived Records</h3>
-          <p className="text-sm text-gray-500">Records that are archived by admins will appear here.</p>
+          <h3 className="text-lg font-semibold text-gray-600 dark:text-gray-300 mb-2">No Archived Records</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Records that are archived by admins will appear here.</p>
         </div>
       ) : (
         <DataTable
@@ -323,7 +328,7 @@ const Archives = () => {
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>

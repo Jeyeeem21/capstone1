@@ -18,6 +18,7 @@ class StockLog extends Model
         'kg_amount',
         'source_type',
         'source_id',
+        'source_processing_ids',
         'notes',
         'procurement_cost',
         'drying_cost',
@@ -43,6 +44,7 @@ class StockLog extends Model
         'selling_price' => 'decimal:2',
         'profit_per_unit' => 'decimal:2',
         'profit_margin' => 'decimal:2',
+        'source_processing_ids' => 'array',
     ];
 
     /**

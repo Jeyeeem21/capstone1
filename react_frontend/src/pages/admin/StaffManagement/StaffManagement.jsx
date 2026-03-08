@@ -137,8 +137,12 @@ const StaffManagement = () => {
     try {
       setSubmitting(true);
       await usersApi.delete(selectedItem.id);
+      const removedId = selectedItem.id;
+      // Immediately remove from local data for instant UI
+      setStaff(prev => prev.filter(s => s.id !== removedId));
       toast.success('Staff Removed', `${selectedItem.name} has been removed.`);
       setIsDeleteModalOpen(false);
+      // Refetch in background to confirm
       fetchStaff();
     } catch (error) {
       const msg = error?.response?.data?.message || 'Failed to remove staff member.';
@@ -156,10 +160,10 @@ const StaffManagement = () => {
 
   const getPositionBadge = (position) => {
     const colors = {
-      'Secretary': 'bg-purple-100 text-purple-600',
-      'Driver': 'bg-blue-100 text-blue-600',
+      'Secretary': 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+      'Driver': 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
     };
-    return colors[position] || 'bg-gray-100 text-gray-600';
+    return colors[position] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
   };
 
   const columns = [
@@ -172,7 +176,7 @@ const StaffManagement = () => {
             {row.position}
           </span>
           {row.position === 'Driver' && row.truck_plate_number && (
-            <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-600">
+            <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
               <Truck size={10} />
               {row.truck_plate_number}
             </span>

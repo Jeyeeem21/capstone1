@@ -9,7 +9,7 @@ const ActionButtons = ({ onView, onEdit, onDelete, onArchive, size = 'sm' }) => 
       {onView && (
         <button
           onClick={(e) => { e.stopPropagation(); onView(); }}
-          className={`${btnClass} rounded-md hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors`}
+          className={`${btnClass} rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 hover:text-blue-700 dark:text-blue-300 transition-colors`}
           title="View"
         >
           <Eye size={iconSize} />
@@ -18,7 +18,7 @@ const ActionButtons = ({ onView, onEdit, onDelete, onArchive, size = 'sm' }) => 
       {onEdit && (
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          className={`${btnClass} rounded-md hover:bg-button-50 text-button-500 hover:text-button-700 transition-colors`}
+          className={`${btnClass} rounded-md hover:bg-button-50 dark:hover:bg-button-900/30 text-button-500 hover:text-button-700 dark:text-button-300 transition-colors`}
           title="Edit"
         >
           <Edit size={iconSize} />
@@ -27,7 +27,7 @@ const ActionButtons = ({ onView, onEdit, onDelete, onArchive, size = 'sm' }) => 
       {onArchive && (
         <button
           onClick={(e) => { e.stopPropagation(); onArchive(); }}
-          className={`${btnClass} rounded-md hover:bg-amber-50 text-amber-500 hover:text-amber-700 transition-colors`}
+          className={`${btnClass} rounded-md hover:bg-amber-50 dark:hover:bg-amber-900/30 text-amber-500 hover:text-amber-700 dark:text-amber-300 transition-colors`}
           title="Archive"
         >
           <Archive size={iconSize} />
@@ -36,7 +36,7 @@ const ActionButtons = ({ onView, onEdit, onDelete, onArchive, size = 'sm' }) => 
       {onDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className={`${btnClass} rounded-md hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors`}
+          className={`${btnClass} rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 hover:text-red-700 dark:text-red-300 transition-colors`}
           title="Delete"
         >
           <Trash2 size={iconSize} />

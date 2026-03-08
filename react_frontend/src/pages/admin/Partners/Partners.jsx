@@ -38,7 +38,7 @@ const Partners = () => {
       id: `customer-${c.id}`,
       originalId: c.id,
       name: c.name,
-      type: 'Customer',
+      type: 'Client',
       contact: c.contact || c.name,
       phone: c.phone,
       status: c.status,
@@ -71,12 +71,12 @@ const Partners = () => {
 
   const partnerSections = [
     { icon: Truck, title: 'Suppliers', description: 'Manage supplier relationships', to: `${basePath}/partners/supplier`, count: totalSuppliers },
-    { icon: UserCheck, title: 'Customers', description: 'Track customer information', to: `${basePath}/partners/customer`, count: totalCustomers },
+    { icon: UserCheck, title: 'Clients', description: 'Track client information', to: `${basePath}/partners/customer`, count: totalCustomers },
   ];
 
   const partnerBreakdown = useMemo(() => [
     { name: 'Suppliers', value: totalSuppliers, color: '#f97316' },
-    { name: 'Customers', value: totalCustomers, color: '#3b82f6' },
+    { name: 'Clients', value: totalCustomers, color: '#3b82f6' },
   ], [totalSuppliers, totalCustomers]);
 
   const handleView = (row) => {
@@ -91,7 +91,7 @@ const Partners = () => {
     { header: 'Name', accessor: 'name' },
     { header: 'Type', accessor: 'type', cell: (row) => (
       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-        row.type === 'Supplier' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+        row.type === 'Supplier' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
       }`}>{row.type}</span>
     )},
     { header: 'Contact', accessor: 'contact' },
@@ -106,10 +106,10 @@ const Partners = () => {
     <div>
       <PageHeader 
         title="Partners" 
-        description="Manage your business relationships with suppliers and customers"
+        description="Manage your business relationships with suppliers and clients"
         icon={Users}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -120,7 +120,7 @@ const Partners = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <StatsCard label="Total Partners" value={totalPartners} unit="partners" icon={Users} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
           <StatsCard label="Suppliers" value={activeSuppliers} unit="active" icon={Truck} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-          <StatsCard label="Customers" value={activeCustomers} unit="active" icon={UserCheck} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
+          <StatsCard label="Clients" value={activeCustomers} unit="active" icon={UserCheck} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
           <DonutChart
             title="Partner Mix"
             data={partnerBreakdown}
@@ -138,15 +138,15 @@ const Partners = () => {
       <div className="grid grid-cols-2 gap-3 mb-4">
         {partnerSections.map((section) => (
           <Link key={section.to} to={section.to}>
-            <Card className="hover:shadow-md hover:border-primary-200 transition-all cursor-pointer group">
+            <Card className="hover:shadow-md hover:border-primary-200 dark:border-primary-700 transition-all cursor-pointer group">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-50 group-hover:bg-primary-50 rounded-lg transition-colors">
-                      <section.icon size={18} className="text-gray-500 group-hover:text-primary-600 transition-colors" />
+                    <div className="p-2 bg-gray-50 dark:bg-gray-700/50 group-hover:bg-primary-50 dark:group-hover:bg-primary-900/20 dark:hover:bg-primary-900/20 rounded-lg transition-colors">
+                      <section.icon size={18} className="text-gray-500 dark:text-gray-400 group-hover:text-primary-600 dark:text-primary-400 transition-colors" />
                     </div>
                     <div>
-                      <h3 className="font-medium text-gray-800 text-sm">{section.title}</h3>
+                      <h3 className="font-medium text-gray-800 dark:text-gray-100 text-sm">{section.title}</h3>
                       <p className="text-xs text-gray-400">{section.count} partners</p>
                     </div>
                   </div>
@@ -164,7 +164,7 @@ const Partners = () => {
       ) : (
         <DataTable 
           title="Recent Partners"
-          subtitle="10 most recent partners from customers and suppliers"
+          subtitle="10 most recent partners from clients and suppliers"
           columns={columns} 
           data={allPartners} 
           searchPlaceholder="Search partners..." 

@@ -1,6 +1,6 @@
 ===============================================================================
         KJP RICEMILL — ADMIN & SUPER ADMIN FUNCTIONALITY AUDIT REPORT
-                        Generated: March 4, 2026
+                        Updated: March 10, 2026
 ===============================================================================
 
 TABLE OF CONTENTS:
@@ -161,10 +161,12 @@ Legend:  ✅ = Working   ⚠️ = See Notes   ❌ = Not Working / Missing
  ✅ Line chart, Donut chart
 
 ─── PRODUCTS ─────────────────────────────────────────────────────────────────
- ✅ Add product (variety, name, price, weight, description, image)
+ ✅ Add product (variety, name, price, weight, description, image upload)
  ✅ View product details
- ✅ Edit product
+ ✅ Edit product (with image update/replace)
  ✅ Delete/Archive product (super_admin only, custom soft delete)
+ ✅ Product image upload (FormData, stored in storage/products/)
+ ✅ Public pages show product image with business logo fallback
  ✅ Search, sort, pagination
 
 ─── VARIETIES ────────────────────────────────────────────────────────────────
@@ -208,12 +210,14 @@ Legend:  ✅ = Working   ⚠️ = See Notes   ❌ = Not Working / Missing
  ✅ Ship order (assign driver + plate number + estimated delivery date)
  ✅ Cancel order (with confirmation)
  ✅ Request return (with reason, notes, proof photos — multi-image)
- ✅ Accept return (assign pickup driver + estimated pickup date)
- ✅ Reject return
+ ✅ Accept return (assign pickup driver + plate + estimated pickup date)
+ ✅ Reject return (reverts status to delivered)
  ✅ Mark as Returned (driver pickup complete → stock restored)
+ ✅ Restock items selectively (per-item quantity selection after void/return)
  ✅ Record Payment (mark unpaid orders as paid — cash or GCash + proof)
  ✅ Payment status display (Not Paid / Paid badges)
  ✅ Proof image lightbox (click to enlarge, z-index fixed above modals)
+ ✅ Void tracking (voided_by + authorized_by recorded on sale)
  ✅ Search, sort, date filter, pagination
 
 ─── PARTNERS (OVERVIEW) ──────────────────────────────────────────────────────
@@ -251,6 +255,7 @@ Legend:  ✅ = Working   ⚠️ = See Notes   ❌ = Not Working / Missing
 ─── SALES ────────────────────────────────────────────────────────────────────
  ✅ View all completed transactions (read-only)
  ✅ Status tabs (All, Delivered, Completed, Cancelled, Returned, Voided)
+ ✅ Combined "Paid/Not Paid Sales" card with toggle for filtered view
  ✅ View sale details (modal with items, payment info, proof images)
  ✅ Proof image lightbox (z-index fixed)
  ✅ Line chart (daily/monthly/yearly)
@@ -315,7 +320,7 @@ Legend:  ✅ = Working   ⚠️ = See Notes   ❌ = Not Working / Missing
  ❌ Permanent Delete button REMOVED (by design — no hard deletes)
 
 ===============================================================================
-6. KNOWN ISSUES / NOTES
+6. KNOWN ISSUES / NOTES (Updated March 2026)
 ===============================================================================
 
 1. DRYING — POSTPONE ACTION
@@ -353,6 +358,18 @@ Legend:  ✅ = Working   ⚠️ = See Notes   ❌ = Not Working / Missing
    DryingProcess is later restored from Archives, these pivot rows will
    NOT be restored. The drying process record itself is fine, but the
    batch procurement associations are lost.
+
+7. FOOTER QUICK LINKS — ROLE-BASED (Fixed March 2026)
+   Footer.jsx now uses useAuth() for role-aware quick links:
+   - Staff: Links to /staff/pos, /staff/profile
+   - Admin/SuperAdmin: Links to {basePath}/products, /pos, /orders,
+     /procurement, /sales
+   - Public layout has separate footer with /about, /products, /contact
+
+8. PUBLIC PRODUCT CARDS — FIELD MAPPING (Fixed March 2026)
+   Product normalizers in Home.jsx and Products.jsx now correctly map
+   API fields: product_name→name, variety_name→variety tags,
+   weight_formatted→description, is_in_stock→inStock.
 
 ===============================================================================
                           END OF AUDIT REPORT

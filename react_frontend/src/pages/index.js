@@ -11,7 +11,7 @@ export {
   AdminOrders,
   Partners, 
   Supplier, 
-  Customer,
+  Client,
   StaffManagement, 
   AuditTrail, 
   Archives,

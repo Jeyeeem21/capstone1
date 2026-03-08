@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import { Package, Box, Tag, DollarSign, CheckCircle, XCircle, Archive, Scale, Hash, Calendar, ShoppingCart } from 'lucide-react';
+import { useState, useCallback, useMemo, useRef } from 'react';
+import { Package, Box, Tag, DollarSign, CheckCircle, XCircle, Archive, Scale, Hash, Calendar, ShoppingCart, Upload, X, ImageIcon } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -27,13 +27,17 @@ const Products = () => {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [costAnalysis, setCostAnalysis] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const imageInputRef = useRef(null);
 
   // Super-fast data fetching with cache
   const { 
     data: products, 
     loading, 
     isRefreshing,
-    refetch 
+    refetch,
+    optimisticUpdate,
   } = useDataFetch('/products', {
     cacheKey: CACHE_KEY,
     initialData: [],
@@ -72,6 +76,8 @@ const Products = () => {
       status: 'active'
     });
     setErrors({});
+    setImageFile(null);
+    setImagePreview(null);
     refetchVarieties();
     setIsAddModalOpen(true);
   }, [refetchVarieties]);
@@ -92,6 +98,8 @@ const Products = () => {
     });
     setErrors({});
     setCostAnalysis(null);
+    setImageFile(null);
+    setImagePreview(item.image || null);
     refetchVarieties();
     setIsEditModalOpen(true);
     // Fetch cost analysis for unit cost display
@@ -125,31 +133,45 @@ const Products = () => {
     });
   }, []);
 
+  const handleImageChange = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }, []);
+
+  const handleRemoveImage = useCallback(() => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  }, []);
+
   const handleAddSubmit = async () => {
     if (saving) return; // Prevent double submit
     setSaving(true);
     try {
       setErrors({});
-      const submitData = {
-        product_name: formData.product_name,
-        variety_id: parseInt(formData.variety_id),
-        price: parseFloat(formData.price) || 0,
-        stocks: 0,
-        weight: formData.weight ? parseFloat(formData.weight) : null,
-        status: formData.status,
-      };
-      const response = await apiClient.post('/products', submitData);
+      const fd = new FormData();
+      fd.append('product_name', formData.product_name);
+      fd.append('variety_id', parseInt(formData.variety_id));
+      fd.append('price', parseFloat(formData.price) || 0);
+      fd.append('stocks', 0);
+      fd.append('weight', formData.weight ? parseFloat(formData.weight) : '');
+      fd.append('status', formData.status);
+      if (imageFile) fd.append('image', imageFile);
+      const response = await apiClient.post('/products', fd);
       
       if (response.success && response.data) {
         const productName = formData.product_name;
         // Close modal first
         setIsAddModalOpen(false);
         
-        // Refetch and toast together
+        toast.success('Product Added', `${productName} has been added successfully.`);
+        setImageFile(null);
+        setImagePreview(null);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Product Added', `${productName} has been added successfully.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -176,26 +198,28 @@ const Products = () => {
     setSaving(true);
     try {
       setErrors({});
-      const submitData = {
-        product_name: formData.product_name,
-        variety_id: parseInt(formData.variety_id),
-        price: parseFloat(formData.price) || 0,
-        stocks: selectedItem.stocks,
-        weight: formData.weight ? parseFloat(formData.weight) : null,
-        status: formData.status,
-      };
-      const response = await apiClient.put(`/products/${selectedItem.product_id}`, submitData);
+      const fd = new FormData();
+      fd.append('_method', 'PUT');
+      fd.append('product_name', formData.product_name);
+      fd.append('variety_id', parseInt(formData.variety_id));
+      fd.append('price', parseFloat(formData.price) || 0);
+      fd.append('stocks', selectedItem.stocks);
+      fd.append('weight', formData.weight ? parseFloat(formData.weight) : '');
+      fd.append('status', formData.status);
+      if (imageFile) fd.append('image', imageFile);
+      const response = await apiClient.post(`/products/${selectedItem.product_id}`, fd);
       
       if (response.success && response.data) {
         const productName = formData.product_name;
         // Close modal first
         setIsEditModalOpen(false);
         
-        // Refetch and toast together
+        toast.success('Product Updated', `${productName} has been updated.`);
+        setImageFile(null);
+        setImagePreview(null);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Product Updated', `${productName} has been updated.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -225,14 +249,16 @@ const Products = () => {
       
       if (response.success) {
         const productName = selectedItem.product_name;
+        const archivedId = selectedItem.product_id;
         // Close modal first
         setIsDeleteModalOpen(false);
         
-        // Refetch and toast together
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(p => p.product_id !== archivedId));
+        toast.success('Product Archived', `${productName} has been archived.`);
+        // Refetch in background to confirm
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Product Archived', `${productName} has been archived.`);
-        });
+        refetch();
         return;
       } else {
         throw new Error(response.error || 'Failed to archive');
@@ -275,14 +301,14 @@ const Products = () => {
       header: 'Price', 
       accessor: 'price_formatted',
       cell: (row) => (
-        <span className="font-semibold text-green-600">{row.price_formatted}</span>
+        <span className="font-semibold text-green-600 dark:text-green-400">{row.price_formatted}</span>
       )
     },
     { 
       header: 'Weight', 
       accessor: 'weight_formatted',
       cell: (row) => (
-        <span className="text-gray-600">{row.weight_formatted || '-'}</span>
+        <span className="text-gray-600 dark:text-gray-300">{row.weight_formatted || '-'}</span>
       )
     },
     { 
@@ -291,10 +317,10 @@ const Products = () => {
       cell: (row) => (
         <div>
           <div className="flex items-center gap-2">
-            <span className={`font-medium ${row.stocks > 0 ? 'text-blue-600' : 'text-red-500'}`}>
+            <span className={`font-medium ${row.stocks > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500'}`}>
               {row.stocks.toLocaleString()}
             </span>
-            <span className="text-xs text-gray-500">{row.unit}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{row.unit}</span>
           </div>
           {row.weight && row.stocks > 0 && (
             <p className="text-[10px] text-gray-400">{(row.stocks * parseFloat(row.weight)).toLocaleString()} kg total</p>
@@ -313,7 +339,7 @@ const Products = () => {
       cell: (row) => (
         <ActionButtons
           onEdit={() => handleEdit(row)}
-          onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined}
+          onArchive={isSuperAdmin() && (row.stocks || 0) === 0 && !row.has_pending_orders ? () => handleDelete(row) : undefined}
         />
       )
     }
@@ -321,13 +347,13 @@ const Products = () => {
 
   // ViewDetailItem component for view modal
   const ViewDetailItem = ({ icon: Icon, label, value, iconColor = 'text-primary-500', compact = false }) => (
-    <div className={`flex items-start gap-2 ${compact ? 'p-2' : 'p-3'} bg-primary-50/30 rounded-xl border-2 border-primary-200`}>
-      <div className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white shadow-sm ${iconColor}`}>
+    <div className={`flex items-start gap-2 ${compact ? 'p-2' : 'p-3'} bg-primary-50 dark:bg-primary-900/20 rounded-xl border-2 border-primary-200 dark:border-primary-700`}>
+      <div className={`${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white dark:bg-gray-700 shadow-sm ${iconColor}`}>
         <Icon size={compact ? 14 : 18} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500 uppercase tracking-wide truncate`}>{label}</p>
-        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-800 mt-0.5 truncate`}>{value}</p>
+        <p className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate`}>{label}</p>
+        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-800 dark:text-gray-100 mt-0.5 truncate`}>{value}</p>
       </div>
     </div>
   );
@@ -339,7 +365,7 @@ const Products = () => {
         description="Manage your product inventory and catalog" 
         icon={Package}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -351,30 +377,30 @@ const Products = () => {
           <StatsCard 
             label="Total Products" 
             value={totalProducts} 
+            unit={`${activeProducts} active`}
             icon={Package} 
-            trend={`${activeProducts} active`}
-            color="primary"
+            iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
           />
           <StatsCard 
             label="Active" 
             value={activeProducts} 
+            unit="Available for sale"
             icon={CheckCircle} 
-            trend="Available for sale"
-            color="green"
+            iconBgColor="bg-gradient-to-br from-green-400 to-green-600"
           />
           <StatsCard 
             label="In Stock" 
             value={inStockProducts} 
+            unit={`${outOfStockProducts} out of stock`}
             icon={Box} 
-            trend={`${outOfStockProducts} out of stock`}
-            color="blue"
+            iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
           />
           <StatsCard 
             label="Inactive" 
             value={inactiveProducts} 
+            unit="Not available"
             icon={XCircle} 
-            trend="Not available"
-            color="gray"
+            iconBgColor="bg-gradient-to-br from-gray-400 to-gray-600"
           />
         </div>
       )}
@@ -410,6 +436,32 @@ const Products = () => {
       >
         {({ submitted }) => (
           <>
+            {/* Image Upload */}
+            <div className="mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Product Image <span className="text-gray-400 font-normal">(optional)</span></label>
+              <div
+                onClick={() => imageInputRef.current?.click()}
+                className="relative cursor-pointer rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 transition-colors overflow-hidden"
+              >
+                {imagePreview ? (
+                  <div className="relative h-36">
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}
+                      className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full shadow"
+                    ><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-24 gap-1 text-gray-400 dark:text-gray-500">
+                    <Upload size={22} />
+                    <span className="text-xs">Click to upload image</span>
+                    <span className="text-[10px] text-gray-400">JPG, PNG, WEBP — max 2MB</span>
+                  </div>
+                )}
+              </div>
+              <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/jpg,image/webp" className="hidden" onChange={handleImageChange} />
+            </div>
             <FormInput 
               label="Product Name" 
               name="product_name" 
@@ -472,6 +524,32 @@ const Products = () => {
           const hasStock = selectedItem?.stocks > 0;
           return (
           <>
+            {/* Image Upload */}
+            <div className="mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Product Image <span className="text-gray-400 font-normal">(optional)</span></label>
+              <div
+                onClick={() => imageInputRef.current?.click()}
+                className="relative cursor-pointer rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 transition-colors overflow-hidden"
+              >
+                {imagePreview ? (
+                  <div className="relative h-36">
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}
+                      className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full shadow"
+                    ><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-24 gap-1 text-gray-400 dark:text-gray-500">
+                    <Upload size={22} />
+                    <span className="text-xs">Click to upload image</span>
+                    <span className="text-[10px] text-gray-400">JPG, PNG, WEBP — max 2MB</span>
+                  </div>
+                )}
+              </div>
+              <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/jpg,image/webp" className="hidden" onChange={handleImageChange} />
+            </div>
             <FormInput 
               label="Product Name" 
               name="product_name" 
@@ -508,8 +586,8 @@ const Products = () => {
                   submitted={submitted}
                 />
                 {costAnalysis?.has_data && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Unit Cost: <span className="font-semibold text-gray-700">₱{costAnalysis.avg_cost_per_unit.toLocaleString()}</span>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Unit Cost: <span className="font-semibold text-gray-700 dark:text-gray-200">₱{costAnalysis.avg_cost_per_unit.toLocaleString()}</span>
                   </p>
                 )}
               </div>
@@ -573,7 +651,7 @@ const Products = () => {
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -583,10 +661,10 @@ const Products = () => {
         {selectedItem && (
           <div className="space-y-3">
             {/* Header with Status */}
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 to-primary-100 rounded-xl border border-primary-200">
+            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 dark:from-gray-700 to-primary-100 dark:to-gray-800 rounded-xl border border-primary-200 dark:border-primary-700">
               <div>
-                <h3 className="text-lg font-bold text-gray-800">{selectedItem.product_name}</h3>
-                <p className="text-xs text-gray-500">Product ID: #{String(selectedItem.product_id).padStart(4, '0')}</p>
+                <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{selectedItem.product_name}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Product ID: #{String(selectedItem.product_id).padStart(4, '0')}</p>
               </div>
               <StatusBadge status={selectedItem.status === 'active' ? 'Active' : 'Inactive'} />
             </div>
@@ -599,18 +677,18 @@ const Products = () => {
               <ViewDetailItem icon={Box} label="Stocks" value={`${selectedItem.stocks.toLocaleString()} ${selectedItem.unit}${selectedItem.weight && selectedItem.stocks > 0 ? ` (${(selectedItem.stocks * parseFloat(selectedItem.weight)).toLocaleString()} kg)` : ''}`} iconColor="text-blue-500" compact />
               <ViewDetailItem icon={Scale} label="Weight" value={selectedItem.weight_formatted || 'N/A'} iconColor="text-purple-500" compact />
               <ViewDetailItem icon={ShoppingCart} label="Stock Status" value={selectedItem.stock_status} iconColor={selectedItem.is_in_stock ? 'text-green-500' : 'text-red-500'} compact />
-              <ViewDetailItem icon={Calendar} label="Created" value={selectedItem.created_date} iconColor="text-gray-500" compact />
+              <ViewDetailItem icon={Calendar} label="Created" value={selectedItem.created_date} iconColor="text-gray-500 dark:text-gray-400" compact />
             </div>
 
             {/* Price Summary */}
-            <div className="p-3 bg-green-50 rounded-xl border border-green-200">
+            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-700">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-green-700">Unit Price</span>
-                <span className="text-xl font-bold text-green-600">{selectedItem.price_formatted}</span>
+                <span className="text-sm font-medium text-green-700 dark:text-green-400">Unit Price</span>
+                <span className="text-xl font-bold text-green-600 dark:text-green-400">{selectedItem.price_formatted}</span>
               </div>
               {selectedItem.stocks > 0 && (
-                <div className="mt-1 text-xs text-gray-600">
-                  Total Value: <strong className="text-green-600">₱{(selectedItem.price * selectedItem.stocks).toLocaleString()}</strong>
+                <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                  Total Value: <strong className="text-green-600 dark:text-green-400">₱{(selectedItem.price * selectedItem.stocks).toLocaleString()}</strong>
                 </div>
               )}
             </div>

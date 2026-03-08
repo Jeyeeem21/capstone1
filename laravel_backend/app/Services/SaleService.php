@@ -81,8 +81,12 @@ class SaleService
             foreach ($data['items'] as $itemData) {
                 $product = Product::findOrFail($itemData['product_id']);
 
-                $qty = (int) $itemData['quantity'];
                 $unitPrice = (float) ($itemData['unit_price'] ?? $product->price);
+                if ($unitPrice <= 0) {
+                    throw new \Exception("Cannot order \"{$product->name}\" — price is not yet set.");
+                }
+
+                $qty = (int) $itemData['quantity'];
                 $itemSubtotal = $unitPrice * $qty;
 
                 SaleItem::create([
@@ -174,7 +178,7 @@ class SaleService
             // Valid transitions
             $validTransitions = [
                 'pending' => ['processing', 'cancelled'],
-                'processing' => ['shipped', 'cancelled'],
+                'processing' => ['shipped', 'completed', 'cancelled'],
                 'shipped' => ['delivered', 'cancelled'],
                 'delivered' => ['return_requested'],
                 'picking_up' => ['returned'],
@@ -242,8 +246,8 @@ class SaleService
                 Cache::forget('stock_logs_all');
             }
 
-            // Update customer order count on delivery
-            if ($newStatus === 'delivered' && $sale->customer_id) {
+            // Update customer order count on delivery or completion
+            if (in_array($newStatus, ['delivered', 'completed']) && $sale->customer_id) {
                 $sale->customer()->increment('orders');
             }
 
@@ -317,26 +321,6 @@ class SaleService
                 throw new \Exception('Only orders being picked up can be marked as returned.');
             }
 
-            // Restore stock
-            foreach ($sale->items as $item) {
-                $product = Product::lockForUpdate()->findOrFail($item->product_id);
-                $stockBefore = (int) $product->stocks;
-                $product->stocks += $item->quantity;
-                $product->save();
-
-                StockLog::create([
-                    'product_id' => $product->product_id,
-                    'type' => 'in',
-                    'quantity_before' => $stockBefore,
-                    'quantity_change' => $item->quantity,
-                    'quantity_after' => (int) $product->stocks,
-                    'kg_amount' => $product->weight ? $item->quantity * (float) $product->weight : null,
-                    'source_type' => 'order_return',
-                    'source_id' => $sale->id,
-                    'notes' => "Order returned ({$sale->transaction_id}) — {$sale->return_reason}",
-                ]);
-            }
-
             // Decrement customer orders
             if ($sale->customer_id) {
                 $sale->customer()->decrement('orders');
@@ -345,6 +329,58 @@ class SaleService
             $sale->update([
                 'status' => 'returned',
             ]);
+
+            $this->clearCache();
+
+            return $sale->load(['customer', 'items.product.variety']);
+        });
+    }
+
+    /**
+     * Restock selected items from a returned order.
+     * Only items that haven't been restocked yet can be restocked.
+     */
+    public function restockItems(int $saleId, array $items): Sale
+    {
+        return DB::transaction(function () use ($saleId, $items) {
+            $sale = Sale::with('items.product')->findOrFail($saleId);
+
+            if ($sale->status !== 'returned') {
+                throw new \Exception('Only returned orders can have items restocked.');
+            }
+
+            // Build lookup: itemId => quantity
+            $quantityMap = collect($items)->keyBy('id')->map(fn($i) => (int) $i['quantity']);
+
+            $itemsToRestock = $sale->items->filter(function ($item) use ($quantityMap) {
+                return $quantityMap->has($item->id) && !$item->restocked && $quantityMap[$item->id] > 0;
+            });
+
+            if ($itemsToRestock->isEmpty()) {
+                throw new \Exception('No eligible items to restock.');
+            }
+
+            foreach ($itemsToRestock as $item) {
+                $quantity = min($quantityMap[$item->id], $item->quantity);
+                $product = Product::lockForUpdate()->findOrFail($item->product_id);
+                $stockBefore = (int) $product->stocks;
+                $product->stocks += $quantity;
+                $product->save();
+
+                StockLog::create([
+                    'product_id' => $product->product_id,
+                    'type' => 'in',
+                    'quantity_before' => $stockBefore,
+                    'quantity_change' => $quantity,
+                    'quantity_after' => (int) $product->stocks,
+                    'kg_amount' => $product->weight ? $quantity * (float) $product->weight : null,
+                    'source_type' => 'order_return',
+                    'source_id' => $sale->id,
+                    'notes' => "Restocked from return ({$sale->transaction_id}) — {$sale->return_reason}",
+                ]);
+
+                $item->update(['restocked' => true]);
+            }
 
             $this->clearCache();
             Cache::forget('products_all');
@@ -383,9 +419,9 @@ class SaleService
     /**
      * Void a sale — restore stock.
      */
-    public function voidSale(int $saleId): Sale
+    public function voidSale(int $saleId, ?string $reason = null, ?string $voidedBy = null, ?string $authorizedBy = null): Sale
     {
-        return DB::transaction(function () use ($saleId) {
+        return DB::transaction(function () use ($saleId, $reason, $voidedBy, $authorizedBy) {
             $sale = Sale::with('items.product')->findOrFail($saleId);
 
             if ($sale->status === 'voided') {
@@ -414,7 +450,12 @@ class SaleService
             }
 
             // Mark voided
-            $sale->update(['status' => 'voided']);
+            $sale->update([
+                'status' => 'voided',
+                'notes' => $reason,
+                'voided_by' => $voidedBy,
+                'authorized_by' => $authorizedBy,
+            ]);
 
             // Decrement customer orders
             if ($sale->customer_id) {
@@ -599,5 +640,6 @@ class SaleService
     public function clearCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        DashboardService::clearStatsCache();
     }
 }

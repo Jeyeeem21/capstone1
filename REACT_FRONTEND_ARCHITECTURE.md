@@ -161,7 +161,7 @@ Built on native `fetch` with advanced features:
 | **inventoryApi** | `inventoryApi.js` | `getAll`, `getById`, `getLowStock`, `create`, `update`, `updateStock(id, qty, reason)`, `delete` | `updateStock` uses PATCH with quantity + reason. |
 | **ordersApi** | `ordersApi.js` | `getAll`, `getById`, `create`, `updateStatus(id, status)`, `update`, `cancel`, `delete` | `updateStatus` uses PATCH. |
 | **productsApi** | `productsApi.js` | `getAll`, `getFeatured`, `getVarieties`, `getById`, `create`, `update`, `delete` | `getAll`, `getFeatured`, `getVarieties`, `getById` all cached. CUD operations clear product caches. |
-| **salesApi** | `salesApi.js` | `getAll`, `getSummary(period)`, `getByDateRange`, `create`, `getPredictions(period)`, `refreshPredictions` | `getSummary` and `getPredictions` cached. `create` invalidates summary caches. |
+| **salesApi** | `salesApi.js` | `getAll`, `getSummary(period)`, `getByDateRange`, `create`, `getPredictions(period)`, `refreshPredictions` | `getSummary` and `getPredictions` cached. `create` invalidates summary caches. Also used by Orders page for return/restock/payment operations via direct `apiClient` calls. |
 | **settingsApi** | `settingsApi.js` | `getAll`, `update`, `getProfile`, `updateProfile`, `uploadAvatar` | `uploadAvatar` uses FormData. |
 | **usersApi** | `usersApi.js` | `getAll`, `getById`, `create`, `update`, `delete`, `updateRole(id, role)` | `updateRole` uses PATCH. |
 | **websiteContentApi** | `websiteContentApi.js` | `getAll`, `getHomeContent`, `getAboutContent`, `saveHomeContent`, `saveAboutContent`, `uploadHeroImage`, `seedDefaults` | `uploadHeroImage` uses FormData. |
@@ -435,7 +435,9 @@ Rice milling/processing after drying.
 
 Product CRUD with variety dropdown.
 
-- **Form fields:** product_name, variety_id, price, weight, status
+- **Form fields:** product_name, variety_id, price, weight, status, **image upload** (file picker, jpeg/png/jpg/webp, max 2MB)
+- Image preview in product cards and form.
+- Uses `FormData` for create/update to support file upload.
 - Cost analysis fetch on edit.
 - **APIs:** `/products`, `/varieties`
 
@@ -485,10 +487,13 @@ Sales forecasting component (embedded in Sales page).
 Admin order management.
 
 - **Status flow:** Pending → Processing → Shipped → Delivered
-- **Return handling** with reason and notes.
+- **Return flow:** Accept return (assign pickup driver/plate/date), Reject return (revert to delivered), Mark as returned
+- **Restock per-item:** Select individual items to restock from returned/voided orders with quantity inputs
+- **Record Payment:** Upload payment proof for unpaid orders (Pay Later/COD)
+- **Void tracking:** Shows `voided_by` and `authorized_by` in order details
 - Cancel orders with confirmation.
 - Status tabs with URL persistence.
-- **API:** `/sales` (admin orders and sales share same API)
+- **API:** `/sales` (admin orders and sales share same API — includes `/return/accept`, `/return/reject`, `/return/complete`, `/restock`, `/pay`)
 
 #### `Partners.jsx` (181 lines)
 
@@ -591,7 +596,7 @@ All public pages use API data with localStorage caching fallback.
 
 Landing page sections:
 - Hero section (dynamic content from `websiteContentApi.getHomeContent`)
-- Featured products grid (from `productsApi`)
+- Featured products grid (from `productsApi`) with **product images** and `useBusinessSettings` business logo fallback
 - About preview section
 - Stats counters
 - Features showcase
@@ -610,6 +615,8 @@ Landing page sections:
 Public product catalog.
 - Search, variety filter, sort options
 - Grid/list view toggle
+- **Normalizer function** maps API fields to display fields: `product_name`→`name`, `variety_name`→`variety`/`tags`, `weight_formatted`→`description`, `is_in_stock`→`inStock`
+- **Product images** displayed from API `image` field with `useBusinessSettings` business logo fallback
 - `productsApi.getAll` + `productsApi.getVarieties`
 
 #### `Contact.jsx` (424 lines)
@@ -780,6 +787,9 @@ Admin footer (shown on desktop only).
 
 - 3-column grid: Company Info, Quick Links, Contact Info.
 - Pulls data from `BusinessSettingsContext` (business name, address, phone, email, hours).
+- **Role-aware Quick Links:** Uses `useAuth()` for `basePath` and `isStaff()`.
+  - Admin/Super Admin: Products, POS, Orders, Procurement, Sales (using `basePath`)
+  - Staff: POS, Profile (hardcoded `/staff/*` paths)
 - Social media links (filtered — only shows configured ones).
 - Bottom bar: copyright, "Powered by XianFire Framework. Built at Mindoro State University".
 - Dark background (`--color-bg-footer`).
@@ -898,9 +908,11 @@ Status pill badge with auto-detected colors.
 | Status Keywords | Color |
 |---|---|
 | active, completed, dried, in stock, paid, approved, delivered | Green (success) |
-| pending, low stock, drying, warning, postponed, return requested | Yellow (warning) |
+| pending, low stock, drying, warning, postponed, return requested, picking up | Yellow (warning) |
 | inactive, cancelled, voided, out of stock, rejected, failed, returned | Red (danger) |
 | info, new, draft, shipped, processing | Blue (info) |
+
+All variants include `dark:` mode overrides (e.g., `dark:bg-green-500/15 dark:text-green-400`).
 
 Override auto-detection with explicit `variant` prop.
 

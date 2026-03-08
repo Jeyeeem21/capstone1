@@ -40,7 +40,7 @@ const FormInput = ({
         <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {label}
           {required && <span className="text-red-500">*</span>}
-          {!required && <span className="text-gray-400 dark:text-gray-500 text-xs font-normal">(Optional)</span>}
+          {!required && <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400 text-xs font-normal">(Optional)</span>}
         </label>
       )}
       <div className="relative">
@@ -56,14 +56,14 @@ const FormInput = ({
           disabled={disabled}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all shadow-sm
             ${displayError 
-              ? 'border-red-400 bg-red-50/50 dark:bg-red-500/10 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20' 
               : showSuccess
-                ? 'border-green-400 bg-green-50/30 dark:bg-green-500/10 focus:border-green-500 focus:ring-green-500/20'
-                : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100 dark:border-primary-700 hover:border-primary-400 dark:hover:border-primary-600 focus:border-primary-500 focus:ring-primary-500/20'
             }
-            ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}
+            ${disabled ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed opacity-60' : ''}
             ${shouldShake ? 'animate-shake' : ''}
-            focus:outline-none focus:ring-4 pr-10
+            focus:outline-none focus:ring-4 pr-10 dark:placeholder-gray-400
           `}
           {...props}
         />
@@ -74,7 +74,7 @@ const FormInput = ({
           {!loading && showSuccess && !displayError && <Check size={18} className="text-green-500" />}
         </div>
       </div>
-      {hint && !displayError && !loading && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}
+      {hint && !displayError && !loading && <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
       {loading && <p className="mt-1.5 text-xs text-blue-500 flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Checking availability...</p>}
       {displayError && !loading && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} />{displayError}</p>}
     </div>
@@ -117,7 +117,7 @@ const FormSelect = ({
         <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {label}
           {required && <span className="text-red-500">*</span>}
-          {!required && <span className="text-gray-400 dark:text-gray-500 text-xs font-normal">(Optional)</span>}
+          {!required && <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400 text-xs font-normal">(Optional)</span>}
         </label>
       )}
       <div className="relative">
@@ -131,14 +131,14 @@ const FormSelect = ({
           disabled={disabled}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all appearance-none cursor-pointer shadow-sm pr-10
             ${displayError 
-              ? 'border-red-400 bg-red-50/50 dark:bg-red-500/10 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20' 
               : showSuccess
-                ? 'border-green-400 bg-green-50/30 dark:bg-green-500/10 focus:border-green-500 focus:ring-green-500/20'
-                : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100 dark:border-primary-700 hover:border-primary-400 dark:hover:border-primary-600 focus:border-primary-500 focus:ring-primary-500/20'
             }
-            ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}
+            ${disabled ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed opacity-60' : ''}
             ${shouldShake ? 'animate-shake' : ''}
-            focus:outline-none focus:ring-4
+            focus:outline-none focus:ring-4 dark:placeholder-gray-400
           `}
         >
           <option value="">{placeholder}</option>
@@ -157,7 +157,7 @@ const FormSelect = ({
           </svg>
         </div>
       </div>
-      {hint && !displayError && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}
+      {hint && !displayError && <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
       {displayError && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} />{displayError}</p>}
     </div>
   );
@@ -199,7 +199,7 @@ const FormTextarea = ({
         <label htmlFor={name} className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
           {label}
           {required && <span className="text-red-500">*</span>}
-          {!required && <span className="text-gray-400 dark:text-gray-500 text-xs font-normal">(Optional)</span>}
+          {!required && <span className="text-gray-400 dark:text-gray-500 dark:text-gray-400 text-xs font-normal">(Optional)</span>}
         </label>
       )}
       <div className="relative">
@@ -215,14 +215,14 @@ const FormTextarea = ({
           rows={rows}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all resize-none shadow-sm
             ${displayError 
-              ? 'border-red-400 bg-red-50/50 dark:bg-red-500/10 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20' 
               : showSuccess
-                ? 'border-green-400 bg-green-50/30 dark:bg-green-500/10 focus:border-green-500 focus:ring-green-500/20'
-                : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100 dark:border-primary-700 hover:border-primary-400 dark:hover:border-primary-600 focus:border-primary-500 focus:ring-primary-500/20'
             }
-            ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-60' : ''}
+            ${disabled ? 'bg-gray-100 dark:bg-gray-600 cursor-not-allowed opacity-60' : ''}
             ${shouldShake ? 'animate-shake' : ''}
-            focus:outline-none focus:ring-4
+            focus:outline-none focus:ring-4 dark:placeholder-gray-400
           `}
         />
         {/* Status Icon */}
@@ -231,7 +231,7 @@ const FormTextarea = ({
           {showSuccess && !displayError && <Check size={18} className="text-green-500" />}
         </div>
       </div>
-      {hint && !displayError && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}
+      {hint && !displayError && <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
       {displayError && <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} />{displayError}</p>}
     </div>
   );

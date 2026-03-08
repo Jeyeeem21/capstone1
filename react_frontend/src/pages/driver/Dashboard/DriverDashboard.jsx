@@ -101,7 +101,7 @@ const DriverDashboard = () => {
     }
 
     return (
-      <div className="bg-white rounded-xl shadow-lg p-3 min-w-[180px]" style={{ border: `1px solid ${theme.border_color}` }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 min-w-[180px]" style={{ border: `1px solid ${theme.border_color}` }}>
         <p className="text-sm font-semibold mb-2 pb-1.5" style={{ color: theme.text_primary, borderBottom: `1px solid ${theme.border_color}20` }}>{label}</p>
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between gap-4">
@@ -114,13 +114,13 @@ const DriverDashboard = () => {
           {changePercent !== null && (
             <div className="flex items-center justify-end gap-1">
               {changeDirection === 'up' && (
-                <span className="text-[11px] font-medium text-green-600 flex items-center gap-0.5">
+                <span className="text-[11px] font-medium text-green-600 dark:text-green-400 flex items-center gap-0.5">
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
                   +{changePercent}%
                 </span>
               )}
               {changeDirection === 'down' && (
-                <span className="text-[11px] font-medium text-red-600 flex items-center gap-0.5">
+                <span className="text-[11px] font-medium text-red-600 dark:text-red-400 flex items-center gap-0.5">
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 8L2 4H8L5 8Z" fill="currentColor"/></svg>
                   {changePercent}%
                 </span>
@@ -175,7 +175,7 @@ const DriverDashboard = () => {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-4 sm:p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5" style={{ border: `1px solid ${theme.border_color}` }}>
               <Skeleton variant="circle" width="w-10" height="h-10" className="mb-3" />
               <Skeleton variant="title" width="w-20" className="mb-1" />
               <Skeleton variant="text" width="w-24" />
@@ -187,7 +187,7 @@ const DriverDashboard = () => {
         {summaryCards.map((card) => (
           <div 
             key={card.label} 
-            className="bg-white rounded-xl p-4 sm:p-5 transition-all hover:shadow-md"
+            className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 transition-all hover:shadow-md"
             style={{ border: `1px solid ${theme.border_color}` }}
           >
             <div className="flex items-center justify-between mb-3">
@@ -208,12 +208,12 @@ const DriverDashboard = () => {
       {/* Charts Section */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
             <Skeleton variant="title" width="w-32" className="mb-2" />
             <Skeleton variant="text" width="w-48" className="mb-4" />
             <Skeleton variant="custom" className="h-[250px] w-full rounded-lg" />
           </div>
-          <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
             <Skeleton variant="title" width="w-24" className="mb-2" />
             <Skeleton variant="text" width="w-36" className="mb-4" />
             <div className="flex items-center justify-center py-4">
@@ -227,7 +227,7 @@ const DriverDashboard = () => {
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Delivery Bar Chart with period toggle */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-lg font-bold" style={{ color: theme.text_primary }}>{deliveryLabels[deliveryPeriod]}</h2>
@@ -259,7 +259,7 @@ const DriverDashboard = () => {
         </div>
 
         {/* Delivery Status Donut */}
-        <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
           <h2 className="text-lg font-bold" style={{ color: theme.text_primary }}>Delivery Status</h2>
           <p className="text-xs mb-4" style={{ color: theme.text_secondary }}>Breakdown of your deliveries</p>
           <div className="flex flex-col items-center">
@@ -297,7 +297,7 @@ const DriverDashboard = () => {
 
       {/* Today's Deliveries */}
       {loading ? (
-        <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex items-center justify-between mb-4">
             <Skeleton variant="title" width="w-40" />
             <Skeleton variant="text" width="w-16" />
@@ -319,7 +319,7 @@ const DriverDashboard = () => {
           </div>
         </div>
       ) : (
-      <div className="bg-white rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${theme.border_color}` }}>
           <div className="flex items-center gap-2">
             <Calendar size={18} style={{ color: theme.button_primary }} />

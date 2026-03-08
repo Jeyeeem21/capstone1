@@ -47,6 +47,7 @@ const DryingProcess = () => {
     loading,
     isRefreshing,
     refetch,
+    optimisticUpdate,
   } = useDataFetch('/drying-processes', {
     cacheKey: CACHE_KEY,
     initialData: [],
@@ -272,10 +273,10 @@ const DryingProcess = () => {
       const response = await apiClient.post('/drying-processes', submitData);
       if (response.success && response.data) {
         setIsAddModalOpen(false);
-        invalidateAndRefetch().then(() => {
-          toast.success('Drying Started',
-            dryingSource === 'batch' ? 'Batch drying process has been created.' : 'New drying process has been created.');
-        });
+        toast.success('Drying Started',
+          dryingSource === 'batch' ? 'Batch drying process has been created.' : 'New drying process has been created.');
+        // Refetch in background
+        invalidateAndRefetch();
         return;
       } else {
         throw response;
@@ -303,10 +304,13 @@ const DryingProcess = () => {
     try {
       const response = await apiClient.delete(`/drying-processes/${selectedItem.id}`);
       if (response.success) {
+        const archivedId = selectedItem.id;
         setIsDeleteModalOpen(false);
-        invalidateAndRefetch().then(() => {
-          toast.success('Returned', 'Drying process has been returned to procurement.');
-        });
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(d => d.id !== archivedId));
+        toast.success('Returned', 'Drying process has been returned to procurement.');
+        // Refetch in background to confirm
+        invalidateAndRefetch();
         return;
       } else {
         throw new Error(response.message || 'Failed to return');
@@ -317,7 +321,7 @@ const DryingProcess = () => {
     } finally {
       setSaving(false);
     }
-  }, [selectedItem, invalidateAndRefetch, toast, saving]);
+  }, [selectedItem, invalidateAndRefetch, optimisticUpdate, toast, saving]);
 
   // ---- Chart helper functions ----
   const getWeeksInMonth = useCallback((year, month) => {
@@ -543,14 +547,14 @@ const DryingProcess = () => {
   const columns = useMemo(() => [
     {
       header: 'ID', accessor: 'id',
-      cell: (row) => <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
+      cell: (row) => <span className="font-mono text-sm text-gray-600 dark:text-gray-300">#{String(row.id).padStart(4, '0')}</span>
     },
     {
       header: 'Source', accessor: 'procurement_info',
       cell: (row) => {
         if (row.batch_id) return (
           <div className="flex flex-col gap-0.5">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 w-fit">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 w-fit">
               <Layers size={10} />{row.batch_number}
             </span>
           </div>
@@ -571,10 +575,10 @@ const DryingProcess = () => {
       header: 'Quantity', accessor: 'quantity_kg',
       cell: (row) => (
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-green-600">
+          <span className="font-semibold text-green-600 dark:text-green-400">
             {parseFloat(row.quantity_kg).toLocaleString()} kg
           </span>
-          <span className="text-xs text-blue-600">
+          <span className="text-xs text-blue-600 dark:text-blue-400">
             {parseInt(row.sacks || 0)} sacks
           </span>
           {parseFloat(row.quantity_out || 0) > 0 && (
@@ -587,26 +591,26 @@ const DryingProcess = () => {
     },
     {
       header: 'Days', accessor: 'days',
-      cell: (row) => <span className="font-semibold text-blue-600">{row.days}</span>
+      cell: (row) => <span className="font-semibold text-blue-600 dark:text-blue-400">{row.days}</span>
     },
     {
       header: 'Price', accessor: 'price',
-      cell: (row) => <span className="text-gray-700">₱{parseFloat(row.price).toLocaleString()}</span>
+      cell: (row) => <span className="text-gray-700 dark:text-gray-200">₱{parseFloat(row.price).toLocaleString()}</span>
     },
     {
       header: 'Total Price', accessor: 'total_price',
-      cell: (row) => <span className="font-semibold text-button-600">₱{parseFloat(row.total_price).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-button-600 dark:text-button-400">₱{parseFloat(row.total_price).toLocaleString()}</span>
     },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     {
       header: 'Dates', accessor: 'created_at',
       cell: (row) => (
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             Start: {row.created_at ? new Date(row.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
           </span>
           {row.dried_at ? (
-            <span className="text-xs text-green-600 font-medium">
+            <span className="text-xs text-green-600 dark:text-green-400 font-medium">
               Dried: {new Date(row.dried_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}
             </span>
           ) : (
@@ -628,7 +632,7 @@ const DryingProcess = () => {
               onClick={(e) => { e.stopPropagation(); handleIncrementDay(row); }}
               disabled={actionDisabled || saving}
               className={`p-1.5 rounded-md transition-colors ${
-                actionDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-blue-50 text-blue-500 hover:text-blue-700'
+                actionDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 hover:text-blue-700 dark:text-blue-300'
               }`}
               title={actionDisabled ? 'Cannot add days' : 'Add Day (+1)'}
             >
@@ -639,7 +643,7 @@ const DryingProcess = () => {
               onClick={(e) => { e.stopPropagation(); handleMarkDried(row); }}
               disabled={actionDisabled || (row.days || 0) < 1 || saving}
               className={`p-1.5 rounded-md transition-colors ${
-                actionDisabled || (row.days || 0) < 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-green-50 text-green-500 hover:text-green-700'
+                actionDisabled || (row.days || 0) < 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 hover:text-green-700 dark:text-green-300'
               }`}
               title={actionDisabled ? 'Already dried' : (row.days || 0) < 1 ? 'Add at least 1 day first' : 'Mark as Dried'}
             >
@@ -650,7 +654,7 @@ const DryingProcess = () => {
               onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
               disabled={deleteDisabled || (row.days || 0) >= 1}
               className={`p-1.5 rounded-md transition-colors ${
-                deleteDisabled || (row.days || 0) >= 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-amber-50 text-amber-500 hover:text-amber-700'
+                deleteDisabled || (row.days || 0) >= 1 ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-amber-50 text-amber-500 hover:text-amber-700 dark:text-amber-300'
               }`}
               title={deleteDisabled ? 'Cannot return' : (row.days || 0) >= 1 ? 'Cannot return — drying has started' : 'Return to Procurement'}
             >
@@ -669,7 +673,7 @@ const DryingProcess = () => {
         description="Manage the drying stage between procurement and processing"
         icon={Sun}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -688,19 +692,19 @@ const DryingProcess = () => {
       {/* Charts */}
       {loading && dryingProcesses.length === 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 h-[340px] animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
-            <div className="h-3 bg-gray-100 rounded w-1/4 mb-6"></div>
-            <div className="h-[240px] bg-gray-100 rounded"></div>
+          <div className="lg:col-span-2 bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-6 h-[340px] animate-pulse">
+            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/3 mb-2"></div>
+            <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
+            <div className="h-[240px] bg-gray-100 dark:bg-gray-700 rounded"></div>
           </div>
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-4 h-[162px] animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-[100px] bg-gray-100 rounded-full mx-auto w-[100px]"></div>
+            <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[162px] animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2"></div>
+              <div className="h-[100px] bg-gray-100 dark:bg-gray-700 rounded-full mx-auto w-[100px]"></div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-4 h-[162px] animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-[100px] bg-gray-100 rounded-full mx-auto w-[100px]"></div>
+            <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[162px] animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2"></div>
+              <div className="h-[100px] bg-gray-100 dark:bg-gray-700 rounded-full mx-auto w-[100px]"></div>
             </div>
           </div>
         </div>
@@ -719,7 +723,7 @@ const DryingProcess = () => {
                   <select
                     value={chartPeriod}
                     onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
-                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -729,31 +733,31 @@ const DryingProcess = () => {
                   </select>
                   {chartPeriod === 'daily' && (
                     <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {chartPeriod === 'weekly' && (
                     <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {chartPeriod === 'monthly' && (
                     <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000" max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {chartPeriod === 'bi-annually' && (
                     <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000" max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {chartPeriod === 'annually' && (
                     <div className="flex items-center gap-1">
                       <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
                         min="2000" max={chartYearTo}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                       <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
                       <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
                         min={chartYearFrom} max={new Date().getFullYear()}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                     </div>
                   )}
                 </div>
@@ -761,9 +765,9 @@ const DryingProcess = () => {
               onDotClick={setActiveChartPoint}
               activePoint={activeChartPoint}
               summaryStats={[
-                { label: 'Total Records', value: totalRecords.toString(), color: 'text-primary-600' },
-                { label: 'Avg Days', value: String(avgDays), color: 'text-primary-600' },
-                { label: 'Total Qty', value: `${totalQuantity.toLocaleString()} kg`, color: 'text-green-600' },
+                { label: 'Total Records', value: totalRecords.toString(), color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Avg Days', value: String(avgDays), color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Total Qty', value: `${totalQuantity.toLocaleString()} kg`, color: 'text-green-600 dark:text-green-400' },
               ]}
             />
           </div>
@@ -805,12 +809,12 @@ const DryingProcess = () => {
           <div className="flex items-center gap-3 mb-3">
             <div className="flex items-center gap-2">
               <Layers size={16} className="text-indigo-500" />
-              <span className="text-sm font-medium text-gray-600">Filter by Batch:</span>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Filter by Batch:</span>
             </div>
             <select
               value={batchFilter}
               onChange={(e) => setBatchFilter(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 min-w-[240px]"
+              className="px-3 py-1.5 text-sm border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 min-w-[240px]"
             >
               <option value="">All Batches</option>
               <option value="no-batch">No Batch (Standalone)</option>
@@ -821,7 +825,7 @@ const DryingProcess = () => {
             {batchFilter && (
               <button
                 onClick={() => setBatchFilter('')}
-                className="text-xs text-gray-500 hover:text-red-500 underline transition-colors"
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 underline transition-colors"
               >
                 Clear filter
               </button>
@@ -829,12 +833,12 @@ const DryingProcess = () => {
             {batchFilter && batchFilter !== 'no-batch' && (() => {
               const b = allBatches.find(b => String(b.id) === batchFilter);
               return b ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-                  <span className="text-xs font-semibold text-indigo-700">{b.batch_number}</span>
-                  <span className="text-xs text-gray-500">·</span>
-                  <span className="text-xs text-gray-600">{b.remaining_sacks}/{b.total_sacks} sacks remaining</span>
-                  <span className="text-xs text-gray-500">·</span>
-                  <span className={`text-xs font-medium ${b.status === 'Open' ? 'text-green-600' : b.status === 'Closed' ? 'text-yellow-600' : 'text-gray-500'}`}>{b.status}</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg">
+                  <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">{b.batch_number}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">{b.remaining_sacks}/{b.total_sacks} sacks remaining</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
+                  <span className={`text-xs font-medium ${b.status === 'Open' ? 'text-green-600 dark:text-green-400' : b.status === 'Closed' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400'}`}>{b.status}</span>
                 </div>
               ) : null;
             })()}
@@ -865,7 +869,7 @@ const DryingProcess = () => {
           <div className="flex gap-3 justify-end">
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -877,14 +881,14 @@ const DryingProcess = () => {
             {/* Left Column */}
             <div className="space-y-3">
               {/* ID & Status */}
-              <div className="bg-gradient-to-r from-primary-50 to-button-50 p-3 rounded-lg border-2 border-primary-200">
+              <div className="bg-gradient-to-r from-primary-50 dark:from-gray-700 to-button-50 dark:to-gray-700 p-3 rounded-lg border-2 border-primary-200 dark:border-primary-700">
                 <div className="flex items-start gap-2">
                   <div className="p-2 bg-button-500 text-white rounded-lg">
                     <Sun size={20} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-800">Drying #{String(selectedItem.id).padStart(4, '0')}</h3>
-                    <p className="text-xs text-gray-600">Record ID</p>
+                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">Drying #{String(selectedItem.id).padStart(4, '0')}</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Record ID</p>
                   </div>
                   <StatusBadge status={selectedItem.status} />
                 </div>
@@ -892,26 +896,26 @@ const DryingProcess = () => {
 
               {/* Procurement Info */}
               {selectedItem.procurement_info && (
-                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-blue-100 text-blue-600 rounded-lg"><Package size={18} /></div>
+                <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Package size={18} /></div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 mb-0.5">Procurement Source</p>
-                    <p className="font-semibold text-gray-800 text-sm">#{String(selectedItem.procurement_id).padStart(4, '0')} - {selectedItem.procurement_info.supplier_name}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Procurement Source</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">#{String(selectedItem.procurement_id).padStart(4, '0')} - {selectedItem.procurement_info.supplier_name}</p>
                   </div>
                 </div>
               )}
 
               {/* Batch Info */}
               {selectedItem.batch_id && (
-                <div className="flex items-start gap-2 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                  <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Layers size={18} /></div>
+                <div className="flex items-start gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700">
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg"><Layers size={18} /></div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 mb-0.5">Batch Source</p>
-                    <p className="font-semibold text-indigo-700 text-sm">{selectedItem.batch_number}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Batch Source</p>
+                    <p className="font-semibold text-indigo-700 dark:text-indigo-300 text-sm">{selectedItem.batch_number}</p>
                     {selectedItem.batch_breakdown?.length > 0 && (
                       <div className="mt-1.5 space-y-0.5">
                         {selectedItem.batch_breakdown.map((item, i) => (
-                          <p key={i} className="text-xs text-gray-600">
+                          <p key={i} className="text-xs text-gray-600 dark:text-gray-300">
                             #{String(item.procurement_id).padStart(4,'0')} {item.supplier_name} — {item.sacks_taken} sacks / {parseFloat(item.quantity_kg).toLocaleString()} kg
                           </p>
                         ))}
@@ -922,14 +926,14 @@ const DryingProcess = () => {
               )}
 
               {/* Total Cost */}
-              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
+              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 dark:from-gray-700 to-primary-50 dark:to-gray-700 rounded-lg border-2 border-button-200 dark:border-button-700">
                 <div className="p-2 bg-button-500 text-white rounded-lg">
                   <DollarSign size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Total Cost</p>
-                  <p className="text-xl font-bold text-button-600">₱{parseFloat(selectedItem.total_price).toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">({parseInt(selectedItem.sacks || 0)} sacks × ₱{parseFloat(selectedItem.price).toLocaleString()}) × {selectedItem.days} days</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Total Cost</p>
+                  <p className="text-xl font-bold text-button-600 dark:text-button-400">₱{parseFloat(selectedItem.total_price).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">({parseInt(selectedItem.sacks || 0)} sacks × ₱{parseFloat(selectedItem.price).toLocaleString()}) × {selectedItem.days} days</p>
                 </div>
               </div>
             </div>
@@ -937,36 +941,36 @@ const DryingProcess = () => {
             {/* Right Column */}
             <div className="space-y-3">
               {/* Quantity Info */}
-              <div className="p-3 bg-gray-50 rounded-lg space-y-2.5">
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                  <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                     <Scale size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Quantity</p>
-                    <p className="font-semibold text-gray-800 text-sm">{parseInt(selectedItem.sacks || 0)} sacks ({parseFloat(selectedItem.quantity_kg).toLocaleString()} kg)</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Quantity</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseInt(selectedItem.sacks || 0)} sacks ({parseFloat(selectedItem.quantity_kg).toLocaleString()} kg)</p>
                   </div>
                 </div>
               </div>
 
               {/* Days & Price */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                   <Calendar size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Drying Days</p>
-                  <p className="font-semibold text-gray-800 text-sm">{selectedItem.days} days</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Drying Days</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{selectedItem.days} days</p>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-lg">
                   <DollarSign size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Price</p>
-                  <p className="font-semibold text-gray-800 text-sm">₱{parseFloat(selectedItem.price).toLocaleString()}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Price</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">₱{parseFloat(selectedItem.price).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -987,12 +991,12 @@ const DryingProcess = () => {
         {({ submitted }) => (
           <>
             {/* Source Toggle */}
-            <div className="flex gap-2 p-1 bg-gray-100 rounded-xl mb-4">
+            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-4">
               <button
                 type="button"
                 onClick={() => { setDryingSource('procurement'); setBatchPreview(null); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
-                  dryingSource === 'procurement' ? 'bg-white shadow text-button-600 border border-button-200' : 'text-gray-500 hover:text-gray-700'
+                  dryingSource === 'procurement' ? 'bg-white dark:bg-gray-700 shadow text-button-600 dark:text-button-400 border border-button-200 dark:border-button-700' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200'
                 }`}
               >
                 <Package size={14} /> Single Procurement
@@ -1001,7 +1005,7 @@ const DryingProcess = () => {
                 type="button"
                 onClick={() => setDryingSource('batch')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
-                  dryingSource === 'batch' ? 'bg-white shadow text-indigo-600 border border-indigo-200' : 'text-gray-500 hover:text-gray-700'
+                  dryingSource === 'batch' ? 'bg-white dark:bg-gray-700 shadow text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200'
                 }`}
               >
                 <Layers size={14} /> From Batch
@@ -1023,8 +1027,8 @@ const DryingProcess = () => {
                   error={errors.procurement_id?.[0]}
                 />
                 {formData.procurement_id && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-2">
-                    <p className="text-xs text-blue-700">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-2">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
                       Auto-filled: <strong>{parseInt(formData.sacks || 0)} sacks</strong> / <strong>{parseFloat(formData.quantity_kg || 0).toLocaleString()} kg</strong>
                     </p>
                   </div>
@@ -1033,8 +1037,8 @@ const DryingProcess = () => {
                   onChange={handleFormChange} required placeholder="0.00" submitted={submitted}
                   error={errors.price?.[0]} step="0.01"
                 />
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                  <p className="text-xs text-gray-600">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the table to increment days. Total = (Sacks × Price) × Days.</p>
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg">
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the table to increment days. Total = (Sacks × Price) × Days.</p>
                 </div>
               </>
             )}
@@ -1043,10 +1047,10 @@ const DryingProcess = () => {
             {dryingSource === 'batch' && (
               <>
                 <div className="mb-3">
-                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">Batch <span className="text-red-500">*</span></label>
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Batch <span className="text-red-500">*</span></label>
                   <select name="batch_id" value={batchFormData.batch_id} onChange={handleBatchFormChange}
-                    className={`w-full px-4 py-2.5 text-sm border-2 rounded-xl bg-white focus:outline-none focus:ring-4 transition-all ${
-                      batchErrors.batch_id ? 'border-red-400 focus:ring-red-500/20' : 'border-gray-200 focus:ring-indigo-500/20 focus:border-indigo-400'
+                    className={`w-full px-4 py-2.5 text-sm border-2 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 transition-all ${
+                      batchErrors.batch_id ? 'border-red-400 focus:ring-red-500/20' : 'border-gray-200 dark:border-gray-600 focus:ring-indigo-500/20 focus:border-indigo-400'
                     }`}
                   >
                     {openBatchOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -1057,10 +1061,10 @@ const DryingProcess = () => {
                 {batchFormData.batch_id && (() => {
                   const b = allBatches.find(b => String(b.id) === batchFormData.batch_id);
                   return b ? (
-                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg mb-3 flex gap-4">
-                      <div><p className="text-xs text-gray-500">Variety</p><p className="text-sm font-semibold text-indigo-700">{b.variety_name}</p></div>
-                      <div><p className="text-xs text-gray-500">Available</p><p className="text-sm font-bold text-green-600">{b.remaining_sacks} sacks / {parseFloat(b.remaining_kg).toLocaleString()} kg</p></div>
-                      <div><p className="text-xs text-gray-500">Status</p><p className="text-sm font-medium">{b.status}</p></div>
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg mb-3 flex gap-4">
+                      <div><p className="text-xs text-gray-500 dark:text-gray-400">Variety</p><p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{b.variety_name}</p></div>
+                      <div><p className="text-xs text-gray-500 dark:text-gray-400">Available</p><p className="text-sm font-bold text-green-600 dark:text-green-400">{b.remaining_sacks} sacks / {parseFloat(b.remaining_kg).toLocaleString()} kg</p></div>
+                      <div><p className="text-xs text-gray-500 dark:text-gray-400">Status</p><p className="text-sm font-medium">{b.status}</p></div>
                     </div>
                   ) : null;
                 })()}
@@ -1079,22 +1083,22 @@ const DryingProcess = () => {
                 })()}
 
                 {loadingPreview && (
-                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg mb-2 animate-pulse">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg mb-2 animate-pulse">
                     <p className="text-xs text-gray-400">Calculating distribution...</p>
                   </div>
                 )}
                 {batchPreview && !loadingPreview && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-2">
-                    <p className="text-xs font-semibold text-green-700 mb-1.5">Proportional distribution:</p>
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg mb-2">
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1.5">Proportional distribution:</p>
                     <div className="space-y-1">
                       {batchPreview.breakdown?.map((item, i) => (
-                        <div key={i} className="flex justify-between text-xs text-gray-700">
+                        <div key={i} className="flex justify-between text-xs text-gray-700 dark:text-gray-200">
                           <span>Procurement #{String(item.procurement_id).padStart(4,'0')}</span>
                           <span>{item.sacks_taken} sacks → {parseFloat(item.quantity_kg).toLocaleString()} kg</span>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-1.5 pt-1.5 border-t border-green-200 flex justify-between text-xs font-bold text-green-700">
+                    <div className="mt-1.5 pt-1.5 border-t border-green-200 dark:border-green-700 flex justify-between text-xs font-bold text-green-700 dark:text-green-300">
                       <span>Total</span>
                       <span>{batchFormData.sacks} sacks → {parseFloat(batchPreview.total_kg || 0).toLocaleString()} kg</span>
                     </div>

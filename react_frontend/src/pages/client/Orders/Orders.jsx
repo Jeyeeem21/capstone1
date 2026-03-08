@@ -103,7 +103,7 @@ const Orders = () => {
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
               <Skeleton variant="title" width="w-12" className="mb-1" />
               <Skeleton variant="text" width="w-20" />
             </div>
@@ -117,7 +117,7 @@ const Orders = () => {
           { label: 'Delivered', value: orderStats.delivered, color: '#22c55e' },
           { label: 'Cancelled', value: orderStats.cancelled, color: '#ef4444' },
         ].map(stat => (
-          <div key={stat.label} className="bg-white rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
             <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
             <p className="text-xs" style={{ color: theme.text_secondary }}>{stat.label}</p>
           </div>
@@ -127,7 +127,7 @@ const Orders = () => {
 
       {/* Filters */}
       {loading ? (
-        <div className="bg-white rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex flex-col sm:flex-row gap-3">
             <Skeleton variant="input" className="flex-1" />
             <div className="flex gap-1">
@@ -136,7 +136,7 @@ const Orders = () => {
           </div>
         </div>
       ) : (
-      <div className="bg-white rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-4 mb-6" style={{ border: `1px solid ${theme.border_color}` }}>
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Search */}
           <div className="flex-1 relative">
@@ -180,7 +180,7 @@ const Orders = () => {
       {loading ? (
         <div className="columns-1 sm:columns-2 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-5 mb-4 break-inside-avoid" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-5 mb-4 break-inside-avoid" style={{ border: `1px solid ${theme.border_color}` }}>
               <div className="flex items-center justify-between mb-3">
                 <Skeleton variant="text" width="w-36" />
                 <Skeleton variant="button" width="w-20" />
@@ -197,7 +197,7 @@ const Orders = () => {
           ))}
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
           <ClipboardList size={48} className="mx-auto mb-4" style={{ color: theme.text_secondary }} />
           <h3 className="text-lg font-semibold" style={{ color: theme.text_primary }}>No orders found</h3>
           <p className="text-sm mt-1" style={{ color: theme.text_secondary }}>
@@ -214,13 +214,13 @@ const Orders = () => {
             return (
               <div 
                 key={order.id} 
-                className="bg-white rounded-xl overflow-hidden transition-all mb-4 break-inside-avoid"
+                className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-all mb-4 break-inside-avoid"
                 style={{ border: `1px solid ${theme.border_color}` }}
               >
                 {/* Order Header - compact */}
                 <button
                   onClick={() => setExpandedOrder(isExpanded ? null : order.id)}
-                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50/50 transition-colors"
+                  className="w-full flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
                     <div 
@@ -292,7 +292,7 @@ const Orders = () => {
 
                     {/* Order Info Grid - compact */}
                     <div className="grid grid-cols-3 gap-2 mb-3">
-                      <div className="flex items-start gap-1.5 p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-start gap-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <CreditCard size={12} className="mt-0.5 flex-shrink-0" style={{ color: theme.text_secondary }} />
                         <div className="min-w-0">
                           <p className="text-[9px] font-medium" style={{ color: theme.text_secondary }}>Payment</p>
@@ -302,14 +302,14 @@ const Orders = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-start gap-1.5 p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-start gap-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <MapPin size={12} className="mt-0.5 flex-shrink-0" style={{ color: theme.text_secondary }} />
                         <div className="min-w-0">
                           <p className="text-[9px] font-medium" style={{ color: theme.text_secondary }}>Address</p>
                           <p className="text-[10px] truncate" style={{ color: theme.text_primary }} title={order.deliveryAddress}>{order.deliveryAddress}</p>
                         </div>
                       </div>
-                      <div className="flex items-start gap-1.5 p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-start gap-1.5 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <Calendar size={12} className="mt-0.5 flex-shrink-0" style={{ color: theme.text_secondary }} />
                         <div className="min-w-0">
                           <p className="text-[9px] font-medium" style={{ color: theme.text_secondary }}>
@@ -324,7 +324,7 @@ const Orders = () => {
 
                     {/* Items - compact */}
                     <div className="border rounded-lg overflow-hidden" style={{ borderColor: theme.border_color }}>
-                      <div className="bg-gray-50 px-3 py-1.5">
+                      <div className="bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5">
                         <p className="text-[9px] font-semibold" style={{ color: theme.text_secondary }}>ORDER ITEMS</p>
                       </div>
                       <div className="divide-y" style={{ borderColor: theme.border_color }}>
@@ -349,7 +349,7 @@ const Orders = () => {
                           <span>₱{order.subtotal.toLocaleString()}</span>
                         </div>
                         {order.discount > 0 && (
-                          <div className="flex justify-between text-[10px] text-green-600">
+                          <div className="flex justify-between text-[10px] text-green-600 dark:text-green-400">
                             <span>Discount</span>
                             <span>-₱{order.discount.toLocaleString()}</span>
                           </div>
@@ -367,8 +367,8 @@ const Orders = () => {
 
                     {/* Notes */}
                     {order.notes && (
-                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <FileText size={12} className="text-yellow-600 mt-0.5" />
+                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
+                        <FileText size={12} className="text-yellow-600 dark:text-yellow-400 mt-0.5" />
                         <p className="text-[10px] text-yellow-800">{order.notes}</p>
                       </div>
                     )}
@@ -384,21 +384,21 @@ const Orders = () => {
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleReturnRequest(order); }}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 transition-all hover:bg-orange-100"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 transition-all hover:bg-orange-100 dark:hover:bg-orange-900/20"
                         >
                           <RotateCcw size={12} /> Return Item
                         </button>
                       </div>
                     )}
                     {order.status === 'Return Requested' && (
-                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-orange-50 border border-orange-200 rounded-lg">
-                        <AlertTriangle size={12} className="text-orange-600 mt-0.5 flex-shrink-0" />
+                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg">
+                        <AlertTriangle size={12} className="text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
                         <p className="text-[10px] text-orange-800">Return request submitted. Waiting for admin approval.</p>
                       </div>
                     )}
                     {order.status === 'Returned' && (
-                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-green-50 border border-green-200 rounded-lg">
-                        <CheckCircle size={12} className="text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="mt-2 flex items-start gap-1.5 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                        <CheckCircle size={12} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                         <p className="text-[10px] text-green-800">Return has been processed. Refund will be credited to your account.</p>
                       </div>
                     )}
@@ -414,11 +414,11 @@ const Orders = () => {
       {isReturnModalOpen && returnOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setIsReturnModalOpen(false)} />
-          <div className="relative bg-white rounded-2xl w-full max-w-md shadow-xl" style={{ border: `2px solid ${theme.border_color}` }}>
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl" style={{ border: `2px solid ${theme.border_color}` }}>
             <div className="p-5">
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-orange-50">
-                  <RotateCcw size={18} className="text-orange-600" />
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-orange-50 dark:bg-orange-900/20">
+                  <RotateCcw size={18} className="text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold" style={{ color: theme.text_primary }}>Request Return</h3>
@@ -428,7 +428,7 @@ const Orders = () => {
 
               {/* Items being returned */}
               <div className="mb-4 rounded-lg border overflow-hidden" style={{ borderColor: theme.border_color }}>
-                <div className="bg-gray-50 px-3 py-1.5">
+                <div className="bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5">
                   <p className="text-[9px] font-semibold" style={{ color: theme.text_secondary }}>ITEMS TO RETURN</p>
                 </div>
                 <div className="divide-y" style={{ borderColor: theme.border_color }}>
@@ -478,7 +478,7 @@ const Orders = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsReturnModalOpen(false)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium border-2 transition-all hover:bg-gray-50"
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium border-2 transition-all hover:bg-gray-50 dark:hover:bg-gray-700"
                   style={{ borderColor: theme.border_color, color: theme.text_primary }}
                 >
                   Cancel

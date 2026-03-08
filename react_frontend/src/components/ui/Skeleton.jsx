@@ -66,7 +66,7 @@ const Skeleton = ({
 
 // Pre-built skeleton layouts for common use cases
 export const SkeletonCard = ({ className = '' }) => (
-  <div className={`p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 ${className}`}>
+  <div className={`p-4 bg-white dark:bg-gray-800 rounded-xl border border-primary-100 dark:border-primary-700 ${className}`}>
     <div className="flex items-center gap-4 mb-4">
       <Skeleton variant="avatar" />
       <div className="flex-1">
@@ -79,7 +79,7 @@ export const SkeletonCard = ({ className = '' }) => (
 );
 
 export const SkeletonTable = ({ rows = 5, columns = 4, className = '' }) => (
-  <div className={`overflow-hidden rounded-xl border border-gray-100 dark:border-gray-700 ${className}`}>
+  <div className={`overflow-hidden rounded-xl border border-primary-100 dark:border-primary-700 ${className}`}>
     {/* Header */}
     <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 flex gap-4">
       {Array.from({ length: columns }).map((_, i) => (
@@ -114,7 +114,7 @@ export const SkeletonForm = ({ fields = 4, className = '' }) => (
 export const SkeletonStats = ({ count = 4, className = '' }) => (
   <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${className}`}>
     {Array.from({ length: count }).map((_, index) => (
-      <div key={index} className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700">
+      <div key={index} className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-primary-100 dark:border-primary-700">
         <div className="flex items-center justify-between mb-3">
           <Skeleton variant="text" width="w-20" />
           <Skeleton variant="circle" width="w-10" height="h-10" />
@@ -129,7 +129,7 @@ export const SkeletonStats = ({ count = 4, className = '' }) => (
 export const SkeletonList = ({ items = 5, className = '' }) => (
   <div className={`space-y-3 ${className}`}>
     {Array.from({ length: items }).map((_, index) => (
-      <div key={index} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700">
+      <div key={index} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-lg border border-primary-100 dark:border-primary-700">
         <Skeleton variant="avatar" />
         <div className="flex-1">
           <Skeleton variant="text" width="w-1/3" className="mb-1" />
@@ -202,11 +202,11 @@ export const SkeletonDashboard = ({ className = '' }) => (
   <div className={`space-y-6 ${className}`}>
     <SkeletonStats count={4} />
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="p-4 bg-white rounded-xl border border-gray-100">
+      <div className="p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
         <Skeleton variant="title" width="w-32" className="mb-4" />
         <Skeleton variant="custom" className="h-64 w-full rounded-lg" />
       </div>
-      <div className="p-4 bg-white rounded-xl border border-gray-100">
+      <div className="p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
         <Skeleton variant="title" width="w-32" className="mb-4" />
         <Skeleton variant="custom" className="h-64 w-full rounded-lg" />
       </div>

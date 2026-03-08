@@ -202,7 +202,7 @@ class UserController extends Controller
             return $this->errorResponse('Cannot delete your own account', 403);
         }
 
-        $this->logAudit('DELETE', 'Users', "Archived user: {$user->name}", [
+        $this->logAudit('ARCHIVE', 'Users', "Archived user: {$user->name}", [
             'user_id' => $user->id,
             'name'    => $user->name,
             'email'   => $user->email,

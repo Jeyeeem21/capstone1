@@ -28,7 +28,7 @@ const AuditTrail = () => {
   const todayLogs = useMemo(() => auditLogs.filter(log => log.timestamp?.startsWith(todayStr)).length, [auditLogs, todayStr]);
   const createActions = useMemo(() => auditLogs.filter(log => log.action === 'CREATE').length, [auditLogs]);
   const updateActions = useMemo(() => auditLogs.filter(log => log.action === 'UPDATE').length, [auditLogs]);
-  const deleteActions = useMemo(() => auditLogs.filter(log => log.action === 'DELETE').length, [auditLogs]);
+  const archiveActions = useMemo(() => auditLogs.filter(log => ['ARCHIVE', 'RESTORE', 'SOFT_DELETE', 'SOFT_DELETE_ALL'].includes(log.action)).length, [auditLogs]);
 
   const handleViewDetails = (log) => {
     setSelectedLog(log);
@@ -40,10 +40,15 @@ const AuditTrail = () => {
       'CREATE': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
       'UPDATE': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
       'DELETE': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+      'ARCHIVE': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+      'RESTORE': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+      'SOFT_DELETE': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+      'SOFT_DELETE_ALL': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+      'RETURN': 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
       'LOGIN': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-      'LOGOUT': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+      'LOGOUT': 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 dark:bg-gray-700 dark:text-gray-300',
     };
-    return actionStyles[action] || 'bg-gray-100 text-gray-600';
+    return actionStyles[action] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
   };
 
   const getModuleIcon = (module) => {
@@ -101,7 +106,7 @@ const AuditTrail = () => {
       cell: (row) => (
         <div>
           <p className="font-medium">{row.user}</p>
-          <p className="text-xs text-gray-500">{row.role}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{row.role}</p>
         </div>
       )
     },
@@ -143,11 +148,11 @@ const AuditTrail = () => {
           iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
         />
         <StatsCard
-          label="Deleted Records"
-          value={deleteActions}
-          unit="records deleted"
+          label="Archive Actions"
+          value={archiveActions}
+          unit="archive activities"
           icon={ClipboardList}
-          iconBgColor="bg-gradient-to-br from-red-400 to-red-600"
+          iconBgColor="bg-gradient-to-br from-yellow-400 to-yellow-600"
         />
       </div>
       )}
@@ -166,7 +171,7 @@ const AuditTrail = () => {
         pagination
         defaultItemsPerPage={10}
         filterField="action"
-        filterOptions={['CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT']}
+        filterOptions={['CREATE', 'UPDATE', 'DELETE', 'ARCHIVE', 'RESTORE', 'SOFT_DELETE', 'SOFT_DELETE_ALL', 'RETURN', 'LOGIN', 'LOGOUT']}
         filterPlaceholder="All Actions"
         dateFilterField="timestamp"
         onRowDoubleClick={handleViewDetails}
@@ -192,22 +197,22 @@ const AuditTrail = () => {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Module</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedLog.module}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">{selectedLog.module}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Timestamp</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedLog.timestamp}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">{selectedLog.timestamp}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">IP Address</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedLog.ip_address}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">{selectedLog.ip_address}</p>
                 </div>
               </div>
             </div>
 
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Description</p>
-              <p className="text-gray-800 dark:text-gray-200">{selectedLog.description}</p>
+              <p className="text-gray-800 dark:text-gray-100">{selectedLog.description}</p>
             </div>
 
             <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
@@ -217,7 +222,7 @@ const AuditTrail = () => {
                   {selectedLog.user.split(' ').map(n => n[0]).join('')}
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800 dark:text-gray-200">{selectedLog.user}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">{selectedLog.user}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{selectedLog.role}</p>
                 </div>
               </div>
@@ -235,7 +240,7 @@ const AuditTrail = () => {
             <div className="flex justify-end pt-4">
               <button
                 onClick={() => setIsDetailModalOpen(false)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium transition-colors"
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium transition-colors"
               >
                 Close
               </button>

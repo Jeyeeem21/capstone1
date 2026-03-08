@@ -219,15 +219,15 @@ const DataTable = ({
       return <ChevronsUpDown size={14} className="text-gray-400" />;
     }
     return sortConfig.direction === 'asc' 
-      ? <ChevronUp size={14} className="text-primary-600" />
-      : <ChevronDown size={14} className="text-primary-600" />;
+      ? <ChevronUp size={14} className="text-primary-600 dark:text-primary-400" />
+      : <ChevronDown size={14} className="text-primary-600 dark:text-primary-400" />;
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-400 overflow-hidden shadow-lg shadow-primary-100/50">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-400 dark:border-primary-700 overflow-hidden shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30">
       {/* Title Header */}
       {(title || onAdd || headerRight) && (
-        <div className="p-4 border-b-2 border-primary-300 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
+        <div className="p-4 border-b-2 border-primary-300 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               {title && <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{title}</h3>}
@@ -248,7 +248,7 @@ const DataTable = ({
 
       {/* Search and Filter */}
       {(searchable || filterField || dateFilterField) && (
-        <div className="p-4 border-b-2 border-primary-200 bg-gray-50 dark:bg-gray-700">
+        <div className="p-4 border-b-2 border-primary-200 dark:border-primary-700 bg-gray-50 dark:bg-gray-700">
           <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
             {searchable && (
               <SearchInput
@@ -264,7 +264,7 @@ const DataTable = ({
                 <select
                   value={filterValue}
                   onChange={(e) => handleFilterChange(e.target.value)}
-                  className="pl-9 pr-8 py-2.5 text-sm border-2 border-primary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-600 dark:text-white appearance-none cursor-pointer min-w-[180px] font-medium"
+                  className="pl-9 pr-8 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 dark:text-white appearance-none cursor-pointer min-w-[180px] font-medium"
                 >
                   <option value="">{filterPlaceholder}</option>
                   {computedFilterOptions.map((option) => {
@@ -283,19 +283,19 @@ const DataTable = ({
                   type="date"
                   value={startDate}
                   onChange={(e) => handleStartDateChange(e.target.value)}
-                  className="px-3 py-2 text-sm border-2 border-primary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-600 dark:text-white font-medium"
+                  className="px-3 py-2 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 dark:text-white font-medium"
                 />
                 <span className="text-xs text-gray-400 font-medium">to</span>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => handleEndDateChange(e.target.value)}
-                  className="px-3 py-2 text-sm border-2 border-primary-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-600 dark:text-white font-medium"
+                  className="px-3 py-2 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 dark:text-white font-medium"
                 />
                 {(startDate || endDate) && (
                   <button
                     onClick={handleResetDates}
-                    className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 hover:text-red-600 bg-white border-2 border-primary-200 rounded-xl hover:border-red-300 transition-colors"
+                    className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:text-red-400 bg-white dark:bg-gray-700 border-2 border-primary-200 dark:border-primary-700 rounded-xl hover:border-red-300 dark:border-red-700 transition-colors"
                     title="Reset date filter"
                   >
                     <RotateCcw size={13} />
@@ -312,7 +312,7 @@ const DataTable = ({
       <div className="overflow-x-auto hidden lg:block">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-primary-100 dark:bg-gray-700 border-b-2 border-primary-300">
+            <tr className="bg-primary-100 dark:bg-primary-900/20 border-b-2 border-primary-300 dark:border-primary-700">
               {selectable && (
                 <th className="px-4 py-3.5 text-center w-12">
                   <button
@@ -320,7 +320,7 @@ const DataTable = ({
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
                       selectedRows.length === paginatedData.length && paginatedData.length > 0
                         ? 'bg-button-500 border-button-500 text-white'
-                        : 'border-primary-300 bg-white hover:border-primary-400'
+                        : 'border-primary-300 dark:border-primary-600 bg-white dark:bg-gray-800 hover:border-primary-400'
                     }`}
                   >
                     {selectedRows.length === paginatedData.length && paginatedData.length > 0 && <Check size={12} />}
@@ -349,7 +349,7 @@ const DataTable = ({
               paginatedData.map((row, rowIndex) => (
                 <tr
                   key={row.id || rowIndex}
-                  className={`border-b border-primary-200 dark:border-gray-700 transition-all cursor-pointer table-row-hover
+                  className={`border-b border-primary-200 dark:border-primary-700 transition-all cursor-pointer table-row-hover
                     ${isRowSelected(row) ? 'table-row-selected' : 'bg-white dark:bg-gray-800'}`}
                   onClick={(e) => handleRowClick(row, e)}
                   onDoubleClick={() => handleRowDoubleClick(row)}
@@ -361,7 +361,7 @@ const DataTable = ({
                         className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
                           isRowSelected(row)
                             ? 'bg-button-500 border-button-500 text-white'
-                            : 'border-primary-300 bg-white hover:border-primary-400'
+                            : 'border-primary-300 dark:border-primary-600 bg-white dark:bg-gray-800 hover:border-primary-400'
                         }`}
                       >
                         {isRowSelected(row) && <Check size={12} />}
@@ -371,7 +371,7 @@ const DataTable = ({
                   {columns.map((col) => (
                     <td
                       key={col.accessor || col.header}
-                      className={`px-4 py-3.5 text-sm text-gray-800 dark:text-gray-200 font-medium ${col.cellClassName || ''}`}
+                      className={`px-4 py-3.5 text-sm text-gray-800 dark:text-gray-100 font-medium ${col.cellClassName || ''}`}
                     >
                       {col.cell ? col.cell(row, rowIndex) : row[col.accessor]}
                     </td>
@@ -406,16 +406,16 @@ const DataTable = ({
                   className={`bg-white dark:bg-gray-700 rounded-xl border-2 transition-all cursor-pointer
                     ${isRowSelected(row) 
                       ? 'border-button-500 shadow-lg shadow-button-500/20' 
-                      : 'border-primary-300 dark:border-gray-600 hover:border-button-400 hover:shadow-md'
+                      : 'border-primary-300 dark:border-primary-700 hover:border-button-400 hover:shadow-md'
                     }`}
                   onClick={(e) => handleRowClick(row, e)}
                 >
                   {/* Card Header */}
-                  <div className="p-4 border-b border-primary-100 dark:border-gray-600">
+                  <div className="p-4 border-b border-primary-100 dark:border-primary-700">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         {titleCol && (
-                          <h4 className="font-semibold text-gray-800 dark:text-white text-base truncate">
+                          <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-base truncate">
                             {titleCol.cell ? titleCol.cell(row, rowIndex) : row[titleCol.accessor]}
                           </h4>
                         )}
@@ -431,7 +431,7 @@ const DataTable = ({
                           className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                             isRowSelected(row)
                               ? 'bg-button-500 border-button-500 text-white'
-                              : 'border-primary-300 bg-white hover:border-primary-400'
+                              : 'border-primary-300 dark:border-primary-600 bg-white dark:bg-gray-700 hover:border-primary-400'
                           }`}
                         >
                           {isRowSelected(row) && <Check size={14} />}
@@ -445,7 +445,7 @@ const DataTable = ({
                     {otherCols.map((col) => (
                       <div key={col.accessor} className="flex items-center justify-between text-sm">
                         <span className="text-gray-500 dark:text-gray-400">{col.header}</span>
-                        <span className="font-medium text-gray-800 dark:text-gray-200">
+                        <span className="font-medium text-gray-800 dark:text-gray-100">
                           {col.cell ? col.cell(row, rowIndex) : row[col.accessor]}
                         </span>
                       </div>

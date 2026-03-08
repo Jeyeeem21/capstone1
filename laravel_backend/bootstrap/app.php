@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // Register role middleware alias
+        $middleware->alias([
+            'role' => \App\Http\Middleware\EnsureUserHasRole::class,
+        ]);
+
         // Add CORS middleware for API
         $middleware->api(prepend: [
             HandleCors::class,

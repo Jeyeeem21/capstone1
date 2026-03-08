@@ -1,13 +1,13 @@
 // Reusable border styles for consistency across the application
 export const borderStyles = {
   // Primary card border - green theme
-  card: 'border-2 border-primary-300 shadow-lg shadow-primary-100/50',
+  card: 'border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50',
   
   // Table container border
-  table: 'border-2 border-primary-300 shadow-lg shadow-primary-100/50',
+  table: 'border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50',
   
   // Input field border
-  input: 'border-2 border-primary-200 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20',
+  input: 'border-2 border-primary-200 dark:border-primary-700 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20',
   
   // Selected/Active state border
   active: 'border-2 border-primary-500 bg-primary-50 shadow-md shadow-primary-200/50',

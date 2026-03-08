@@ -27,6 +27,7 @@ class Product extends Model
         'stock_floor',
         'unit',
         'weight',
+        'image',
         'status',
         'is_deleted',
         'is_archived',
@@ -108,6 +109,14 @@ class Product extends Model
     public function variety()
     {
         return $this->belongsTo(\App\Models\Variety::class, 'variety_id');
+    }
+
+    /**
+     * Relationship with SaleItems.
+     */
+    public function saleItems()
+    {
+        return $this->hasMany(\App\Models\SaleItem::class, 'product_id', 'product_id');
     }
 
     /**

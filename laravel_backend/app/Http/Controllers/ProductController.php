@@ -12,6 +12,7 @@ use App\Services\ProcessingService;
 use App\Traits\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
@@ -83,7 +84,12 @@ class ProductController extends Controller
                 'unit' => 'nullable|string|max:50',
                 'weight' => 'required|numeric|min:0.01',
                 'status' => ['nullable', Rule::in(['active', 'inactive'])],
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             ]);
+
+            if ($request->hasFile('image')) {
+                $validated['image'] = $request->file('image')->store('products', 'public');
+            }
 
             $product = $this->productService->createProduct($validated);
 
@@ -155,10 +161,12 @@ class ProductController extends Controller
                 'unit' => 'nullable|string|max:50',
                 'weight' => 'sometimes|required|numeric|min:0.01',
                 'status' => ['nullable', Rule::in(['active', 'inactive'])],
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
             ]);
 
             // Prevent changing variety or weight if product has existing stock
             $product = Product::findOrFail($id);
+
             if ($product->stocks > 0) {
                 if (isset($validated['variety_id']) && (int) $validated['variety_id'] !== $product->variety_id) {
                     return response()->json([
@@ -174,6 +182,13 @@ class ProductController extends Controller
                         'errors' => ['weight' => ['Cannot change weight while product has existing stock']],
                     ], 422);
                 }
+            }
+
+            if ($request->hasFile('image')) {
+                if ($product->image) {
+                    Storage::disk('public')->delete($product->image);
+                }
+                $validated['image'] = $request->file('image')->store('products', 'public');
             }
 
             $product = $this->productService->updateProduct($id, $validated);
@@ -216,7 +231,7 @@ class ProductController extends Controller
         try {
             $this->productService->deleteProduct($id);
 
-            $this->logAudit('DELETE', 'Products', "Archived product #{$id}", [
+            $this->logAudit('ARCHIVE', 'Products', "Archived product #{$id}", [
                 'product_id' => $id,
             ]);
 
@@ -232,9 +247,8 @@ class ProductController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete product',
-                'error' => $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 422);
         }
     }
 

@@ -1,9 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { MainLayout, StaffLayout, PublicLayout, ClientLayout, DriverLayout } from './layouts';
 import { ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { BusinessSettingsProvider } from './context/BusinessSettingsContext';
+import { BusinessSettingsProvider, useBusinessSettings } from './context/BusinessSettingsContext';
 import { ProtectedRoute, SuperAdminRoute } from './components/auth/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
+import NotFound from './pages/NotFound';
 import {
   // Admin pages
   Dashboard,
@@ -17,7 +20,7 @@ import {
   AdminOrders,
   Partners,
   Supplier,
-  Customer,
+  Client,
   StaffManagement,
   Settings,
   // Shared pages
@@ -55,7 +58,12 @@ const RoleRedirect = () => {
   }
   
   if (user?.role === 'staff') {
-    return <Navigate to="/staff/dashboard" replace />;
+    if (user?.position === 'Driver') return <Navigate to="/driver/dashboard" replace />;
+    return <Navigate to="/staff/pos" replace />;
+  }
+  
+  if (user?.role === 'client') {
+    return <Navigate to="/client/dashboard" replace />;
   }
   
   if (user?.role === 'super_admin') {
@@ -81,10 +89,10 @@ function AppRoutes() {
     <Routes>
       {/* Public Routes */}
       <Route element={<PublicLayout />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/products" element={<PublicProducts />} />
-        <Route path="/contact" element={<Contact />} />
+        <Route path="/" element={<ErrorBoundary><Home /></ErrorBoundary>} />
+        <Route path="/about" element={<ErrorBoundary><About /></ErrorBoundary>} />
+        <Route path="/products" element={<ErrorBoundary><PublicProducts /></ErrorBoundary>} />
+        <Route path="/contact" element={<ErrorBoundary><Contact /></ErrorBoundary>} />
       </Route>
       
       {/* Standalone POS redirect */}
@@ -97,26 +105,27 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route index element={<Navigate to="/superadmin/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="procurement" element={<Procurement />} />
-        <Route path="drying" element={<DryingProcess />} />
-        <Route path="processing" element={<Processing />} />
+        <Route path="dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="procurement" element={<ErrorBoundary><Procurement /></ErrorBoundary>} />
+        <Route path="drying" element={<ErrorBoundary><DryingProcess /></ErrorBoundary>} />
+        <Route path="processing" element={<ErrorBoundary><Processing /></ErrorBoundary>} />
         
-        <Route path="products" element={<Products />} />
-        <Route path="products/varieties" element={<Varieties />} />
-        <Route path="products/inventory" element={<Inventory />} />
+        <Route path="products" element={<ErrorBoundary><Products /></ErrorBoundary>} />
+        <Route path="products/varieties" element={<ErrorBoundary><Varieties /></ErrorBoundary>} />
+        <Route path="products/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
         
-        <Route path="sales" element={<Sales />} />
+        <Route path="sales" element={<ErrorBoundary><Sales /></ErrorBoundary>} />
         
-        <Route path="partners" element={<Partners />} />
-        <Route path="partners/supplier" element={<Supplier />} />
-        <Route path="partners/customer" element={<Customer />} />
+        <Route path="partners" element={<ErrorBoundary><Partners /></ErrorBoundary>} />
+        <Route path="partners/supplier" element={<ErrorBoundary><Supplier /></ErrorBoundary>} />
+        <Route path="partners/client" element={<ErrorBoundary><Client /></ErrorBoundary>} />
         
-        <Route path="staff-management" element={<StaffManagement />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="staff-management" element={<ErrorBoundary><StaffManagement /></ErrorBoundary>} />
+        <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
         
-        <Route path="pos" element={<PointOfSale />} />
-        <Route path="orders" element={<AdminOrders />} />
+        <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
+        <Route path="orders" element={<ErrorBoundary><AdminOrders /></ErrorBoundary>} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Admin Routes (Admin only) */}
@@ -126,26 +135,27 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="procurement" element={<Procurement />} />
-        <Route path="drying" element={<DryingProcess />} />
-        <Route path="processing" element={<Processing />} />
+        <Route path="dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="procurement" element={<ErrorBoundary><Procurement /></ErrorBoundary>} />
+        <Route path="drying" element={<ErrorBoundary><DryingProcess /></ErrorBoundary>} />
+        <Route path="processing" element={<ErrorBoundary><Processing /></ErrorBoundary>} />
         
-        <Route path="products" element={<Products />} />
-        <Route path="products/varieties" element={<Varieties />} />
-        <Route path="products/inventory" element={<Inventory />} />
+        <Route path="products" element={<ErrorBoundary><Products /></ErrorBoundary>} />
+        <Route path="products/varieties" element={<ErrorBoundary><Varieties /></ErrorBoundary>} />
+        <Route path="products/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
         
-        <Route path="sales" element={<Sales />} />
+        <Route path="sales" element={<ErrorBoundary><Sales /></ErrorBoundary>} />
         
-        <Route path="partners" element={<Partners />} />
-        <Route path="partners/supplier" element={<Supplier />} />
-        <Route path="partners/customer" element={<Customer />} />
+        <Route path="partners" element={<ErrorBoundary><Partners /></ErrorBoundary>} />
+        <Route path="partners/supplier" element={<ErrorBoundary><Supplier /></ErrorBoundary>} />
+        <Route path="partners/client" element={<ErrorBoundary><Client /></ErrorBoundary>} />
         
-        <Route path="staff-management" element={<StaffManagement />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="staff-management" element={<ErrorBoundary><StaffManagement /></ErrorBoundary>} />
+        <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
         
-        <Route path="pos" element={<PointOfSale />} />
-        <Route path="orders" element={<AdminOrders />} />
+        <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
+        <Route path="orders" element={<ErrorBoundary><AdminOrders /></ErrorBoundary>} />
+        <Route path="*" element={<NotFound />} />
       </Route>
       
       {/* Staff Routes */}
@@ -154,10 +164,11 @@ function AppRoutes() {
           <StaffLayout />
         </ProtectedRoute>
       }>
-        <Route index element={<Navigate to="/staff/dashboard" replace />} />
-        <Route path="dashboard" element={<StaffDashboard />} />
-        <Route path="profile" element={<StaffProfile />} />
-        <Route path="pos" element={<PointOfSale />} />
+        <Route index element={<Navigate to="/staff/pos" replace />} />
+        <Route path="dashboard" element={<ErrorBoundary><StaffDashboard /></ErrorBoundary>} />
+        <Route path="profile" element={<ErrorBoundary><StaffProfile /></ErrorBoundary>} />
+        <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Client Routes */}
@@ -167,38 +178,61 @@ function AppRoutes() {
         </ProtectedRoute>
       }>
         <Route index element={<Navigate to="/client/dashboard" replace />} />
-        <Route path="dashboard" element={<ClientDashboard />} />
-        <Route path="shop" element={<Shop />} />
-        <Route path="orders" element={<Orders />} />
-        <Route path="cart" element={<Cart />} />
-        <Route path="profile" element={<Profile />} />
-        <Route path="settings" element={<ClientSettings />} />
-        <Route path="pos" element={<PointOfSale />} />
+        <Route path="dashboard" element={<ErrorBoundary><ClientDashboard /></ErrorBoundary>} />
+        <Route path="shop" element={<ErrorBoundary><Shop /></ErrorBoundary>} />
+        <Route path="orders" element={<ErrorBoundary><Orders /></ErrorBoundary>} />
+        <Route path="cart" element={<ErrorBoundary><Cart /></ErrorBoundary>} />
+        <Route path="profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
+        <Route path="settings" element={<ErrorBoundary><ClientSettings /></ErrorBoundary>} />
+        <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
       {/* Driver Routes */}
       <Route path="/driver" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'driver']}>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'driver', 'staff']}>
           <DriverLayout />
         </ProtectedRoute>
       }>
         <Route index element={<Navigate to="/driver/dashboard" replace />} />
-        <Route path="dashboard" element={<DriverDashboard />} />
-        <Route path="deliveries" element={<Deliveries />} />
-        <Route path="profile" element={<DriverProfile />} />
-        <Route path="settings" element={<DriverSettings />} />
+        <Route path="dashboard" element={<ErrorBoundary><DriverDashboard /></ErrorBoundary>} />
+        <Route path="deliveries" element={<ErrorBoundary><Deliveries /></ErrorBoundary>} />
+        <Route path="profile" element={<ErrorBoundary><DriverProfile /></ErrorBoundary>} />
+        <Route path="settings" element={<ErrorBoundary><DriverSettings /></ErrorBoundary>} />
+        <Route path="*" element={<NotFound />} />
       </Route>
 
-      {/* Catch-all: redirect to home */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Catch-all: 404 page */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
+
+// Dynamic document title & favicon from business settings
+const DynamicHead = () => {
+  const { settings } = useBusinessSettings();
+
+  useEffect(() => {
+    if (settings.business_name) {
+      document.title = settings.business_name;
+    }
+  }, [settings.business_name]);
+
+  useEffect(() => {
+    if (settings.business_logo && settings.business_logo !== '/logo.svg') {
+      const link = document.querySelector("link[rel~='icon']");
+      if (link) link.href = settings.business_logo;
+    }
+  }, [settings.business_logo]);
+
+  return null;
+};
 
 function App() {
   return (
     <AuthProvider>
       <BusinessSettingsProvider>
+        <DynamicHead />
         <ToastProvider>
           <BrowserRouter>
             <AppRoutes />

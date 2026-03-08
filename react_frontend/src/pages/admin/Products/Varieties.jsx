@@ -31,7 +31,8 @@ const Varieties = () => {
     data: varieties, 
     loading, 
     isRefreshing,
-    refetch 
+    refetch,
+    optimisticUpdate,
   } = useDataFetch('/varieties', {
     cacheKey: CACHE_KEY,
     initialData: [],
@@ -102,10 +103,10 @@ const Varieties = () => {
       if (response.success && response.data) {
         const varietyName = formData.name;
         setIsAddModalOpen(false);
+        toast.success('Variety Added', `${varietyName} has been added successfully.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Variety Added', `${varietyName} has been added successfully.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -137,10 +138,10 @@ const Varieties = () => {
       if (response.success && response.data) {
         const varietyName = formData.name;
         setIsEditModalOpen(false);
+        toast.success('Variety Updated', `${varietyName} has been updated.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Variety Updated', `${varietyName} has been updated.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -170,11 +171,14 @@ const Varieties = () => {
       
       if (response.success) {
         const varietyName = selectedItem.name;
+        const archivedId = selectedItem.id;
         setIsDeleteModalOpen(false);
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(v => v.id !== archivedId));
+        toast.success('Variety Archived', `${varietyName} has been archived.`);
+        // Refetch in background to confirm
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Variety Archived', `${varietyName} has been archived.`);
-        });
+        refetch();
         return;
       } else {
         throw new Error(response.error || 'Failed to archive');
@@ -204,14 +208,14 @@ const Varieties = () => {
 
   // Color picker component
   const ColorPicker = ({ value, onChange, label }) => (
-    <div className="bg-gray-50 rounded-xl border-2 border-gray-200 p-4">
+    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700 p-4">
       <div className="flex items-start gap-2 mb-3">
-        <div className="p-2 rounded-lg bg-white shadow-sm text-button-500">
+        <div className="p-2 rounded-lg bg-white dark:bg-gray-700 shadow-sm text-button-500">
           <Palette size={18} />
         </div>
         <div className="flex-1">
-          <h4 className="font-semibold text-gray-800 text-sm">{label}</h4>
-          <p className="text-xs text-gray-500">Used for card border in mobile view</p>
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{label}</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Used for card border in mobile view</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -220,7 +224,7 @@ const Varieties = () => {
             type="color"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-12 h-12 rounded-lg cursor-pointer border-2 border-gray-200 hover:border-button-400 transition-colors"
+            className="w-12 h-12 rounded-lg cursor-pointer border-2 border-primary-200 dark:border-primary-700 hover:border-button-400 transition-colors"
             style={{ padding: 0 }}
           />
         </div>
@@ -232,7 +236,7 @@ const Varieties = () => {
               const val = e.target.value;
               if (/^#[0-9A-Fa-f]{0,6}$/.test(val)) onChange(val);
             }}
-            className="w-full px-3 py-2 font-mono text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-button-500 focus:border-button-500"
+            className="w-full px-3 py-2 font-mono text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-button-500 focus:border-button-500"
             placeholder="#000000"
           />
         </div>
@@ -243,7 +247,7 @@ const Varieties = () => {
             key={i}
             type="button"
             onClick={() => onChange(preset)}
-            className={`w-8 h-8 rounded-lg border-2 hover:scale-110 transition-all shadow-sm ${value === preset ? 'border-button-500 ring-2 ring-button-300' : 'border-gray-200 hover:border-button-400'}`}
+            className={`w-8 h-8 rounded-lg border-2 hover:scale-110 transition-all shadow-sm ${value === preset ? 'border-button-500 ring-2 ring-button-300' : 'border-gray-200 dark:border-gray-600 hover:border-button-400'}`}
             style={{ backgroundColor: preset }}
             title={preset}
           />
@@ -260,7 +264,7 @@ const Varieties = () => {
       cell: (row) => (
         <div className="flex items-center gap-3">
           <ColorPreview color={row.color || '#22c55e'} />
-          <p className="font-medium text-gray-800">{row.name}</p>
+          <p className="font-medium text-gray-800 dark:text-gray-100">{row.name}</p>
         </div>
       )
     },
@@ -268,7 +272,7 @@ const Varieties = () => {
       header: 'Description', 
       accessor: 'description',
       cell: (row) => (
-        <p className="text-sm text-gray-600 truncate max-w-xs">
+        <p className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">
           {row.description || '-'}
         </p>
       )
@@ -276,7 +280,7 @@ const Varieties = () => {
     { header: 'Products', accessor: 'products_count', cell: (row) => row.products_count || 0 },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
     { header: 'Actions', accessor: 'actions', sortable: false, cell: (row) => (
-      <ActionButtons onEdit={() => handleEdit(row)} onArchive={() => handleDelete(row)} />
+      <ActionButtons onEdit={() => handleEdit(row)} onArchive={(row.products_count || 0) === 0 ? () => handleDelete(row) : undefined} />
     )},
   ], [handleView, handleEdit, handleDelete]);
 
@@ -287,7 +291,7 @@ const Varieties = () => {
         description="Manage rice varieties used in procurement and production" 
         icon={Tag}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -340,7 +344,7 @@ const Varieties = () => {
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -365,8 +369,8 @@ const Varieties = () => {
                   <Tag size={24} />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-800">{selectedItem.name}</h3>
-                  <p className="text-sm text-gray-600">{selectedItem.description || 'No description'}</p>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{selectedItem.name}</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">{selectedItem.description || 'No description'}</p>
                 </div>
                 <StatusBadge status={selectedItem.status} />
               </div>
@@ -374,27 +378,27 @@ const Varieties = () => {
 
             <div className="grid grid-cols-2 gap-4">
               {/* Color */}
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
                   <Palette size={18} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600">Border Color</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Border Color</p>
                   <div className="flex items-center gap-2">
                     <ColorPreview color={selectedItem.color || '#22c55e'} />
-                    <span className="font-semibold text-gray-800 text-sm">{selectedItem.color || '#22c55e'}</span>
+                    <span className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{selectedItem.color || '#22c55e'}</span>
                   </div>
                 </div>
               </div>
 
               {/* Products Count */}
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
+              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-button-50 dark:from-gray-700 to-primary-50 dark:to-gray-700 rounded-lg border-2 border-button-200 dark:border-gray-600">
                 <div className="p-2 bg-button-500 text-white rounded-lg">
                   <Package size={18} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600">Products</p>
-                  <p className="text-xl font-bold text-button-600">{selectedItem.products_count || 0}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Products</p>
+                  <p className="text-xl font-bold text-button-600 dark:text-button-400">{selectedItem.products_count || 0}</p>
                 </div>
               </div>
             </div>

@@ -108,5 +108,9 @@ class ProcurementService
     public function clearCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        // Procurements and batches are tightly coupled — always clear both
+        Cache::forget('procurement_batches_all');
+        Cache::forget('procurement_batches_open');
+        DashboardService::clearStatsCache();
     }
 }

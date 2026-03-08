@@ -188,4 +188,7 @@ through the entire chain to compute the final cost per product unit.
   • Check the Stock Distribution modal BEFORE distributing to see
     if your selling price covers the production cost
   • Use the Product View modal to see historical average costs
+  • When items are restocked from voided/returned sales, stock
+    increases but cost data from the original stock-in is preserved
+    in stock_logs for accurate cost analysis
 

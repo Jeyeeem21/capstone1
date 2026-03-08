@@ -291,7 +291,7 @@ class ProcessingController extends Controller
             $processingId = $processing->id;
             $this->processingService->deleteProcessing($processing);
 
-            $this->logAudit('DELETE', 'Processing', "Archived processing #{$processingId}", [
+            $this->logAudit('ARCHIVE', 'Processing', "Archived processing #{$processingId}", [
                 'processing_id' => $processingId,
             ]);
 

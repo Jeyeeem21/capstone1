@@ -1,4 +1,4 @@
-import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
+﻿import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
 import { useState, useMemo, memo, useCallback, useRef, useEffect } from 'react';
 import { PageHeader } from '../../../components/common';
 import { Button, StatsCard, useToast } from '../../../components/ui';
@@ -8,29 +8,29 @@ import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { debouncedSearchAddress, calculateDistance, geocodeAddress } from '../../../api/openRouteService';
 
-// Customer combobox component - select existing or add new (requires name + contact or email)
-const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange, onInputChange, onContactChange, onEmailChange, customerOptions, error }) => {
+// client combobox component - select existing or add new (requires name + contact or email)
+const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, onInputChange, onContactChange, onEmailChange, clientOptions, error, emailError }) => {
   return (
     <div className="mb-3">
-      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
         <User size={14} className="text-gray-400" />
-        Customer <span className="text-red-500">*</span>
+        Client <span className="text-red-500">*</span>
       </label>
       
-      {/* Dropdown for existing customers */}
+      {/* Dropdown for existing clients */}
       <div className="relative">
         <select
           value={value}
           onChange={onChange}
           className={`w-full px-3 py-2.5 text-sm border-2 rounded-lg transition-all appearance-none cursor-pointer pr-8 focus:outline-none focus:ring-2 ${
             error
-              ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20'
+              ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20'
               : value && !newName
-                ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
-                : 'border-primary-200 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
           }`}
         >
-          {customerOptions.map(opt => (
+          {clientOptions.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
@@ -50,20 +50,20 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange,
         <div className="flex-1 h-px bg-gray-200"></div>
       </div>
 
-      {/* Input for new customer name */}
+      {/* Input for new client name */}
       <div className="relative">
         <input
           type="text"
           value={newName}
           onChange={onInputChange}
-          placeholder="Type new customer name..."
+          placeholder="Type new client name..."
           className={`w-full px-3 py-2.5 pl-8 text-sm border-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
             newName 
-              ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20' 
-              : 'border-primary-200 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+              ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20' 
+              : 'border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
           }`}
         />
-        <PlusCircle size={14} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${newName ? 'text-green-600' : 'text-gray-400'}`} />
+        <PlusCircle size={14} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${newName ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
         {newName && (
           <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
             <Check size={14} className="text-green-500" />
@@ -71,7 +71,7 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange,
         )}
       </div>
 
-      {/* Contact & Email fields - shown when adding new customer */}
+      {/* Contact & Email fields - shown when adding new client */}
       {newName && (
         <div className="mt-2 space-y-2">
           <div className="relative">
@@ -82,36 +82,40 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange,
               placeholder="Contact number (e.g. 09171234567)"
               className={`w-full px-3 py-2 pl-8 text-sm border-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
                 newContact
-                  ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
-                  : 'border-primary-200 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                  ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                  : 'border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
               }`}
             />
-            <Phone size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${newContact ? 'text-green-600' : 'text-gray-400'}`} />
+            <Phone size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${newContact ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
           </div>
           <div className="relative">
             <input
               type="email"
               value={newEmail}
               onChange={onEmailChange}
-              placeholder="Email address (optional if contact provided)"
+              placeholder="Email address (required)"
               className={`w-full px-3 py-2 pl-8 text-sm border-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
-                newEmail
-                  ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
-                  : 'border-primary-200 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                emailError
+                  ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20'
+                  : newEmail
+                    ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                    : 'border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
               }`}
             />
-            <Mail size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${newEmail ? 'text-green-600' : 'text-gray-400'}`} />
+            <Mail size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${emailError ? 'text-red-500' : newEmail ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
           </div>
-          <p className="text-[10px] text-gray-400 italic">Provide at least a contact number or email.</p>
+          {emailError && (
+            <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle size={10} />{emailError}</p>
+          )}
         </div>
       )}
 
-      {/* Info when new customer is valid */}
-      {newName && (newContact || newEmail) && (
-        <div className="flex items-start gap-1.5 p-1.5 mt-1.5 bg-green-50 border border-green-200 rounded-lg">
-          <AlertCircle size={12} className="text-green-600 mt-0.5 flex-shrink-0" />
-          <p className="text-[10px] text-green-700">
-            New customer "<strong>{newName}</strong>" will be created.
+      {/* Info when new client is valid */}
+      {newName && newEmail && !emailError && (
+        <div className="flex items-start gap-1.5 p-1.5 mt-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+          <AlertCircle size={12} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+          <p className="text-[10px] text-green-700 dark:text-green-300">
+            New client "<strong>{newName}</strong>" will be created.
           </p>
         </div>
       )}
@@ -124,11 +128,11 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange,
   );
 });
 
-CustomerCombobox.displayName = 'CustomerCombobox';
+ClientCombobox.displayName = 'ClientCombobox';
 
 const PointOfSale = () => {
   const toast = useToast();
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, isAdmin, isAdminOrAbove } = useAuth();
   const { settings: businessSettings } = useBusinessSettings();
   const [cart, setCart] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -137,9 +141,11 @@ const PointOfSale = () => {
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [showSaleCompleteModal, setShowSaleCompleteModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
   const [cashTendered, setCashTendered] = useState('');
   const [gcashReference, setGcashReference] = useState('');
+  const [gcashRefError, setGcashRefError] = useState('');
+  const gcashRefCheckTimeout = useRef(null);
   const [gcashProofFiles, setGcashProofFiles] = useState([]);
   const [gcashProofPreviews, setGcashProofPreviews] = useState([]);
   const [showCamera, setShowCamera] = useState(false);
@@ -153,11 +159,13 @@ const PointOfSale = () => {
   const [voidPassword, setVoidPassword] = useState('');
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [newCustomerName, setNewCustomerName] = useState('');
-  const [newCustomerContact, setNewCustomerContact] = useState('');
-  const [newCustomerEmail, setNewCustomerEmail] = useState('');
-  const [customerError, setCustomerError] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientContact, setNewClientContact] = useState('');
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [clientError, setClientError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const emailCheckTimeout = useRef(null);
   // Delivery / Shipping state
   const [forDelivery, setForDelivery] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -235,7 +243,7 @@ const PointOfSale = () => {
   const { data: productsRaw, refetch: refetchProducts } = useDataFetch('/products');
   const { data: salesRaw, refetch: refetchSales } = useDataFetch('/sales');
   const { data: varietiesRaw } = useDataFetch('/varieties');
-  const { data: customersRaw, refetch: refetchCustomers } = useDataFetch('/customers');
+  const { data: clientsRaw, refetch: refetchClients } = useDataFetch('/customers');
 
   // Map products to POS format — include all active products even with 0 stock
   const products = useMemo(() =>
@@ -260,34 +268,35 @@ const PointOfSale = () => {
     [varietiesRaw]
   );
 
-  // Customer options for combobox
-  const customerOptions = useMemo(() => {
-    const opts = (customersRaw || [])
+  // client options for combobox
+  const clientOptions = useMemo(() => {
+    const opts = (clientsRaw || [])
       .filter(c => c.status === 'Active')
       .map(c => ({ value: String(c.id), label: c.name }));
-    return [{ value: '', label: 'Select a customer...' }, ...opts];
-  }, [customersRaw]);
+    return [{ value: '', label: 'Select a client...' }, ...opts];
+  }, [clientsRaw]);
 
-  // Check if selected existing customer has contact or email
-  const selectedCustomerHasContactInfo = useMemo(() => {
-    if (!selectedCustomerId) return false;
-    const customer = (customersRaw || []).find(c => String(c.id) === selectedCustomerId);
-    if (!customer) return false;
-    return !!(customer.contact || customer.phone || customer.email);
-  }, [selectedCustomerId, customersRaw]);
+  // Check if selected existing client has contact or email
+  const selectedClientHasContactInfo = useMemo(() => {
+    if (!selectedClientId) return false;
+    const client = (clientsRaw || []).find(c => String(c.id) === selectedClientId);
+    if (!client) return false;
+    return !!(client.contact || client.phone || client.email);
+  }, [selectedClientId, clientsRaw]);
 
-  const handleCustomerSelect = useCallback((e) => {
+  const handleClientSelect = useCallback((e) => {
     const id = e.target.value;
-    setSelectedCustomerId(id);
+    setSelectedClientId(id);
     if (id) {
-      setNewCustomerName('');
-      setNewCustomerContact('');
-      setNewCustomerEmail('');
-      // Auto-fill delivery address from customer's saved address
+      setNewClientName('');
+      setNewClientContact('');
+      setNewClientEmail('');
+      setEmailError('');
+      // Auto-fill delivery address from client's saved address
       if (forDelivery) {
-        const customer = (customersRaw || []).find(c => String(c.id) === id);
-        if (customer?.address) {
-          setDeliveryAddress(customer.address);
+        const client = (clientsRaw || []).find(c => String(c.id) === id);
+        if (client?.address) {
+          setDeliveryAddress(client.address);
         } else {
           setDeliveryAddress('');
         }
@@ -297,36 +306,81 @@ const PointOfSale = () => {
         setSelectedCoords(null);
       }
     }
-    setCustomerError('');
-  }, [forDelivery, customersRaw]);
+    setClientError('');
+  }, [forDelivery, clientsRaw]);
 
-  const handleNewCustomerInput = useCallback((e) => {
+  const handleNewClientInput = useCallback((e) => {
     const val = e.target.value;
-    setNewCustomerName(val);
-    setCustomerError('');
+    setNewClientName(val);
+    setClientError('');
     if (val) {
-      // Check if typed name matches existing customer
-      const match = (customersRaw || []).find(c => c.name.toLowerCase() === val.toLowerCase());
+      // Check if typed name matches existing client
+      const match = (clientsRaw || []).find(c => c.name.toLowerCase() === val.toLowerCase());
       if (match) {
-        setSelectedCustomerId(String(match.id));
-        setNewCustomerName('');
-        setNewCustomerContact('');
-        setNewCustomerEmail('');
+        setSelectedClientId(String(match.id));
+        setNewClientName('');
+        setNewClientContact('');
+        setNewClientEmail('');
         return;
       }
-      setSelectedCustomerId('');
+      setSelectedClientId('');
     }
-  }, [customersRaw]);
+  }, [clientsRaw]);
 
-  const handleNewCustomerContact = useCallback((e) => {
-    setNewCustomerContact(e.target.value);
-    setCustomerError('');
+  const handleNewClientContact = useCallback((e) => {
+    setNewClientContact(e.target.value);
+    setClientError('');
   }, []);
 
-  const handleNewCustomerEmail = useCallback((e) => {
-    setNewCustomerEmail(e.target.value);
-    setCustomerError('');
+  const checkGcashReference = useCallback((ref) => {
+    const digits = ref.replace(/\s/g, '');
+    if (digits.length !== 13) return;
+    if (gcashRefCheckTimeout.current) clearTimeout(gcashRefCheckTimeout.current);
+    gcashRefCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/sales/check-reference', { reference_number: digits });
+        if (response.data && !response.data.available) {
+          setGcashRefError('This reference number has already been used.');
+        } else {
+          setGcashRefError('');
+        }
+      } catch {
+        // silently ignore network errors
+      }
+    }, 500);
   }, []);
+
+  const checkPosEmailAvailability = useCallback((email) => {
+    if (emailCheckTimeout.current) clearTimeout(emailCheckTimeout.current);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) return;
+    emailCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/customers/check-email', { email });
+        if (response.data && !response.data.available) {
+          setEmailError('This email is already taken.');
+        } else {
+          setEmailError('');
+        }
+      } catch {
+        // silently ignore network errors
+      }
+    }, 500);
+  }, []);
+
+  const handleNewClientEmail = useCallback((e) => {
+    const value = e.target.value;
+    setNewClientEmail(value);
+    setClientError('');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (value && !emailRegex.test(value)) {
+      setEmailError('Please enter a valid email address.');
+      if (emailCheckTimeout.current) clearTimeout(emailCheckTimeout.current);
+    } else {
+      setEmailError('');
+      checkPosEmailAvailability(value);
+    }
+  }, [checkPosEmailAvailability]);
 
   // Recent transactions from API (today only, completed)
   const recentTransactions = useMemo(() => {
@@ -339,6 +393,7 @@ const PointOfSale = () => {
         time: s.date_formatted,
         total: s.total,
         items: s.items_count,
+        itemsList: s.items || [],
         payment: s.payment_method?.toUpperCase(),
         status: s.status,
       }))
@@ -367,6 +422,10 @@ const PointOfSale = () => {
   });
 
   const addToCart = (product) => {
+    if (!product.price || product.price <= 0) {
+      toast.error('Cannot Add', `"${product.name}" has no price set yet.`);
+      return;
+    }
     const existingItem = cart.find(item => item.id === product.id);
     if (existingItem) {
       setCart(cart.map(item => 
@@ -402,15 +461,10 @@ const PointOfSale = () => {
   };
 
   const confirmVoid = async () => {
-    if (!selectedVoidTxn || !voidReason.trim() || saving) return;
-    // Non-super admin must provide super admin password
-    if (!isSuperAdmin() && !voidPassword.trim()) return;
+    if (!selectedVoidTxn || !voidReason.trim() || !voidPassword.trim() || saving) return;
     setSaving(true);
     try {
-      const payload = { reason: voidReason };
-      if (!isSuperAdmin()) {
-        payload.admin_password = voidPassword;
-      }
+      const payload = { reason: voidReason, admin_password: voidPassword };
       const response = await apiClient.post(`/sales/${selectedVoidTxn.saleId}/void`, payload);
       if (response.success) {
         invalidateCache('/sales');
@@ -439,37 +493,44 @@ const PointOfSale = () => {
 
   const completeSale = () => {
     if (cart.length === 0) return;
-    // Reset customer fields and show customer modal
-    setSelectedCustomerId('');
-    setNewCustomerName('');
-    setNewCustomerContact('');
-    setNewCustomerEmail('');
-    setCustomerError('');
-    setShowCustomerModal(true);
+    // Reset client fields and show client modal
+    setSelectedClientId('');
+    setNewClientName('');
+    setNewClientContact('');
+    setNewClientEmail('');
+    setClientError('');
+    setEmailError('');
+    setShowClientModal(true);
   };
 
-  const confirmCustomer = async () => {
-    // Validate customer: must have name + (contact or email)
-    if (!selectedCustomerId && !newCustomerName) {
-      setCustomerError('Please select a customer or add a new one.');
+  const confirmClient = async () => {
+    // Validate client: must have name + (contact or email)
+    if (!selectedClientId && !newClientName) {
+      setClientError('Please select a client or add a new one.');
       return;
     }
 
-    // If existing customer selected, check they have contact info
-    if (selectedCustomerId && !selectedCustomerHasContactInfo) {
-      setCustomerError('Selected customer has no contact or email on file. Please update their info or add a new customer.');
+    // If existing client selected, check they have contact info
+    if (selectedClientId && !selectedClientHasContactInfo) {
+      setClientError('Selected client has no contact or email on file. Please update their info or add a new client.');
       return;
     }
 
-    // If new customer, require at least contact or email
-    if (newCustomerName && !newCustomerContact.trim() && !newCustomerEmail.trim()) {
-      setCustomerError('Provide at least a contact number or email for the new customer.');
+    // If new client, require email
+    if (newClientName && !newClientEmail.trim()) {
+      setClientError('Email address is required for new clients.');
+      return;
+    }
+
+    // Block if email has a uniqueness/format error
+    if (newClientName && emailError) {
+      setClientError('Please fix the email error before proceeding.');
       return;
     }
 
     // If for delivery, require address
     if (forDelivery && !deliveryAddress.trim()) {
-      setCustomerError('Delivery address is required for delivery orders.');
+      setClientError('Delivery address is required for delivery orders.');
       return;
     }
 
@@ -496,10 +557,11 @@ const PointOfSale = () => {
       }
     }
 
-    setCustomerError('');
-    setShowCustomerModal(false);
+    setClientError('');
+    setShowClientModal(false);
     setCashTendered('');
     setGcashReference('');
+    setGcashRefError('');
     setGcashProofFiles([]);
     setGcashProofPreviews([]);
     setShowCamera(false);
@@ -568,7 +630,9 @@ const PointOfSale = () => {
       const tendered = parseFloat(cashTendered);
       if (isNaN(tendered) || tendered < total) return;
     } else if (paymentMethod === 'gcash') {
-      if (!gcashReference.trim()) return;
+      if (!gcashReference.trim() || gcashReference.replace(/\s/g, '').length !== 13) return;
+      if (gcashProofFiles.length === 0) return;
+      if (gcashRefError) return;
     }
     // COD and Pay Later require no additional fields
 
@@ -584,10 +648,10 @@ const PointOfSale = () => {
           formData.append(`items[${i}][quantity]`, item.quantity);
           formData.append(`items[${i}][unit_price]`, item.price);
         });
-        if (selectedCustomerId) formData.append('customer_id', parseInt(selectedCustomerId));
-        if (newCustomerName) formData.append('new_customer_name', newCustomerName);
-        if (newCustomerContact) formData.append('new_customer_contact', newCustomerContact);
-        if (newCustomerEmail) formData.append('new_customer_email', newCustomerEmail);
+        if (selectedClientId) formData.append('customer_id', parseInt(selectedClientId));
+        if (newClientName) formData.append('new_customer_name', newClientName);
+        if (newClientContact) formData.append('new_customer_contact', newClientContact);
+        if (newClientEmail) formData.append('new_customer_email', newClientEmail);
         formData.append('payment_method', paymentMethod);
         formData.append('amount_tendered', total);
         formData.append('reference_number', gcashReference);
@@ -607,10 +671,10 @@ const PointOfSale = () => {
             quantity: item.quantity,
             unit_price: item.price,
           })),
-          customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
-          new_customer_name: newCustomerName || null,
-          new_customer_contact: newCustomerContact || null,
-          new_customer_email: newCustomerEmail || null,
+          customer_id: selectedClientId ? parseInt(selectedClientId) : null,
+          new_customer_name: newClientName || null,
+          new_customer_contact: newClientContact || null,
+          new_customer_email: newClientEmail || null,
           payment_method: paymentMethod,
           amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
           reference_number: paymentMethod === 'gcash' ? gcashReference : null,
@@ -622,12 +686,12 @@ const PointOfSale = () => {
       }
       
       if (response.success && response.data) {
-        const customerName = newCustomerName || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.label : null);
+        const clientName = newClientName || (selectedClientId ? clientOptions.find(o => o.value === selectedClientId)?.label : null);
         const saleData = {
           items: [...cart],
           total,
           totalItems,
-          customerName,
+          clientName,
           paymentMethod: paymentMethod === 'cash' ? 'CASH' : paymentMethod === 'gcash' ? 'GCASH' : paymentMethod === 'pay_later' ? 'PAY LATER' : 'COD',
           transactionId: response.data.transaction_id,
           time: response.data.date_formatted || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' }),
@@ -642,11 +706,12 @@ const PointOfSale = () => {
         setShowPaymentModal(false);
         setShowSaleCompleteModal(true);
         setCart([]);
-        setSelectedCustomerId('');
-        setNewCustomerName('');
-        setNewCustomerContact('');
-        setNewCustomerEmail('');
-        setCustomerError('');
+        setSelectedClientId('');
+        setNewClientName('');
+        setNewClientContact('');
+        setNewClientEmail('');
+        setClientError('');
+        setEmailError('');
         setForDelivery(false);
         setDeliveryAddress('');
         setDistanceKm('');
@@ -659,9 +724,9 @@ const PointOfSale = () => {
         invalidateCache('/products');
         refetchSales();
         refetchProducts();
-        if (newCustomerName) {
+        if (newClientName) {
           invalidateCache('/customers');
-          refetchCustomers();
+          refetchClients();
         }
       } else {
         throw response;
@@ -715,9 +780,9 @@ const PointOfSale = () => {
 
       <div className="flex gap-6" style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}>
         {/* Products Section - scrollable */}
-        <div className="lg:col-span-2 flex-1 min-w-0 bg-white rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 p-4 flex flex-col overflow-hidden">
+        <div className="lg:col-span-2 flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4 flex flex-col overflow-hidden">
           {/* Search and Variety Filter */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4 pb-4 border-b-2 border-primary-100 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-3 mb-4 pb-4 border-b-2 border-primary-100 dark:border-primary-800 shrink-0">
             <div className="relative flex-1">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -725,7 +790,7 @@ const PointOfSale = () => {
                 placeholder="Search products..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 text-sm border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-medium"
+                className="w-full pl-9 pr-3 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-medium bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
               />
             </div>
             <div className="relative">
@@ -733,7 +798,7 @@ const PointOfSale = () => {
               <select
                 value={selectedVariety}
                 onChange={(e) => setSelectedVariety(e.target.value)}
-                className="pl-9 pr-8 py-2.5 text-sm border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white appearance-none cursor-pointer min-w-[160px] font-medium"
+                className="pl-9 pr-8 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 appearance-none cursor-pointer min-w-[160px] font-medium"
               >
                 <option value="">All Varieties</option>
                 {varieties.map((cat) => (
@@ -746,30 +811,41 @@ const PointOfSale = () => {
           {/* Products Grid - scrollable */}
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {filteredProducts.map((product) => (
+              {filteredProducts.map((product) => {
+                const hasNoPrice = !product.price || product.price <= 0;
+                return (
                 <div 
                   key={product.id} 
                   onClick={() => addToCart(product)}
-                  className="bg-white rounded-xl border-2 border-primary-200 shadow-sm p-3 text-center cursor-pointer hover:shadow-lg hover:border-primary-400 hover:bg-primary-50/30 hover:scale-[1.02] transition-all"
+                  className={`bg-white dark:bg-gray-800 rounded-xl border-2 shadow-sm p-3 text-center transition-all ${
+                    hasNoPrice
+                      ? 'border-red-300 dark:border-red-700 opacity-60 cursor-not-allowed'
+                      : 'border-primary-200 dark:border-primary-700 cursor-pointer hover:shadow-lg hover:border-primary-400 hover:bg-primary-50/30 dark:hover:bg-primary-900/20 hover:scale-[1.02]'
+                  }`}
                 >
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-xl mx-auto mb-2 flex items-center justify-center border border-primary-200">
-                    <Package size={20} className="text-primary-600" />
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-secondary-100 dark:to-gray-800 rounded-xl mx-auto mb-2 flex items-center justify-center border border-primary-200 dark:border-primary-700">
+                    <Package size={20} className="text-primary-600 dark:text-primary-400" />
                   </div>
-                  <h4 className="font-semibold text-gray-800 text-xs mb-1 line-clamp-2">{product.name}{product.weight_formatted ? ` (${product.weight_formatted})` : ''}</h4>
-                  <p className="text-primary-600 font-bold text-sm">₱{product.price.toLocaleString()}</p>
+                  <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-xs mb-1 line-clamp-2">{product.name}{product.weight_formatted ? ` (${product.weight_formatted})` : ''}</h4>
+                  {hasNoPrice ? (
+                    <p className="text-red-500 dark:text-red-400 font-bold text-xs">No price set</p>
+                  ) : (
+                    <p className="text-primary-600 dark:text-primary-400 font-bold text-sm">₱{product.price.toLocaleString()}</p>
+                  )}
                   <p className={`text-[10px] mt-0.5 ${product.stock > 0 ? 'text-gray-400' : 'text-amber-500 font-medium'}`}>{product.stock > 0 ? `${product.stock} in stock` : 'No stock'}</p>
-                  <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-medium bg-primary-50 text-primary-600 rounded-full border border-primary-200">
+                  <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-medium bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 rounded-full border border-primary-200 dark:border-primary-700">
                     {product.variety}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Cart Section - fixed, fills height */}
         <div className="hidden lg:flex lg:flex-col w-80 xl:w-96 shrink-0">
-          <div className="bg-white rounded-xl border-2 border-primary-300 shadow-lg shadow-primary-100/50 overflow-hidden flex flex-col h-full">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 overflow-hidden flex flex-col h-full">
             {/* Cart Header */}
             <div className="p-4 bg-gradient-to-r from-button-500 to-button-600 text-white border-b-2 border-button-600 shrink-0">
               <h3 className="font-bold text-base flex items-center gap-2">
@@ -795,10 +871,10 @@ const PointOfSale = () => {
                 ) : (
                   <div className="space-y-2">
                     {cart.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-2.5 bg-primary-50/30 rounded-lg border-2 border-primary-200">
+                      <div key={item.id} className="flex items-center justify-between p-2.5 bg-primary-50 dark:bg-gray-700 rounded-lg border-2 border-primary-200 dark:border-primary-700">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-800 text-xs truncate">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</p>
-                          <p className="text-primary-600 text-xs font-medium">₱{item.price.toLocaleString()} × {item.quantity}</p>
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-xs truncate">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</p>
+                          <p className="text-primary-600 dark:text-primary-400 text-xs font-medium">₱{item.price.toLocaleString()} × {item.quantity}</p>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button variant="outline" size="xs" onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}>
@@ -816,7 +892,7 @@ const PointOfSale = () => {
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-10 text-center text-xs font-bold border border-primary-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-10 text-center text-xs font-bold border border-primary-200 dark:border-primary-700 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-400 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                           <Button variant="outline" size="xs" onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}>
                             <Plus size={12} />
@@ -832,15 +908,15 @@ const PointOfSale = () => {
               </div>
 
               {/* Payment Method - always visible */}
-              <div className="border-t-2 border-primary-200 pt-4 mb-4 shrink-0">
-                <p className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Payment Method</p>
+              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 mb-4 shrink-0">
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
                 <div className="grid grid-cols-4 gap-2">
                   <button
                     onClick={() => setPaymentMethod('cash')}
                     className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
                       ${paymentMethod === 'cash' 
-                        ? 'border-primary-500 bg-primary-50 text-primary-600' 
-                        : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' 
+                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                       }
                     `}
                   >
@@ -851,8 +927,8 @@ const PointOfSale = () => {
                     onClick={() => setPaymentMethod('gcash')}
                     className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
                       ${paymentMethod === 'gcash' 
-                        ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                        : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                       }
                     `}
                   >
@@ -863,8 +939,8 @@ const PointOfSale = () => {
                     onClick={() => setPaymentMethod('cod')}
                     className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
                       ${paymentMethod === 'cod' 
-                        ? 'border-amber-500 bg-amber-50 text-amber-600' 
-                        : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' 
+                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                       }
                     `}
                   >
@@ -875,8 +951,8 @@ const PointOfSale = () => {
                     onClick={() => setPaymentMethod('pay_later')}
                     className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
                       ${paymentMethod === 'pay_later' 
-                        ? 'border-purple-500 bg-purple-50 text-purple-600' 
-                        : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' 
+                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                       }
                     `}
                   >
@@ -887,7 +963,7 @@ const PointOfSale = () => {
               </div>
 
               {/* Delivery Toggle */}
-              <div className="border-t-2 border-primary-200 pt-3 shrink-0">
+              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 shrink-0">
                 <label className="flex items-center gap-2 cursor-pointer group">
                   <div className={`relative w-10 h-5 rounded-full transition-colors ${forDelivery ? 'bg-orange-500' : 'bg-gray-300'}`}
                     onClick={() => {
@@ -896,9 +972,9 @@ const PointOfSale = () => {
                       if (!next) { setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }
                     }}
                   >
-                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white dark:bg-gray-800 shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </div>
-                  <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
                     <Truck size={14} className={forDelivery ? 'text-orange-500' : 'text-gray-400'} />
                     For Delivery
                   </span>
@@ -907,7 +983,7 @@ const PointOfSale = () => {
                 {forDelivery && (deliveryAddress || distanceKm || calculatingDistance) && (
                   <div className="mt-2 space-y-1">
                     {deliveryAddress && (
-                      <p className="text-[10px] text-gray-500 flex items-start gap-1">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 flex items-start gap-1">
                         <MapPin size={10} className="mt-0.5 shrink-0 text-orange-400" />
                         <span className="line-clamp-2">{deliveryAddress}</span>
                       </p>
@@ -935,28 +1011,31 @@ const PointOfSale = () => {
               </div>
 
               {/* Total Section - always visible */}
-              <div className="border-t-2 border-primary-200 pt-4 shrink-0">
+              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 shrink-0">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-gray-500 font-medium">Subtotal</span>
-                  <span className="text-sm font-semibold text-gray-700">₱{subtotal.toLocaleString()}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Subtotal</span>
+                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">₱{subtotal.toLocaleString()}</span>
                 </div>
                 {forDelivery && deliveryFee > 0 && (
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-orange-500 font-medium flex items-center gap-1">
                       <Truck size={10} /> Shipping Fee
                     </span>
-                    <span className="text-sm font-semibold text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center mb-4 pb-4 border-b-2 border-primary-100">
-                  <span className="font-bold text-gray-800">Total</span>
-                  <span className="text-xl font-bold text-primary-600">₱{total.toLocaleString()}</span>
+                <div className="flex justify-between items-center mb-4 pb-4 border-b-2 border-primary-100 dark:border-primary-800">
+                  <span className="font-bold text-gray-800 dark:text-gray-100">Total</span>
+                  <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{total.toLocaleString()}</span>
                 </div>
                 
                 {/* Action Buttons */}
                 <div className="space-y-2">
                   <Button onClick={completeSale} className="w-full" icon={Receipt} disabled={cart.length === 0}>
                     Place Order
+                  </Button>
+                  <Button onClick={voidTransaction} className="w-full" variant="outline" icon={RotateCcw}>
+                    Void Transaction
                   </Button>
                 </div>
               </div>
@@ -972,15 +1051,15 @@ const PointOfSale = () => {
             {mobileCartOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setMobileCartOpen(false)} />}
             <div className="fixed bottom-20 md:bottom-0 left-0 right-0 z-50">
               {mobileCartOpen && (
-                <div className="bg-white max-h-[70vh] overflow-y-auto rounded-t-2xl shadow-2xl border-t-2 border-primary-200">
+                <div className="bg-white dark:bg-gray-800 max-h-[70vh] overflow-y-auto rounded-t-2xl shadow-2xl border-t-2 border-primary-200 dark:border-primary-700">
                   <div className="p-4">
                     {/* Cart Header */}
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2">
-                        <ShoppingCart size={16} className="text-primary-600" />
+                      <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                        <ShoppingCart size={16} className="text-primary-600 dark:text-primary-400" />
                         Current Order
                       </h3>
-                      <span className="text-xs font-semibold bg-primary-50 text-primary-600 px-2 py-0.5 rounded-full border border-primary-200">
+                      <span className="text-xs font-semibold bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 px-2 py-0.5 rounded-full border border-primary-200 dark:border-primary-700">
                         {totalItems} items
                       </span>
                     </div>
@@ -988,10 +1067,10 @@ const PointOfSale = () => {
                     {/* Cart Items */}
                     <div className="space-y-2 mb-4 max-h-[25vh] overflow-y-auto">
                       {cart.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-2.5 bg-primary-50/30 rounded-lg border-2 border-primary-200">
+                        <div key={item.id} className="flex items-center justify-between p-2.5 bg-primary-50 dark:bg-gray-700 rounded-lg border-2 border-primary-200 dark:border-primary-700">
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-800 text-xs truncate">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</p>
-                            <p className="text-primary-600 text-xs font-medium">₱{item.price.toLocaleString()} × {item.quantity}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-xs truncate">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</p>
+                            <p className="text-primary-600 dark:text-primary-400 text-xs font-medium">₱{item.price.toLocaleString()} × {item.quantity}</p>
                           </div>
                           <div className="flex items-center gap-1">
                             <Button variant="outline" size="xs" onClick={() => updateQuantity(item.id, -1)}>
@@ -1010,15 +1089,15 @@ const PointOfSale = () => {
                     </div>
 
                     {/* Payment Method */}
-                    <div className="border-t-2 border-primary-200 pt-3 mb-3">
-                      <p className="text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Payment Method</p>
+                    <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
                       <div className="grid grid-cols-4 gap-2">
                         <button
                           onClick={() => setPaymentMethod('cash')}
                           className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
                             ${paymentMethod === 'cash' 
-                              ? 'border-primary-500 bg-primary-50 text-primary-600' 
-                              : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' 
+                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                             }
                           `}
                         >
@@ -1029,8 +1108,8 @@ const PointOfSale = () => {
                           onClick={() => setPaymentMethod('gcash')}
                           className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
                             ${paymentMethod === 'gcash' 
-                              ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                              : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                             }
                           `}
                         >
@@ -1041,8 +1120,8 @@ const PointOfSale = () => {
                           onClick={() => setPaymentMethod('cod')}
                           className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
                             ${paymentMethod === 'cod' 
-                              ? 'border-amber-500 bg-amber-50 text-amber-600' 
-                              : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                              ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' 
+                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                             }
                           `}
                         >
@@ -1053,8 +1132,8 @@ const PointOfSale = () => {
                           onClick={() => setPaymentMethod('pay_later')}
                           className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
                             ${paymentMethod === 'pay_later' 
-                              ? 'border-purple-500 bg-purple-50 text-purple-600' 
-                              : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' 
+                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
                             }
                           `}
                         >
@@ -1065,7 +1144,7 @@ const PointOfSale = () => {
                     </div>
 
                     {/* Delivery Toggle - Mobile */}
-                    <div className="border-t-2 border-primary-200 pt-3 mb-3">
+                    <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <div className={`relative w-10 h-5 rounded-full transition-colors ${forDelivery ? 'bg-orange-500' : 'bg-gray-300'}`}
                           onClick={() => {
@@ -1074,36 +1153,36 @@ const PointOfSale = () => {
                             if (!next) { setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }
                           }}
                         >
-                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white dark:bg-gray-800 shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
                         </div>
-                        <span className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
                           <Truck size={14} className={forDelivery ? 'text-orange-500' : 'text-gray-400'} />
                           For Delivery
                         </span>
                       </label>
                       {forDelivery && (deliveryAddress || distanceKm) && (
                         <div className="mt-1">
-                          {deliveryAddress && <p className="text-[10px] text-gray-500 truncate"><MapPin size={10} className="inline mr-0.5 text-orange-400" />{deliveryAddress}</p>}
+                          {deliveryAddress && <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate"><MapPin size={10} className="inline mr-0.5 text-orange-400" />{deliveryAddress}</p>}
                           {distanceKm && <p className="text-[10px] text-orange-500 font-medium"><Navigation size={10} className="inline mr-0.5" />{distanceKm} km</p>}
                         </div>
                       )}
                     </div>
 
                     {/* Total */}
-                    <div className="border-t-2 border-primary-200 pt-3 mb-3">
+                    <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs text-gray-500 font-medium">Subtotal</span>
-                        <span className="text-sm font-semibold text-gray-700">₱{subtotal.toLocaleString()}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Subtotal</span>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">₱{subtotal.toLocaleString()}</span>
                       </div>
                       {forDelivery && deliveryFee > 0 && (
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-xs text-orange-500 font-medium flex items-center gap-1"><Truck size={10} /> Shipping</span>
-                          <span className="text-sm font-semibold text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       )}
                       <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-800">Total</span>
-                        <span className="text-lg font-bold text-primary-600">₱{total.toLocaleString()}</span>
+                        <span className="font-bold text-gray-800 dark:text-gray-100">Total</span>
+                        <span className="text-lg font-bold text-primary-600 dark:text-primary-400">₱{total.toLocaleString()}</span>
                       </div>
                     </div>
 
@@ -1111,6 +1190,9 @@ const PointOfSale = () => {
                     <div className="space-y-2">
                       <Button onClick={() => { setMobileCartOpen(false); completeSale(); }} className="w-full" icon={Receipt} disabled={cart.length === 0}>
                         Place Order
+                      </Button>
+                      <Button onClick={() => { setMobileCartOpen(false); voidTransaction(); }} className="w-full" variant="outline" icon={RotateCcw}>
+                        Void Transaction
                       </Button>
                     </div>
                   </div>
@@ -1131,52 +1213,53 @@ const PointOfSale = () => {
         )}
       </div>
 
-      {/* Customer Selection Modal */}
-      {showCustomerModal && (
+      {/* client Selection Modal */}
+      {showClientModal && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowCustomerModal(false)} />
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowClientModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700">
               {/* Header */}
               <div className="p-5 bg-gradient-to-r from-button-500 to-button-600 text-white shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <User size={20} />
-                  Customer Information
+                  Client Information
                 </h3>
-                <p className="text-sm text-white/80 mt-1">Select an existing customer or add a new one</p>
+                <p className="text-sm text-white/80 mt-1">Select an existing client or add a new one</p>
               </div>
 
               <div className="p-5">
                 {/* Order Summary */}
-                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-500">Items</span>
-                    <span className="font-medium text-gray-800">{totalItems} items</span>
+                    <span className="text-gray-500 dark:text-gray-400">Items</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{totalItems} items</span>
                   </div>
-                  <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
-                    <span className="font-bold text-gray-800">Total</span>
-                    <span className="text-xl font-bold text-primary-600">₱{total.toLocaleString()}</span>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                    <span className="font-bold text-gray-800 dark:text-gray-100">Total</span>
+                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{total.toLocaleString()}</span>
                   </div>
                 </div>
 
-                {/* Customer Combobox */}
-                <CustomerCombobox
-                  value={selectedCustomerId}
-                  newName={newCustomerName}
-                  newContact={newCustomerContact}
-                  newEmail={newCustomerEmail}
-                  onChange={handleCustomerSelect}
-                  onInputChange={handleNewCustomerInput}
-                  onContactChange={handleNewCustomerContact}
-                  onEmailChange={handleNewCustomerEmail}
-                  customerOptions={customerOptions}
-                  error={customerError}
+                {/* client Combobox */}
+                <ClientCombobox
+                  value={selectedClientId}
+                  newName={newClientName}
+                  newContact={newClientContact}
+                  newEmail={newClientEmail}
+                  onChange={handleClientSelect}
+                  onInputChange={handleNewClientInput}
+                  onContactChange={handleNewClientContact}
+                  onEmailChange={handleNewClientEmail}
+                  clientOptions={clientOptions}
+                  error={clientError}
+                  emailError={emailError}
                 />
 
                 {/* Delivery Address — shown when For Delivery is toggled on */}
                 {forDelivery && (
-                  <div className="mt-4 p-3 bg-orange-50 rounded-xl border-2 border-orange-200">
-                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
+                  <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border-2 border-orange-200 dark:border-orange-700">
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
                       <Truck size={14} className="text-orange-500" />
                       Delivery Address <span className="text-red-500">*</span>
                     </label>
@@ -1190,7 +1273,7 @@ const PointOfSale = () => {
                           setDistanceKm('');
                           setEstimatedDuration(null);
                           setSelectedCoords(null);
-                          setCustomerError('');
+                          setClientError('');
                           // Trigger autocomplete
                           debouncedSearchAddress(e.target.value, (results) => {
                             setAddressSuggestions(results);
@@ -1200,11 +1283,11 @@ const PointOfSale = () => {
                         onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
                         placeholder="Enter delivery address..."
                         rows={2}
-                        className="w-full pl-7 pr-3 py-2 text-xs border-2 border-orange-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white"
+                        className="w-full pl-7 pr-3 py-2 text-xs border-2 border-orange-200 dark:border-orange-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none bg-white dark:bg-gray-800 dark:text-gray-100"
                       />
                       {/* Suggestions dropdown */}
                       {showSuggestions && addressSuggestions.length > 0 && (
-                        <div ref={suggestionsRef} className="absolute z-50 w-full mt-1 bg-white border-2 border-orange-200 rounded-lg shadow-lg max-h-36 overflow-y-auto">
+                        <div ref={suggestionsRef} className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 border-orange-200 dark:border-orange-700 rounded-lg shadow-lg max-h-36 overflow-y-auto">
                           {addressSuggestions.map((s, i) => (
                             <button
                               key={i}
@@ -1228,9 +1311,9 @@ const PointOfSale = () => {
                                   }
                                 }
                               }}
-                              className="w-full text-left px-3 py-2 text-xs hover:bg-orange-50 border-b border-gray-100 last:border-0 transition-colors"
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 last:border-0 transition-colors"
                             >
-                              <span className="font-medium text-gray-800">{s.label}</span>
+                              <span className="font-medium text-gray-800 dark:text-gray-100">{s.label}</span>
                               {s.locality && <span className="block text-[10px] text-gray-400">{s.locality}{s.region ? `, ${s.region}` : ''}</span>}
                             </button>
                           ))}
@@ -1244,7 +1327,7 @@ const PointOfSale = () => {
                           <p className="text-[10px] text-orange-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Calculating distance...</p>
                         ) : (
                           <>
-                            <p className="text-[10px] text-orange-600 font-semibold flex items-center gap-1">
+                            <p className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold flex items-center gap-1">
                               <Navigation size={10} /> {distanceKm} km
                               {estimatedDuration && (
                                 <span className="text-gray-400 font-normal ml-1">
@@ -1261,25 +1344,25 @@ const PointOfSale = () => {
                               const sackFee = trips * ratePerSack * totalSacks;
                               const kmFee = ratePerKm * distance;
                               return (
-                                <div className="bg-orange-100/60 rounded-lg p-2 space-y-1">
-                                  <p className="text-[10px] font-bold text-orange-700 uppercase tracking-wide">Shipping Fee Breakdown</p>
-                                  <div className="text-[10px] text-gray-600 space-y-0.5">
+                                <div className="bg-orange-100/60 dark:bg-orange-900/20 rounded-lg p-2 space-y-1">
+                                  <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 uppercase tracking-wide">Shipping Fee Breakdown</p>
+                                  <div className="text-[10px] text-gray-600 dark:text-gray-300 space-y-0.5">
                                     {ratePerSack > 0 && (
                                       <div className="flex justify-between">
                                         <span>Sack-based: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
-                                        <span className="font-semibold text-gray-800">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        <span className="font-semibold text-gray-800 dark:text-gray-100">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                       </div>
                                     )}
                                     {ratePerKm > 0 && (
                                       <div className="flex justify-between">
                                         <span>Distance-based: ₱{ratePerKm}/km × {distance} km</span>
-                                        <span className="font-semibold text-gray-800">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        <span className="font-semibold text-gray-800 dark:text-gray-100">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                       </div>
                                     )}
                                   </div>
-                                  <div className="flex justify-between border-t border-orange-300/50 pt-1">
-                                    <span className="text-[10px] font-bold text-orange-700">Total Shipping</span>
-                                    <span className="text-xs font-bold text-orange-700">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                  <div className="flex justify-between border-t border-orange-300 dark:border-orange-700/50 pt-1">
+                                    <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300">Total Shipping</span>
+                                    <span className="text-xs font-bold text-orange-700 dark:text-orange-300">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                   </div>
                                 </div>
                               );
@@ -1293,15 +1376,15 @@ const PointOfSale = () => {
               </div>
 
               {/* Footer */}
-              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100">
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => setShowCustomerModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 text-gray-600 hover:bg-gray-50 transition-all"
+                  onClick={() => setShowClientModal(false)}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={confirmCustomer}
+                  onClick={confirmClient}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 transition-all"
                 >
                   <Receipt size={14} /> Continue to Payment
@@ -1317,7 +1400,7 @@ const PointOfSale = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowPaymentModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700">
               {/* Header */}
               <div className={`p-5 text-white shrink-0 ${paymentMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : paymentMethod === 'pay_later' ? 'bg-gradient-to-r from-purple-500 to-purple-600' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -1325,16 +1408,16 @@ const PointOfSale = () => {
                   {paymentMethod === 'cash' ? 'Cash Payment' : paymentMethod === 'gcash' ? 'GCash Payment' : paymentMethod === 'pay_later' ? 'Pay Later' : 'Cash on Delivery'}
                 </h3>
                 <p className="text-sm text-white/80 mt-1">
-                  {paymentMethod === 'cash' ? 'Enter amount tendered by customer' : paymentMethod === 'gcash' ? 'Enter GCash reference number' : paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 'Order will be paid upon delivery'}
+                  {paymentMethod === 'cash' ? 'Enter amount tendered by client' : paymentMethod === 'gcash' ? 'Enter GCash reference number' : paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 'Order will be paid upon delivery'}
                 </p>
               </div>
 
               <div className="p-5">
                 {/* Order Summary */}
-                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-500">Items</span>
-                    <span className="font-medium text-gray-800">{totalItems} items</span>
+                    <span className="text-gray-500 dark:text-gray-400">Items</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{totalItems} items</span>
                   </div>
                   {forDelivery && deliveryFee > 0 && (() => {
                     const distance = parseFloat(distanceKm) || 0;
@@ -1347,25 +1430,25 @@ const PointOfSale = () => {
                     return (
                       <>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-500">Subtotal</span>
-                          <span className="font-medium text-gray-800">₱{subtotal.toLocaleString()}</span>
+                          <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
+                          <span className="font-medium text-gray-800 dark:text-gray-100">₱{subtotal.toLocaleString()}</span>
                         </div>
-                        <div className="bg-orange-50 rounded-md p-2 mb-1">
+                        <div className="bg-orange-50 dark:bg-orange-900/20 rounded-md p-2 mb-1">
                           <div className="flex justify-between text-sm mb-0.5">
                             <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping</span>
-                            <span className="font-medium text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            <span className="font-medium text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                           </div>
-                          <div className="text-[10px] text-gray-500 space-y-0.5 mt-1">
+                          <div className="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5 mt-1">
                             {ratePerSack > 0 && (
                               <div className="flex justify-between">
                                 <span>Sack fee: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
-                                <span className="text-gray-700">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                <span className="text-gray-700 dark:text-gray-200">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                               </div>
                             )}
                             {ratePerKm > 0 && (
                               <div className="flex justify-between">
                                 <span>Distance fee: ₱{ratePerKm}/km × {distance} km</span>
-                                <span className="text-gray-700">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                <span className="text-gray-700 dark:text-gray-200">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                               </div>
                             )}
                             <p className="text-[9px] text-gray-400 mt-0.5">Distance: {distanceKm} km from warehouse</p>
@@ -1374,9 +1457,9 @@ const PointOfSale = () => {
                       </>
                     );
                   })()}
-                  <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
-                    <span className="font-bold text-gray-800">Total Due</span>
-                    <span className="text-xl font-bold text-primary-600">₱{total.toLocaleString()}</span>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                    <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
+                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{total.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -1384,7 +1467,7 @@ const PointOfSale = () => {
                   <>
                     {/* Cash Tendered Input */}
                     <div className="mb-4">
-                      <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Cash Tendered</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Cash Tendered</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">₱</span>
                         <input
@@ -1392,7 +1475,7 @@ const PointOfSale = () => {
                           value={cashTendered}
                           onChange={(e) => setCashTendered(e.target.value)}
                           placeholder="0.00"
-                          className="w-full pl-8 pr-4 py-3 text-lg font-bold border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                          className="w-full pl-8 pr-4 py-3 text-lg font-bold border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-700 dark:text-gray-100"
                           autoFocus
                         />
                       </div>
@@ -1404,7 +1487,7 @@ const PointOfSale = () => {
                         <button
                           key={amount}
                           onClick={() => setCashTendered(String(amount))}
-                          className="py-2 rounded-lg text-xs font-semibold border-2 border-primary-200 hover:bg-primary-50 hover:border-primary-400 transition-all"
+                          className="py-2 rounded-lg text-xs font-semibold border-2 border-primary-200 dark:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-400 transition-all dark:text-gray-200"
                         >
                           ₱{amount.toLocaleString()}
                         </button>
@@ -1413,11 +1496,11 @@ const PointOfSale = () => {
 
                     {/* Change Display */}
                     {cashTendered && (
-                      <div className={`rounded-lg p-3 text-center ${parseFloat(cashTendered) >= total ? 'bg-green-50 border-2 border-green-200' : 'bg-red-50 border-2 border-red-200'}`}>
+                      <div className={`rounded-lg p-3 text-center ${parseFloat(cashTendered) >= total ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
                         <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(cashTendered) >= total ? '#16a34a' : '#dc2626' }}>
                           {parseFloat(cashTendered) >= total ? 'Change' : 'Insufficient'}
                         </p>
-                        <p className={`text-2xl font-bold ${parseFloat(cashTendered) >= total ? 'text-green-600' : 'text-red-600'}`}>
+                        <p className={`text-2xl font-bold ${parseFloat(cashTendered) >= total ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           ₱{Math.abs((parseFloat(cashTendered) || 0) - total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
@@ -1427,26 +1510,45 @@ const PointOfSale = () => {
                   <>
                     {/* GCash Reference */}
                     <div className="mb-4">
-                      <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">GCash Reference Number</label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={gcashReference}
-                        onChange={(e) => setGcashReference(e.target.value)}
-                        placeholder="e.g. 1234 5678 9012"
-                        className="w-full px-4 py-3 text-lg font-bold border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 tracking-wider"
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^\d\s]/g, '').slice(0, 15);
+                          setGcashReference(val);
+                          setGcashRefError('');
+                          checkGcashReference(val);
+                        }}
+                        placeholder="Enter 13-digit reference number"
+                        className={`w-full px-4 py-3 text-lg font-bold border-2 rounded-lg focus:outline-none focus:ring-2 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${
+                          gcashRefError
+                            ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                            : gcashReference.replace(/\s/g, '').length > 0 && gcashReference.replace(/\s/g, '').length !== 13
+                              ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                              : gcashReference.replace(/\s/g, '').length === 13 && !gcashRefError
+                                ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
+                                : 'border-primary-200 dark:border-primary-700 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
                         autoFocus
                       />
+                      {gcashRefError && (
+                        <p className="mt-1 text-xs text-red-500">{gcashRefError}</p>
+                      )}
+                      {!gcashRefError && gcashReference.replace(/\s/g, '').length > 0 && gcashReference.replace(/\s/g, '').length !== 13 && (
+                        <p className="mt-1 text-xs text-red-500">Reference number must be exactly 13 digits (currently {gcashReference.replace(/\s/g, '').length}).</p>
+                      )}
                     </div>
 
                     {/* Payment Proof Upload */}
                     <div className="mb-4">
-                      <label className="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">
-                        Payment Proof <span className="font-normal normal-case text-gray-400">(Optional)</span>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
+                        Payment Proof <span className="text-red-500">*</span>
                       </label>
 
                       {/* Camera View */}
                       {showCamera && (
-                        <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-blue-300">
+                        <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-blue-300 dark:border-blue-700">
                           <video ref={cameraVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
                           <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
                             <button onClick={capturePhoto} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-blue-600 flex items-center gap-1.5">
@@ -1464,7 +1566,7 @@ const PointOfSale = () => {
                         <div className="flex flex-wrap gap-2 mb-3">
                           {gcashProofPreviews.map((url, idx) => (
                             <div key={idx} className="relative group">
-                              <img src={url} alt={`Proof ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200" />
+                              <img src={url} alt={`Proof ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 dark:border-blue-700" />
                               <button
                                 onClick={() => removeGcashProof(idx)}
                                 className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1482,14 +1584,22 @@ const PointOfSale = () => {
                           <button
                             type="button"
                             onClick={() => gcashProofInputRef.current?.click()}
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 text-xs font-semibold transition-all"
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                              gcashProofFiles.length === 0
+                                ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                                : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                            }`}
                           >
                             <ImageIcon size={14} /> Upload Image
                           </button>
                           <button
                             type="button"
                             onClick={startCamera}
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 text-xs font-semibold transition-all"
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                              gcashProofFiles.length === 0
+                                ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                                : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                            }`}
                           >
                             <Camera size={14} /> Open Camera
                           </button>
@@ -1503,46 +1613,49 @@ const PointOfSale = () => {
                           />
                         </div>
                       )}
+                      {gcashProofFiles.length === 0 && (
+                        <p className="mt-1 text-xs text-red-500">Payment proof is required.</p>
+                      )}
                     </div>
 
                     {/* GCash Info */}
-                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
-                      <p className="text-xs font-bold text-blue-700 mb-1 uppercase tracking-wide">Payment Verification</p>
-                      <p className="text-xs text-blue-600">Enter the GCash reference number and optionally upload a screenshot or capture the payment confirmation as proof.</p>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                      <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1 uppercase tracking-wide">Payment Verification</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">Enter the exact 13-digit GCash reference number and upload a screenshot or capture the payment confirmation as proof.</p>
                     </div>
                   </>
                 ) : paymentMethod === 'pay_later' ? (
                   <>
                     {/* Pay Later Info */}
-                    <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 text-center">
+                    <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
                       <Clock size={32} className="mx-auto mb-2 text-purple-500" />
-                      <p className="text-sm font-bold text-purple-700 mb-1">Pay Later</p>
-                      <p className="text-xs text-purple-600">The order will be placed with payment pending. Customer can pay at a later time.</p>
+                      <p className="text-sm font-bold text-purple-700 dark:text-purple-300 mb-1">Pay Later</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">The order will be placed with payment pending. Client can pay at a later time.</p>
                     </div>
                   </>
                 ) : (
                   <>
                     {/* COD Info */}
-                    <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 text-center">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700 rounded-lg p-4 text-center">
                       <Banknote size={32} className="mx-auto mb-2 text-amber-500" />
-                      <p className="text-sm font-bold text-amber-700 mb-1">Cash on Delivery</p>
-                      <p className="text-xs text-amber-600">Payment will be collected upon delivery. The order will be placed as pending.</p>
+                      <p className="text-sm font-bold text-amber-700 dark:text-amber-300 mb-1">Cash on Delivery</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Payment will be collected upon delivery. The order will be placed as pending.</p>
                     </div>
                   </>
                 )}
               </div>
 
               {/* Footer */}
-              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100">
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 text-gray-600 hover:bg-gray-50 transition-all"
+                  onClick={() => { setShowPaymentModal(false); setShowClientModal(true); }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
                 >
-                  Cancel
+                  ← Back
                 </button>
                 <button
                   onClick={confirmPayment}
-                  disabled={saving || (paymentMethod === 'cash' ? (!cashTendered || parseFloat(cashTendered) < total) : paymentMethod === 'gcash' ? !gcashReference.trim() : false)}
+                  disabled={saving || (paymentMethod === 'cash' ? (!cashTendered || parseFloat(cashTendered) < total) : paymentMethod === 'gcash' ? (gcashReference.replace(/\s/g, '').length !== 13 || gcashProofFiles.length === 0 || !!gcashRefError) : false)}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
                     paymentMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : paymentMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : paymentMethod === 'pay_later' ? 'bg-purple-500 hover:bg-purple-600' : 'bg-amber-500 hover:bg-amber-600'
                   }`}
@@ -1560,7 +1673,7 @@ const PointOfSale = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowVoidModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border-2 border-primary-200">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden border-2 border-primary-200 dark:border-primary-700">
               {/* Modal Header */}
               <div className="p-5 bg-gradient-to-r from-red-500 to-red-600 text-white shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -1579,7 +1692,7 @@ const PointOfSale = () => {
                     placeholder="Search transaction ID or time..."
                     value={voidSearch}
                     onChange={(e) => setVoidSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 text-sm border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 font-medium bg-white dark:bg-gray-700 dark:text-gray-100"
                   />
                 </div>
 
@@ -1589,90 +1702,108 @@ const PointOfSale = () => {
                     const isVoided = txn.status === 'voided';
                     const isSelected = selectedVoidTxn?.id === txn.id;
                     return (
-                      <button
+                      <div
                         key={txn.id}
-                        onClick={() => !isVoided && setSelectedVoidTxn(txn)}
-                        disabled={isVoided}
+                        onClick={() => !isVoided && setSelectedVoidTxn(isSelected ? null : txn)}
                         className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
                           isVoided
-                            ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                            ? 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 opacity-50 cursor-not-allowed'
                             : isSelected
-                              ? 'border-red-500 bg-red-50'
-                              : 'border-primary-200 hover:border-primary-400 hover:bg-primary-50/30 cursor-pointer'
+                              ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                              : 'border-primary-200 dark:border-primary-700 hover:border-primary-400 hover:bg-primary-50/30 dark:hover:bg-primary-900/20 cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-sm font-semibold text-gray-800">{txn.id}</p>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{txn.id}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <Clock size={11} className="text-gray-400" />
-                              <span className="text-xs text-gray-500">{txn.time}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{txn.time}</span>
                               <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-gray-500">{txn.items} items</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{txn.items} items</span>
                               <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-gray-500">{txn.payment}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">{txn.payment}</span>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-bold text-primary-600">₱{txn.total.toLocaleString()}</p>
+                            <p className="text-sm font-bold text-primary-600 dark:text-primary-400">₱{txn.total.toLocaleString()}</p>
                             {isVoided && (
-                              <span className="text-[10px] font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">VOIDED</span>
+                              <span className="text-[10px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">VOIDED</span>
                             )}
                           </div>
                         </div>
-                      </button>
+                        {/* Expanded items list when selected */}
+                        {isSelected && txn.itemsList && txn.itemsList.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-700">
+                            <p className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wide mb-1.5">Ordered Items</p>
+                            <div className="space-y-1">
+                              {txn.itemsList.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-700 dark:text-gray-200 font-medium">{item.product_name || item.name}</span>
+                                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                    <span>×{item.quantity}</span>
+                                    <span className="font-semibold text-primary-600 dark:text-primary-400">₱{(item.unit_price || item.price || 0).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
 
                 {/* Void Reason */}
                 {selectedVoidTxn && (
-                  <div className="p-3 rounded-lg bg-red-50 border-2 border-red-200">
-                    <p className="text-xs font-bold text-red-700 mb-2 uppercase tracking-wide">Reason for Void</p>
+                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700">
+                    <p className="text-xs font-bold text-red-700 dark:text-red-300 mb-2 uppercase tracking-wide">Reason for Void</p>
                     <textarea
                       value={voidReason}
                       onChange={(e) => setVoidReason(e.target.value)}
                       placeholder="Enter reason for voiding this transaction..."
-                      className="w-full px-3 py-2 text-sm border-2 border-red-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="w-full px-3 py-2 text-sm border-2 border-red-200 dark:border-red-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none bg-white dark:bg-gray-700 dark:text-gray-100"
                       rows={2}
                     />
-                    <div className="flex items-center justify-between mt-2 text-xs text-red-600">
+                    <div className="flex items-center justify-between mt-2 text-xs text-red-600 dark:text-red-400">
                       <span>Refund amount:</span>
                       <span className="font-bold text-base">₱{selectedVoidTxn.total.toLocaleString()}</span>
                     </div>
                   </div>
                 )}
 
-                {/* Super Admin Password - required for admin/secretary */}
-                {selectedVoidTxn && !isSuperAdmin() && (
-                  <div className="mt-4 p-3 rounded-lg bg-amber-50 border-2 border-amber-200">
-                    <p className="text-xs font-bold text-amber-700 mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                {/* Password Confirmation - required for all roles */}
+                {selectedVoidTxn && (
+                  <div className="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700">
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-300 mb-2 uppercase tracking-wide flex items-center gap-1.5">
                       <Lock size={12} />
-                      Super Admin Password Required
+                      {isAdminOrAbove() ? 'Confirm Your Password' : 'Admin / Super Admin Password Required'}
                     </p>
                     <input
                       type="password"
                       value={voidPassword}
                       onChange={(e) => setVoidPassword(e.target.value)}
-                      placeholder="Enter super admin password..."
-                      className="w-full px-3 py-2 text-sm border-2 border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder={isAdminOrAbove() ? 'Enter your password to confirm...' : 'Enter admin or super admin password...'}
+                      className="w-full px-3 py-2 text-sm border-2 border-amber-200 dark:border-amber-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 dark:text-gray-100"
                     />
-                    <p className="text-[10px] text-amber-600 mt-1.5 italic">Authorization from Super Admin is required to void transactions.</p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5 italic">
+                      {isAdminOrAbove() ? 'Enter your password to authorize this void.' : 'Authorization from Admin or Super Admin is required to void transactions.'}
+                    </p>
                   </div>
                 )}
               </div>
 
               {/* Modal Footer */}
-              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100">
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
                   onClick={() => setShowVoidModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 text-gray-600 hover:bg-gray-50 transition-all"
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmVoid}
-                  disabled={!selectedVoidTxn || !voidReason.trim() || (!isSuperAdmin() && !voidPassword.trim())}
+                  disabled={!selectedVoidTxn || !voidReason.trim() || !voidPassword.trim()}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <RotateCcw size={14} /> Confirm Void & Refund
@@ -1688,7 +1819,7 @@ const PointOfSale = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowSaleCompleteModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border-2 border-primary-200 animate-in fade-in zoom-in">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border-2 border-primary-200 dark:border-primary-700 animate-in fade-in zoom-in">
               {/* Success Header */}
               <div className="p-6 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-center">
                 <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1702,68 +1833,68 @@ const PointOfSale = () => {
               <div className="p-5">
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Time</span>
-                    <span className="font-medium text-gray-800">{lastSale.time}</span>
+                    <span className="text-gray-500 dark:text-gray-400">Time</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.time}</span>
                   </div>
-                  {lastSale.customerName && (
+                  {lastSale.clientName && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Customer</span>
-                      <span className="font-medium text-gray-800">{lastSale.customerName}</span>
+                      <span className="text-gray-500 dark:text-gray-400">Client</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.clientName}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Items</span>
-                    <span className="font-medium text-gray-800">{lastSale.totalItems} items</span>
+                    <span className="text-gray-500 dark:text-gray-400">Items</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.totalItems} items</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Payment</span>
-                    <span className="font-medium text-gray-800">{lastSale.paymentMethod}</span>
+                    <span className="text-gray-500 dark:text-gray-400">Payment</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.paymentMethod}</span>
                   </div>
                   {lastSale.paymentMethod === 'CASH' && lastSale.cashTendered && (
                     <>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Cash Tendered</span>
-                        <span className="font-medium text-gray-800">₱{lastSale.cashTendered.toLocaleString()}</span>
+                        <span className="text-gray-500 dark:text-gray-400">Cash Tendered</span>
+                        <span className="font-medium text-gray-800 dark:text-gray-100">₱{lastSale.cashTendered.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Change</span>
-                        <span className="font-bold text-green-600">₱{lastSale.change.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-gray-500 dark:text-gray-400">Change</span>
+                        <span className="font-bold text-green-600 dark:text-green-400">₱{lastSale.change.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </>
                   )}
                   {lastSale.paymentMethod === 'GCASH' && lastSale.gcashReference && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">GCash Ref</span>
-                      <span className="font-medium text-gray-800 tracking-wide">{lastSale.gcashReference}</span>
+                      <span className="text-gray-500 dark:text-gray-400">GCash Ref</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-100 tracking-wide">{lastSale.gcashReference}</span>
                     </div>
                   )}
-                  <div className="border-t-2 border-primary-100 pt-2 mt-2">
+                  <div className="border-t-2 border-primary-100 dark:border-primary-800 pt-2 mt-2">
                     {lastSale.forDelivery && lastSale.deliveryFee > 0 && (
                       <>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-500">Subtotal</span>
-                          <span className="font-medium text-gray-800">₱{lastSale.subtotal.toLocaleString()}</span>
+                          <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
+                          <span className="font-medium text-gray-800 dark:text-gray-100">₱{lastSale.subtotal.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-sm mb-1">
                           <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping</span>
-                          <span className="font-medium text-orange-600">₱{lastSale.deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-medium text-orange-600 dark:text-orange-400">₱{lastSale.deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                       </>
                     )}
                     <div className="flex justify-between">
-                      <span className="font-bold text-gray-800">Total</span>
-                      <span className="text-xl font-bold text-primary-600">₱{lastSale.total.toLocaleString()}</span>
+                      <span className="font-bold text-gray-800 dark:text-gray-100">Total</span>
+                      <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{lastSale.total.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Items List */}
-                <div className="bg-gray-50 rounded-lg p-3 mb-4 max-h-32 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4 max-h-32 overflow-y-auto">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">Items Ordered</p>
                   {lastSale.items.map(item => (
                     <div key={item.id} className="flex justify-between text-xs py-0.5">
-                      <span className="text-gray-600">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''} ×{item.quantity}</span>
-                      <span className="font-medium text-gray-700">₱{(item.price * item.quantity).toLocaleString()}</span>
+                      <span className="text-gray-600 dark:text-gray-300">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''} ×{item.quantity}</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-200">₱{(item.price * item.quantity).toLocaleString()}</span>
                     </div>
                   ))}
                 </div>

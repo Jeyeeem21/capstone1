@@ -20,16 +20,16 @@ const moduleIcons = {
 };
 
 const moduleColors = {
-  products: { bg: 'bg-blue-500', light: 'bg-blue-100 text-blue-600' },
-  varieties: { bg: 'bg-indigo-500', light: 'bg-indigo-100 text-indigo-600' },
-  suppliers: { bg: 'bg-green-500', light: 'bg-green-100 text-green-600' },
-  customers: { bg: 'bg-cyan-500', light: 'bg-cyan-100 text-cyan-600' },
-  procurements: { bg: 'bg-orange-500', light: 'bg-orange-100 text-orange-600' },
-  drying_processes: { bg: 'bg-yellow-500', light: 'bg-yellow-100 text-yellow-600' },
-  processings: { bg: 'bg-rose-500', light: 'bg-rose-100 text-rose-600' },
-  drivers: { bg: 'bg-teal-500', light: 'bg-teal-100 text-teal-600' },
-  deliveries: { bg: 'bg-purple-500', light: 'bg-purple-100 text-purple-600' },
-  users: { bg: 'bg-violet-500', light: 'bg-violet-100 text-violet-600' },
+  products: { bg: 'bg-blue-500', light: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' },
+  varieties: { bg: 'bg-indigo-500', light: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' },
+  suppliers: { bg: 'bg-green-500', light: 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' },
+  customers: { bg: 'bg-cyan-500', light: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400' },
+  procurements: { bg: 'bg-orange-500', light: 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' },
+  drying_processes: { bg: 'bg-yellow-500', light: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' },
+  processings: { bg: 'bg-rose-500', light: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' },
+  drivers: { bg: 'bg-teal-500', light: 'bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400' },
+  deliveries: { bg: 'bg-purple-500', light: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' },
+  users: { bg: 'bg-violet-500', light: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400' },
 };
 
 // Reusable detail item
@@ -40,14 +40,14 @@ const DetailItem = ({ icon: Icon, iconBg, label, value, children }) => (
     </div>
     <div className="flex-1 min-w-0">
       <p className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">{label}</p>
-      {children || <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{value || '—'}</p>}
+      {children || <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{value || '—'}</p>}
     </div>
   </div>
 );
 
 // Highlighted detail item (for cost/price)
-const HighlightItem = ({ icon: Icon, label, value, color = 'text-button-600' }) => (
-  <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 dark:from-button-900/20 dark:to-primary-900/20 rounded-lg border-2 border-button-200 dark:border-button-700">
+const HighlightItem = ({ icon: Icon, label, value, color = 'text-button-600 dark:text-button-400' }) => (
+  <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 dark:from-gray-700 dark:to-gray-800 rounded-lg border-2 border-button-200 dark:border-button-700">
     <div className="p-2 bg-button-500 text-white rounded-lg shrink-0">
       <Icon size={18} />
     </div>
@@ -62,13 +62,13 @@ const HighlightItem = ({ icon: Icon, label, value, color = 'text-button-600' }) 
 const RecordHeader = ({ module, id, name, status }) => {
   const Icon = moduleIcons[module] || Package;
   return (
-    <div className="bg-gradient-to-r from-primary-50 to-button-50 dark:from-primary-900/20 dark:to-button-900/20 p-3 rounded-lg border-2 border-primary-200 dark:border-primary-700">
+    <div className="bg-gradient-to-r from-primary-50 to-button-50 dark:from-gray-700 dark:to-gray-800 p-3 rounded-lg border-2 border-primary-200 dark:border-primary-700">
       <div className="flex items-start gap-2">
         <div className="p-2 bg-button-500 text-white rounded-lg">
           <Icon size={20} />
         </div>
         <div className="flex-1">
-          <h3 className="text-base font-bold text-gray-800 dark:text-gray-200">{name || `#${String(id).padStart(4, '0')}`}</h3>
+          <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{name || `#${String(id).padStart(4, '0')}`}</h3>
           <p className="text-xs text-gray-600 dark:text-gray-400">Record ID: {id}</p>
         </div>
         {status && <StatusBadge status={status} />}
@@ -97,7 +97,7 @@ const ProcurementView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="procurements" id={data.id} name={`Procurement #${String(data.id).padStart(4, '0')}`} status={data.status} />
-      <DetailItem icon={Building2} iconBg="bg-blue-100 text-blue-600" label="Supplier" value={data.supplier_name} />
+      <DetailItem icon={Building2} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Supplier" value={data.supplier_name} />
       {data.batch_number && (
         <div className="flex items-center gap-2 p-2.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg">
           <Layers size={15} className="text-indigo-500 shrink-0" />
@@ -107,40 +107,40 @@ const ProcurementView = ({ data }) => (
           </div>
           {data.batch_status && (
             <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-              data.batch_status === 'Open' ? 'bg-green-100 text-green-700' :
-              data.batch_status === 'Closed' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-gray-100 text-gray-600'
+              data.batch_status === 'Open' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+              data.batch_status === 'Closed' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+              'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
             }`}>{data.batch_status}</span>
           )}
         </div>
       )}
-      <DetailItem icon={Tag} iconBg="bg-green-100 text-green-600" label="Variety" value={data.variety_name} />
+      <DetailItem icon={Tag} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Variety" value={data.variety_name} />
       <HighlightItem icon={DollarSign} label="Total Cost" value={`₱${parseFloat(data.total_cost || 0).toLocaleString()}`} />
-      <DetailItem icon={Calendar} iconBg="bg-purple-100 text-purple-600" label="Date Created">
-        <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{formatDate(data.created_at)}</p>
+      <DetailItem icon={Calendar} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Date Created">
+        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{formatDate(data.created_at)}</p>
         {data.created_at && <p className="text-xs text-gray-500 dark:text-gray-400">{formatTime(data.created_at)}</p>}
       </DetailItem>
     </div>
     <div className="space-y-3">
       <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2.5">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg"><Boxes size={16} /></div>
+          <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Boxes size={16} /></div>
           <div className="flex-1">
             <p className="text-xs text-gray-600 dark:text-gray-400">Sacks/Bags</p>
-            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{parseInt(data.sacks || 0).toLocaleString()} sacks</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseInt(data.sacks || 0).toLocaleString()} sacks</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-green-100 text-green-600 rounded-lg"><Scale size={16} /></div>
+          <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg"><Scale size={16} /></div>
           <div className="flex-1">
             <p className="text-xs text-gray-600 dark:text-gray-400">Quantity</p>
-            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{parseFloat(data.quantity_kg || 0).toLocaleString()} kg</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseFloat(data.quantity_kg || 0).toLocaleString()} kg</p>
           </div>
         </div>
       </div>
-      <DetailItem icon={DollarSign} iconBg="bg-yellow-100 text-yellow-600" label="Price per KG" value={`₱${parseFloat(data.price_per_kg || 0).toLocaleString()}`} />
+      <DetailItem icon={DollarSign} iconBg="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400" label="Price per KG" value={`₱${parseFloat(data.price_per_kg || 0).toLocaleString()}`} />
       {data.description && (
-        <DetailItem icon={FileText} iconBg="bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300" label="Remarks" value={data.description} />
+        <DetailItem icon={FileText} iconBg="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 dark:bg-gray-600 dark:text-gray-300" label="Remarks" value={data.description} />
       )}
     </div>
   </div>
@@ -150,18 +150,18 @@ const ProductView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="products" id={data.product_id} name={data.product_name} status={data.status} />
-      <DetailItem icon={Tag} iconBg="bg-blue-100 text-blue-600" label="Variety" value={data.variety_name} />
+      <DetailItem icon={Tag} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Variety" value={data.variety_name} />
       <HighlightItem icon={DollarSign} label="Price" value={data.price_formatted || `₱${parseFloat(data.price || 0).toLocaleString()}`} />
-      <DetailItem icon={Calendar} iconBg="bg-gray-100 text-gray-600" label="Created" value={formatDate(data.created_at)} />
+      <DetailItem icon={Calendar} iconBg="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" label="Created" value={formatDate(data.created_at)} />
     </div>
     <div className="space-y-3">
-      <DetailItem icon={Box} iconBg="bg-blue-100 text-blue-600" label="Stocks" value={`${parseInt(data.stocks || 0).toLocaleString()} ${data.unit || 'pcs'}`} />
-      <DetailItem icon={Scale} iconBg="bg-purple-100 text-purple-600" label="Weight" value={data.weight_formatted || (data.weight ? `${data.weight} kg` : '—')} />
-      <DetailItem icon={ShoppingCart} iconBg="bg-orange-100 text-orange-600" label="Stock Floor" value={`${parseInt(data.stock_floor || 0).toLocaleString()} ${data.unit || 'pcs'}`} />
+      <DetailItem icon={Box} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Stocks" value={`${parseInt(data.stocks || 0).toLocaleString()} ${data.unit || 'pcs'}`} />
+      <DetailItem icon={Scale} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Weight" value={data.weight_formatted || (data.weight ? `${data.weight} kg` : '—')} />
+      <DetailItem icon={ShoppingCart} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Stock Floor" value={`${parseInt(data.stock_floor || 0).toLocaleString()} ${data.unit || 'pcs'}`} />
       {(data.price && data.stocks) && (
         <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
           <p className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">Total Value</p>
-          <p className="text-lg font-bold text-green-600">₱{(parseFloat(data.price) * parseInt(data.stocks)).toLocaleString()}</p>
+          <p className="text-lg font-bold text-green-600 dark:text-green-400">₱{(parseFloat(data.price) * parseInt(data.stocks)).toLocaleString()}</p>
         </div>
       )}
     </div>
@@ -172,25 +172,25 @@ const CustomerView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="customers" id={data.id} name={data.name} status={data.status} />
-      <DetailItem icon={User} iconBg="bg-blue-100 text-blue-600" label="Contact Person" value={data.contact} />
-      <DetailItem icon={Package} iconBg="bg-button-100 text-button-600" label="Total Orders" value={data.orders || 0} />
+      <DetailItem icon={User} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Contact Person" value={data.contact} />
+      <DetailItem icon={Package} iconBg="bg-button-100 dark:bg-gray-600 text-button-600 dark:text-button-400" label="Total Orders" value={data.orders || 0} />
     </div>
     <div className="space-y-3">
-      <DetailItem icon={Mail} iconBg="bg-green-100 text-green-600" label="Email">
+      <DetailItem icon={Mail} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Email">
         {data.email ? (
-          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 hover:underline text-sm">{data.email}</a>
+          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.email}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
-      <DetailItem icon={Phone} iconBg="bg-purple-100 text-purple-600" label="Phone">
+      <DetailItem icon={Phone} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Phone">
         {data.phone ? (
-          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 hover:underline text-sm">{data.phone}</a>
+          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.phone}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
-      <DetailItem icon={MapPin} iconBg="bg-orange-100 text-orange-600" label="Address" value={data.address} />
+      <DetailItem icon={MapPin} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Address" value={data.address} />
     </div>
   </div>
 );
@@ -199,51 +199,51 @@ const SupplierView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="suppliers" id={data.id} name={data.name} status={data.status} />
-      <DetailItem icon={User} iconBg="bg-blue-100 text-blue-600" label="Contact Person" value={data.contact} />
-      <DetailItem icon={Box} iconBg="bg-button-100 text-button-600" label="Products Supplied" value={data.products || 0} />
+      <DetailItem icon={User} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Contact Person" value={data.contact} />
+      <DetailItem icon={Box} iconBg="bg-button-100 dark:bg-gray-600 text-button-600 dark:text-button-400" label="Products Supplied" value={data.products || 0} />
     </div>
     <div className="space-y-3">
-      <DetailItem icon={Mail} iconBg="bg-green-100 text-green-600" label="Email">
+      <DetailItem icon={Mail} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Email">
         {data.email ? (
-          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 hover:underline text-sm">{data.email}</a>
+          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.email}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
-      <DetailItem icon={Phone} iconBg="bg-purple-100 text-purple-600" label="Phone">
+      <DetailItem icon={Phone} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Phone">
         {data.phone ? (
-          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 hover:underline text-sm">{data.phone}</a>
+          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.phone}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
-      <DetailItem icon={MapPin} iconBg="bg-orange-100 text-orange-600" label="Address" value={data.address} />
+      <DetailItem icon={MapPin} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Address" value={data.address} />
     </div>
   </div>
 );
 
 const VarietyView = ({ data }) => (
   <div className="space-y-3">
-    <div className="bg-gradient-to-r from-primary-50 to-button-50 dark:from-primary-900/20 dark:to-button-900/20 p-4 rounded-lg border-2 border-primary-200 dark:border-primary-700">
+    <div className="bg-gradient-to-r from-primary-50 to-button-50 dark:from-gray-700 dark:to-gray-800 p-4 rounded-lg border-2 border-primary-200 dark:border-primary-700">
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg" style={{ backgroundColor: data.color || '#6b7280' }}>
           <Tag size={20} className="text-white" />
         </div>
         <div className="flex-1">
-          <h3 className="text-base font-bold text-gray-800 dark:text-gray-200">{data.name}</h3>
+          <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{data.name}</h3>
           {data.description && <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{data.description}</p>}
         </div>
         {data.status && <StatusBadge status={data.status} />}
       </div>
     </div>
     <div className="grid grid-cols-2 gap-3">
-      <DetailItem icon={Tag} iconBg="bg-purple-100 text-purple-600" label="Color">
+      <DetailItem icon={Tag} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Color">
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: data.color || '#ccc' }} />
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{data.color || '—'}</span>
+          <div className="w-4 h-4 rounded-full border border-primary-200 dark:border-primary-700" style={{ backgroundColor: data.color || '#ccc' }} />
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{data.color || '—'}</span>
         </div>
       </DetailItem>
-      <DetailItem icon={Package} iconBg="bg-button-100 text-button-600" label="Products Count" value={data.products_count || 0} />
+      <DetailItem icon={Package} iconBg="bg-button-100 dark:bg-gray-600 text-button-600 dark:text-button-400" label="Products Count" value={data.products_count || 0} />
     </div>
   </div>
 );
@@ -252,24 +252,24 @@ const ProcessingView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="processings" id={data.id} name={`Processing #${String(data.id).padStart(4, '0')}`} status={data.status} />
-      <DetailItem icon={Calendar} iconBg="bg-blue-100 text-blue-600" label="Processing Date" value={formatDate(data.processing_date)} />
-      <DetailItem icon={Scale} iconBg="bg-blue-100 text-blue-600" label="Input (kg)" value={`${parseFloat(data.input_kg || 0).toLocaleString()} kg`} />
-      <DetailItem icon={User} iconBg="bg-purple-100 text-purple-600" label="Operator" value={data.operator_name} />
+      <DetailItem icon={Calendar} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Processing Date" value={formatDate(data.processing_date)} />
+      <DetailItem icon={Scale} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Input (kg)" value={`${parseFloat(data.input_kg || 0).toLocaleString()} kg`} />
+      <DetailItem icon={User} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Operator" value={data.operator_name} />
     </div>
     <div className="space-y-3">
       {data.status === 'Completed' || data.output_kg ? (
         <>
-          <DetailItem icon={CheckCircle} iconBg="bg-green-100 text-green-600" label="Output (kg)" value={`${parseFloat(data.output_kg || 0).toLocaleString()} kg`} />
-          <DetailItem icon={ArrowDown} iconBg="bg-indigo-100 text-indigo-600" label="Stock Out" value={`${parseFloat(data.stock_out || 0).toLocaleString()} kg`} />
-          <DetailItem icon={Package} iconBg="bg-orange-100 text-orange-600" label="Husk (kg)" value={`${parseFloat(data.husk_kg || 0).toLocaleString()} kg`} />
-          <DetailItem icon={Percent} iconBg="bg-purple-100 text-purple-600" label="Yield %" value={`${parseFloat(data.yield_percent || 0).toFixed(1)}%`} />
+          <DetailItem icon={CheckCircle} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Output (kg)" value={`${parseFloat(data.output_kg || 0).toLocaleString()} kg`} />
+          <DetailItem icon={ArrowDown} iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400" label="Stock Out" value={`${parseFloat(data.stock_out || 0).toLocaleString()} kg`} />
+          <DetailItem icon={Package} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Husk (kg)" value={`${parseFloat(data.husk_kg || 0).toLocaleString()} kg`} />
+          <DetailItem icon={Percent} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Yield %" value={`${parseFloat(data.yield_percent || 0).toFixed(1)}%`} />
           {data.completed_date && (
-            <DetailItem icon={Calendar} iconBg="bg-green-100 text-green-600" label="Completed Date" value={formatDate(data.completed_date)} />
+            <DetailItem icon={Calendar} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Completed Date" value={formatDate(data.completed_date)} />
           )}
         </>
       ) : (
         <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
-          <p className="text-xs text-yellow-600 font-medium">Processing is still pending completion.</p>
+          <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Processing is still pending completion.</p>
         </div>
       )}
     </div>
@@ -280,7 +280,7 @@ const DryingProcessView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="drying_processes" id={data.id} name={`Drying Process #${String(data.id).padStart(4, '0')}`} status={data.status} />
-      <DetailItem icon={Building2} iconBg="bg-blue-100 text-blue-600" label="Supplier" value={data.supplier_name} />
+      <DetailItem icon={Building2} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Supplier" value={data.supplier_name} />
       {data.batch_number && (
         <div className="flex items-center gap-2 p-2.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg">
           <Layers size={15} className="text-indigo-500 shrink-0" />
@@ -290,27 +290,27 @@ const DryingProcessView = ({ data }) => (
           </div>
         </div>
       )}
-      <DetailItem icon={Calendar} iconBg="bg-purple-100 text-purple-600" label="Dried At" value={formatDate(data.dried_at)} />
+      <DetailItem icon={Calendar} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Dried At" value={formatDate(data.dried_at)} />
     </div>
     <div className="space-y-3">
       <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2.5">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg"><Boxes size={16} /></div>
+          <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Boxes size={16} /></div>
           <div className="flex-1">
             <p className="text-xs text-gray-600 dark:text-gray-400">Sacks</p>
-            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{parseInt(data.sacks || 0).toLocaleString()} sacks</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseInt(data.sacks || 0).toLocaleString()} sacks</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-green-100 text-green-600 rounded-lg"><Scale size={16} /></div>
+          <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg"><Scale size={16} /></div>
           <div className="flex-1">
             <p className="text-xs text-gray-600 dark:text-gray-400">Quantity</p>
-            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{parseFloat(data.quantity_kg || 0).toLocaleString()} kg</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseFloat(data.quantity_kg || 0).toLocaleString()} kg</p>
           </div>
         </div>
       </div>
-      <DetailItem icon={Scale} iconBg="bg-green-100 text-green-600" label="Quantity Out" value={`${parseFloat(data.quantity_out || 0).toLocaleString()} kg`} />
-      <DetailItem icon={Calendar} iconBg="bg-gray-100 text-gray-600" label="Days" value={`${data.days || 0} days`} />
+      <DetailItem icon={Scale} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Quantity Out" value={`${parseFloat(data.quantity_out || 0).toLocaleString()} kg`} />
+      <DetailItem icon={Calendar} iconBg="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" label="Days" value={`${data.days || 0} days`} />
       <HighlightItem icon={DollarSign} label="Total Price" value={`₱${parseFloat(data.total_price || 0).toLocaleString()}`} />
     </div>
   </div>
@@ -320,28 +320,28 @@ const DriverView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="drivers" id={data.id} name={data.name} status={data.status} />
-      <DetailItem icon={User} iconBg="bg-blue-100 text-blue-600" label="Contact" value={data.contact} />
-      <DetailItem icon={Phone} iconBg="bg-purple-100 text-purple-600" label="Phone">
+      <DetailItem icon={User} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Contact" value={data.contact} />
+      <DetailItem icon={Phone} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Phone">
         {data.phone ? (
-          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 hover:underline text-sm">{data.phone}</a>
+          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.phone}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
-      <DetailItem icon={Mail} iconBg="bg-green-100 text-green-600" label="Email">
+      <DetailItem icon={Mail} iconBg="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" label="Email">
         {data.email ? (
-          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 hover:underline text-sm">{data.email}</a>
+          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.email}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
     </div>
     <div className="space-y-3">
-      <DetailItem icon={Hash} iconBg="bg-orange-100 text-orange-600" label="License Number" value={data.license_number} />
-      <DetailItem icon={Car} iconBg="bg-teal-100 text-teal-600" label="Vehicle Type" value={data.vehicle_type} />
-      <DetailItem icon={Hash} iconBg="bg-gray-100 text-gray-600" label="Plate Number" value={data.plate_number} />
-      <DetailItem icon={MapPin} iconBg="bg-orange-100 text-orange-600" label="Address" value={data.address} />
-      <DetailItem icon={Package} iconBg="bg-button-100 text-button-600" label="Total Deliveries" value={data.total_deliveries || 0} />
+      <DetailItem icon={Hash} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="License Number" value={data.license_number} />
+      <DetailItem icon={Car} iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" label="Vehicle Type" value={data.vehicle_type} />
+      <DetailItem icon={Hash} iconBg="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" label="Plate Number" value={data.plate_number} />
+      <DetailItem icon={MapPin} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Address" value={data.address} />
+      <DetailItem icon={Package} iconBg="bg-button-100 dark:bg-gray-600 text-button-600 dark:text-button-400" label="Total Deliveries" value={data.total_deliveries || 0} />
     </div>
   </div>
 );
@@ -350,17 +350,17 @@ const DeliveryView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="deliveries" id={data.id} name={data.delivery_number || `Delivery #${String(data.id).padStart(4, '0')}`} status={data.status} />
-      <DetailItem icon={Car} iconBg="bg-teal-100 text-teal-600" label="Driver" value={data.driver_name} />
-      <DetailItem icon={UserCheck} iconBg="bg-cyan-100 text-cyan-600" label="Customer" value={data.customer_name} />
-      <DetailItem icon={MapPin} iconBg="bg-orange-100 text-orange-600" label="Destination" value={data.destination} />
+      <DetailItem icon={Car} iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" label="Driver" value={data.driver_name} />
+      <DetailItem icon={UserCheck} iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400" label="Client" value={data.customer_name} />
+      <DetailItem icon={MapPin} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Destination" value={data.destination} />
     </div>
     <div className="space-y-3">
-      <DetailItem icon={User} iconBg="bg-blue-100 text-blue-600" label="Contact Person" value={data.contact_person} />
-      <DetailItem icon={Phone} iconBg="bg-purple-100 text-purple-600" label="Contact Phone" value={data.contact_phone} />
-      <DetailItem icon={Calendar} iconBg="bg-blue-100 text-blue-600" label="Delivery Date" value={formatDate(data.delivery_date)} />
-      <DetailItem icon={Package} iconBg="bg-button-100 text-button-600" label="Items" value={`${data.items_count || 0} items`} />
+      <DetailItem icon={User} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Contact Person" value={data.contact_person} />
+      <DetailItem icon={Phone} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Contact Phone" value={data.contact_phone} />
+      <DetailItem icon={Calendar} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Delivery Date" value={formatDate(data.delivery_date)} />
+      <DetailItem icon={Package} iconBg="bg-button-100 dark:bg-gray-600 text-button-600 dark:text-button-400" label="Items" value={`${data.items_count || 0} items`} />
       {data.notes && (
-        <DetailItem icon={FileText} iconBg="bg-gray-100 text-gray-600" label="Notes" value={data.notes} />
+        <DetailItem icon={FileText} iconBg="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" label="Notes" value={data.notes} />
       )}
     </div>
   </div>
@@ -370,28 +370,28 @@ const UserView = ({ data }) => (
   <div className="grid grid-cols-2 gap-3">
     <div className="space-y-3">
       <RecordHeader module="users" id={data.id} name={data.name} status={data.status} />
-      <DetailItem icon={Mail} iconBg="bg-blue-100 text-blue-600" label="Email">
+      <DetailItem icon={Mail} iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" label="Email">
         {data.email ? (
-          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 hover:underline text-sm">{data.email}</a>
+          <a href={`mailto:${data.email}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.email}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
-      <DetailItem icon={Phone} iconBg="bg-purple-100 text-purple-600" label="Phone">
+      <DetailItem icon={Phone} iconBg="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" label="Phone">
         {data.phone ? (
-          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 hover:underline text-sm">{data.phone}</a>
+          <a href={`tel:${data.phone}`} className="font-semibold text-button-600 dark:text-button-400 hover:underline text-sm">{data.phone}</a>
         ) : (
           <p className="text-sm text-gray-400">—</p>
         )}
       </DetailItem>
     </div>
     <div className="space-y-3">
-      <DetailItem icon={Shield} iconBg="bg-violet-100 text-violet-600" label="Role" value={data.role_label || data.role} />
-      <DetailItem icon={Building2} iconBg="bg-orange-100 text-orange-600" label="Position" value={data.position} />
+      <DetailItem icon={Shield} iconBg="bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400" label="Role" value={data.role_label || data.role} />
+      <DetailItem icon={Building2} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Position" value={data.position} />
       {data.truck_plate_number && (
-        <DetailItem icon={Car} iconBg="bg-teal-100 text-teal-600" label="Truck Plate" value={data.truck_plate_number} />
+        <DetailItem icon={Car} iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" label="Truck Plate" value={data.truck_plate_number} />
       )}
-      <DetailItem icon={Calendar} iconBg="bg-gray-100 text-gray-600" label="Date Hired" value={formatDate(data.date_hired)} />
+      <DetailItem icon={Calendar} iconBg="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300" label="Date Hired" value={formatDate(data.date_hired)} />
     </div>
   </div>
 );

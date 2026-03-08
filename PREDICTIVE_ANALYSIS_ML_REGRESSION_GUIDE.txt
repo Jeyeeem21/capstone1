@@ -109,6 +109,13 @@ F. GRADIENT BOOSTING (XGBoost, LightGBM)
 RECOMMENDED FOR CAPSTONE: Start with Linear Regression for simplicity and
 interpretability. If accuracy is insufficient, try Random Forest or XGBoost.
 
+NOTE: The KJP Ricemill system currently implements linear regression
+DIRECTLY in PHP (SalesPredictionService) without a separate Python service.
+This approach works well for the current dataset size and provides
+daily/weekly/monthly sales predictions with confidence intervals.
+The Python microservice architecture below is documented for reference
+if a more advanced ML pipeline is needed in the future.
+
 
 ================================================================================
 4. HOW IT WORKS (STEP BY STEP)

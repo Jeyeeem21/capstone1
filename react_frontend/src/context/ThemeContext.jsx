@@ -213,7 +213,6 @@ export const ThemeProvider = ({ children }) => {
       root.style.setProperty('--color-text-secondary', darkModeColors.text_secondary);
       root.style.setProperty('--color-text-sidebar', '#e2e8f0');
       root.style.setProperty('--color-text-content', '#f1f5f9');
-      document.body.classList.add('dark-mode');
       document.documentElement.classList.add('dark');
     } else {
       root.style.setProperty('--color-bg-primary', theme.bg_primary || theme.bgPrimary || defaultTheme.bg_primary);
@@ -226,7 +225,6 @@ export const ThemeProvider = ({ children }) => {
       root.style.setProperty('--color-text-secondary', theme.text_secondary || theme.textSecondary || defaultTheme.text_secondary);
       root.style.setProperty('--color-text-sidebar', theme.text_sidebar || theme.textSidebar || defaultTheme.text_sidebar);
       root.style.setProperty('--color-text-content', theme.text_content || theme.textContent || defaultTheme.text_content);
-      document.body.classList.remove('dark-mode');
       document.documentElement.classList.remove('dark');
     }
     

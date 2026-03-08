@@ -25,7 +25,13 @@ const Login = () => {
       if (from) {
         navigate(from, { replace: true });
       } else if (user.role === 'staff') {
-        navigate('/staff/dashboard', { replace: true });
+        if (user.position === 'Driver') {
+          navigate('/driver/dashboard', { replace: true });
+        } else {
+          navigate('/staff/pos', { replace: true });
+        }
+      } else if (user.role === 'client') {
+        navigate('/client/dashboard', { replace: true });
       } else if (user.role === 'super_admin') {
         navigate('/superadmin/dashboard', { replace: true });
       } else {
@@ -82,7 +88,20 @@ const Login = () => {
       await login(formData.email, formData.password);
       // Redirect handled by useEffect above
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.');
+      const msg = err.message || '';
+      if (
+        msg.includes('401') ||
+        msg.toLowerCase().includes('unauthenticated') ||
+        msg.toLowerCase().includes('credentials') ||
+        msg.toLowerCase().includes('invalid')
+      ) {
+        setError('Invalid email or password. Please try again.');
+      } else if (msg) {
+        setError(msg);
+      } else {
+        setError('Login failed. Please try again.');
+      }
+      setShakeKey(prev => prev + 1);
     } finally {
       setIsLoading(false);
     }
@@ -96,9 +115,9 @@ const Login = () => {
     const paddingClasses = `${hasLeftIcon ? 'pl-10' : 'px-4'} ${hasRightIcon ? 'pr-12' : 'pr-10'}`;
     
     const statusClasses = {
-      error: 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20',
-      success: 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20',
-      default: 'border-gray-300 bg-white hover:border-gray-400 focus:border-blue-500 focus:ring-blue-500/20'
+      error: 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20',
+      success: 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20',
+      default: 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 focus:border-blue-500 focus:ring-blue-500/20'
     };
 
     return `${baseClasses} ${paddingClasses} ${statusClasses[status]} ${shouldShake ? 'animate-shake' : ''}`;
@@ -107,14 +126,14 @@ const Login = () => {
   // Show loading spinner while checking auth
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 dark:from-gray-700 via-white to-secondary-50 dark:to-gray-700">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-button-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 dark:from-gray-700 via-white to-secondary-50 dark:to-gray-700 p-4">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute top-20 left-20 w-72 h-72 bg-button-500 rounded-full blur-3xl"></div>
@@ -123,7 +142,7 @@ const Login = () => {
 
       <div className="relative w-full max-w-md">
         {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-primary-200 p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border-2 border-primary-200 dark:border-primary-700 p-8">
           {/* Logo */}
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 bg-gradient-to-br from-button-500 to-button-600 rounded-2xl flex items-center justify-center shadow-lg shadow-button-500/25 overflow-hidden">
@@ -142,13 +161,13 @@ const Login = () => {
 
           {/* Title */}
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">{settings.business_name || 'KJP Ricemill'}</h1>
-            <p className="text-gray-500 mt-1">Sign in to your account</p>
+            <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{settings.business_name || 'KJP Ricemill'}</h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Sign in to your account</p>
           </div>
 
           {/* Error */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 text-red-600 text-sm rounded-xl flex items-center gap-2">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 text-sm rounded-xl flex items-center gap-2">
               <AlertCircle size={16} className="flex-shrink-0" />
               {error}
             </div>
@@ -158,7 +177,7 @@ const Login = () => {
           <form onSubmit={handleSubmit} className={shakeKey > 0 ? 'animate-shake' : ''} key={shakeKey} noValidate>
             {/* Email */}
             <div className="mb-4">
-              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                 Email Address
                 <span className="text-red-500">*</span>
               </label>
@@ -190,7 +209,7 @@ const Login = () => {
 
             {/* Password */}
             <div className="mb-4">
-              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                 Password
                 <span className="text-red-500">*</span>
               </label>
@@ -209,7 +228,7 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors z-10"
+                  className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-300 transition-colors z-10"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -250,7 +269,7 @@ const Login = () => {
           <div className="mt-6 text-center">
             <Link 
               to="/" 
-              className="text-sm text-gray-500 hover:text-button-600 transition-colors"
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 transition-colors"
             >
               &larr; Back to website
             </Link>

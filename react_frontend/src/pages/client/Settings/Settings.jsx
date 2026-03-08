@@ -201,7 +201,7 @@ const Settings = () => {
 
           {/* Appearance Actions */}
           {appearanceSaved && (
-            <div className="mb-3 p-2.5 rounded-lg bg-green-50 text-green-700 text-xs flex items-center gap-2">
+            <div className="mb-3 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
               <Check size={14} /> Appearance settings saved!
             </div>
           )}
@@ -212,7 +212,7 @@ const Settings = () => {
               <Save size={13} /> Save
             </button>
             <button onClick={handleAppearanceReset}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-50 transition-all"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
               style={{ border: `1px solid ${theme.border_color}`, color: theme.text_secondary }}>
               <RotateCcw size={13} /> Reset
             </button>
@@ -232,7 +232,7 @@ const Settings = () => {
           </div>
 
           {profileSaved && (
-            <div className="mb-3 p-2.5 rounded-lg bg-green-50 text-green-700 text-xs flex items-center gap-2">
+            <div className="mb-3 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
               <Check size={14} /> Profile updated successfully!
             </div>
           )}
@@ -308,7 +308,7 @@ const Settings = () => {
           </div>
 
           {passwordSaved && (
-            <div className="mb-3 p-2.5 rounded-lg bg-green-50 text-green-700 text-xs flex items-center gap-2">
+            <div className="mb-3 p-2.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs flex items-center gap-2">
               <Check size={14} /> Password changed successfully!
             </div>
           )}

@@ -55,8 +55,8 @@ const StaffDashboard = () => {
       accessor: 'product',
       cell: (row) => (
         <div>
-          <p className="font-medium text-gray-800">{row.product}</p>
-          <p className="text-xs text-gray-500">{row.sku}</p>
+          <p className="font-medium text-gray-800 dark:text-gray-100">{row.product}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{row.sku}</p>
         </div>
       )
     },
@@ -64,7 +64,7 @@ const StaffDashboard = () => {
       header: 'Current Stock', 
       accessor: 'currentStock',
       cell: (row) => (
-        <span className={`font-semibold ${row.status === 'Critical' ? 'text-red-600' : 'text-yellow-600'}`}>
+        <span className={`font-semibold ${row.status === 'Critical' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
           {row.currentStock} units
         </span>
       )
@@ -72,7 +72,7 @@ const StaffDashboard = () => {
     { 
       header: 'Min. Required', 
       accessor: 'minStock',
-      cell: (row) => <span className="text-gray-600">{row.minStock} units</span>
+      cell: (row) => <span className="text-gray-600 dark:text-gray-300">{row.minStock} units</span>
     },
     { 
       header: 'Status', 
@@ -81,8 +81,8 @@ const StaffDashboard = () => {
         <StatusBadge 
           status={row.status} 
           customColors={{
-            Critical: { bg: 'bg-red-100', text: 'text-red-700', dot: 'bg-red-500' },
-            Low: { bg: 'bg-yellow-100', text: 'text-yellow-700', dot: 'bg-yellow-500' },
+            Critical: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
+            Low: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500' },
           }}
         />
       )
@@ -95,7 +95,7 @@ const StaffDashboard = () => {
       case 'stock': return <Package size={16} className="text-blue-500" />;
       case 'order': return <CheckCircle size={16} className="text-purple-500" />;
       case 'alert': return <AlertTriangle size={16} className="text-red-500" />;
-      default: return <Bell size={16} className="text-gray-500" />;
+      default: return <Bell size={16} className="text-gray-500 dark:text-gray-400" />;
     }
   };
 
@@ -143,18 +143,18 @@ const StaffDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Low Stock Alerts - Takes 2 columns */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl border-2 border-primary-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-primary-100 flex items-center justify-between">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700 shadow-sm">
+            <div className="px-5 py-4 border-b border-primary-100 dark:border-primary-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <AlertTriangle size={20} className="text-red-600" />
+                <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                  <AlertTriangle size={20} className="text-red-600 dark:text-red-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Low Stock Alerts</h3>
-                  <p className="text-sm text-gray-500">Items requiring immediate attention</p>
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-100">Low Stock Alerts</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Items requiring immediate attention</p>
                 </div>
               </div>
-              <span className="px-3 py-1 bg-red-100 text-red-700 text-sm font-medium rounded-full">
+              <span className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm font-medium rounded-full">
                 {lowStockItems.length} items
               </span>
             </div>
@@ -184,14 +184,14 @@ const StaffDashboard = () => {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white rounded-xl border-2 border-primary-200 shadow-sm">
-        <div className="px-5 py-4 border-b border-primary-100 flex items-center gap-3">
-          <div className="p-2 bg-button-100 rounded-lg">
-            <Clock size={20} className="text-button-600" />
+      <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700 shadow-sm">
+        <div className="px-5 py-4 border-b border-primary-100 dark:border-primary-800 flex items-center gap-3">
+          <div className="p-2 bg-button-100 dark:bg-button-900/30 rounded-lg">
+            <Clock size={20} className="text-button-600 dark:text-button-400" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-800">Recent Activity</h3>
-            <p className="text-sm text-gray-500">Your latest actions and updates</p>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Recent Activity</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Your latest actions and updates</p>
           </div>
         </div>
         <div className="p-4">
@@ -199,14 +199,14 @@ const StaffDashboard = () => {
             {recentActivities.map((activity) => (
               <div 
                 key={activity.id}
-                className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <div className="p-2 bg-gray-100 rounded-lg">
+                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
                   {getActivityIcon(activity.type)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800">{activity.action}</p>
-                  <p className="text-sm text-gray-500 truncate">{activity.description}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">{activity.action}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{activity.description}</p>
                 </div>
                 <span className="text-xs text-gray-400 whitespace-nowrap">{activity.time}</span>
               </div>
@@ -216,26 +216,26 @@ const StaffDashboard = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-gradient-to-br from-button-50 to-button-100 rounded-xl border-2 border-button-200 p-6">
-        <h3 className="font-semibold text-gray-800 mb-4">Quick Actions</h3>
+      <div className="bg-gradient-to-br from-button-50 dark:from-gray-700 to-button-100 dark:to-gray-800 rounded-xl border-2 border-button-200 dark:border-button-700 p-6">
+        <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <a 
             href="/staff/pos" 
-            className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-button-200 hover:border-button-400 hover:shadow-md transition-all"
+            className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-button-200 dark:border-button-700 hover:border-button-400 hover:shadow-md transition-all"
           >
             <div className="p-3 bg-button-500 rounded-xl">
               <ShoppingCart size={24} className="text-white" />
             </div>
-            <span className="text-sm font-medium text-gray-700">Open POS</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Open POS</span>
           </a>
           <a 
             href="/staff/profile" 
-            className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl border border-button-200 hover:border-button-400 hover:shadow-md transition-all"
+            className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-button-200 dark:border-button-700 hover:border-button-400 hover:shadow-md transition-all"
           >
             <div className="p-3 bg-blue-500 rounded-xl">
               <LayoutDashboard size={24} className="text-white" />
             </div>
-            <span className="text-sm font-medium text-gray-700">My Profile</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">My Profile</span>
           </a>
         </div>
       </div>

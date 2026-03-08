@@ -196,11 +196,10 @@ const Supplier = () => {
         // Close modal first
         setIsAddModalOpen(false);
         
-        // Refetch and toast together
+        toast.success('Supplier Added', `${supplierName} has been added successfully.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Supplier Added', `${supplierName} has been added successfully.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -236,11 +235,10 @@ const Supplier = () => {
         // Close modal first
         setIsEditModalOpen(false);
         
-        // Refetch and toast together
+        toast.success('Supplier Updated', `${supplierName} has been updated.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Supplier Updated', `${supplierName} has been updated.`);
-        });
+        refetch();
         return;
       } else {
         throw response;
@@ -271,14 +269,16 @@ const Supplier = () => {
       
       if (response.success) {
         const supplierName = selectedItem.name;
+        const archivedId = selectedItem.id;
         // Close modal first
         setIsDeleteModalOpen(false);
         
-        // Refetch and toast together
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(s => s.id !== archivedId));
+        toast.success('Supplier Archived', `${supplierName} has been archived.`);
+        // Refetch in background to confirm
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Supplier Archived', `${supplierName} has been archived.`);
-        });
+        refetch();
         return;
       } else {
         throw new Error(response.error || 'Failed to archive');
@@ -309,14 +309,14 @@ const Supplier = () => {
       cell: (row) => (
         <div className="space-y-1">
           <div className="flex items-center gap-1.5 text-sm">
-            <Mail size={14} className="text-green-600" />
-            <a href={`mailto:${row.email}`} className="text-button-600 hover:text-button-700 hover:underline">
+            <Mail size={14} className="text-green-600 dark:text-green-400" />
+            <a href={`mailto:${row.email}`} className="text-button-600 hover:text-button-700 dark:text-button-300 hover:underline">
               {row.email}
             </a>
           </div>
           <div className="flex items-center gap-1.5 text-sm">
-            <Phone size={14} className="text-purple-600" />
-            <a href={`tel:${row.phone}`} className="text-gray-700 hover:text-gray-900">
+            <Phone size={14} className="text-purple-600 dark:text-purple-400" />
+            <a href={`tel:${row.phone}`} className="text-gray-700 dark:text-gray-200 hover:text-gray-900">
               {row.phone}
             </a>
           </div>
@@ -332,9 +332,9 @@ const Supplier = () => {
         const kg = row.total_kg || 0;
         return (
           <div className="text-sm">
-            <span className={`font-semibold ${sacks > 0 ? 'text-button-600' : 'text-gray-400'}`}>{sacks.toLocaleString()} sacks</span>
+            <span className={`font-semibold ${sacks > 0 ? 'text-button-600 dark:text-button-400' : 'text-gray-400'}`}>{sacks.toLocaleString()} sacks</span>
             <span className="text-gray-400 mx-1">/</span>
-            <span className={`font-semibold ${kg > 0 ? 'text-green-600' : 'text-gray-400'}`}>{kg.toLocaleString()} kg</span>
+            <span className={`font-semibold ${kg > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>{kg.toLocaleString()} kg</span>
           </div>
         );
       }
@@ -344,7 +344,7 @@ const Supplier = () => {
       <div className="flex items-center gap-1">
         <button
           onClick={(e) => { e.stopPropagation(); handleViewProcurements(row); }}
-          className="p-1.5 rounded-md hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors"
+          className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 hover:text-blue-700 dark:text-blue-300 transition-colors"
           title="View Procurement Records"
         >
           <ClipboardList size={15} />
@@ -361,7 +361,7 @@ const Supplier = () => {
         description="Manage your supplier database and partnerships" 
         icon={Truck}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -423,7 +423,7 @@ const Supplier = () => {
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -435,63 +435,63 @@ const Supplier = () => {
             {/* Left Column */}
             <div className="space-y-3">
               {/* Business Info */}
-              <div className="bg-gradient-to-r from-primary-50 to-button-50 p-3 rounded-lg border-2 border-primary-200">
+              <div className="bg-gradient-to-r from-primary-50 dark:from-gray-700 to-button-50 dark:to-gray-700 p-3 rounded-lg border-2 border-primary-200 dark:border-primary-700">
                 <div className="flex items-start gap-2">
                   <div className="p-2 bg-button-500 text-white rounded-lg">
                     <Building2 size={20} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-800">{selectedItem.name}</h3>
-                    <p className="text-xs text-gray-600">Company Name</p>
+                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{selectedItem.name}</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Company Name</p>
                   </div>
                   <StatusBadge status={selectedItem.status} />
                 </div>
               </div>
 
               {/* Contact Person */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                   <User size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Contact Person</p>
-                  <p className="font-semibold text-gray-800 text-sm">{selectedItem.contact}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Contact Person</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{selectedItem.contact}</p>
                 </div>
               </div>
 
               {/* Products */}
-              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
+              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 dark:from-gray-700 to-primary-50 dark:to-gray-700 rounded-lg border-2 border-button-200 dark:border-button-700">
                 <div className="p-2 bg-button-500 text-white rounded-lg">
                   <Box size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Products Supplied</p>
-                  <p className="text-xl font-bold text-button-600">{selectedItem.products || 0}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Products Supplied</p>
+                  <p className="text-xl font-bold text-button-600 dark:text-button-400">{selectedItem.products || 0}</p>
                 </div>
               </div>
 
               {/* Procurement Stats */}
-              <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+              <div className="p-3 bg-gradient-to-r from-green-50 dark:from-gray-700 to-emerald-50 dark:to-gray-700 rounded-lg border-2 border-green-200 dark:border-green-700">
                 <div className="flex items-center gap-2 mb-2">
-                  <Scale size={16} className="text-green-600" />
-                  <p className="text-xs font-semibold text-gray-700">Procurement Summary</p>
+                  <Scale size={16} className="text-green-600 dark:text-green-400" />
+                  <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">Procurement Summary</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <p className="text-xs text-gray-500">Transactions</p>
-                    <p className="text-sm font-bold text-gray-800">{selectedItem.procurement_count || 0}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Transactions</p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{selectedItem.procurement_count || 0}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Total Cost</p>
-                    <p className="text-sm font-bold text-gray-800">₱{(selectedItem.total_cost || 0).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Cost</p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">₱{(selectedItem.total_cost || 0).toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Total Sacks</p>
-                    <p className="text-sm font-bold text-amber-600">{(selectedItem.total_sacks || 0).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Sacks</p>
+                    <p className="text-sm font-bold text-amber-600 dark:text-amber-400">{(selectedItem.total_sacks || 0).toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Total Kg</p>
-                    <p className="text-sm font-bold text-green-600">{(selectedItem.total_kg || 0).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Kg</p>
+                    <p className="text-sm font-bold text-green-600 dark:text-green-400">{(selectedItem.total_kg || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -500,27 +500,27 @@ const Supplier = () => {
             {/* Right Column */}
             <div className="space-y-3">
               {/* Email & Phone in Same Section */}
-              <div className="p-3 bg-gray-50 rounded-lg space-y-2.5">
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2.5">
                 {/* Email */}
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                  <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                     <Mail size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Email</p>
-                    <a href={`mailto:${selectedItem.email}`} className="font-semibold text-button-600 hover:text-button-700 transition-colors text-sm">
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Email</p>
+                    <a href={`mailto:${selectedItem.email}`} className="font-semibold text-button-600 hover:text-button-700 dark:text-button-300 transition-colors text-sm">
                       {selectedItem.email}
                     </a>
                   </div>
                 </div>
                 {/* Phone */}
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
+                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
                     <Phone size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Phone</p>
-                    <a href={`tel:${selectedItem.phone}`} className="font-semibold text-button-600 hover:text-button-700 transition-colors text-sm">
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Phone</p>
+                    <a href={`tel:${selectedItem.phone}`} className="font-semibold text-button-600 hover:text-button-700 dark:text-button-300 transition-colors text-sm">
                       {selectedItem.phone}
                     </a>
                   </div>
@@ -528,13 +528,13 @@ const Supplier = () => {
               </div>
 
               {/* Address */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg">
                   <MapPin size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Address</p>
-                  <p className="font-semibold text-gray-800 text-sm">{selectedItem.address}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Address</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{selectedItem.address}</p>
                 </div>
               </div>
             </div>
@@ -698,12 +698,12 @@ const Supplier = () => {
         footer={
           <div className="flex justify-between items-center">
             {!loadingProcurements && supplierProcurements.length > 0 && (
-              <span className="text-sm text-gray-500">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
             )}
             <div className="flex-1" />
             <button
               onClick={() => setIsProcurementsModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -713,10 +713,10 @@ const Supplier = () => {
         {loadingProcurements ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 size={32} className="animate-spin text-button-500" />
-            <span className="ml-3 text-gray-500">Loading procurement records...</span>
+            <span className="ml-3 text-gray-500 dark:text-gray-400">Loading procurement records...</span>
           </div>
         ) : supplierProcurements.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             <ShoppingBag size={48} className="mx-auto mb-3 text-gray-300" />
             <p className="text-lg font-medium">No procurement records</p>
             <p className="text-sm">No purchases from this supplier yet.</p>
@@ -731,21 +731,21 @@ const Supplier = () => {
               const varieties = [...new Set(supplierProcurements.map(p => p.variety_name).filter(Boolean))];
               return (
                 <div className="grid grid-cols-4 gap-3 mb-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-                    <p className="text-xs text-amber-600 font-medium">Total Sacks</p>
-                    <p className="text-lg font-bold text-amber-700">{totalSacks.toLocaleString()}</p>
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3 text-center">
+                    <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">Total Sacks</p>
+                    <p className="text-lg font-bold text-amber-700 dark:text-amber-300">{totalSacks.toLocaleString()}</p>
                   </div>
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                    <p className="text-xs text-green-600 font-medium">Total Kg</p>
-                    <p className="text-lg font-bold text-green-700">{totalKg.toLocaleString()}</p>
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 text-center">
+                    <p className="text-xs text-green-600 dark:text-green-400 font-medium">Total Kg</p>
+                    <p className="text-lg font-bold text-green-700 dark:text-green-300">{totalKg.toLocaleString()}</p>
                   </div>
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                    <p className="text-xs text-blue-600 font-medium">Total Cost</p>
-                    <p className="text-lg font-bold text-blue-700">₱{totalCost.toLocaleString()}</p>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 text-center">
+                    <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total Cost</p>
+                    <p className="text-lg font-bold text-blue-700 dark:text-blue-300">₱{totalCost.toLocaleString()}</p>
                   </div>
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
-                    <p className="text-xs text-purple-600 font-medium">Varieties</p>
-                    <p className="text-lg font-bold text-purple-700">{varieties.length}</p>
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3 text-center">
+                    <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Varieties</p>
+                    <p className="text-lg font-bold text-purple-700 dark:text-purple-300">{varieties.length}</p>
                     <p className="text-xs text-purple-400 truncate" title={varieties.join(', ')}>{varieties.join(', ') || '—'}</p>
                   </div>
                 </div>
@@ -753,40 +753,40 @@ const Supplier = () => {
             })()}
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Date</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Variety</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Sacks</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Quantity (kg)</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Price/kg</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">Total Cost</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Batch</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
+                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">Variety</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-300">Sacks</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-300">Quantity (kg)</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-300">Price/kg</th>
+                  <th className="px-4 py-3 text-right font-semibold text-gray-600 dark:text-gray-300">Total Cost</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">Batch</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-600 dark:text-gray-300">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {supplierProcurements.map((proc) => (
-                  <tr key={proc.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{proc.created_at ? new Date(proc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                  <tr key={proc.id} className="hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50 transition-colors">
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{proc.created_at ? new Date(proc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: proc.variety_color || '#6B7280' }}></span>
-                        <span className="text-gray-700 font-medium">{proc.variety_name || 'Unknown'}</span>
+                        <span className="text-gray-700 dark:text-gray-200 font-medium">{proc.variety_name || 'Unknown'}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800">{(proc.sacks || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800">{(proc.quantity_kg || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">₱{(proc.price_per_kg || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800">₱{(proc.total_cost || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs font-mono">{proc.batch_number || '—'}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">{(proc.sacks || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">{(proc.quantity_kg || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">₱{(proc.price_per_kg || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">₱{(proc.total_cost || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs font-mono">{proc.batch_number || '—'}</td>
                     <td className="px-4 py-3"><StatusBadge status={proc.status} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="px-4 py-3 bg-gray-50 border-t flex justify-between items-center text-sm">
-              <span className="text-gray-500">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
-              <span className="font-semibold text-gray-700">
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t flex justify-between items-center text-sm">
+              <span className="text-gray-500 dark:text-gray-400">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
+              <span className="font-semibold text-gray-700 dark:text-gray-200">
                 Total: ₱{supplierProcurements.reduce((sum, p) => sum + (p.total_cost || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>

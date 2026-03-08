@@ -40,13 +40,13 @@ const SidebarMenuItem = ({
           className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-4 py-3 rounded-lg text-left transition-all duration-200 group
             ${isActive
               ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25'
-              : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:hover:text-button-300'
+              : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:text-button-300 dark:hover:text-button-300'
             }`}
           title={isCollapsed ? label : ''}
           style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined}
         >
           <div className={`flex items-center ${isCollapsed ? '' : 'gap-3'}`}>
-            <Icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:group-hover:text-button-300'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
+            <Icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 dark:group-hover:text-button-300'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
             {!isCollapsed && <span className="font-medium" style={{ fontSize: 'var(--font-size-sidebar)' }}>{label}</span>}
           </div>
           {!isCollapsed && (
@@ -78,14 +78,14 @@ const SidebarMenuItem = ({
         flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 mb-0.5 group
         ${isActive
           ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25'
-          : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:hover:text-button-300'
+          : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:text-button-300 dark:hover:text-button-300'
         }
       `}
       style={({ isActive }) => !isActive ? { color: 'var(--color-text-sidebar)' } : undefined}
     >
       {({ isActive }) => (
         <>
-          <Icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:group-hover:text-button-300'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
+          <Icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 dark:group-hover:text-button-300'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
           {!isCollapsed && <span className="font-medium" style={{ fontSize: 'var(--font-size-sidebar)' }}>{label}</span>}
         </>
       )}

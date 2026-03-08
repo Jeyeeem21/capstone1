@@ -32,6 +32,8 @@ class Sale extends Model
         'return_pickup_driver',
         'return_pickup_plate',
         'return_pickup_date',
+        'voided_by',
+        'authorized_by',
     ];
 
     protected $casts = [

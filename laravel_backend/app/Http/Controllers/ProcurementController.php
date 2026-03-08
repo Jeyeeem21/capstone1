@@ -11,6 +11,7 @@ use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class ProcurementController extends Controller
 {
@@ -233,15 +234,27 @@ class ProcurementController extends Controller
     public function destroy(string $id): JsonResponse
     {
         $procurement = Procurement::findOrFail($id);
+        $batchId = $procurement->batch_id;
         
         // Set status to Cancelled before soft deleting
         $procurement->status = 'Cancelled';
         $procurement->saveQuietly();
         
-        // Now soft delete
+        // Now archive (sets is_archived=true)
         $this->procurementService->deleteProcurement($procurement);
 
-        $this->logAudit('DELETE', 'Procurement', "Archived procurement #{$id} — {$procurement->sacks} sacks / {$procurement->quantity_kg} kg", [
+        // Recalculate batch totals so sack counts reflect the removal immediately
+        if ($batchId) {
+            $batch = \App\Models\ProcurementBatch::find($batchId);
+            if ($batch) {
+                $batch->recalculateTotals();
+                // Clear batch cache AFTER recalculation so the next fetch gets fresh data
+                Cache::forget('procurement_batches_all');
+                Cache::forget('procurement_batches_open');
+            }
+        }
+
+        $this->logAudit('ARCHIVE', 'Procurement', "Archived procurement #{$id} — {$procurement->sacks} sacks / {$procurement->quantity_kg} kg", [
             'procurement_id' => (int) $id,
         ]);
 

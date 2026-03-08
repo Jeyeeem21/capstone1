@@ -19,7 +19,7 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
   
   return (
     <div className="mb-4">
-      <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+      <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
         Supplier <span className="text-red-500">*</span>
       </label>
       
@@ -31,10 +31,10 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
           onChange={onChange}
           className={`w-full px-4 py-3 text-sm border-2 rounded-xl transition-all appearance-none cursor-pointer shadow-sm pr-10 focus:outline-none focus:ring-4 ${
             displayError 
-              ? 'border-red-400 bg-red-50/50 focus:border-red-500 focus:ring-red-500/20' 
+              ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20' 
               : hasValue && !newName
-                ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20'
-                : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+                ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
           } ${submitted && showRequiredError ? 'animate-shake' : ''}`}
         >
           {supplierOptions.map(opt => (
@@ -52,9 +52,9 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
 
       {/* OR divider */}
       <div className="flex items-center gap-3 my-3">
-        <div className="flex-1 h-px bg-gray-200"></div>
-        <span className="text-xs text-gray-500 uppercase font-medium">or add new</span>
-        <div className="flex-1 h-px bg-gray-200"></div>
+        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600"></div>
+        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">or add new</span>
+        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-600"></div>
       </div>
 
       {/* Input for new supplier */}
@@ -67,11 +67,11 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
           placeholder="Type new supplier name..."
           className={`w-full px-4 py-3 pl-10 text-sm border-2 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 ${
             newName 
-              ? 'border-green-400 bg-green-50/30 focus:border-green-500 focus:ring-green-500/20' 
-              : 'border-primary-300 bg-white hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+              ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20' 
+              : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
           }`}
         />
-        <PlusCircle size={18} className={`absolute left-3 top-1/2 -translate-y-1/2 ${newName ? 'text-green-600' : 'text-gray-400'}`} />
+        <PlusCircle size={18} className={`absolute left-3 top-1/2 -translate-y-1/2 ${newName ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
         {newName && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
             <Check size={18} className="text-green-500" />
@@ -88,7 +88,7 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
               value={newContact || ''}
               onChange={(e) => onFieldChange('new_supplier_contact', e.target.value)}
               placeholder="Contact person name"
-              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
             />
             <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
@@ -98,7 +98,7 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
               value={newPhone || ''}
               onChange={(e) => onFieldChange('new_supplier_phone', e.target.value)}
               placeholder="Contact number (e.g. 09171234567)"
-              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
             />
             <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
@@ -108,7 +108,7 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
               value={newEmail || ''}
               onChange={(e) => onFieldChange('new_supplier_email', e.target.value)}
               placeholder="Email address (optional)"
-              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
             />
             <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
@@ -118,19 +118,19 @@ const SupplierCombobox = memo(({ value, newName, newContact, newPhone, newEmail,
               value={newAddress || ''}
               onChange={(e) => onFieldChange('new_supplier_address', e.target.value)}
               placeholder="Address (optional)"
-              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 bg-white rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+              className="w-full px-4 py-2.5 pl-10 text-sm border-2 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
             />
             <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
-          <p className="text-[11px] text-gray-500 pl-1">Provide supplier contact details for your records.</p>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 pl-1">Provide supplier contact details for your records.</p>
         </div>
       )}
 
       {/* Info message when new supplier name is entered */}
       {newName && (
-        <div className="flex items-start gap-2 p-2 mt-2 bg-green-50 border border-green-200 rounded-lg">
-          <AlertCircle size={16} className="text-green-600 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-green-700">
+        <div className="flex items-start gap-2 p-2 mt-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+          <AlertCircle size={16} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-green-700 dark:text-green-300">
             A new supplier "<strong>{newName}</strong>" will be created and added to your suppliers list.
           </p>
         </div>
@@ -213,6 +213,7 @@ const Procurement = () => {
     loading, 
     isRefreshing,
     refetch,
+    optimisticUpdate,
   } = useDataFetch('/procurements', {
     cacheKey: CACHE_KEY,
     initialData: [],
@@ -234,7 +235,7 @@ const Procurement = () => {
   });
 
   // Fetch procurement batches (for filter dropdown + add-to-batch in modal)
-  const { data: batches, refetch: refetchBatches } = useDataFetch('/procurement-batches', {
+  const { data: batches, refetch: refetchBatches, optimisticUpdate: optimisticUpdateBatches } = useDataFetch('/procurement-batches', {
     cacheKey: BATCHES_CACHE_KEY,
     initialData: [],
   });
@@ -470,10 +471,14 @@ const Procurement = () => {
       });
       
       if (response.success) {
+        // Immediately update status in local data for instant UI
+        optimisticUpdate(prev => prev.map(p => p.id === item.id ? { ...p, status: 'Cancelled' } : p));
+        toast.success('Procurement Cancelled', 'Procurement status changed to Cancelled.');
+        // Refetch in background (include batches so sack counts update)
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Procurement Cancelled', 'Procurement status changed to Cancelled.');
-        });
+        invalidateCache(BATCHES_CACHE_KEY);
+        refetch();
+        refetchBatches();
       }
     } catch (error) {
       console.error('Error cancelling procurement:', error);
@@ -481,7 +486,7 @@ const Procurement = () => {
     } finally {
       setSaving(false);
     }
-  }, [saving, refetch, toast]);
+  }, [saving, refetch, refetchBatches, optimisticUpdate, toast]);
 
   const handleDelete = useCallback((item) => {
     setSelectedItem(item);
@@ -504,10 +509,10 @@ const Procurement = () => {
         status: newStatus,
       });
       if (response.success) {
+        toast.success('Status Updated', `Batch ${batch.batch_number} is now ${newStatus}.`);
+        // Refetch in background
         invalidateCache(BATCHES_CACHE_KEY);
-        refetchBatches().then(() => {
-          toast.success('Status Updated', `Batch ${batch.batch_number} is now ${newStatus}.`);
-        });
+        refetchBatches();
       }
     } catch (error) {
       console.error('Error toggling batch status:', error);
@@ -638,12 +643,14 @@ const Procurement = () => {
         isEdit ? setIsEditModalOpen(false) : setIsAddModalOpen(false);
         
         // Refetch and toast together
+        toast.success(message, desc);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache(SUPPLIERS_CACHE_KEY);
         invalidateCache(BATCHES_CACHE_KEY);
-        Promise.all([refetch(), refetchSuppliers(), refetchBatches()]).then(() => {
-          toast.success(message, desc);
-        });
+        refetch();
+        refetchSuppliers();
+        refetchBatches();
         return;
       } else {
         throw response;
@@ -776,12 +783,13 @@ const Procurement = () => {
       });
       if (response.success && response.data) {
         setIsIndividualDryingOpen(false);
+        toast.success('Sent to Drying', `${sacks} sacks from Procurement #${String(individualDryingItem.id).padStart(4, '0')} sent to drying.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache('/drying-processes');
         invalidateCache(BATCHES_CACHE_KEY);
-        Promise.all([refetch(), refetchBatches()]).then(() => {
-          toast.success('Sent to Drying', `${sacks} sacks from Procurement #${String(individualDryingItem.id).padStart(4, '0')} sent to drying.`);
-        });
+        refetch();
+        refetchBatches();
       } else {
         throw response;
       }
@@ -827,12 +835,13 @@ const Procurement = () => {
       });
       if (response.success && response.data) {
         setIsSendToDryingOpen(false);
+        toast.success('Sent to Drying', `${dryingSacks} sacks have been sent to drying.`);
+        // Refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache(BATCHES_CACHE_KEY);
         invalidateCache('/drying-processes');
-        Promise.all([refetch(), refetchBatches()]).then(() => {
-          toast.success('Sent to Drying', `${dryingSacks} sacks have been sent to drying.`);
-        });
+        refetch();
+        refetchBatches();
       } else {
         throw response;
       }
@@ -856,14 +865,41 @@ const Procurement = () => {
       const response = await apiClient.delete(`/procurements/${selectedItem.id}`);
       
       if (response.success) {
+        const archivedItem = selectedItem;
+        const archivedId = archivedItem.id;
         // Close modal first
         setIsDeleteModalOpen(false);
         
-        // Refetch and toast together
+        // Immediately remove from local data (optimistic update) for instant UI
+        optimisticUpdate(prev => prev.filter(p => p.id !== archivedId));
+        
+        // Immediately update batch sack counts if procurement belonged to a batch
+        if (archivedItem.batch_id) {
+          optimisticUpdateBatches(prev => prev.map(b => {
+            if (b.id === archivedItem.batch_id) {
+              const newTotalSacks = Math.max(0, (b.total_sacks || 0) - (archivedItem.sacks || 0));
+              const newTotalKg = Math.max(0, (b.total_kg || 0) - parseFloat(archivedItem.quantity_kg || 0));
+              const usedSacks = (b.total_sacks || 0) - (b.remaining_sacks || 0);
+              const usedKg = (b.total_kg || 0) - (b.remaining_kg || 0);
+              return {
+                ...b,
+                total_sacks: newTotalSacks,
+                total_kg: newTotalKg,
+                remaining_sacks: Math.max(0, newTotalSacks - usedSacks),
+                remaining_kg: Math.max(0, newTotalKg - usedKg),
+              };
+            }
+            return b;
+          }));
+        }
+        
+        toast.success('Procurement Archived', 'Procurement record has been archived.');
+        
+        // Refetch in background to confirm (include batches so sack counts update)
         invalidateCache(CACHE_KEY);
-        refetch().then(() => {
-          toast.success('Procurement Archived', 'Procurement record has been archived.');
-        });
+        invalidateCache(BATCHES_CACHE_KEY);
+        refetch();
+        refetchBatches();
         return;
       } else {
         throw new Error(response.error || 'Failed to archive');
@@ -1040,9 +1076,9 @@ const Procurement = () => {
       accessor: 'id',
       cell: (row) => (
         <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-sm text-gray-600">#{String(row.id).padStart(4, '0')}</span>
+          <span className="font-mono text-sm text-gray-600 dark:text-gray-300">#{String(row.id).padStart(4, '0')}</span>
           {row.batch_number && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 w-fit">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 w-fit">
               <Layers size={10} />{row.batch_number}
             </span>
           )}
@@ -1063,8 +1099,8 @@ const Procurement = () => {
       accessor: 'quantity_kg',
       cell: (row) => (
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-green-600">{parseFloat(row.quantity_kg).toLocaleString()} kg</span>
-          <span className="text-xs text-blue-600">{parseInt(row.sacks || 0).toLocaleString()} sacks</span>
+          <span className="font-semibold text-green-600 dark:text-green-400">{parseFloat(row.quantity_kg).toLocaleString()} kg</span>
+          <span className="text-xs text-blue-600 dark:text-blue-400">{parseInt(row.sacks || 0).toLocaleString()} sacks</span>
           {(row.drying_sacks > 0 || row.drying_kg > 0) && (
             <span className="text-[11px] text-orange-500">
               ↗ {row.drying_sacks} sacks / {parseFloat(row.drying_kg).toLocaleString()} kg drying
@@ -1076,18 +1112,18 @@ const Procurement = () => {
     { 
       header: 'Price/kg', 
       accessor: 'price_per_kg',
-      cell: (row) => <span className="text-gray-700">₱{parseFloat(row.price_per_kg).toLocaleString()}</span>
+      cell: (row) => <span className="text-gray-700 dark:text-gray-200">₱{parseFloat(row.price_per_kg).toLocaleString()}</span>
     },
     { 
       header: 'Total Cost', 
       accessor: 'total_cost',
-      cell: (row) => <span className="font-semibold text-button-600">₱{parseFloat(row.total_cost).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-button-600 dark:text-button-400">₱{parseFloat(row.total_cost).toLocaleString()}</span>
     },
     { header: 'Status', accessor: 'status', cell: (row) => (
       <div>
         <StatusBadge status={row.status} />
         {row.description && (
-          <p className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[140px]" title={row.description}><span className="text-gray-500">Remarks:</span> {row.description}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate max-w-[140px]" title={row.description}><span className="text-gray-500 dark:text-gray-400">Remarks:</span> {row.description}</p>
         )}
       </div>
     )},
@@ -1095,7 +1131,7 @@ const Procurement = () => {
       header: 'Date', accessor: 'created_at',
       cell: (row) => row.created_at ? (
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-gray-600">{new Date(row.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          <span className="text-xs text-gray-600 dark:text-gray-300">{new Date(row.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}</span>
           <span className="text-[11px] text-gray-400">{new Date(row.created_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true })}</span>
         </div>
       ) : <span className="text-gray-300 text-xs">—</span>
@@ -1118,7 +1154,7 @@ const Procurement = () => {
             onClick={(e) => { if (!editDisabled) { e.stopPropagation(); handleEdit(row, remarksOnlyEdit); } else e.stopPropagation(); }}
             disabled={editDisabled}
             className={`p-1.5 rounded-md transition-colors ${
-              editDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-button-50 text-button-500 hover:text-button-700'
+              editDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-button-50 dark:hover:bg-button-900/20 text-button-500 hover:text-button-700 dark:text-button-300'
             }`}
             title={editDisabled ? 'Cannot edit' : remarksOnlyEdit ? 'Edit Remarks' : 'Edit'}
           >
@@ -1127,7 +1163,7 @@ const Procurement = () => {
           {canSendToDrying && (
             <button
               onClick={(e) => { e.stopPropagation(); handleOpenIndividualDrying(row); }}
-              className="p-1.5 rounded-md hover:bg-yellow-50 text-yellow-500 hover:text-yellow-700 transition-colors"
+              className="p-1.5 rounded-md hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-yellow-500 hover:text-yellow-700 dark:text-yellow-300 transition-colors"
               title="Send to Drying"
             >
               <Sun size={15} />
@@ -1139,7 +1175,7 @@ const Procurement = () => {
             onClick={(e) => { if (!deleteDisabled) { e.stopPropagation(); handleDelete(row); } else e.stopPropagation(); }}
             disabled={deleteDisabled}
             className={`p-1.5 rounded-md transition-colors ${
-              deleteDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-amber-50 text-amber-500 hover:text-amber-700'
+              deleteDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-amber-50 text-amber-500 hover:text-amber-700 dark:text-amber-300'
             }`}
             title={deleteDisabled ? 'Cannot archive' : 'Archive'}
           >
@@ -1156,7 +1192,7 @@ const Procurement = () => {
     {
       header: 'Batch #', accessor: 'batch_number',
       cell: (row) => (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
           <Layers size={10} />{row.batch_number}
         </span>
       )
@@ -1173,25 +1209,25 @@ const Procurement = () => {
       header: 'Sacks', accessor: 'total_sacks',
       cell: (row) => (
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-blue-600">{row.total_sacks}</span>
-          <span className="text-xs text-gray-500">{row.remaining_sacks} left</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-400">{row.total_sacks}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{row.remaining_sacks} left</span>
         </div>
       )
     },
     {
       header: 'Total Kg', accessor: 'total_kg',
-      cell: (row) => <span className="font-semibold text-green-600">{parseFloat(row.total_kg).toLocaleString()} kg</span>
+      cell: (row) => <span className="font-semibold text-green-600 dark:text-green-400">{parseFloat(row.total_kg).toLocaleString()} kg</span>
     },
     {
       header: 'Procurement Cost', accessor: 'total_cost',
-      cell: (row) => <span className="font-semibold text-button-600">₱{parseFloat(row.total_cost || 0).toLocaleString()}</span>
+      cell: (row) => <span className="font-semibold text-button-600 dark:text-button-400">₱{parseFloat(row.total_cost || 0).toLocaleString()}</span>
     },
     {
       header: 'Drying Cost', accessor: 'total_drying_cost',
       cell: (row) => {
         const cost = parseFloat(row.total_drying_cost || 0);
         return cost > 0 
-          ? <span className="font-semibold text-orange-600">₱{cost.toLocaleString()}</span>
+          ? <span className="font-semibold text-orange-600 dark:text-orange-400">₱{cost.toLocaleString()}</span>
           : <span className="text-gray-400 text-xs">—</span>;
       }
     },
@@ -1200,12 +1236,12 @@ const Procurement = () => {
       cell: (row) => {
         const procurement = parseFloat(row.total_cost || 0);
         const drying = parseFloat(row.total_drying_cost || 0);
-        return <span className="font-bold text-purple-600">₱{(procurement + drying).toLocaleString()}</span>;
+        return <span className="font-bold text-purple-600 dark:text-purple-400">₱{(procurement + drying).toLocaleString()}</span>;
       }
     },
     {
       header: 'Items', accessor: 'procurements_count',
-      cell: (row) => <span className="text-sm text-gray-700">{row.procurements_count ?? '—'}</span>
+      cell: (row) => <span className="text-sm text-gray-700 dark:text-gray-200">{row.procurements_count ?? '—'}</span>
     },
     { 
       header: 'Status', accessor: 'status', 
@@ -1222,13 +1258,13 @@ const Procurement = () => {
     {
       header: 'Notes', accessor: 'notes',
       cell: (row) => row.notes ? (
-        <span className="text-xs text-gray-600 max-w-[200px] truncate block">{row.notes}</span>
+        <span className="text-xs text-gray-600 dark:text-gray-300 max-w-[200px] truncate block">{row.notes}</span>
       ) : <span className="text-gray-400 text-xs">—</span>
     },
     {
       header: 'Created', accessor: 'created_at',
       cell: (row) => (
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
           {row.created_at ? new Date(row.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
         </span>
       )
@@ -1242,7 +1278,7 @@ const Procurement = () => {
         description="Manage purchase orders and supplier transactions" 
         icon={ShoppingCart}
         action={isRefreshing ? (
-          <span className="text-xs text-gray-500 animate-pulse">Syncing...</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
         ) : null}
       />
 
@@ -1261,19 +1297,19 @@ const Procurement = () => {
       {/* Charts */}
       {loading && procurements.length === 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6 h-[340px] animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
-            <div className="h-3 bg-gray-100 rounded w-1/4 mb-6"></div>
-            <div className="h-[240px] bg-gray-100 rounded"></div>
+          <div className="lg:col-span-2 bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-6 h-[340px] animate-pulse">
+            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/3 mb-2"></div>
+            <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
+            <div className="h-[240px] bg-gray-100 dark:bg-gray-700 rounded"></div>
           </div>
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-4 h-[162px] animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-[100px] bg-gray-100 rounded-full mx-auto w-[100px]"></div>
+            <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[162px] animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2"></div>
+              <div className="h-[100px] bg-gray-100 dark:bg-gray-700 rounded-full mx-auto w-[100px]"></div>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-4 h-[162px] animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-[100px] bg-gray-100 rounded-full mx-auto w-[100px]"></div>
+            <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[162px] animate-pulse">
+              <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2"></div>
+              <div className="h-[100px] bg-gray-100 dark:bg-gray-700 rounded-full mx-auto w-[100px]"></div>
             </div>
           </div>
         </div>
@@ -1293,7 +1329,7 @@ const Procurement = () => {
                   <select
                     value={chartPeriod}
                     onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
-                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -1307,7 +1343,7 @@ const Procurement = () => {
                       type="month"
                       value={chartMonth}
                       onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
                   {chartPeriod === 'weekly' && (
@@ -1315,7 +1351,7 @@ const Procurement = () => {
                       type="month"
                       value={chartMonth}
                       onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
                   {chartPeriod === 'monthly' && (
@@ -1325,7 +1361,7 @@ const Procurement = () => {
                       onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000"
                       max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
                     />
                   )}
                   {chartPeriod === 'bi-annually' && (
@@ -1335,7 +1371,7 @@ const Procurement = () => {
                       onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
                       min="2000"
                       max={new Date().getFullYear()}
-                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
+                      className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
                     />
                   )}
                   {chartPeriod === 'annually' && (
@@ -1346,7 +1382,7 @@ const Procurement = () => {
                         onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
                         min="2000"
                         max={chartYearTo}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
                       />
                       <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
                       <input
@@ -1355,7 +1391,7 @@ const Procurement = () => {
                         onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
                         min={chartYearFrom}
                         max={new Date().getFullYear()}
-                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
+                        className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
                       />
                     </div>
                   )}
@@ -1364,9 +1400,9 @@ const Procurement = () => {
               onDotClick={setActiveChartPoint}
               activePoint={activeChartPoint}
               summaryStats={[
-                { label: 'Total Orders', value: totalProcurements.toString(), color: 'text-primary-600' }, 
-                { label: 'Avg Order Value', value: `₱${avgOrderValue.toLocaleString()}`, color: 'text-primary-600' }, 
-                { label: 'Total Qty', value: `${totalQuantity.toLocaleString()} kg`, color: 'text-green-600' }
+                { label: 'Total Orders', value: totalProcurements.toString(), color: 'text-primary-600 dark:text-primary-400' }, 
+                { label: 'Avg Order Value', value: `₱${avgOrderValue.toLocaleString()}`, color: 'text-primary-600 dark:text-primary-400' }, 
+                { label: 'Total Qty', value: `${totalQuantity.toLocaleString()} kg`, color: 'text-green-600 dark:text-green-400' }
               ]} 
             />
           </div>
@@ -1399,11 +1435,11 @@ const Procurement = () => {
       )}
 
       {/* Table Tab Toggle */}
-      <div className="flex items-center gap-1 mb-4 bg-white dark:bg-gray-700 rounded-lg p-1 shadow-sm border border-gray-200 w-fit">
+      <div className="flex items-center gap-1 mb-4 bg-white dark:bg-gray-700 rounded-lg p-1 shadow-sm border border-primary-200 dark:border-primary-700 w-fit">
         <button
           onClick={() => setTableTab('records')}
           className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${
-            tableTab === 'records' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-800'
+            tableTab === 'records' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 dark:text-gray-100'
           }`}
         >
           <FileText size={14} /> Records
@@ -1411,7 +1447,7 @@ const Procurement = () => {
         <button
           onClick={() => setTableTab('batches')}
           className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 ${
-            tableTab === 'batches' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 hover:text-gray-800'
+            tableTab === 'batches' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 dark:text-gray-100'
           }`}
         >
           <List size={14} /> Batches
@@ -1424,12 +1460,12 @@ const Procurement = () => {
           <div className="flex items-center gap-3 mb-3">
             <div className="flex items-center gap-2">
               <Layers size={16} className="text-indigo-500" />
-              <span className="text-sm font-medium text-gray-600">Filter by Batch:</span>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Filter by Batch:</span>
             </div>
             <select
               value={batchFilter}
               onChange={e => setBatchFilter(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 min-w-[240px]"
+              className="px-3 py-1.5 text-sm border border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 min-w-[240px]"
             >
               {batchOptions.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1438,7 +1474,7 @@ const Procurement = () => {
             {batchFilter && (
               <button
                 onClick={() => setBatchFilter('')}
-                className="text-xs text-gray-500 hover:text-red-500 underline transition-colors"
+                className="text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 underline transition-colors"
               >
                 Clear filter
               </button>
@@ -1446,12 +1482,12 @@ const Procurement = () => {
             {batchFilter && (() => {
               const b = batches.find(b => String(b.id) === batchFilter);
               return b ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-                  <span className="text-xs font-semibold text-indigo-700">{b.batch_number}</span>
-                  <span className="text-xs text-gray-500">·</span>
-                  <span className="text-xs text-gray-600">{b.remaining_sacks}/{b.total_sacks} sacks remaining</span>
-                  <span className="text-xs text-gray-500">·</span>
-                  <span className={`text-xs font-medium ${ b.status === 'Open' ? 'text-green-600' : b.status === 'Closed' ? 'text-yellow-600' : 'text-gray-500'}`}>{b.status}</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg">
+                  <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">{b.batch_number}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">{b.remaining_sacks}/{b.total_sacks} sacks remaining</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">·</span>
+                  <span className={`text-xs font-medium ${ b.status === 'Open' ? 'text-green-600 dark:text-green-400' : b.status === 'Closed' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400'}`}>{b.status}</span>
                 </div>
               ) : null;
             })()}
@@ -1525,7 +1561,7 @@ const Procurement = () => {
             </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -1537,80 +1573,80 @@ const Procurement = () => {
             {/* Left Column */}
             <div className="space-y-3">
               {/* ID & Status */}
-              <div className="bg-gradient-to-r from-primary-50 to-button-50 p-3 rounded-lg border-2 border-primary-200">
+              <div className="bg-gradient-to-r from-primary-50 to-button-50 dark:from-gray-700 dark:to-gray-700 p-3 rounded-lg border-2 border-primary-200 dark:border-primary-700">
                 <div className="flex items-start gap-2">
-                  <div className="p-2 bg-button-500 text-white rounded-lg">
+                  <div className="p-2 bg-button-500 dark:bg-button-600 text-white rounded-lg">
                     <Package size={20} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-800">Procurement #{String(selectedItem.id).padStart(4, '0')}</h3>
-                    <p className="text-xs text-gray-600">Record ID</p>
+                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">Procurement #{String(selectedItem.id).padStart(4, '0')}</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Record ID</p>
                   </div>
                   <StatusBadge status={selectedItem.status} />
                 </div>
               </div>
 
               {/* Supplier */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                   <Building2 size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Supplier</p>
-                  <p className="font-semibold text-gray-800 text-sm">{selectedItem.supplier_name}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Supplier</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{selectedItem.supplier_name}</p>
                 </div>
               </div>
 
               {/* Batch badge */}
               {selectedItem?.batch_number && (
-                <div className="flex items-center gap-2 p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <div className="flex items-center gap-2 p-2.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg">
                   <Layers size={15} className="text-indigo-500 shrink-0" />
                   <div>
-                    <p className="text-xs text-gray-500">Batch</p>
-                    <p className="text-sm font-semibold text-indigo-700">{selectedItem.batch_number}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Batch</p>
+                    <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{selectedItem.batch_number}</p>
                   </div>
                   <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-                    selectedItem.batch_status === 'Open' ? 'bg-green-100 text-green-700' :
-                    selectedItem.batch_status === 'Closed' ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-gray-100 text-gray-600'
+                    selectedItem.batch_status === 'Open' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                    selectedItem.batch_status === 'Closed' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                    'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                   }`}>{selectedItem.batch_status}</span>
                 </div>
               )}
 
               {/* Variety */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                   <User size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Variety</p>
-                  <p className="font-semibold text-gray-800 text-sm">{selectedItem.variety_name || '—'}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Variety</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{selectedItem.variety_name || '—'}</p>
                 </div>
               </div>
 
               {/* Total Cost */}
-              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
-                <div className="p-2 bg-button-500 text-white rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 dark:from-gray-700 dark:to-gray-700 rounded-lg border-2 border-button-200 dark:border-button-700">
+                <div className="p-2 bg-button-500 dark:bg-button-600 text-white rounded-lg">
                   <DollarSign size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Total Cost</p>
-                  <p className="text-xl font-bold text-button-600">₱{parseFloat(selectedItem.total_cost).toLocaleString()}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Total Cost</p>
+                  <p className="text-xl font-bold text-button-600 dark:text-button-400">₱{parseFloat(selectedItem.total_cost).toLocaleString()}</p>
                 </div>
               </div>
 
               {/* Date */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
                   <Calendar size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Date Created</p>
-                  <p className="font-semibold text-gray-800 text-sm">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Date Created</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
                     {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </p>
                   {selectedItem.created_at && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(selectedItem.created_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true })}
                     </p>
                   )}
@@ -1621,47 +1657,47 @@ const Procurement = () => {
             {/* Right Column */}
             <div className="space-y-3">
               {/* Quantity Info */}
-              <div className="p-3 bg-gray-50 rounded-lg space-y-2.5">
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                  <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                     <Boxes size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Sacks/Bags</p>
-                    <p className="font-semibold text-gray-800 text-sm">{parseInt(selectedItem.sacks || 0).toLocaleString()} sacks</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Sacks/Bags</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseInt(selectedItem.sacks || 0).toLocaleString()} sacks</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                  <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                     <Scale size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Quantity</p>
-                    <p className="font-semibold text-gray-800 text-sm">{parseFloat(selectedItem.quantity_kg).toLocaleString()} kg</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Quantity</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{parseFloat(selectedItem.quantity_kg).toLocaleString()} kg</p>
                   </div>
                 </div>
               </div>
 
               {/* Price per KG */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-lg">
                   <DollarSign size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Price per KG</p>
-                  <p className="font-semibold text-gray-800 text-sm">₱{parseFloat(selectedItem.price_per_kg).toLocaleString()}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Price per KG</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">₱{parseFloat(selectedItem.price_per_kg).toLocaleString()}</p>
                 </div>
               </div>
 
               {/* Remarks */}
               {selectedItem.description && (
-                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
-                  <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
+                <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
                     <FileText size={18} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 mb-0.5">Remarks</p>
-                    <p className="text-gray-800 text-sm">{selectedItem.description}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Remarks</p>
+                    <p className="text-gray-800 dark:text-gray-100 text-sm">{selectedItem.description}</p>
                   </div>
                 </div>
               )}
@@ -1683,8 +1719,8 @@ const Procurement = () => {
         {({ submitted }) => (
           <>
             {/* Batch Assignment Section — TOP */}
-            <div className="pb-3 mb-3 border-b border-gray-100">
-              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+            <div className="pb-3 mb-3 border-b border-gray-100 dark:border-gray-700">
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                 <Layers size={14} className="text-indigo-500" />
                 Batch Assignment <span className="text-gray-400 font-normal">(optional)</span>
               </label>
@@ -1696,7 +1732,7 @@ const Procurement = () => {
                       name="batch_id"
                       value={formData.batch_id}
                       onChange={handleFormChange}
-                      className="flex-1 px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="flex-1 px-4 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                     >
                       {openBatchOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1705,7 +1741,7 @@ const Procurement = () => {
                     <button
                       type="button"
                       onClick={() => setIsCreatingBatch(true)}
-                      className="px-3 py-2.5 text-sm font-medium text-indigo-600 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all flex items-center gap-1.5 whitespace-nowrap"
+                      className="px-3 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-700 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <PlusCircle size={14} />
                       New Batch
@@ -1714,46 +1750,46 @@ const Procurement = () => {
                   {formData.batch_id && (() => {
                     const b = batches.find(b => String(b.id) === formData.batch_id);
                     return b ? (
-                      <p className="mt-1.5 text-xs text-indigo-600">
+                      <p className="mt-1.5 text-xs text-indigo-600 dark:text-indigo-400">
                         Batch variety: <strong>{b.variety_name}</strong> · {b.remaining_sacks} sacks remaining
                       </p>
                     ) : null;
                   })()}
                 </>
               ) : (
-                <div className="p-3 bg-indigo-50 border-2 border-indigo-200 rounded-xl space-y-3">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-700 rounded-xl space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-indigo-700">Create New Batch</p>
+                    <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">Create New Batch</p>
                     <button
                       type="button"
                       onClick={() => { setIsCreatingBatch(false); setNewBatchNotes(''); }}
-                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200 underline"
                     >
                       Cancel
                     </button>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Batch Variety *</label>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1 block">Batch Variety *</label>
                     <select
                       name="variety_id"
                       value={formData.variety_id}
                       onChange={handleFormChange}
-                      className="w-full px-3 py-2 text-sm border-2 border-indigo-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+                      className="w-full px-3 py-2 text-sm border-2 border-indigo-200 dark:border-indigo-700 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
                     >
                       {varietyOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
-                    <p className="mt-1 text-xs text-gray-500">All procurements in this batch must be this variety.</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">All procurements in this batch must be this variety.</p>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">Notes (optional)</label>
+                    <label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1 block">Notes (optional)</label>
                     <input
                       type="text"
                       value={newBatchNotes}
                       onChange={(e) => setNewBatchNotes(e.target.value)}
                       placeholder="e.g. Season 2026 first harvest"
-                      className="w-full px-3 py-2 text-sm border-2 border-indigo-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+                      className="w-full px-3 py-2 text-sm border-2 border-indigo-200 dark:border-indigo-700 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
                     />
                   </div>
                   <button
@@ -1866,10 +1902,10 @@ const Procurement = () => {
 
             {/* Calculated Total */}
             {(formData.quantity_kg && formData.price_per_kg) && (
-              <div className="p-3 bg-button-50 border border-button-200 rounded-lg">
+              <div className="p-3 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Calculated Total:</span>
-                  <span className="text-lg font-bold text-button-600">₱{calculatedTotal.toLocaleString()}</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Calculated Total:</span>
+                  <span className="text-lg font-bold text-button-600 dark:text-button-400">₱{calculatedTotal.toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -1907,7 +1943,7 @@ const Procurement = () => {
             {showRemarksOnly ? (
               /* Remarks-only edit for dried/drying procurements */
               <>
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg mb-4">
                   <p className="text-sm text-yellow-800">
                     <strong>Procurement #{String(selectedItem?.id).padStart(4, '0')}</strong> {isRemarksOnlyEdit ? 'is already Dried' : `has ${selectedItem?.drying_sacks} sacks in drying`}. Only the remarks can be edited.
                   </p>
@@ -1990,8 +2026,8 @@ const Procurement = () => {
 
                 {/* Drying info banner */}
                 {selectedItem?.drying_sacks > 0 && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs text-blue-700">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
                       <strong>{selectedItem.drying_sacks} sacks</strong> / <strong>{parseFloat(selectedItem.drying_kg).toLocaleString()} kg</strong> are committed to drying. Values cannot be set below these amounts.
                     </p>
                   </div>
@@ -1999,10 +2035,10 @@ const Procurement = () => {
 
                 {/* Calculated Total */}
                 {(formData.quantity_kg && formData.price_per_kg) && (
-                  <div className="p-3 bg-button-50 border border-button-200 rounded-lg">
+                  <div className="p-3 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Calculated Total:</span>
-                      <span className="text-lg font-bold text-button-600">₱{calculatedTotal.toLocaleString()}</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-300">Calculated Total:</span>
+                      <span className="text-lg font-bold text-button-600 dark:text-button-400">₱{calculatedTotal.toLocaleString()}</span>
                     </div>
                   </div>
                 )}
@@ -2019,8 +2055,8 @@ const Procurement = () => {
                 />
 
                 {/* Batch Assignment */}
-                <div className="border-t border-gray-100 pt-3 mt-1">
-                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 mb-2">
+                <div className="border-t border-gray-100 dark:border-gray-700 pt-3 mt-1">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
                     <Layers size={14} className="text-indigo-500" />
                     Batch Assignment <span className="text-gray-400 font-normal">(optional)</span>
                   </label>
@@ -2029,7 +2065,7 @@ const Procurement = () => {
                       name="batch_id"
                       value={formData.batch_id}
                       onChange={handleFormChange}
-                      className="flex-1 px-4 py-2.5 text-sm border-2 border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="flex-1 px-4 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                     >
                       {openBatchOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -2046,7 +2082,7 @@ const Procurement = () => {
                   {formData.batch_id && (() => {
                     const b = batches.find(b => String(b.id) === formData.batch_id);
                     return b ? (
-                      <p className="mt-1.5 text-xs text-indigo-600">
+                      <p className="mt-1.5 text-xs text-indigo-600 dark:text-indigo-400">
                         Batch variety: <strong>{b.variety_name}</strong> · {b.remaining_sacks} sacks remaining
                       </p>
                     ) : null;
@@ -2116,19 +2152,19 @@ const Procurement = () => {
             <>
               {/* Batch Info */}
               {selectedBatch && (
-                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg mb-3">
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg mb-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <Layers size={16} className="text-indigo-600" />
-                    <span className="text-sm font-bold text-indigo-700">{selectedBatch.batch_number}</span>
+                    <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{selectedBatch.batch_number}</span>
                     <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
-                      selectedBatch.status === 'Open' ? 'bg-green-100 text-green-700' :
-                      selectedBatch.status === 'Closed' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-gray-100 text-gray-600'
+                      selectedBatch.status === 'Open' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                      selectedBatch.status === 'Closed' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                      'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                     }`}>{selectedBatch.status}</span>
                   </div>
-                  <div className="flex gap-4 text-xs text-gray-600">
+                  <div className="flex gap-4 text-xs text-gray-600 dark:text-gray-300">
                     <div><span className="font-medium">Variety:</span> {selectedBatch.variety_name}</div>
-                    <div><span className="font-medium">Available:</span> <span className="font-bold text-green-600">{selectedBatch.remaining_sacks} sacks / {parseFloat(selectedBatch.remaining_kg).toLocaleString()} kg</span></div>
+                    <div><span className="font-medium">Available:</span> <span className="font-bold text-green-600 dark:text-green-400">{selectedBatch.remaining_sacks} sacks / {parseFloat(selectedBatch.remaining_kg).toLocaleString()} kg</span></div>
                   </div>
                 </div>
               )}
@@ -2146,22 +2182,22 @@ const Procurement = () => {
               />
 
               {loadingDryingPreview && (
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg mb-2 animate-pulse">
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg mb-2 animate-pulse">
                   <p className="text-xs text-gray-400">Calculating distribution...</p>
                 </div>
               )}
               {dryingPreview && !loadingDryingPreview && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-2">
-                  <p className="text-xs font-semibold text-green-700 mb-1.5">Proportional distribution:</p>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg mb-2">
+                  <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1.5">Proportional distribution:</p>
                   <div className="space-y-1">
                     {dryingPreview.breakdown?.map((item, i) => (
-                      <div key={i} className="flex justify-between text-xs text-gray-700">
+                      <div key={i} className="flex justify-between text-xs text-gray-700 dark:text-gray-200">
                         <span>Procurement #{String(item.procurement_id).padStart(4,'0')}</span>
                         <span>{item.sacks_taken} sacks → {parseFloat(item.quantity_kg).toLocaleString()} kg</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-1.5 pt-1.5 border-t border-green-200 flex justify-between text-xs font-bold text-green-700">
+                  <div className="mt-1.5 pt-1.5 border-t border-green-200 dark:border-green-700 flex justify-between text-xs font-bold text-green-700 dark:text-green-300">
                     <span>Total</span>
                     <span>{dryingSacks} sacks → {parseFloat(dryingPreview.total_kg || 0).toLocaleString()} kg</span>
                   </div>
@@ -2181,8 +2217,8 @@ const Procurement = () => {
                 step="0.01"
               />
 
-              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                <p className="text-xs text-gray-600">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the Drying page to increment days. Total = (Sacks × Price) × Days.</p>
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg">
+                <p className="text-xs text-gray-600 dark:text-gray-300">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the Drying page to increment days. Total = (Sacks × Price) × Days.</p>
               </div>
             </>
           );
@@ -2209,17 +2245,17 @@ const Procurement = () => {
           const proportionalKg = totalSacks > 0 ? ((enteredSacks / totalSacks) * parseFloat(individualDryingItem.quantity_kg)).toFixed(2) : 0;
           return (
             <>
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg space-y-1">
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg space-y-1">
                 <p className="text-sm font-medium text-yellow-800">
                   Procurement #{String(individualDryingItem.id).padStart(4, '0')}
                 </p>
-                <p className="text-xs text-yellow-700">
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
                   Supplier: {individualDryingItem.supplier_name} &bull; {individualDryingItem.variety_name || 'N/A'}
                 </p>
-                <p className="text-xs text-yellow-700">
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
                   {totalSacks.toLocaleString()} sacks &bull; {parseFloat(individualDryingItem.quantity_kg).toLocaleString()} kg
                   {alreadyDrying > 0 && (
-                    <span className="text-orange-600 ml-1">({alreadyDrying} sacks already drying)</span>
+                    <span className="text-orange-600 dark:text-orange-400 ml-1">({alreadyDrying} sacks already drying)</span>
                   )}
                 </p>
               </div>
@@ -2260,8 +2296,8 @@ const Procurement = () => {
               />
 
               {enteredSacks > 0 && !(parseInt(individualDryingSacks) > remaining) && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs text-blue-700">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
                     <strong>{enteredSacks.toLocaleString()} sacks</strong> ≈ <strong>{parseFloat(proportionalKg).toLocaleString()} kg</strong> will be sent to drying. Days start at <strong>0</strong>.
                   </p>
                 </div>
@@ -2291,7 +2327,7 @@ const Procurement = () => {
             </button>
             <button
               onClick={() => setIsBatchViewOpen(false)}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
             >
               Close
             </button>
@@ -2303,26 +2339,26 @@ const Procurement = () => {
             {/* Left Column */}
             <div className="space-y-3">
               {/* Batch ID & Status */}
-              <div className="bg-gradient-to-r from-indigo-50 to-button-50 p-3 rounded-lg border-2 border-indigo-200">
+              <div className="bg-gradient-to-r from-indigo-50 to-button-50 dark:from-gray-700 dark:to-gray-700 p-3 rounded-lg border-2 border-indigo-200 dark:border-gray-600">
                 <div className="flex items-start gap-2">
-                  <div className="p-2 bg-indigo-500 text-white rounded-lg">
+                  <div className="p-2 bg-indigo-500 dark:bg-indigo-600 text-white rounded-lg">
                     <Layers size={20} />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-base font-bold text-gray-800">{selectedBatch.batch_number}</h3>
-                    <p className="text-xs text-gray-600">Batch Number</p>
+                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{selectedBatch.batch_number}</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Batch Number</p>
                   </div>
                   <StatusBadge status={selectedBatch.status} />
                 </div>
               </div>
 
               {/* Variety */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-primary-200 dark:border-primary-700">
+                <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                   <User size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Variety</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Variety</p>
                   {selectedBatch.variety_name ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white" style={{ backgroundColor: selectedBatch.variety_color || '#6b7280' }}>
                       {selectedBatch.variety_name}
@@ -2332,41 +2368,41 @@ const Procurement = () => {
               </div>
 
               {/* Cost Breakdown */}
-              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 rounded-lg border-2 border-button-200">
-                <div className="p-2 bg-button-500 text-white rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gradient-to-r from-button-50 to-primary-50 dark:from-gray-700 dark:to-gray-700 rounded-lg border-2 border-button-200 dark:border-button-700">
+                <div className="p-2 bg-button-500 dark:bg-button-600 text-white rounded-lg">
                   <DollarSign size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-1">Cost Breakdown</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-1">Cost Breakdown</p>
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Procurement</span>
-                      <span className="text-sm font-semibold text-button-600">₱{parseFloat(selectedBatch.total_cost || 0).toLocaleString()}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Procurement</span>
+                      <span className="text-sm font-semibold text-button-600 dark:text-button-400">₱{parseFloat(selectedBatch.total_cost || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Drying</span>
-                      <span className="text-sm font-semibold text-orange-600">₱{parseFloat(selectedBatch.total_drying_cost || 0).toLocaleString()}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Drying</span>
+                      <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">₱{parseFloat(selectedBatch.total_drying_cost || 0).toLocaleString()}</span>
                     </div>
-                    <div className="border-t border-gray-200 pt-1 flex justify-between items-center">
-                      <span className="text-xs font-medium text-gray-700">Total Expenses</span>
-                      <span className="text-lg font-bold text-purple-600">₱{(parseFloat(selectedBatch.total_cost || 0) + parseFloat(selectedBatch.total_drying_cost || 0)).toLocaleString()}</span>
+                    <div className="border-t border-gray-200 dark:border-gray-600 pt-1 flex justify-between items-center">
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-200">Total Expenses</span>
+                      <span className="text-lg font-bold text-purple-600 dark:text-purple-400">₱{(parseFloat(selectedBatch.total_cost || 0) + parseFloat(selectedBatch.total_drying_cost || 0)).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Date */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+              <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-primary-200 dark:border-primary-700">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
                   <Calendar size={18} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-xs text-gray-600 mb-0.5">Date Created</p>
-                  <p className="font-semibold text-gray-800 text-sm">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Date Created</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
                     {selectedBatch.created_at ? new Date(selectedBatch.created_at).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                   </p>
                   {selectedBatch.created_at && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(selectedBatch.created_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit', hour12: true })}
                     </p>
                   )}
@@ -2375,13 +2411,13 @@ const Procurement = () => {
 
               {/* Notes */}
               {selectedBatch.notes && (
-                <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="p-2 bg-gray-100 text-gray-600 rounded-lg">
+                <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-primary-200 dark:border-primary-700">
+                  <div className="p-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg">
                     <FileText size={18} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 mb-0.5">Notes</p>
-                    <p className="text-gray-800 text-sm">{selectedBatch.notes}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Notes</p>
+                    <p className="text-gray-800 dark:text-gray-100 text-sm">{selectedBatch.notes}</p>
                   </div>
                 </div>
               )}
@@ -2391,60 +2427,60 @@ const Procurement = () => {
             <div className="space-y-3">
               {/* Stats Grid */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
                     <Boxes size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Total Sacks</p>
-                    <p className="font-bold text-blue-600 text-lg">{selectedBatch.total_sacks}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Total Sacks</p>
+                    <p className="font-bold text-blue-600 dark:text-blue-400 text-lg">{selectedBatch.total_sacks}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
                     <Scale size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Total Kg</p>
-                    <p className="font-bold text-green-600 text-lg">{parseFloat(selectedBatch.total_kg).toLocaleString()}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Total Kg</p>
+                    <p className="font-bold text-green-600 dark:text-green-400 text-lg">{parseFloat(selectedBatch.total_kg).toLocaleString()}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="p-1.5 bg-orange-100 text-orange-600 rounded-lg">
+                <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg">
                     <Boxes size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Sacks Left</p>
-                    <p className="font-bold text-orange-600 text-lg">{selectedBatch.remaining_sacks}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Sacks Left</p>
+                    <p className="font-bold text-orange-600 dark:text-orange-400 text-lg">{selectedBatch.remaining_sacks}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
+                <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
                     <Package size={16} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600">Items</p>
-                    <p className="font-bold text-purple-600 text-lg">{selectedBatch.procurements_count || procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).length}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Items</p>
+                    <p className="font-bold text-purple-600 dark:text-purple-400 text-lg">{selectedBatch.procurements_count || procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).length}</p>
                   </div>
                 </div>
               </div>
 
               {/* Procurements in Batch */}
-              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-sm font-semibold text-gray-700 mb-2">Procurements in this Batch</p>
+              <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-primary-200 dark:border-primary-700">
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Procurements in this Batch</p>
                 <div className="max-h-48 overflow-y-auto space-y-2">
                   {procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).length > 0 ? (
                     procurements.filter(p => String(p.batch_id) === String(selectedBatch.id)).map(p => (
-                      <div key={p.id} className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded-lg text-sm">
+                      <div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-gray-700 border border-primary-200 dark:border-primary-700 rounded-lg text-sm">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-gray-600">#{String(p.id).padStart(4, '0')}</span>
-                          <span className="text-gray-700">{p.supplier_name}</span>
+                          <span className="font-mono text-gray-600 dark:text-gray-300">#{String(p.id).padStart(4, '0')}</span>
+                          <span className="text-gray-700 dark:text-gray-200">{p.supplier_name}</span>
                           <StatusBadge status={p.status} />
                         </div>
                         <div className="text-right text-xs">
-                          <span className="text-blue-600 font-medium">{p.sacks} sacks</span>
+                          <span className="text-blue-600 dark:text-blue-400 font-medium">{p.sacks} sacks</span>
                           <span className="text-gray-400 mx-1">•</span>
-                          <span className="text-green-600 font-medium">{parseFloat(p.quantity_kg).toLocaleString()} kg</span>
+                          <span className="text-green-600 dark:text-green-400 font-medium">{parseFloat(p.quantity_kg).toLocaleString()} kg</span>
                         </div>
                       </div>
                     ))

@@ -42,9 +42,9 @@ const Pagination = ({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-primary-100">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-primary-100 dark:border-primary-800">
       {/* Items info & per page selector */}
-      <div className="flex items-center gap-4 text-sm text-gray-500">
+      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
         <span>
           Showing {startItem} to {endItem} of {totalItems} entries
         </span>
@@ -54,7 +54,7 @@ const Pagination = ({
             <select
               value={itemsPerPage}
               onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-              className="px-2 py-1 border-2 border-primary-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-2 py-1 border-2 border-primary-200 dark:border-primary-700 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {itemsPerPageOptions.map((option) => (
                 <option key={option} value={option}>
@@ -72,18 +72,18 @@ const Pagination = ({
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="First page"
         >
-          <ChevronsLeft size={18} className="text-gray-600" />
+          <ChevronsLeft size={18} className="text-gray-600 dark:text-gray-300" />
         </button>
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Previous page"
         >
-          <ChevronLeft size={18} className="text-gray-600" />
+          <ChevronLeft size={18} className="text-gray-600 dark:text-gray-300" />
         </button>
 
         <div className="flex items-center gap-1 mx-2">
@@ -97,7 +97,7 @@ const Pagination = ({
                 className={`min-w-[32px] h-8 rounded-md text-sm font-medium transition-colors
                   ${currentPage === page
                     ? 'bg-button-500 text-white'
-                    : 'hover:bg-gray-100 text-gray-600'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                   }`}
               >
                 {page}
@@ -109,18 +109,18 @@ const Pagination = ({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages || totalPages === 0}
-          className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Next page"
         >
-          <ChevronRight size={18} className="text-gray-600" />
+          <ChevronRight size={18} className="text-gray-600 dark:text-gray-300" />
         </button>
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages || totalPages === 0}
-          className="p-1.5 rounded-md hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           title="Last page"
         >
-          <ChevronsRight size={18} className="text-gray-600" />
+          <ChevronsRight size={18} className="text-gray-600 dark:text-gray-300" />
         </button>
       </div>
     </div>

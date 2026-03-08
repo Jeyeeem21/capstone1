@@ -19,7 +19,7 @@ import {
   X,
   ClipboardList,
   Sun,
-  Shield
+  Shield,
 } from 'lucide-react';
 import { Avatar } from '../ui';
 import { ConfirmModal } from '../ui/Modal';
@@ -93,7 +93,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
       
       <aside 
         className={`
-          fixed left-0 top-0 h-screen border-r-2 border-primary-300 
+          fixed left-0 top-0 h-screen border-r-2 border-primary-300 dark:border-primary-700 
           flex flex-col transition-all duration-300 z-50
           shadow-[4px_0_20px_-3px_rgba(0,0,0,0.2)]
           w-72
@@ -104,7 +104,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
         style={{ backgroundColor: 'var(--color-bg-sidebar)', color: 'var(--color-text-sidebar)' }}
       >
       {/* Header / Logo */}
-      <div className="p-4 border-b-2 border-primary-200">
+      <div className="p-4 border-b-2 border-primary-200 dark:border-primary-700">
         <div className="flex items-center gap-3">
           <div 
             className="w-10 h-10 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25 overflow-hidden flex-shrink-0"
@@ -123,23 +123,23 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
           {/* Mobile/Tablet: Close button */}
           <div className="flex-1 min-w-0 lg:hidden">
             <h1 className="font-bold text-lg leading-tight" style={{ color: 'var(--color-text-sidebar)' }}>{settings.business_name || 'KJP Ricemill'}</h1>
-            <p className="text-xs text-primary-500 font-medium">{settings.business_tagline || 'Inventory & Sales'}</p>
+            <p className="text-xs text-primary-500 dark:text-primary-400 font-medium">{settings.business_tagline || 'Inventory & Sales'}</p>
           </div>
           <button
             onClick={onMobileClose}
-            className="p-1.5 rounded-lg hover:bg-primary-100 transition-colors bg-primary-50 flex-shrink-0 lg:hidden"
+            className="p-1.5 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors bg-primary-50 dark:bg-primary-900/20 flex-shrink-0 lg:hidden"
             title="Close sidebar"
           >
-            <X size={18} className="text-primary-500" />
+            <X size={18} className="text-primary-500 dark:text-primary-400" />
           </button>
           {/* Desktop: Show ">" button beside logo when collapsed */}
           {isCollapsed && (
             <button
               onClick={onToggleCollapse}
-              className="p-1.5 rounded-lg hover:bg-primary-100 transition-colors bg-primary-50 flex-shrink-0 hidden lg:block"
+              className="p-1.5 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors bg-primary-50 dark:bg-primary-900/20 flex-shrink-0 hidden lg:block"
               title="Expand sidebar"
             >
-              <ChevronLeft size={18} className="text-primary-500 rotate-180" />
+              <ChevronLeft size={18} className="text-primary-500 dark:text-primary-400 rotate-180" />
             </button>
           )}
           {/* Desktop: Show title and "<" button at edge when expanded */}
@@ -147,14 +147,14 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             <>
               <div className="flex-1 min-w-0 hidden lg:block">
                 <h1 className="font-bold text-lg leading-tight" style={{ color: 'var(--color-text-sidebar)' }}>{settings.business_name || 'KJP Ricemill'}</h1>
-                <p className="text-xs text-primary-500 font-medium">{settings.business_tagline || 'Inventory & Sales'}</p>
+                <p className="text-xs text-primary-500 dark:text-primary-400 font-medium">{settings.business_tagline || 'Inventory & Sales'}</p>
               </div>
               <button
                 onClick={onToggleCollapse}
-                className="p-1.5 rounded-lg hover:bg-primary-100 transition-colors bg-primary-50 flex-shrink-0 hidden lg:block"
+                className="p-1.5 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors bg-primary-50 dark:bg-primary-900/20 flex-shrink-0 hidden lg:block"
                 title="Collapse sidebar"
               >
-                <ChevronLeft size={18} className="text-primary-500" />
+                <ChevronLeft size={18} className="text-primary-500 dark:text-primary-400" />
               </button>
             </>
           )}
@@ -253,8 +253,8 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             />
             <SidebarSubMenuItem
               icon={UserCheck}
-              label="Customer"
-              to={`${basePath}/partners/customer`}
+              label="Client"
+              to={`${basePath}/partners/client`}
             />
           </SidebarMenuItem>
 
@@ -285,7 +285,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
       </nav>
 
       {/* User Profile Footer */}
-      <div className="p-4 border-t border-primary-100">
+      <div className="p-4 border-t border-primary-100 dark:border-primary-700">
         <div className="relative group">
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} p-2 rounded-xl bg-gradient-to-r from-secondary-100 to-secondary-50 dark:from-gray-700 dark:to-gray-600 cursor-pointer`}>
             <Avatar fallback={displayName} size="md" />
@@ -308,8 +308,8 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
           {/* Tooltip when collapsed */}
           {isCollapsed && (
             <div className="absolute left-full bottom-0 ml-3 hidden group-hover:block z-50">
-              <div className="bg-white dark:bg-gray-800 border-2 border-primary-300 dark:border-gray-700 rounded-xl shadow-xl p-3 min-w-[180px]">
-                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-primary-100 dark:border-gray-700">
+              <div className="bg-white dark:bg-gray-800 border-2 border-primary-300 dark:border-primary-700 rounded-xl shadow-xl p-3 min-w-[180px]">
+                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-primary-100 dark:border-primary-700">
                   <Avatar fallback={displayName} size="md" />
                   <div className="min-w-0">
                     <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{displayName}</p>
@@ -325,7 +325,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
                 </button>
               </div>
               {/* Arrow */}
-              <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-white dark:bg-gray-800 border-l-2 border-b-2 border-primary-300 dark:border-gray-700 rotate-45"></div>
+              <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-white dark:bg-gray-800 border-l-2 border-b-2 border-primary-300 dark:border-primary-700 rotate-45"></div>
             </div>
           )}
         </div>

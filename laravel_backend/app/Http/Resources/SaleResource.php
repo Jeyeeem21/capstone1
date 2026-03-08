@@ -31,6 +31,8 @@ class SaleResource extends JsonResource
             'paid_at_formatted' => $this->paid_at?->format('M d, Y h:i A'),
             'status' => $this->status,
             'notes' => $this->notes,
+            'voided_by' => $this->voided_by,
+            'authorized_by' => $this->authorized_by,
             'items_count' => $this->items_count ?? $this->items->count(),
             'total_quantity' => $this->items->sum('quantity'),
             'items' => $this->items->map(function ($item) {
@@ -50,6 +52,7 @@ class SaleResource extends JsonResource
                     'quantity' => (int) $item->quantity,
                     'unit_price' => (float) $item->unit_price,
                     'subtotal' => (float) $item->subtotal,
+                    'restocked' => (bool) $item->restocked,
                 ];
             }),
             'delivery_address' => $this->delivery_address,

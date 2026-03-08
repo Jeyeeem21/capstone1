@@ -83,7 +83,7 @@ const ClientDashboard = () => {
     }
 
     return (
-      <div className="bg-white rounded-xl shadow-lg p-3 min-w-[180px]" style={{ border: `1px solid ${theme.border_color}` }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3 min-w-[180px]" style={{ border: `1px solid ${theme.border_color}` }}>
         <p className="text-sm font-semibold mb-2 pb-1.5" style={{ color: theme.text_primary, borderBottom: `1px solid ${theme.border_color}20` }}>{label}</p>
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between gap-4">
@@ -96,13 +96,13 @@ const ClientDashboard = () => {
           {changePercent !== null && (
             <div className="flex items-center justify-end gap-1">
               {changeDirection === 'up' && (
-                <span className="text-[11px] font-medium text-green-600 flex items-center gap-0.5">
+                <span className="text-[11px] font-medium text-green-600 dark:text-green-400 flex items-center gap-0.5">
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
                   +{changePercent}%
                 </span>
               )}
               {changeDirection === 'down' && (
-                <span className="text-[11px] font-medium text-red-600 flex items-center gap-0.5">
+                <span className="text-[11px] font-medium text-red-600 dark:text-red-400 flex items-center gap-0.5">
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 8L2 4H8L5 8Z" fill="currentColor"/></svg>
                   {changePercent}%
                 </span>
@@ -153,7 +153,7 @@ const ClientDashboard = () => {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-xl p-4 sm:p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5" style={{ border: `1px solid ${theme.border_color}` }}>
               <Skeleton variant="circle" width="w-10" height="h-10" className="mb-3" />
               <Skeleton variant="title" width="w-20" className="mb-1" />
               <Skeleton variant="text" width="w-24" />
@@ -165,7 +165,7 @@ const ClientDashboard = () => {
         {summaryCards.map((card) => (
           <div 
             key={card.label} 
-            className="bg-white rounded-xl p-4 sm:p-5 transition-all hover:shadow-md"
+            className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 transition-all hover:shadow-md"
             style={{ border: `1px solid ${theme.border_color}` }}
           >
             <div className="flex items-center justify-between mb-3">
@@ -186,12 +186,12 @@ const ClientDashboard = () => {
       {/* Charts Section */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
             <Skeleton variant="title" width="w-32" className="mb-2" />
             <Skeleton variant="text" width="w-48" className="mb-4" />
             <Skeleton variant="custom" className="h-[250px] w-full rounded-lg" />
           </div>
-          <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
             <Skeleton variant="title" width="w-24" className="mb-2" />
             <Skeleton variant="text" width="w-36" className="mb-4" />
             <div className="flex items-center justify-center py-4">
@@ -205,7 +205,7 @@ const ClientDashboard = () => {
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Spending Bar Chart with period toggle */}
-        <div className="lg:col-span-2 bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-lg font-bold" style={{ color: theme.text_primary }}>{spendingLabels[spendingPeriod]}</h2>
@@ -237,7 +237,7 @@ const ClientDashboard = () => {
         </div>
 
         {/* Order Status Donut Chart */}
-        <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="mb-4">
             <h2 className="text-lg font-bold" style={{ color: theme.text_primary }}>Order Status</h2>
             <p className="text-xs" style={{ color: theme.text_secondary }}>Breakdown of your orders</p>
@@ -280,7 +280,7 @@ const ClientDashboard = () => {
 
       {/* Recent Orders - Compact Table */}
       {loading ? (
-        <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
           <div className="flex items-center justify-between mb-4">
             <Skeleton variant="title" width="w-32" />
             <Skeleton variant="text" width="w-16" />
@@ -298,7 +298,7 @@ const ClientDashboard = () => {
           </div>
         </div>
       ) : (
-      <div className="bg-white rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl" style={{ border: `1px solid ${theme.border_color}` }}>
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: `1px solid ${theme.border_color}` }}>
           <h2 className="text-base font-semibold" style={{ color: theme.text_primary }}>Recent Orders</h2>
           <Link 
@@ -328,7 +328,7 @@ const ClientDashboard = () => {
                 const config = statusConfig[order.status] || statusConfig['Pending'];
                 return (
                   <tr key={order.id}
-                    className="hover:bg-gray-50/50 transition-colors cursor-pointer"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
                     style={{ borderBottom: idx < mockRecentOrders.length - 1 ? `1px solid ${theme.border_color}` : 'none' }}
                     onClick={() => navigate('/client/orders')}>
                     <td className="px-5 py-2.5">
@@ -368,7 +368,7 @@ const ClientDashboard = () => {
             const StatusIcon = config.icon;
             return (
               <div key={order.id}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50/50 cursor-pointer"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                 onClick={() => navigate('/client/orders')}>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: config.bg }}>
                   <StatusIcon size={14} style={{ color: config.color }} />

@@ -28,6 +28,7 @@ class ProductResource extends JsonResource
             'unit' => $this->weight ? (intval($this->weight) == $this->weight ? intval($this->weight) . 'kg' : number_format($this->weight, 2) . 'kg') : 'kg',
             'weight' => $this->weight ? (float) $this->weight : null,
             'weight_formatted' => $this->weight ? (intval($this->weight) == $this->weight ? intval($this->weight) . ' kg' : number_format($this->weight, 2) . ' kg') : null,
+            'image' => $this->image ? '/storage/' . $this->image : null,
             'status' => $this->status,
             'is_active' => $this->status === 'active',
             'is_in_stock' => $this->stocks > 0,
@@ -36,6 +37,7 @@ class ProductResource extends JsonResource
                 : (($this->stock_floor ?? 0) > 0 && $this->stocks <= $this->stock_floor
                     ? 'Low Stock'
                     : 'In Stock'),
+            'has_pending_orders' => (bool) $this->has_pending_orders,
             'is_deleted' => (bool) $this->is_deleted,
             'created_at' => $this->created_at ? $this->created_at->format('Y-m-d H:i:s') : null,
             'updated_at' => $this->updated_at ? $this->updated_at->format('Y-m-d H:i:s') : null,

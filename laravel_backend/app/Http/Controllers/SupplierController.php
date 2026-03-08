@@ -159,7 +159,7 @@ class SupplierController extends Controller
         // Now soft delete (sets deleted_at)
         $this->supplierService->deleteSupplier($supplier);
 
-        $this->logAudit('DELETE', 'Supplier', "Archived supplier: {$supplier->name}", [
+        $this->logAudit('ARCHIVE', 'Supplier', "Archived supplier: {$supplier->name}", [
             'supplier_id' => $supplier->id,
         ]);
 

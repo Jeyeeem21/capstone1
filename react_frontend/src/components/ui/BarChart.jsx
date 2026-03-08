@@ -8,12 +8,12 @@ const getCSSVariable = (name) => {
 
 // Helper to detect dark mode
 const useIsDarkMode = () => {
-  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setIsDark(document.body.classList.contains('dark-mode'));
+      setIsDark(document.documentElement.classList.contains('dark'));
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
   return isDark;
@@ -52,7 +52,7 @@ const BarChart = ({
   }, []);
 
   return (
-    <div className="bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 outline-none [&_*]:outline-none p-4">
+    <div className="bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 outline-none [&_*]:outline-none p-4">
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100">{title}</h3>
@@ -73,7 +73,7 @@ const BarChart = ({
                     ? prev.filter(k => k !== bar.dataKey)
                     : prev.length >= bars.length - 1 ? prev : [...prev, bar.dataKey]
                 )}
-                className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer select-none ${isHidden ? 'opacity-40' : ''}`}
+                className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 cursor-pointer select-none ${isHidden ? 'opacity-40' : ''}`}
               >
                 <div className="w-8 h-3 rounded" style={{ backgroundColor: color, opacity: isHidden ? 0.3 : 1 }} />
                 <span className={`text-sm ${isHidden ? 'text-gray-400 line-through' : 'text-gray-600 dark:text-gray-300'}`}>{bar.name}</span>

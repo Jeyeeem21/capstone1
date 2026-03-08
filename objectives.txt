@@ -93,6 +93,24 @@ SPECIFIC OBJECTIVES:
 26. To implement a Point of Sale (POS) module for processing
     walk-in customer transactions.
 
+27. To implement a return and refund management system that
+    tracks return requests, proof of return, pickup scheduling,
+    and selective item restocking.
+
+28. To implement a cost traceability system that tracks
+    production costs from procurement through drying and
+    processing to compute per-unit cost and profit margins.
+
+29. To implement predictive sales analytics using machine
+    learning regression to forecast revenue and demand trends.
+
+30. To implement a two-tier archiving system with soft delete
+    for safe record management and restoration capabilities.
+
+31. To implement product image management allowing admin to
+    upload, update, and display product photos across the
+    system and public-facing pages.
+
 
 ================================================================================
                           END OF OBJECTIVES

@@ -45,7 +45,7 @@ class SaleController extends Controller
                 'items' => 'required|array|min:1',
                 'items.*.product_id' => 'required|integer|exists:products,product_id',
                 'items.*.quantity' => 'required|integer|min:1',
-                'items.*.unit_price' => 'required|numeric|min:0',
+                'items.*.unit_price' => 'required|numeric|min:0.01',
                 'customer_id' => 'nullable|integer|exists:customers,id',
                 'new_customer_name' => 'nullable|string|max:255',
                 'new_customer_contact' => 'nullable|string|max:255',
@@ -119,7 +119,7 @@ class SaleController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|string|in:pending,processing,shipped,delivered,return_requested,picking_up,returned,cancelled',
+                'status' => 'required|string|in:pending,processing,shipped,delivered,completed,return_requested,picking_up,returned,cancelled',
                 'driver_name' => 'nullable|string|max:255',
                 'driver_plate_number' => 'nullable|string|max:20',
             ]);
@@ -262,13 +262,45 @@ class SaleController extends Controller
         try {
             $sale = $this->saleService->markReturned($id);
 
-            $this->logAudit('UPDATE', 'Orders', "Order #{$sale->transaction_id} marked as returned. Stock restored.", [
+            $this->logAudit('UPDATE', 'Orders', "Order #{$sale->transaction_id} marked as returned. Stock not yet restored — awaiting manual restock.", [
                 'sale_id' => $sale->id,
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Order marked as returned. Stock has been restored.',
+                'message' => 'Order marked as returned. Use "Restock Items" to restore stock for items in good condition.',
+                'data' => new SaleResource($sale),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * Restock selected items from a returned order.
+     */
+    public function restockItems(Request $request, int $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'items' => 'required|array|min:1',
+                'items.*.id' => 'required|integer|exists:sale_items,id',
+                'items.*.quantity' => 'required|integer|min:1',
+            ]);
+
+            $sale = $this->saleService->restockItems($id, $validated['items']);
+
+            $this->logAudit('UPDATE', 'Orders', "Restocked " . count($validated['items']) . " item(s) from returned order #{$sale->transaction_id}.", [
+                'sale_id' => $sale->id,
+                'items' => $validated['items'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Selected items have been restocked.',
                 'data' => new SaleResource($sale),
             ]);
         } catch (\Exception $e) {
@@ -355,26 +387,52 @@ class SaleController extends Controller
         try {
             $user = auth()->user();
 
-            // If user is NOT super_admin, require super admin password
-            if ($user->role !== 'super_admin') {
+            // Super Admin & Admin can use their own password; Secretary needs admin/super_admin password
+            if ($user->role === 'super_admin' || $user->role === 'admin') {
+                // Admin or Super Admin must confirm with their own password
                 $request->validate([
                     'admin_password' => 'required|string',
                 ]);
 
-                // Find a super_admin user and verify the password
-                $superAdmin = \App\Models\User::where('role', 'super_admin')->first();
-                if (!$superAdmin || !\Illuminate\Support\Facades\Hash::check($request->admin_password, $superAdmin->password)) {
+                if (!\Illuminate\Support\Facades\Hash::check($request->admin_password, $user->password)) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Invalid Super Admin password.',
+                        'message' => 'Incorrect password.',
+                    ], 403);
+                }
+            } else {
+                // Staff/Secretary must provide an admin or super_admin password
+                $request->validate([
+                    'admin_password' => 'required|string',
+                ]);
+
+                // Try to match against any super_admin or admin user
+                $authorizedUser = \App\Models\User::whereIn('role', ['super_admin', 'admin'])
+                    ->where('status', 'active')
+                    ->get()
+                    ->first(function ($admin) use ($request) {
+                        return \Illuminate\Support\Facades\Hash::check($request->admin_password, $admin->password);
+                    });
+
+                if (!$authorizedUser) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid Admin/Super Admin password.',
                     ], 403);
                 }
             }
 
-            $sale = $this->saleService->voidSale($id);
+            $voidedBy = $user->name;
+            $authorizedBy = isset($authorizedUser) ? $authorizedUser->name : $user->name;
 
-            $this->logAudit('DELETE', 'Sales', "Voided sale #{$sale->id}", [
+            $sale = $this->saleService->voidSale($id, $request->reason, $voidedBy, $authorizedBy);
+
+            $this->logAudit('DELETE', 'Sales', "Voided order #{$sale->transaction_id}" . ($request->reason ? " — Reason: {$request->reason}" : ''), [
                 'sale_id' => $sale->id,
+                'transaction_id' => $sale->transaction_id,
+                'reason' => $request->reason,
+                'voided_by' => $voidedBy,
+                'authorized_by' => $authorizedBy,
             ]);
 
             return response()->json([
@@ -429,5 +487,18 @@ class SaleController extends Controller
                 'message' => 'Failed to fetch product growth data',
             ], 500);
         }
+    }
+
+    /**
+     * Check if a GCash reference number is already used.
+     */
+    public function checkReference(Request $request): JsonResponse
+    {
+        $request->validate(['reference_number' => 'required|string']);
+        $exists = \App\Models\Sale::where('reference_number', $request->reference_number)->exists();
+        return response()->json([
+            'success' => true,
+            'data' => ['available' => !$exists],
+        ]);
     }
 }

@@ -77,10 +77,13 @@ class AuditTrailController extends Controller
         $today = now()->toDateString();
 
         $stats = [
-            'today'   => AuditTrail::whereDate('created_at', $today)->count(),
-            'created' => AuditTrail::where('action', 'CREATE')->count(),
-            'updated' => AuditTrail::where('action', 'UPDATE')->count(),
-            'deleted' => AuditTrail::where('action', 'DELETE')->count(),
+            'today'    => AuditTrail::whereDate('created_at', $today)->count(),
+            'created'  => AuditTrail::where('action', 'CREATE')->count(),
+            'updated'  => AuditTrail::where('action', 'UPDATE')->count(),
+            'deleted'  => AuditTrail::where('action', 'DELETE')->count(),
+            'archived' => AuditTrail::where('action', 'ARCHIVE')->count(),
+            'restored' => AuditTrail::where('action', 'RESTORE')->count(),
+            'soft_deleted' => AuditTrail::whereIn('action', ['SOFT_DELETE', 'SOFT_DELETE_ALL'])->count(),
         ];
 
         return $this->successResponse($stats, 'Statistics retrieved successfully');

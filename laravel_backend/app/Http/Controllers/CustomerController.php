@@ -164,7 +164,7 @@ class CustomerController extends Controller
         // Now soft delete (sets deleted_at)
         $this->customerService->deleteCustomer($customer);
 
-        $this->logAudit('DELETE', 'Customer', "Archived customer: {$customer->name}", [
+        $this->logAudit('ARCHIVE', 'Customer', "Archived customer: {$customer->name}", [
             'customer_id' => $customer->id,
         ]);
 

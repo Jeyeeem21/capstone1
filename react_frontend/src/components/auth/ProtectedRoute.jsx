@@ -22,7 +22,13 @@ export const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
     // Redirect based on user's role
     if (user?.role === 'staff') {
-      return <Navigate to="/staff/dashboard" replace />;
+      if (user?.position === 'Driver') {
+        return <Navigate to="/driver/dashboard" replace />;
+      }
+      return <Navigate to="/staff/pos" replace />;
+    }
+    if (user?.role === 'client') {
+      return <Navigate to="/client/dashboard" replace />;
     }
     if (user?.role === 'super_admin') {
       return <Navigate to="/superadmin/dashboard" replace />;

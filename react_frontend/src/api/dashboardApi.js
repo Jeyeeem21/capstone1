@@ -41,14 +41,20 @@ export const dashboardApi = {
    * Refresh dashboard data (clears cache and fetches fresh)
    */
   refresh: async () => {
-    // Clear frontend cache
-    apiClient.cache.remove('dashboard-stats-daily');
-    apiClient.cache.remove('dashboard-stats-monthly');
-    apiClient.cache.remove('dashboard-stats-yearly');
-    apiClient.cache.remove('dashboard-activity-15');
+    // Clear all dashboard frontend caches (memory + localStorage)
+    dashboardApi.clearFrontendCache();
 
     // Clear backend cache
     await apiClient.post(ENDPOINTS.DASHBOARD.REFRESH);
+  },
+
+  /**
+   * Clear all dashboard-related frontend cache entries.
+   * Call this after archive/restore/soft-delete to keep Dashboard in sync.
+   */
+  clearFrontendCache: () => {
+    apiClient.cache.removeByPrefix('dashboard-stats');
+    apiClient.cache.removeByPrefix('dashboard-activity');
   },
 };
 

@@ -125,7 +125,7 @@ class CategoryController extends Controller
         // Now soft delete (sets deleted_at)
         $this->categoryService->deleteCategory($category);
 
-        $this->logAudit('DELETE', 'Categories', "Archived category: {$category->name}", [
+        $this->logAudit('ARCHIVE', 'Categories', "Archived category: {$category->name}", [
             'category_id' => $category->id,
             'name' => $category->name,
         ]);

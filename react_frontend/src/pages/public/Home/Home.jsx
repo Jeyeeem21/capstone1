@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../components/ui';
 import { productsApi, websiteContentApi } from '../../../api';
+import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 
 // Icon mapping for features
 const iconMap = {
@@ -86,6 +87,8 @@ const Home = () => {
   const [products, setProducts] = useState(getInitialProducts);
   const [loading, setLoading] = useState(() => !window.__HOME_CONTENT__);
   const [content, setContent] = useState(getInitialContent);
+  const { settings } = useBusinessSettings();
+  const logoFallback = settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : null;
 
   // Sync with API in background
   useEffect(() => {
@@ -107,13 +110,13 @@ const Home = () => {
         const result = await productsApi.getFeatured();
         if (result.success && result.data.length > 0) {
           const normalizedProducts = result.data.map(p => ({
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            price: parseFloat(p.price),
+            id: p.id || p.product_id,
+            name: p.product_name || p.name,
+            description: p.variety_name ? `${p.variety_name} — ${p.weight_formatted || p.unit || 'Rice'}` : (p.description || ''),
+            price: parseFloat(p.price) || 0,
             unit: p.unit,
             image: p.image,
-            tags: p.tags || [],
+            tags: p.tags || (p.variety_name ? [p.variety_name] : []),
           }));
           setProducts(normalizedProducts);
           localStorage.setItem('kjp-products', JSON.stringify(normalizedProducts));
@@ -211,16 +214,16 @@ const Home = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-24 bg-gradient-to-b from-white to-primary-50">
+      <section id="features" className="py-24 bg-gradient-to-b from-white to-primary-50 dark:from-gray-800 dark:to-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+            <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
               Why Choose Us
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               Excellence in Every Grain
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               We take pride in delivering the highest quality rice products with exceptional service
             </p>
           </div>
@@ -229,14 +232,14 @@ const Home = () => {
             {features.map((feature, index) => (
               <div 
                 key={feature.title}
-                className="group bg-white rounded-xl p-8 shadow-lg shadow-primary-100/50 hover:shadow-xl transition-all duration-300 border-2 border-primary-300 hover:border-button-400"
+                className="group bg-white dark:bg-gray-700 rounded-xl p-8 shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400"
                 style={{ animationDelay: `${index * 100}ms` }}
               >
                 <div className="w-14 h-14 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-button-500/25">
                   <feature.icon size={24} className="text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-3">{feature.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-3">{feature.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -244,18 +247,18 @@ const Home = () => {
       </section>
 
       {/* Products Preview Section */}
-      <section className="py-24 bg-white">
+      <section className="py-24 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-12 gap-4">
             <div>
-              <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+              <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
                 Our Products
               </span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-800">
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100">
                 Premium Rice Selection
               </h2>
             </div>
-            <Link to="/products" className="group flex items-center gap-2 text-button-600 font-medium hover:text-button-700">
+            <Link to="/products" className="group flex items-center gap-2 text-button-600 dark:text-button-400 font-medium hover:text-button-700">
               View All Products
               <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </Link>
@@ -265,32 +268,39 @@ const Home = () => {
             {products.map((product, index) => (
               <div 
                 key={product.id || index}
-                className="group bg-white rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 hover:shadow-xl transition-all duration-300 border-2 border-primary-300 hover:border-button-400"
+                className="group bg-white dark:bg-gray-700 rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400"
               >
-                <div className="relative h-48 overflow-hidden">
-                  <img 
-                    src={product.image} 
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  />
+                {/* Product Image */}
+                <div className="relative h-44 overflow-hidden">
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  ) : logoFallback ? (
+                    <img src={logoFallback} alt={product.name} className="w-full h-full object-contain p-6 opacity-60" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-gray-600 dark:to-gray-700 flex items-center justify-center">
+                      <Package size={36} className="text-primary-400 dark:text-gray-400" />
+                    </div>
+                  )}
                   {product.tags && product.tags.length > 0 && (
-                    <span className="absolute top-4 left-4 px-3 py-1 bg-button-500 text-white text-xs font-medium rounded-full">
-                      {product.tags[0]}
-                    </span>
+                    <div className="absolute top-3 left-3">
+                      <span className="px-3 py-1 bg-button-500 text-white text-xs font-medium rounded-full shadow">
+                        {product.tags[0]}
+                      </span>
+                    </div>
                   )}
                 </div>
                 <div className="p-6">
-                  <h3 className="font-semibold text-gray-800 mb-2 group-hover:text-button-600 transition-colors">
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 transition-colors">
                     {product.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 line-clamp-2">{product.description}</p>
                   <div className="flex items-end justify-between">
                     <div>
-                      <span className="text-2xl font-bold text-button-600">₱{typeof product.price === 'number' ? product.price.toLocaleString() : product.price}</span>
-                      <span className="text-sm text-gray-400 ml-1">/{product.unit}</span>
+                      <span className="text-2xl font-bold text-button-600 dark:text-button-400">₱{typeof product.price === 'number' ? product.price.toLocaleString() : product.price}</span>
+                      <span className="text-sm text-gray-400 dark:text-gray-500 dark:text-gray-400 ml-1">/{product.unit}</span>
                     </div>
                     <Link to="/products">
-                      <Button size="sm" variant="outline" className="!border-button-300 !text-button-700 hover:!bg-button-50">View</Button>
+                      <Button size="sm" variant="outline" className="!border-button-300 dark:border-button-700 !text-button-700 dark:text-button-300 hover:!bg-button-50 dark:bg-button-900/20">View</Button>
                     </Link>
                   </div>
                 </div>
@@ -301,7 +311,7 @@ const Home = () => {
       </section>
 
       {/* About Preview Section */}
-      <section className="py-24 bg-gradient-to-br from-primary-50 to-green-50">
+      <section className="py-24 bg-gradient-to-br from-primary-50 to-green-50 dark:from-gray-800 dark:to-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div className="relative">
@@ -316,27 +326,27 @@ const Home = () => {
               <div className="absolute -top-8 -left-8 w-32 h-32 bg-primary-500/20 rounded-2xl -z-0" />
               
               {/* Floating Card */}
-              <div className="absolute -bottom-6 -left-6 bg-white rounded-xl shadow-xl p-4 z-20">
+              <div className="absolute -bottom-6 -left-6 bg-white dark:bg-gray-700 rounded-xl shadow-xl p-4 z-20">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-button-100 rounded-lg flex items-center justify-center">
-                    <Clock size={24} className="text-button-600" />
+                  <div className="w-12 h-12 bg-button-100 dark:bg-button-900/30 rounded-lg flex items-center justify-center">
+                    <Clock size={24} className="text-button-600 dark:text-button-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-gray-800">15+</p>
-                    <p className="text-sm text-gray-500">Years of Excellence</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">15+</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Years of Excellence</p>
                   </div>
                 </div>
               </div>
             </div>
 
             <div>
-              <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+              <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
                 About Us
               </span>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-6">
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-6">
                 {content.aboutTitle}
               </h2>
-              <p className="text-gray-600 mb-6 leading-relaxed">
+              <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
                 {content.aboutDescription}
               </p>
               <ul className="space-y-4 mb-8">
@@ -345,7 +355,7 @@ const Home = () => {
                     <div className="w-6 h-6 bg-button-500 rounded-full flex items-center justify-center flex-shrink-0">
                       <CheckCircle size={14} className="text-white" />
                     </div>
-                    <span className="text-gray-700">{item}</span>
+                    <span className="text-gray-700 dark:text-gray-200">{item}</span>
                   </li>
                 ))}
               </ul>
@@ -361,16 +371,16 @@ const Home = () => {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-24 bg-white">
+      <section className="py-24 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="inline-block px-4 py-1 bg-button-100 text-button-700 rounded-full text-sm font-medium mb-4">
+            <span className="inline-block px-4 py-1 bg-button-100 dark:bg-button-900/30 dark:bg-button-500/20 text-button-700 dark:text-button-300 rounded-full text-sm font-medium mb-4">
               Testimonials
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
               What Our Customers Say
             </h2>
-            <p className="text-gray-600 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
               Don't just take our word for it - hear from our satisfied customers
             </p>
           </div>
@@ -379,22 +389,22 @@ const Home = () => {
             {testimonials.map((testimonial) => (
               <div 
                 key={testimonial.name}
-                className="bg-gradient-to-br from-primary-50 to-white rounded-xl p-8 shadow-lg shadow-primary-100/50 border-2 border-primary-300 hover:border-button-400 transition-colors"
+                className="bg-gradient-to-br from-primary-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-xl p-8 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400 transition-colors"
               >
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
                     <Star key={i} size={18} className="fill-yellow-400 text-yellow-400" />
                   ))}
                 </div>
-                <Quote size={32} className="text-button-200 mb-4" />
-                <p className="text-gray-600 mb-6 italic">"{testimonial.content}"</p>
+                <Quote size={32} className="text-button-200 dark:text-button-600 mb-4" />
+                <p className="text-gray-600 dark:text-gray-300 mb-6 italic">"{testimonial.content}"</p>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-700 rounded-full flex items-center justify-center text-white font-semibold">
                     {testimonial.name.charAt(0)}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-800">{testimonial.name}</p>
-                    <p className="text-sm text-gray-500">{testimonial.role}</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100">{testimonial.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{testimonial.role}</p>
                   </div>
                 </div>
               </div>
@@ -420,7 +430,7 @@ const Home = () => {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/contact">
-              <Button size="lg" className="px-8 bg-white !text-button-700 hover:bg-gray-100 font-semibold">
+              <Button size="lg" className="px-8 bg-white dark:bg-gray-700 !text-button-700 dark:text-button-300 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 font-semibold">
                 Contact Us Now
               </Button>
             </Link>

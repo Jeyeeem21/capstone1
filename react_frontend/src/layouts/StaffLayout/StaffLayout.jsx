@@ -54,7 +54,7 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
       
       <aside 
         className={`
-          fixed left-0 top-0 h-screen border-r-2 border-primary-300 
+          fixed left-0 top-0 h-screen border-r-2 border-primary-300 dark:border-primary-700 
           flex flex-col transition-all duration-300 z-50
           shadow-[4px_0_20px_-3px_rgba(0,0,0,0.2)]
           w-72
@@ -65,7 +65,7 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
         style={{ backgroundColor: 'var(--color-bg-sidebar)', color: 'var(--color-text-sidebar)' }}
       >
         {/* Header / Logo */}
-        <div className="p-4 border-b-2 border-primary-200">
+        <div className="p-4 border-b-2 border-primary-200 dark:border-primary-700">
           <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'justify-between'}`}>
             <div className={`flex items-center gap-3 ${isCollapsed ? 'lg:hidden' : ''}`}>
               <div className="w-10 h-10 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
@@ -73,7 +73,7 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
                 <span className="text-white font-bold text-lg hidden">K</span>
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-800 dark:text-white">KJP Ricemill</h1>
+                <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">KJP Ricemill</h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Staff Portal</p>
               </div>
             </div>
@@ -81,9 +81,9 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
             {/* Close button for mobile */}
             <button 
               onClick={onMobileClose}
-              className="p-2 rounded-lg hover:bg-gray-100 lg:hidden"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 lg:hidden"
             >
-              <X size={20} className="text-gray-500" />
+              <X size={20} className="text-gray-500 dark:text-gray-400" />
             </button>
           </div>
         </div>
@@ -100,14 +100,14 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
                   flex items-center ${isCollapsed ? 'lg:justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 mb-0.5 group
                   ${isActive
                     ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25'
-                    : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:hover:text-button-300'
+                    : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:text-button-300 dark:hover:text-button-300'
                   }
                 `}
                 style={({ isActive }) => !isActive ? { color: 'var(--color-text-sidebar)' } : undefined}
               >
                 {({ isActive }) => (
                   <>
-                    <item.icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
+                    <item.icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
                     {!isCollapsed && <span className="font-medium" style={{ fontSize: 'var(--font-size-sidebar)' }}>{item.label}</span>}
                   </>
                 )}
@@ -117,7 +117,7 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
         </nav>
 
         {/* User Profile Section */}
-        <div className="p-3 border-t-2 border-primary-200">
+        <div className="p-3 border-t-2 border-primary-200 dark:border-primary-700">
           <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'gap-3'} p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl`}>
             <Avatar name={staffName} size="md" />
             {!isCollapsed && (
@@ -125,7 +125,7 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
                 <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">
                   {staffName}
                 </p>
-                <p className="text-xs text-gray-500 truncate">Staff</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
               </div>
             )}
           </div>
@@ -160,23 +160,23 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
 // Staff Header for mobile
 const StaffHeader = ({ onMenuClick }) => {
   return (
-    <header className="lg:hidden sticky top-0 z-50 bg-white border-b-2 border-primary-300 shadow-sm">
+    <header className="lg:hidden sticky top-0 z-50 bg-white dark:bg-gray-700 border-b-2 border-primary-300 dark:border-primary-700 shadow-sm">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">K</span>
           </div>
           <div>
-            <h1 className="text-base font-bold text-gray-800">KJP Ricemill</h1>
-            <p className="text-xs text-gray-500">Staff Portal</p>
+            <h1 className="text-base font-bold text-gray-800 dark:text-gray-100">KJP Ricemill</h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Staff Portal</p>
           </div>
         </div>
         
         <button 
           onClick={onMenuClick}
-          className="hidden md:block p-2 rounded-lg hover:bg-gray-100"
+          className="hidden md:block p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700"
         >
-          <Menu size={24} className="text-gray-600" />
+          <Menu size={24} className="text-gray-600 dark:text-gray-300" />
         </button>
       </div>
     </header>
@@ -194,7 +194,7 @@ const StaffBottomNav = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-primary-300 shadow-lg z-40 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-700 border-t-2 border-primary-300 dark:border-primary-700 shadow-lg z-40 md:hidden">
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => {
           const isActive = location.pathname === item.to;
@@ -203,7 +203,7 @@ const StaffBottomNav = () => {
               key={item.to}
               to={item.to}
               className={`flex flex-col items-center justify-center flex-1 h-full px-2 transition-colors ${
-                isActive ? 'text-button-600' : 'text-gray-500'
+                isActive ? 'text-button-600 dark:text-button-400' : 'text-gray-500 dark:text-gray-400'
               }`}
             >
               <item.icon size={22} className={isActive ? 'text-button-500' : ''} />
@@ -249,7 +249,7 @@ const StaffLayout = () => {
       `}>
         <div className="p-4 md:p-6 lg:p-8 flex-1">
           <div 
-            className="rounded-2xl shadow-xl border-2 border-primary-300 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
+            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
             style={{ 
               backgroundColor: 'var(--color-bg-content)', 
               color: 'var(--color-text-content)',
@@ -260,8 +260,8 @@ const StaffLayout = () => {
           </div>
         </div>
         
-        {/* Footer - hidden on mobile */}
-        <div className="px-4 pb-4 md:px-6 md:pb-6 lg:px-8 lg:pb-8 hidden md:block">
+        {/* Footer */}
+        <div className="px-4 pb-4 md:px-6 md:pb-6 lg:px-8 lg:pb-8">
           <Footer />
         </div>
       </main>

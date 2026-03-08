@@ -22,7 +22,11 @@ class ProductService
     public function getAllProducts()
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
+            $activeStatuses = ['pending', 'processing', 'shipped', 'picking_up', 'return_requested'];
             return Product::with('variety')
+                ->withExists(['saleItems as has_pending_orders' => function ($query) use ($activeStatuses) {
+                    $query->whereHas('sale', fn($q) => $q->whereIn('status', $activeStatuses));
+                }])
                 ->orderBy('created_at', 'desc')
                 ->get();
         });
@@ -88,6 +92,7 @@ class ProductService
                 'unit' => $unit,
                 'weight' => $weight,
                 'status' => $data['status'] ?? 'active',
+                'image' => $data['image'] ?? null,
             ]);
 
             // Refresh to get timestamps as Carbon instances
@@ -122,6 +127,7 @@ class ProductService
                 'unit' => $unit,
                 'weight' => $weight,
                 'status' => $data['status'] ?? $product->status,
+                'image' => array_key_exists('image', $data) ? $data['image'] : $product->image,
             ]);
 
             $product->load('variety');
@@ -139,6 +145,17 @@ class ProductService
     {
         return DB::transaction(function () use ($id) {
             $product = Product::findOrFail($id);
+
+            // Block archive if product has active/pending orders
+            $activeStatuses = ['pending', 'processing', 'shipped', 'picking_up', 'return_requested'];
+            $hasPendingOrders = \App\Models\SaleItem::where('product_id', $product->product_id)
+                ->whereHas('sale', fn($q) => $q->whereIn('status', $activeStatuses))
+                ->exists();
+
+            if ($hasPendingOrders) {
+                throw new \Exception('Cannot archive this product. It has active or pending orders.');
+            }
+
             $result = $product->archive();
             
             $this->clearCache();
@@ -537,6 +554,7 @@ class ProductService
                 'kg_amount' => $actualKgConsumed,
                 'source_type' => 'processing_distribution',
                 'source_id' => $processingUpdates[0]['processing']->id,
+                'source_processing_ids' => array_map(fn($u) => ['processing_id' => $u['processing']->id, 'kg_taken' => $u['kg_to_take']], $adjustedSources),
                 'notes' => "Distributed from " . count($processingUpdates) . " processing source(s)",
                 'procurement_cost' => round($totalProcurementCost, 2),
                 'drying_cost' => round($totalDryingCost, 2),
@@ -573,5 +591,6 @@ class ProductService
         Cache::forget('products_featured');
         // Also clear varieties cache since they might show product counts
         Cache::forget('varieties_all');
+        DashboardService::clearStatsCache();
     }
 }

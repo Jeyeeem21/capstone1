@@ -83,12 +83,18 @@ The main API file (~240 lines). All routes return JSON. Grouped under `sanctum` 
 |--------|-----|--------|
 | GET | `/sales` | `SaleController@index` |
 | POST | `/sales/order` | `SaleController@storeOrder` |
+| POST | `/sales/check-reference` | `SaleController@checkReference` |
 | GET | `/sales/stats` | `SaleController@stats` |
 | GET | `/sales/product-growth` | `SaleController@productGrowth` |
 | GET | `/sales/{id}` | `SaleController@show` |
 | PUT | `/sales/{id}/status` | `SaleController@updateStatus` |
 | POST | `/sales/{id}/void` | `SaleController@void` |
 | POST | `/sales/{id}/return` | `SaleController@processReturn` |
+| POST | `/sales/{id}/return/accept` | `SaleController@acceptReturn` |
+| POST | `/sales/{id}/return/reject` | `SaleController@rejectReturn` |
+| POST | `/sales/{id}/return/complete` | `SaleController@markReturned` |
+| POST | `/sales/{id}/restock` | `SaleController@restockItems` |
+| POST | `/sales/{id}/pay` | `SaleController@markPaid` |
 
 **Predictions** — `GET /sales-predictions`, `POST /sales-predictions/refresh`
 
@@ -98,7 +104,7 @@ The main API file (~240 lines). All routes return JSON. Grouped under `sanctum` 
 
 **Business Settings (Write)** — `PUT /business-settings`, `POST /business-settings/logo`
 
-**Database** — `GET /database/export`, `GET /database/info`
+**Database** — `GET /database/export`, `GET /database/info`, `GET /database/export-csv`, `POST /database/import-csv`
 
 **Customers** — Full `apiResource` + `POST /customers/check-email`
 
@@ -303,9 +309,9 @@ Single artisan command: `inspire` (outputs an inspiring quote).
 |--------|-------------|
 | `index(Request)` | Filters: search, variety_id, status, stock_status, order_by |
 | `featured()` | Featured products for public display |
-| `store(Request)` | Creates product with product_name, variety_id, price, weight, stock_floor, status |
+| `store(Request)` | Creates product with product_name, variety_id, price, weight, stock_floor, status. Supports optional `image` file upload (jpeg/png/jpg/webp, max 2MB, stored to `storage/products/`) |
 | `show(id)` | Single product with variety |
-| `update(Request, id)` | **Prevents variety/weight change if stocks > 0** |
+| `update(Request, id)` | **Prevents variety/weight change if stocks > 0.** Handles image replacement (deletes old file if new one uploaded) |
 | `destroy(id)` | Custom soft-delete (sets `is_deleted = true`), logs DELETE |
 | `restore(id)` | Restores soft-deleted product |
 | `updateStock(Request, id)` | Manual stock adjustment (add/subtract), creates StockLog |
@@ -328,10 +334,16 @@ Single artisan command: `inspire` (outputs an inspiring quote).
 | `storeOrder(Request)` | Generates `ORD-YYYYMMDD-NNN` transaction ID. Supports inline `new_customer` creation. Creates sale + sale items |
 | `show(id)` | With customer, items, items.product |
 | `updateStatus(Request, id)` | State machine: `pending→processing` deducts stock; `cancelled` restores stock |
-| `void(Request, id)` | Requires `super_admin` password if caller isn't super_admin. Restores stock, sets status=voided |
-| `processReturn(Request, id)` | Restores stock, records return_reason/return_notes |
+| `void(Request, id)` | Requires `super_admin` password if caller isn't super_admin. Restores stock, sets status=voided. Tracks `voided_by` (current user) and `authorized_by` (admin who approved) |
+| `processReturn(Request, id)` | Sets status to `return_requested`, records return_reason/return_notes/return_proof |
+| `acceptReturn(Request, id)` | Accepts return request, assigns pickup driver/plate/date, sets status to `picking_up` |
+| `rejectReturn(Request, id)` | Rejects return request, reverts status to `delivered`, clears return fields |
+| `markReturned(Request, id)` | Marks order as `returned` after pickup completion |
+| `restockItems(Request, id)` | Restocks selected items from returned/voided orders. Takes `items` array with `sale_item_id` and `quantity`. Marks items as `restocked` |
+| `markPaid(Request, id)` | Records payment for unpaid orders. Updates `payment_status`, `paid_at`, optionally `payment_method`/`reference_number`/`payment_proof` |
 | `stats()` | Via service |
 | `productGrowth(Request)` | Product sales growth analytics (period: daily/weekly/monthly/yearly) |
+| `checkReference(Request)` | Checks if a GCash reference number has already been used on another sale |
 
 ---
 
@@ -709,10 +721,16 @@ Procurement (price_per_kg × quantity_kg)
 | `getAllSales(filters)` | With customer, items (product, product.variety). Filters: search, status, payment_method, customer_id, date range |
 | `createOrder(data)` | Generates `ORD-YYYYMMDD-NNN` transaction ID. Supports inline `new_customer` creation. Creates sale + sale items. Clears customers cache if new customer created |
 | `updateOrderStatus(id, status)` | State machine: `pending→processing` deducts product stock; `cancelled` restores stock |
-| `voidSale(id, data)` | Restores all item stocks, sets status=voided |
-| `processReturn(id, data)` | Restores stocks, records return_reason/notes |
+| `voidSale(id, reason, voidedBy, authorizedBy)` | Restores all item stocks, sets status=voided, records `voided_by` and `authorized_by` |
+| `processReturn(id, data)` | Sets status to `return_requested`, records return_reason/notes/proof |
+| `acceptReturn(id, data)` | Assigns pickup driver/plate/date, sets status to `picking_up` |
+| `rejectReturn(id)` | Reverts status to `delivered`, clears return fields |
+| `markReturned(id)` | Sets status to `returned`, decrements customer order count (stock is NOT auto-restored — requires manual restock) |
+| `restockItems(id, items)` | Restocks selected items from returned/voided orders. Adds stock back to products, marks sale_items as `restocked` |
+| `markPaid(id, data)` | Updates `payment_status` to `paid`, sets `paid_at`, optionally updates `payment_method`/`reference_number`/`payment_proof` |
 | `getStatistics()` | Total sales, revenue, avg order value, by status, by payment method, recent trends |
 | `getProductSalesGrowth(filters)` | Per-product sales growth comparison across periods |
+| `clearCache()` | Clears sales cache |
 
 ---
 
@@ -850,8 +868,11 @@ Procurement (price_per_kg × quantity_kg)
 | stock_floor | int | `integer` |
 | unit | string | — |
 | weight | decimal | `decimal:2` |
+| image | string | nullable (file path in `storage/products/`) |
 | status | string | `active` / `inactive` |
 | is_deleted | bool | `boolean` |
+| is_archived | bool | `boolean` |
+| archived_at | datetime | nullable |
 
 **Scopes:** `active`, `inactive`, `withDeleted` (removes global scope), `onlyDeleted`  
 **Relationships:** `belongsTo(Variety)`  
@@ -950,16 +971,29 @@ Procurement (price_per_kg × quantity_kg)
 | customer_id | FK, nullable |
 | subtotal | decimal |
 | discount | decimal |
+| delivery_fee | decimal |
 | total | decimal |
 | amount_tendered | decimal |
 | change_amount | decimal |
 | payment_method | string (cash/gcash/cod/pay_later) |
+| payment_status | string (paid/not_paid), default 'paid' |
 | reference_number | string, nullable |
-| status | string (pending/processing/shipped/delivered/completed/returned/cancelled/voided) |
+| payment_proof | text, nullable (cast: array) |
+| paid_at | datetime, nullable |
+| status | string (pending/processing/shipped/delivered/completed/return_requested/picking_up/returned/cancelled/voided) |
 | notes | text, nullable |
 | delivery_address | text, nullable |
+| distance_km | decimal, nullable |
+| driver_name | string, nullable |
+| driver_plate_number | string, nullable |
 | return_reason | text, nullable |
 | return_notes | text, nullable |
+| return_proof | text, nullable (cast: array) |
+| return_pickup_driver | string, nullable |
+| return_pickup_plate | string, nullable |
+| return_pickup_date | date, nullable |
+| voided_by | string, nullable |
+| authorized_by | string, nullable |
 
 **Relationships:** `belongsTo(Customer)`, `hasMany(SaleItem)`  
 **Scopes:** `completed`, `voided`
@@ -977,6 +1011,7 @@ Procurement (price_per_kg × quantity_kg)
 | quantity | int |
 | unit_price | decimal |
 | subtotal | decimal |
+| restocked | boolean, default false |
 
 **Relationships:** `belongsTo(Sale)`, `belongsTo(Product, 'product_id', 'product_id')`
 
@@ -1107,6 +1142,7 @@ Links a batch-mode drying process to individual procurements with the proportion
 | kg_amount | decimal | nullable |
 | source_type | string | e.g., `processing`, `manual` |
 | source_id | int | nullable |
+| source_processing_ids | json | nullable (cast: array). IDs of all processing sources when distributing multi-source stock |
 | notes | text | |
 | procurement_cost | decimal | Cost from procurement chain |
 | drying_cost | decimal | Cost from drying chain |
@@ -1195,10 +1231,10 @@ Links a batch-mode drying process to individual procurements with the proportion
 **Outputs:** id, procurement_id, drying_process_id, procurement_info, drying_process_info (nested), **drying_sources** (whenLoaded: per-source with quantity_kg_taken from pivot, batch info, variety, supplier), input_kg, output_kg, stock_out, remaining_stock, husk_kg, yield_percent, operator_name, status, stock_status, processing_date, completed_date, timestamps, **cost_breakdown** (when computed)
 
 ### 5.7 ProductResource
-**Outputs:** id, product_id, product_name, variety_id, variety_name, variety_color, price, price_formatted (₱), stocks, stock_floor, unit (auto-formatted: `Xkg`), weight, weight_formatted, status, is_active, is_in_stock, **stock_status** (computed: "Out of Stock" / "Low Stock" / "In Stock"), is_deleted, timestamps, created_date (formatted)
+**Outputs:** id, product_id, product_name, variety_id, variety_name, variety_color, price, price_formatted (₱), stocks, stock_floor, unit (auto-formatted: `Xkg`), weight, weight_formatted, **image** (`/storage/<path>` or null), status, is_active, is_in_stock, **stock_status** (computed: "Out of Stock" / "Low Stock" / "In Stock"), is_deleted, timestamps, created_date (formatted)
 
 ### 5.8 SaleResource
-**Outputs:** id, transaction_id, customer_id, customer_name (default "Walk-in"), subtotal, discount, total, total_formatted (₱), amount_tendered, change_amount, payment_method, reference_number, status, notes, items_count, total_quantity, **items** (mapped: id/product_id/product_name/variety_name/variety_color/quantity/unit_price/subtotal), delivery_address, return_reason, return_notes, created_at (ISO), date_formatted, date_short
+**Outputs:** id, transaction_id, customer_id, customer_name (default "Walk-in"), subtotal, discount, delivery_fee, total, total_formatted (₱), amount_tendered, change_amount, payment_method, **payment_status** (default 'paid'), reference_number, **payment_proof** (array of `/storage/` paths), **paid_at** (ISO), **paid_at_formatted**, status, notes, **voided_by**, **authorized_by**, items_count, total_quantity, **items** (mapped: id/product_id/product_name/variety_name/variety_color/weight_formatted/quantity/unit_price/subtotal/**restocked**), delivery_address, distance_km, driver_name, driver_plate_number, return_reason, return_notes, **return_proof** (array of `/storage/` paths), **return_pickup_driver**, **return_pickup_plate**, **return_pickup_date**, **return_pickup_date_formatted**, created_at (ISO), date_formatted, date_short
 
 ### 5.9 ProcurementBatchResource
 **Complex cost computation** — calculates total drying cost by summing:
@@ -1217,7 +1253,7 @@ Links a batch-mode drying process to individual procurements with the proportion
 **Outputs:** id, delivery_assignment_id, product_id, product_name, quantity, unit, price, total
 
 ### 5.13 StockLogResource
-**Outputs:** id, product_id, product_name, variety_name, variety_color, type (in/out), quantity_before, quantity_change, quantity_after, kg_amount, source_type, source_id, notes, procurement_cost, drying_cost, total_cost, cost_per_unit, selling_price, profit_per_unit, profit_margin, created_at (ISO), date_formatted, date_short
+**Outputs:** id, product_id, product_name, variety_name, variety_color, type (in/out), quantity_before, quantity_change, quantity_after, kg_amount, source_type, source_id, **source_processing_ids** (array), notes, procurement_cost, drying_cost, total_cost, cost_per_unit, selling_price, profit_per_unit, profit_margin, created_at (ISO), date_formatted, date_short
 
 ### 5.14 AuditTrailResource
 **Outputs:** id, user_id, user (name, default "System"), role (default "-"), action, module, description, details, ip_address, user_agent, timestamp, created_at
@@ -1477,8 +1513,12 @@ Two controllers support creating related entities inline during their own creati
 ```
 pending → processing (stock deducted) → shipped → delivered → completed
 pending → cancelled (stock restored)
-any → voided (stock restored, requires super_admin password)
-delivered/completed → returned (stock restored)
+any → voided (stock restored, requires super_admin password, tracks voided_by + authorized_by)
+delivered/completed → return_requested (via processReturn)
+return_requested → picking_up (via acceptReturn, assigns pickup driver/plate/date)
+return_requested → delivered (via rejectReturn, clears return fields)
+picking_up → returned (via markReturned, stock NOT auto-restored)
+returned/voided → restocked items (via restockItems, selective per-item restock)
 ```
 
 **Drying Process Status Flow:**

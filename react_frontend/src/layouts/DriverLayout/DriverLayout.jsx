@@ -109,7 +109,7 @@ const DriverHeader = ({ driver }) => {
   return (
     <header 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-white shadow-lg border-b' : 'bg-white shadow-sm border-b'
+        isScrolled ? 'bg-white dark:bg-gray-700 shadow-lg border-b' : 'bg-white dark:bg-gray-700 shadow-sm border-b'
       }`}
       style={{ borderColor: theme.border_color }}
     >
@@ -119,7 +119,7 @@ const DriverHeader = ({ driver }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="hidden md:block lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              className="hidden md:block lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 transition-colors"
               aria-label="Toggle menu"
             >
               {isMobileMenuOpen ? <X size={24} style={{ color: theme.text_primary }} /> : <Menu size={24} style={{ color: theme.text_primary }} />}
@@ -152,7 +152,7 @@ const DriverHeader = ({ driver }) => {
                 end={link.exact}
                 className={({ isActive }) => `
                   flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200
-                  ${isActive ? 'text-white shadow-md' : 'hover:bg-gray-100'}
+                  ${isActive ? 'text-white shadow-md' : 'hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700'}
                 `}
                 style={({ isActive }) => isActive ? { 
                   backgroundColor: theme.button_primary,
@@ -171,7 +171,7 @@ const DriverHeader = ({ driver }) => {
             <div className="relative profile-dropdown">
               <button
                 onClick={(e) => { e.stopPropagation(); setIsProfileOpen(!isProfileOpen); }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 transition-colors"
               >
                 <div 
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
@@ -186,7 +186,7 @@ const DriverHeader = ({ driver }) => {
               </button>
 
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border py-2 z-50" style={{ borderColor: theme.border_color }}>
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-700 rounded-xl shadow-xl border py-2 z-50" style={{ borderColor: theme.border_color }}>
                   <div className="px-4 py-3 border-b" style={{ borderColor: theme.border_color }}>
                     <p className="text-sm font-semibold" style={{ color: theme.text_primary }}>{driver.name}</p>
                     <p className="text-xs" style={{ color: theme.text_secondary }}>{driver.email}</p>
@@ -197,7 +197,7 @@ const DriverHeader = ({ driver }) => {
                   </div>
                   <Link
                     to="/driver/deliveries"
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50 transition-colors"
                     style={{ color: theme.text_primary }}
                   >
                     <ClipboardList size={16} />
@@ -206,7 +206,7 @@ const DriverHeader = ({ driver }) => {
                   <div className="border-t my-1" style={{ borderColor: theme.border_color }} />
                   <button
                     onClick={() => navigate('/')}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full"
                   >
                     <LogOut size={16} />
                     Logout
@@ -222,7 +222,7 @@ const DriverHeader = ({ driver }) => {
       <div className={`hidden md:block lg:hidden transition-all duration-300 overflow-hidden ${
         isMobileMenuOpen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'
       }`}>
-        <div className="bg-white border-t shadow-lg" style={{ borderColor: theme.border_color }}>
+        <div className="bg-white dark:bg-gray-700 border-t shadow-lg" style={{ borderColor: theme.border_color }}>
           <nav className="px-4 py-3 space-y-1">
             {navLinks.map((link) => (
               <NavLink
@@ -231,7 +231,7 @@ const DriverHeader = ({ driver }) => {
                 end={link.exact}
                 className={({ isActive }) => `
                   flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm transition-all duration-200
-                  ${isActive ? 'text-white' : 'hover:bg-gray-50'}
+                  ${isActive ? 'text-white' : 'hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50'}
                 `}
                 style={({ isActive }) => isActive ? { 
                   backgroundColor: theme.button_primary 
@@ -257,7 +257,7 @@ const DriverFooter = () => {
 
   return (
     <footer 
-      className="border-t py-6 hidden md:block"
+      className="border-t py-6"
       style={{ 
         backgroundColor: theme.bg_footer || '#111827',
         borderColor: theme.border_color
@@ -291,7 +291,7 @@ const DriverFooter = () => {
 // Main Driver Layout
 const DriverLayout = () => {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-700/50">
       <DriverHeader driver={mockDriver} />
       <main className="flex-1 pt-16 pb-20 md:pb-0">
         <Outlet />

@@ -79,7 +79,7 @@ const DriverProfile = () => {
       {loading ? (
         <div className="space-y-5">
           {/* Profile Card Skeleton */}
-          <div className="bg-white rounded-xl p-6" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6" style={{ border: `1px solid ${theme.border_color}` }}>
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
               <Skeleton variant="circle" width="w-20" height="h-20" />
               <div className="flex-1 text-center sm:text-left">
@@ -93,7 +93,7 @@ const DriverProfile = () => {
           {/* Stats Skeleton */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
                 <Skeleton variant="circle" width="w-10" height="h-10" className="mb-2" />
                 <Skeleton variant="title" width="w-12" className="mb-1" />
                 <Skeleton variant="text" width="w-20" />
@@ -103,7 +103,7 @@ const DriverProfile = () => {
           {/* Details Skeleton */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[...Array(2)].map((_, i) => (
-              <div key={i} className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
                 <Skeleton variant="title" width="w-36" className="mb-4" />
                 <div className="space-y-3">
                   <Skeleton variant="input" />
@@ -118,13 +118,13 @@ const DriverProfile = () => {
         <div className="space-y-5">
           {/* Success Alert */}
           {showSuccess && (
-            <div className="p-3 rounded-xl bg-green-50 text-green-700 text-sm flex items-center gap-2 border border-green-200">
+            <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm flex items-center gap-2 border border-green-200 dark:border-green-700">
               <CheckCircle size={16} /> Profile updated successfully!
             </div>
           )}
 
           {/* Profile Card */}
-          <div className="bg-white rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.border_color}` }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.border_color}` }}>
             {/* Banner */}
             <div className="h-28 relative" style={{ background: `linear-gradient(135deg, ${theme.button_primary}, ${theme.button_primary}dd)` }}>
               <div className="absolute inset-0 opacity-10">
@@ -198,7 +198,7 @@ const DriverProfile = () => {
             ].map(stat => {
               const Icon = stat.icon;
               return (
-                <div key={stat.label} className="bg-white rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
+                <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl p-4" style={{ border: `1px solid ${theme.border_color}` }}>
                   <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-2" style={{ backgroundColor: `${stat.color}15` }}>
                     <Icon size={16} style={{ color: stat.color }} />
                   </div>
@@ -212,7 +212,7 @@ const DriverProfile = () => {
           {/* Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Personal Info */}
-            <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${theme.button_primary}15` }}>
                   <User size={15} style={{ color: theme.button_primary }} />
@@ -254,7 +254,7 @@ const DriverProfile = () => {
             </div>
 
             {/* Vehicle Info */}
-            <div className="bg-white rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5" style={{ border: `1px solid ${theme.border_color}` }}>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${theme.button_primary}15` }}>
                   <Truck size={15} style={{ color: theme.button_primary }} />

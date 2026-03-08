@@ -161,7 +161,7 @@ class DriverController extends Controller
             return $this->notFoundResponse('Driver not found');
         }
 
-        $this->logAudit('DELETE', 'Drivers', "Deleted driver: {$driver->name}", [
+        $this->logAudit('ARCHIVE', 'Drivers', "Archived driver: {$driver->name}", [
             'driver_id' => $driver->id,
             'name' => $driver->name,
             'email' => $driver->email,
@@ -169,7 +169,7 @@ class DriverController extends Controller
 
         $this->driverService->deleteDriver($driver);
 
-        return $this->successResponse(null, 'Driver deleted successfully');
+        return $this->successResponse(null, 'Driver archived successfully');
     }
 
     /**

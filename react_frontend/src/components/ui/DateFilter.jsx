@@ -29,7 +29,7 @@ const DateFilter = ({ onChange, showCustom = true }) => {
   return (
     <div className="flex flex-wrap items-center gap-3">
       {/* Period Buttons */}
-      <div className="inline-flex rounded-lg border-2 border-primary-200 p-1 bg-primary-50/30">
+      <div className="inline-flex rounded-lg border-2 border-primary-200 dark:border-primary-700 p-1 bg-primary-50 dark:bg-primary-900/20">
         {periods.map((p) => (
           <button
             key={p.value}
@@ -37,7 +37,7 @@ const DateFilter = ({ onChange, showCustom = true }) => {
             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all
               ${period === p.value && !showCustomDates
                 ? 'bg-button-500 text-white shadow-sm' 
-                : 'text-gray-600 hover:text-gray-800 hover:bg-white'
+                : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 dark:text-gray-100 hover:bg-white dark:bg-gray-700'
               }
             `}
           >
@@ -53,8 +53,8 @@ const DateFilter = ({ onChange, showCustom = true }) => {
             onClick={() => setShowCustomDates(!showCustomDates)}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all
               ${showCustomDates 
-                ? 'border-primary-500 bg-primary-50 text-primary-600' 
-                : 'border-primary-200 text-gray-600 hover:bg-primary-50'
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' 
+                : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
               }
             `}
           >
@@ -69,14 +69,14 @@ const DateFilter = ({ onChange, showCustom = true }) => {
                 type="date"
                 value={customDates.start}
                 onChange={(e) => handleCustomDateChange('start', e.target.value)}
-                className="px-3 py-2 text-sm border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="px-3 py-2 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <span className="text-gray-400">to</span>
               <input
                 type="date"
                 value={customDates.end}
                 onChange={(e) => handleCustomDateChange('end', e.target.value)}
-                className="px-3 py-2 text-sm border-2 border-primary-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="px-3 py-2 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
           )}

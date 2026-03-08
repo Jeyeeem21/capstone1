@@ -95,6 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('sales')->group(function () {
         Route::get('/', [SaleController::class, 'index']);
         Route::post('/order', [SaleController::class, 'storeOrder']);
+        Route::post('/check-reference', [SaleController::class, 'checkReference']);
         Route::get('/stats', [SaleController::class, 'stats']);
         Route::get('/product-growth', [SaleController::class, 'productGrowth']);
         Route::get('/{id}', [SaleController::class, 'show']);
@@ -104,6 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/return/accept', [SaleController::class, 'acceptReturn']);
         Route::post('/{id}/return/reject', [SaleController::class, 'rejectReturn']);
         Route::post('/{id}/return/complete', [SaleController::class, 'markReturned']);
+        Route::post('/{id}/restock', [SaleController::class, 'restockItems']);
         Route::post('/{id}/pay', [SaleController::class, 'markPaid']);
     });
 
@@ -113,34 +115,56 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/refresh', [SalesPredictionController::class, 'refresh']);
     });
 
-    // Appearance Settings (write operations)
-    Route::prefix('appearance')->group(function () {
-        Route::put('/', [AppearanceSettingController::class, 'update']);
-        Route::put('/{key}', [AppearanceSettingController::class, 'updateSingle']);
-        Route::post('/reset', [AppearanceSettingController::class, 'reset']);
-    });
+    // ========================================
+    // Super Admin Only Routes
+    // ========================================
 
-    // Website Content (write operations)
-    Route::prefix('website-content')->group(function () {
-        Route::post('/home', [WebsiteContentController::class, 'saveHomeContent']);
-        Route::post('/about', [WebsiteContentController::class, 'saveAboutContent']);
-        Route::post('/hero-image', [WebsiteContentController::class, 'uploadHeroImage']);
-        Route::post('/seed', [WebsiteContentController::class, 'seedDefaults']);
-    });
+    // Appearance Settings (write operations) - Super Admin only
+    Route::middleware('role:super_admin')->group(function () {
+        Route::prefix('appearance')->group(function () {
+            Route::put('/', [AppearanceSettingController::class, 'update']);
+            Route::put('/{key}', [AppearanceSettingController::class, 'updateSingle']);
+            Route::post('/reset', [AppearanceSettingController::class, 'reset']);
+        });
 
-    // Business Settings (write operations)
-    Route::prefix('business-settings')->group(function () {
-        Route::put('/', [BusinessSettingController::class, 'update']);
-        Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']);
-    });
+        // Website Content (write operations)
+        Route::prefix('website-content')->group(function () {
+            Route::post('/home', [WebsiteContentController::class, 'saveHomeContent']);
+            Route::post('/about', [WebsiteContentController::class, 'saveAboutContent']);
+            Route::post('/hero-image', [WebsiteContentController::class, 'uploadHeroImage']);
+            Route::post('/seed', [WebsiteContentController::class, 'seedDefaults']);
+        });
 
-    // Database Backup Routes
-    Route::prefix('database')->group(function () {
-        Route::get('/export', [DatabaseBackupController::class, 'export']);
-        Route::get('/info', [DatabaseBackupController::class, 'info']);
-    });
+        // Business Settings (write operations)
+        Route::prefix('business-settings')->group(function () {
+            Route::put('/', [BusinessSettingController::class, 'update']);
+            Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']);
+        });
 
-    // Customer Routes
+        // Database Backup Routes
+        Route::prefix('database')->group(function () {
+            Route::get('/export', [DatabaseBackupController::class, 'export']);
+            Route::get('/info', [DatabaseBackupController::class, 'info']);
+            Route::get('/export-csv', [DatabaseBackupController::class, 'exportCsv']);
+            Route::post('/import-csv', [DatabaseBackupController::class, 'importCsv']);
+        });
+
+        // Archive Routes
+        Route::prefix('archives')->group(function () {
+            Route::get('/', [ArchiveController::class, 'index']);
+            Route::get('/statistics', [ArchiveController::class, 'statistics']);
+            Route::post('/{module}/{id}/restore', [ArchiveController::class, 'restore']);
+            Route::delete('/{module}/{id}', [ArchiveController::class, 'softDelete']);
+            Route::delete('/{module}/all/soft-delete', [ArchiveController::class, 'softDeleteAll']);
+        });
+
+        // Audit Trail Routes
+        Route::prefix('audit-trails')->group(function () {
+            Route::get('/', [AuditTrailController::class, 'index']);
+            Route::get('/statistics', [AuditTrailController::class, 'statistics']);
+            Route::get('/{auditTrail}', [AuditTrailController::class, 'show']);
+        });
+    });
     Route::prefix('customers')->group(function () {
         Route::get('/', [CustomerController::class, 'index']);
         Route::post('/', [CustomerController::class, 'store']);
@@ -255,21 +279,5 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [UserController::class, 'show']);
         Route::put('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
-    });
-
-    // Archive Routes (Super Admin)
-    Route::prefix('archives')->group(function () {
-        Route::get('/', [ArchiveController::class, 'index']);
-        Route::get('/statistics', [ArchiveController::class, 'statistics']);
-        Route::post('/{module}/{id}/restore', [ArchiveController::class, 'restore']);
-        Route::delete('/{module}/{id}', [ArchiveController::class, 'softDelete']);
-        Route::delete('/{module}/all/soft-delete', [ArchiveController::class, 'softDeleteAll']);
-    });
-
-    // Audit Trail Routes
-    Route::prefix('audit-trails')->group(function () {
-        Route::get('/', [AuditTrailController::class, 'index']);
-        Route::get('/statistics', [AuditTrailController::class, 'statistics']);
-        Route::get('/{auditTrail}', [AuditTrailController::class, 'show']);
     });
 });

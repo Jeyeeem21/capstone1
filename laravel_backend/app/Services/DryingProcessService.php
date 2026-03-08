@@ -357,5 +357,6 @@ class DryingProcessService
     {
         Cache::forget(self::CACHE_KEY);
         Cache::forget('procurements_all');
+        DashboardService::clearStatsCache();
     }
 }

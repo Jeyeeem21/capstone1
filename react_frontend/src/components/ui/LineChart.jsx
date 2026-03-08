@@ -18,12 +18,12 @@ const getCSSVariable = (name) => {
 
 // Helper to detect dark mode
 const useIsDarkMode = () => {
-  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      setIsDark(document.body.classList.contains('dark-mode'));
+      setIsDark(document.documentElement.classList.contains('dark'));
     });
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
   return isDark;
@@ -37,8 +37,8 @@ const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxis
   const currentIndex = data.findIndex(d => String(d.name) === String(label));
 
   return (
-    <div className={`rounded-xl shadow-lg p-3 min-w-[180px] border ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'}`}>
-      <p className={`text-sm font-semibold mb-2 pb-1.5 border-b ${isDark ? 'text-gray-100 border-gray-600' : 'text-gray-800 border-gray-100'}`}>{label}</p>
+    <div className={`rounded-xl shadow-lg p-3 min-w-[180px] border ${isDark ? 'bg-gray-800 border-gray-600' : 'bg-white dark:bg-gray-700 border-primary-200 dark:border-primary-700'}`}>
+      <p className={`text-sm font-semibold mb-2 pb-1.5 border-b ${isDark ? 'text-gray-100 border-gray-600' : 'text-gray-800 dark:text-gray-100 border-gray-100 dark:border-gray-700'}`}>{label}</p>
       {payload.map((entry, i) => {
         const currentValue = entry.value || 0;
         const prevValue = currentIndex > 0 ? (data[currentIndex - 1]?.[entry.dataKey] || 0) : null;
@@ -61,22 +61,22 @@ const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxis
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-1.5">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{entry.name}</span>
+                <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>{entry.name}</span>
               </div>
-              <span className={`text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
+              <span className={`text-sm font-bold ${isDark ? 'text-gray-100' : 'text-gray-800 dark:text-gray-100'}`}>
                 {yAxisUnit === '₱' ? `₱${currentValue.toLocaleString()}` : `${currentValue.toLocaleString()}${yAxisUnit ? ` ${yAxisUnit}` : ''}`}
               </span>
             </div>
             {changePercent !== null && (
               <div className="flex items-center justify-end gap-1">
                 {changeDirection === 'up' && (
-                  <span className="text-[11px] font-medium text-green-600 flex items-center gap-0.5">
+                  <span className="text-[11px] font-medium text-green-600 dark:text-green-400 flex items-center gap-0.5">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 6H2L5 2Z" fill="currentColor"/></svg>
                     +{changePercent}%
                   </span>
                 )}
                 {changeDirection === 'down' && (
-                  <span className="text-[11px] font-medium text-red-600 flex items-center gap-0.5">
+                  <span className="text-[11px] font-medium text-red-600 dark:text-red-400 flex items-center gap-0.5">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 8L2 4H8L5 8Z" fill="currentColor"/></svg>
                     {changePercent}%
                   </span>
@@ -84,7 +84,7 @@ const CustomTooltip = ({ active, payload, label, data, lines, themeColors, yAxis
                 {changeDirection === 'same' && (
                   <span className="text-[11px] font-medium text-gray-400">0.0%</span>
                 )}
-                <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>vs prev</span>
+                <span className={`text-[10px] ${isDark ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400'}`}>vs prev</span>
               </div>
             )}
           </div>
@@ -144,7 +144,7 @@ const LineChart = ({
   }, [yAxisUnit]);
 
   return (
-    <div className="bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 outline-none [&_*]:outline-none p-4">
+    <div className="bg-gradient-to-br from-primary-50 via-primary-100/30 to-primary-50 dark:from-gray-800 dark:via-gray-800 dark:to-gray-700 rounded-xl border-2 border-primary-400 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 outline-none [&_*]:outline-none p-4">
       {/* Header */}
       <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
         <div>
@@ -154,7 +154,7 @@ const LineChart = ({
         
         {/* Tabs */}
         {tabs && !headerRight && (
-          <div className="flex bg-white dark:bg-gray-700 rounded-lg p-1 shadow-sm border border-primary-200">
+          <div className="flex bg-white dark:bg-gray-700 rounded-lg p-1 shadow-sm border border-primary-200 dark:border-primary-700">
             {tabs.map((tab) => (
               <button
                 key={tab.value}
@@ -162,7 +162,7 @@ const LineChart = ({
                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                   activeTab === tab.value
                     ? 'bg-button-500 text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-button-300'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 dark:text-gray-100 dark:hover:text-button-300'
                 }`}
               >
                 {tab.label}
@@ -186,7 +186,7 @@ const LineChart = ({
                     ? prev.filter(k => k !== line.dataKey) 
                     : prev.length >= lines.length - 1 ? prev : [...prev, line.dataKey]
                 )}
-                className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer select-none ${isHidden ? 'opacity-40' : ''}`}
+                className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-all hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 cursor-pointer select-none ${isHidden ? 'opacity-40' : ''}`}
               >
                 <div 
                   className="w-8 h-3 rounded"
@@ -266,11 +266,11 @@ const LineChart = ({
 
       {/* Summary Stats */}
       {summaryStats && (
-        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-primary-200">
+        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-primary-200 dark:border-primary-700">
           {summaryStats.map((stat, index) => (
             <div key={index} className="text-center">
               <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
-              <p className={`text-lg font-bold ${stat.color || 'text-primary-600'}`}>{stat.value}</p>
+              <p className={`text-lg font-bold ${stat.color || 'text-primary-600 dark:text-primary-400'}`}>{stat.value}</p>
             </div>
           ))}
         </div>
