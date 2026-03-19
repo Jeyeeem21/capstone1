@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Menu, X, Phone, Mail, MapPin, Facebook, Instagram, Twitter, ChevronUp } from 'lucide-react';
+import { Menu, X, Phone, Mail, MapPin, Clock, Facebook, Instagram, Twitter, Linkedin, ChevronUp } from 'lucide-react';
 import { Button, LoginModal } from '../../components/ui';
+import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 
 // Public Header/Navbar
 const PublicHeader = () => {
@@ -10,6 +11,7 @@ const PublicHeader = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { settings } = useBusinessSettings();
 
   // Auto-open login modal when redirected with ?login=true
   useEffect(() => {
@@ -52,15 +54,20 @@ const PublicHeader = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25 group-hover:scale-105 transition-transform">
-              <span className="text-white font-bold text-xl">K</span>
+            <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25 group-hover:scale-105 transition-transform overflow-hidden">
+              <img 
+                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
+                alt={settings.business_name || 'Logo'} 
+                className="w-10 h-10 object-contain"
+                onError={(e) => { e.target.onerror = null; e.target.src = '/storage/logos/KJPLogo.png'; }}
+              />
             </div>
             <div>
               <h1 className={`font-bold text-xl transition-colors ${isScrolled ? 'text-gray-800 dark:text-gray-100' : 'text-white'}`}>
-                KJP Ricemill
+                {settings.business_name || 'KJP Ricemill'}
               </h1>
               <p className={`text-xs font-medium transition-colors ${isScrolled ? 'text-button-600 dark:text-button-400' : 'text-button-300'}`}>
-                Quality Rice Products
+                {settings.business_tagline || 'Quality Rice Products'}
               </p>
             </div>
           </Link>
@@ -154,6 +161,7 @@ const PublicHeader = () => {
 
 // Public Footer
 const PublicFooter = () => {
+  const { settings } = useBusinessSettings();
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -175,13 +183,19 @@ const PublicFooter = () => {
     { to: '/contact', label: 'Contact' },
   ];
 
-  const products = [
-    'Premium Jasmine Rice',
-    'Long Grain Rice',
-    'Brown Rice',
-    'Glutinous Rice',
-    'Basmati Rice',
-  ];
+  const contactInfo = [
+    { icon: MapPin, text: settings.business_address || '' },
+    { icon: Phone, text: settings.business_phone || '' },
+    { icon: Mail, text: settings.business_email || '' },
+    { icon: Clock, text: settings.business_hours || '' },
+  ].filter(item => item.text);
+
+  const socialLinks = [
+    { icon: Facebook, href: settings.social_facebook, label: 'Facebook' },
+    { icon: Instagram, href: settings.social_instagram, label: 'Instagram' },
+    { icon: Twitter, href: settings.social_twitter, label: 'Twitter' },
+    { icon: Linkedin, href: settings.social_linkedin, label: 'LinkedIn' },
+  ].filter(link => link.href);
 
   return (
     <footer className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white relative overflow-hidden">
@@ -193,77 +207,57 @@ const PublicFooter = () => {
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Footer Content */}
-        <div className="py-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+        <div className="py-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
           {/* Brand Section */}
-          <div className="lg:col-span-1">
+          <div>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-xl">K</span>
+              <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
+                <img 
+                  src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                  alt={settings.business_name || 'Logo'} 
+                  className="w-10 h-10 object-contain"
+                  onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                />
+                <span style={{display:'none'}} className="text-white font-bold text-xl items-center justify-center">{(settings.business_name || 'K').substring(0, 1)}</span>
               </div>
               <div>
-                <h3 className="font-bold text-xl">KJP Ricemill</h3>
-                <p className="text-xs text-button-400">Quality Rice Products</p>
+                <h3 className="font-bold text-xl">{settings.business_name || 'KJP Ricemill'}</h3>
+                <p className="text-xs text-button-400">{settings.business_tagline || 'Quality Rice Products'}</p>
               </div>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
-              Your trusted partner in premium rice products. We deliver quality rice from farm to table, 
-              ensuring freshness and excellence in every grain.
+              {settings.footer_tagline || 'Your trusted partner in quality rice processing and distribution.'}
             </p>
-            <div className="flex gap-3">
-              <a href="#" className="w-10 h-10 bg-white/10 hover:bg-button-500 rounded-lg flex items-center justify-center transition-colors">
-                <Facebook size={18} />
-              </a>
-              <a href="#" className="w-10 h-10 bg-white/10 hover:bg-button-500 rounded-lg flex items-center justify-center transition-colors">
-                <Instagram size={18} />
-              </a>
-              <a href="#" className="w-10 h-10 bg-white/10 hover:bg-button-500 rounded-lg flex items-center justify-center transition-colors">
-                <Twitter size={18} />
-              </a>
-            </div>
+            {socialLinks.length > 0 && (
+              <div className="flex gap-3">
+                {socialLinks.map((social, index) => (
+                  <a key={index} href={social.href} target="_blank" rel="noopener noreferrer" aria-label={social.label} className="w-10 h-10 bg-white/10 hover:bg-button-500 rounded-lg flex items-center justify-center transition-colors">
+                    <social.icon size={18} />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Quick Links & Products - side by side on mobile */}
-          <div className="grid grid-cols-2 gap-6 md:contents">
-            <div>
-              <h4 className="font-semibold text-lg mb-6 relative">
-                Quick Links
-                <span className="absolute -bottom-2 left-0 w-12 h-1 bg-button-500 rounded-full" />
-              </h4>
-              <ul className="space-y-3">
-                {quickLinks.map((link) => (
-                  <li key={link.to}>
-                    <Link 
-                      to={link.to}
-                      className="text-gray-400 hover:text-button-400 transition-colors flex items-center gap-2 group"
-                    >
-                      <span className="w-1.5 h-1.5 bg-button-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Products */}
-            <div>
-              <h4 className="font-semibold text-lg mb-6 relative">
-                Our Products
-                <span className="absolute -bottom-2 left-0 w-12 h-1 bg-button-500 rounded-full" />
-              </h4>
-              <ul className="space-y-3">
-                {products.map((product) => (
-                  <li key={product}>
-                    <Link 
-                      to="/products"
-                      className="text-gray-400 hover:text-button-400 transition-colors flex items-center gap-2 group"
-                    >
-                      <span className="w-1.5 h-1.5 bg-button-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                      {product}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Quick Links */}
+          <div>
+            <h4 className="font-semibold text-lg mb-6 relative">
+              Quick Links
+              <span className="absolute -bottom-2 left-0 w-12 h-1 bg-button-500 rounded-full" />
+            </h4>
+            <ul className="space-y-3">
+              {quickLinks.map((link) => (
+                <li key={link.to}>
+                  <Link 
+                    to={link.to}
+                    className="text-gray-400 hover:text-button-400 transition-colors flex items-center gap-2 group"
+                  >
+                    <span className="w-1.5 h-1.5 bg-button-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           {/* Contact Info */}
@@ -273,40 +267,26 @@ const PublicFooter = () => {
               <span className="absolute -bottom-2 left-0 w-12 h-1 bg-button-500 rounded-full" />
             </h4>
             <ul className="space-y-4">
-              <li className="flex items-start gap-3">
-                <div className="w-10 h-10 bg-button-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <MapPin size={18} className="text-button-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">123 Rice Street, Barangay San Jose</p>
-                  <p className="text-sm text-gray-400">City of Manila, Philippines</p>
-                </div>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-button-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Phone size={18} className="text-button-400" />
-                </div>
-                <p className="text-sm text-gray-400">+63 912 345 6789</p>
-              </li>
-              <li className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-button-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Mail size={18} className="text-button-400" />
-                </div>
-                <p className="text-sm text-gray-400">info@kjpricemill.com</p>
-              </li>
+              {contactInfo.map((item, index) => (
+                <li key={index} className="flex items-start gap-3">
+                  <div className="w-10 h-10 bg-button-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <item.icon size={18} className="text-button-400" />
+                  </div>
+                  <p className="text-sm text-gray-400 pt-2.5 whitespace-pre-line">{item.text}</p>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
 
         {/* Bottom Bar */}
         <div className="py-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            © {new Date().getFullYear()} KJP Ricemill. All rights reserved.
+          <p className="text-sm text-gray-500">
+            © {new Date().getFullYear()} {settings.business_name || 'KJP Ricemill'} {settings.footer_copyright || 'Management System. All rights reserved.'}
           </p>
-          <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400">
-            <a href="#" className="hover:text-button-400 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-button-400 transition-colors">Terms of Service</a>
-          </div>
+          <p className="text-xs text-gray-600">
+            {settings.footer_powered_by || ''}
+          </p>
         </div>
       </div>
 

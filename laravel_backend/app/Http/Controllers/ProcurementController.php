@@ -6,6 +6,7 @@ use App\Models\Procurement;
 use App\Models\ProcurementBatch;
 use App\Services\ProcurementService;
 use App\Services\ProcurementBatchService;
+use App\Services\EmailService;
 use App\Http\Resources\ProcurementResource;
 use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
@@ -19,11 +20,13 @@ class ProcurementController extends Controller
 
     protected ProcurementService $procurementService;
     protected ProcurementBatchService $batchService;
+    protected EmailService $emailService;
 
-    public function __construct(ProcurementService $procurementService, ProcurementBatchService $batchService)
+    public function __construct(ProcurementService $procurementService, ProcurementBatchService $batchService, EmailService $emailService)
     {
         $this->procurementService = $procurementService;
         $this->batchService = $batchService;
+        $this->emailService = $emailService;
     }
 
     /**
@@ -112,6 +115,9 @@ class ProcurementController extends Controller
             'quantity_kg' => $procurement->quantity_kg,
             'sacks' => $procurement->sacks,
         ]);
+
+        // Email supplier about the purchase
+        $this->emailService->sendProcurementToSupplier($procurement);
 
         return $this->successResponse(
             new ProcurementResource($procurement),

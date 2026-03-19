@@ -61,7 +61,7 @@ const BottomNav = () => {
       submenuId: 'partners',
       submenu: [
         { icon: Truck, label: 'Supplier', to: `${basePath}/partners/supplier` },
-        { icon: UserCheck, label: 'Client', to: `${basePath}/partners/client` },
+        { icon: UserCheck, label: 'Customer', to: `${basePath}/partners/customer` },
       ]
     },
     { icon: UserCog, label: 'Staff', to: `${basePath}/staff-management` },

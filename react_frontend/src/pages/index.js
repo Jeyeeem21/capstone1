@@ -11,7 +11,7 @@ export {
   AdminOrders,
   Partners, 
   Supplier, 
-  Client,
+  Customer,
   StaffManagement, 
   AuditTrail, 
   Archives,
@@ -24,8 +24,8 @@ export { PointOfSale } from './shared';
 // Staff pages (from staff folder)
 export { StaffDashboard, StaffProfile } from './staff';
 
-// Client pages (from client folder)
-export { ClientDashboard, Shop, Orders, Cart, Profile, ClientSettings } from './client';
+// Customer pages (from customer folder)
+export { CustomerDashboard, Product, Orders, Cart, Profile, CustomerSettings } from './customer';
 
 // Driver pages (from driver folder)
 export { DriverDashboard, Deliveries, DriverProfile, DriverSettings } from './driver';
@@ -34,5 +34,5 @@ export { DriverDashboard, Deliveries, DriverProfile, DriverSettings } from './dr
 export * as AdminPages from './admin';
 export * as StaffPages from './staff';
 export * as SharedPages from './shared';
-export * as ClientPages from './client';
+export * as CustomerPages from './customer';
 export * as DriverPages from './driver';

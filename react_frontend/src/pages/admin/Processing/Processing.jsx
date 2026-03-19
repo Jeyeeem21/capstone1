@@ -1346,8 +1346,11 @@ const Processing = () => {
           const totalAvailableKg = selectedGroups.reduce((sum, opt) => sum + opt.remaining, 0);
           
           // Filter out options where any of their dryingIds are already selected
+          // Also filter by variety if at least one source is already selected
+          const selectedVariety = selectedGroups.length > 0 ? selectedGroups[0].varietyName : null;
           const availableOptions = groupedDryingOptions.filter(opt => 
             !opt.dryingIds.some(id => selectedDryingIds.includes(id))
+            && (!selectedVariety || opt.varietyName === selectedVariety)
           );
           
           return (

@@ -61,7 +61,7 @@ class ArchiveController extends Controller
             ],
             'customers' => [
                 'model' => Customer::class,
-                'label' => 'Client',
+                'label' => 'Customer',
                 'nameField' => 'name',
                 'idField' => 'id',
                 'auditModule' => 'Customer',

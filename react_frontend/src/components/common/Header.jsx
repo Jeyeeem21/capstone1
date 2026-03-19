@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu, User, LogOut, Settings, ChevronDown, Wheat } from 'lucide-react';
+import { Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react';
+import NotificationBell from './NotificationBell';
+import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { useAuth } from '../../context/AuthContext';
 
-const Header = ({ onMenuClick, businessName = 'KJP Rice Mill' }) => {
+const Header = ({ onMenuClick }) => {
+  const { settings } = useBusinessSettings();
+  const { user } = useAuth();
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -33,18 +38,21 @@ const Header = ({ onMenuClick, businessName = 'KJP Rice Mill' }) => {
         </button>
         
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center shadow-md">
-            <Wheat size={20} className="text-white" />
+          <div className="w-9 h-9 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center shadow-md overflow-hidden">
+            <img src={settings.business_logo || '/storage/logos/KJPLogo.png'} alt={settings.business_name || 'Logo'} className="w-7 h-7 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+            <span style={{display:'none'}} className="text-white font-bold text-sm items-center justify-center">{(settings.business_name || 'K').substring(0, 1)}</span>
           </div>
           <div>
-            <h1 className="font-bold text-gray-800 dark:text-gray-100 text-base leading-tight">{businessName}</h1>
-            <p className="text-xs text-primary-500 dark:text-primary-400 font-medium">Management System</p>
+            <h1 className="font-bold text-gray-800 dark:text-gray-100 text-base leading-tight">{settings.business_name || 'KJP Ricemill'}</h1>
+            <p className="text-xs text-primary-500 dark:text-primary-400 font-medium">{settings.business_tagline || 'Management System'}</p>
           </div>
         </div>
       </div>
 
-      {/* Right: Account Icon with Dropdown */}
-      <div className="relative" ref={dropdownRef}>
+      {/* Right: Notification Bell + Account Icon with Dropdown */}
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+        <div className="relative" ref={dropdownRef}>
         <button
           onClick={() => setIsAccountOpen(!isAccountOpen)}
           className="flex items-center gap-2 p-2 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/20 transition-colors"
@@ -68,8 +76,8 @@ const Header = ({ onMenuClick, businessName = 'KJP Rice Mill' }) => {
                   <User size={20} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">Admin User</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">admin@kjpricemill.com</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{user?.name || 'Admin'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email || ''}</p>
                 </div>
               </div>
             </div>
@@ -87,6 +95,7 @@ const Header = ({ onMenuClick, businessName = 'KJP Rice Mill' }) => {
             </div>
           </div>
         )}
+      </div>
       </div>
     </header>
   );

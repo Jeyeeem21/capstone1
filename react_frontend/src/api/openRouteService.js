@@ -1,17 +1,19 @@
 /**
- * OpenRouteService API Helper
+ * Geocoding & Routing Helper
  * 
- * Free geocoding (address autocomplete) and distance calculation.
- * Docs: https://openrouteservice.org/dev/#/api-docs
+ * Uses Nominatim (OpenStreetMap) for geocoding — accurate PH barangay-level data.
+ * Uses OpenRouteService for driving route distance calculation.
  */
 import { ORS_API_KEY, ORS_BASE_URL } from './config';
+
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 
 // Debounce timer reference
 let autocompleteTimer = null;
 
 /**
- * Search for addresses (autocomplete)
- * @param {string} query - Search text (e.g., "Calapan City")
+ * Search for addresses (autocomplete) via Nominatim
+ * @param {string} query - Search text (e.g., "Cantil, Roxas, Oriental Mindoro")
  * @param {object} options - Optional: focus coordinates { lat, lng } to bias results
  * @returns {Promise<Array>} Array of { label, lat, lng }
  */
@@ -20,31 +22,38 @@ export const searchAddress = async (query, options = {}) => {
 
   try {
     const params = new URLSearchParams({
-      api_key: ORS_API_KEY,
-      text: query,
-      size: 5,
-      'boundary.country': 'PH', // Limit to Philippines
+      q: query,
+      format: 'json',
+      limit: 5,
+      countrycodes: 'PH',
+      addressdetails: 1,
     });
 
-    // Bias results near a focus point (e.g., warehouse location)
+    // Bias results near a viewbox around the focus point
     if (options.lat && options.lng) {
-      params.append('focus.point.lat', options.lat);
-      params.append('focus.point.lon', options.lng);
+      const offset = 0.5; // ~55km bias radius
+      params.append('viewbox', `${options.lng - offset},${options.lat + offset},${options.lng + offset},${options.lat - offset}`);
+      params.append('bounded', 0);
     }
 
-    const response = await fetch(`${ORS_BASE_URL}/geocode/autocomplete?${params}`);
+    const response = await fetch(`${NOMINATIM_URL}/search?${params}`, {
+      headers: { 'User-Agent': 'KJPRiceMillApp/1.0' },
+    });
     if (!response.ok) throw new Error('Address search failed');
     
     const data = await response.json();
-    return (data.features || []).map(f => ({
-      label: f.properties.label,
-      lat: f.geometry.coordinates[1],
-      lng: f.geometry.coordinates[0],
-      region: f.properties.region,
-      locality: f.properties.locality || f.properties.county,
-    }));
+    return (data || []).map(item => {
+      const addr = item.address || {};
+      return {
+        label: item.display_name,
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+        region: addr.state || addr.region || '',
+        locality: addr.city || addr.town || addr.municipality || addr.county || '',
+      };
+    });
   } catch (error) {
-    console.error('ORS autocomplete error:', error);
+    console.error('Nominatim autocomplete error:', error);
     return [];
   }
 };
@@ -64,7 +73,7 @@ export const debouncedSearchAddress = (query, callback, options = {}) => {
   autocompleteTimer = setTimeout(async () => {
     const results = await searchAddress(query, options);
     callback(results);
-  }, 400);
+  }, 600);
 };
 
 /**
@@ -78,7 +87,7 @@ export const debouncedSearchAddress = (query, callback, options = {}) => {
 export const calculateDistance = async (fromLat, fromLng, toLat, toLng) => {
   try {
     // ORS uses [longitude, latitude] order
-    const response = await fetch(`${ORS_BASE_URL}/v2/directions/driving-hgv`, {
+    const response = await fetch(`${ORS_BASE_URL}/v2/directions/driving-car`, {
       method: 'POST',
       headers: {
         'Authorization': ORS_API_KEY,
@@ -125,37 +134,46 @@ export const calculateDistance = async (fromLat, fromLng, toLat, toLng) => {
 };
 
 /**
- * Geocode a full address to coordinates
+ * Geocode a full address to coordinates via Nominatim (with retry on network errors)
  * @param {string} address
+ * @param {number} retries - Number of retries on failure
  * @returns {Promise<{ lat: number, lng: number } | null>}
  */
-export const geocodeAddress = async (address) => {
+export const geocodeAddress = async (address, retries = 2) => {
   if (!address) return null;
 
-  try {
-    const params = new URLSearchParams({
-      api_key: ORS_API_KEY,
-      text: address,
-      size: 1,
-      'boundary.country': 'PH',
-    });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const params = new URLSearchParams({
+        q: address,
+        format: 'json',
+        limit: 1,
+        countrycodes: 'PH',
+      });
 
-    const response = await fetch(`${ORS_BASE_URL}/geocode/search?${params}`);
-    if (!response.ok) return null;
+      const response = await fetch(`${NOMINATIM_URL}/search?${params}`, {
+        headers: { 'User-Agent': 'KJPRiceMillApp/1.0' },
+      });
+      if (!response.ok) return null;
 
-    const data = await response.json();
-    const feature = data.features?.[0];
-    if (feature) {
-      return {
-        lat: feature.geometry.coordinates[1],
-        lng: feature.geometry.coordinates[0],
-      };
+      const data = await response.json();
+      if (data?.[0]) {
+        return {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon),
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error(`Nominatim geocode error (attempt ${attempt + 1}/${retries + 1}):`, error);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      return null;
     }
-    return null;
-  } catch (error) {
-    console.error('ORS geocode error:', error);
-    return null;
   }
+  return null;
 };
 
 /**

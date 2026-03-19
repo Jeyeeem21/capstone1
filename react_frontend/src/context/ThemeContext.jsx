@@ -6,6 +6,9 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api';
 // Track if API is available (shared across all components)
 let apiAvailable = null; // null = unknown, true = available, false = unavailable
 
+// Personal preference keys - NOT synced via API, stored per-user in localStorage
+const PERSONAL_KEYS = ['mode', 'font_size_base'];
+
 // Default theme colors (fallback if API fails)
 const defaultTheme = {
   // Mode
@@ -154,12 +157,20 @@ export const ThemeProvider = ({ children }) => {
           apiAvailable = true;
           const data = await response.json();
           if (data.success && data.data) {
-            // Only update if different from current theme
-            const newThemeStr = JSON.stringify(data.data);
-            const currentThemeStr = localStorage.getItem('kjp-theme');
-            if (newThemeStr !== currentThemeStr) {
-              setTheme(data.data);
-              localStorage.setItem('kjp-theme', newThemeStr);
+            // Preserve personal preferences (mode, font_size_base) from localStorage
+            // These are per-user and should NOT be overwritten by global API settings
+            const currentLocal = getInitialTheme();
+            const mergedTheme = { ...data.data };
+            PERSONAL_KEYS.forEach(key => {
+              if (currentLocal[key] !== undefined) {
+                mergedTheme[key] = currentLocal[key];
+              }
+            });
+            const mergedStr = JSON.stringify(mergedTheme);
+            const currentStr = localStorage.getItem('kjp-theme');
+            if (mergedStr !== currentStr) {
+              setTheme(mergedTheme);
+              localStorage.setItem('kjp-theme', mergedStr);
             }
           }
         } catch (error) {
@@ -280,7 +291,10 @@ export const ThemeProvider = ({ children }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const settings = Object.entries(theme).map(([key, value]) => ({ key, value: String(value) }));
+      // Exclude personal preferences from API sync - they stay local per user
+      const settings = Object.entries(theme)
+        .filter(([key]) => !PERSONAL_KEYS.includes(key))
+        .map(([key, value]) => ({ key, value: String(value) }));
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`${API_BASE_URL}/appearance`, {
         method: 'PUT',

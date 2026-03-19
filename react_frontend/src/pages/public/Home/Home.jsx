@@ -18,6 +18,7 @@ import {
 import { Button } from '../../../components/ui';
 import { productsApi, websiteContentApi } from '../../../api';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
+import { API_BASE_URL } from '../../../api/config';
 
 // Icon mapping for features
 const iconMap = {
@@ -30,37 +31,17 @@ const iconMap = {
 // Fallback products — empty until real products loaded from API
 const fallbackProducts = [];
 
-// Default content fallback
+// Default content fallback (minimal - real data comes from DB seeder)
 const defaultContent = {
-  heroTitle: 'Quality Rice',
-  heroTitleHighlight: 'From Farm to Table',
-  heroSubtitle: 'Experience the finest selection of premium rice products. From aromatic jasmine to nutritious brown rice, we deliver excellence in every grain.',
-  heroTag: 'Premium Quality Rice Since 2010',
-  aboutTitle: 'Committed to Quality Since 2010',
-  aboutDescription: 'KJP Ricemill has been a trusted name in the rice industry for over 15 years. We take pride in sourcing the finest quality rice from local farmers and delivering it fresh to your doorstep.',
-  aboutPoints: [
-    'Premium quality rice from trusted farmers',
-    'Modern milling facilities for best results',
-    'Strict quality control standards',
-    'Reliable delivery across the region',
-  ],
-  stats: [
-    { value: '15+', label: 'Years Experience' },
-    { value: '500+', label: 'Happy Customers' },
-    { value: '50K+', label: 'Bags Delivered' },
-    { value: '99%', label: 'Satisfaction Rate' },
-  ],
-  features: [
-    { title: 'Quality Assured', description: 'Every grain passes through rigorous quality checks to ensure premium standards.' },
-    { title: 'Farm Fresh', description: 'Sourced directly from local farmers, ensuring freshness from harvest to your table.' },
-    { title: 'Fast Delivery', description: 'Reliable delivery service to get your orders to you quickly and efficiently.' },
-    { title: 'Best Prices', description: 'Competitive wholesale and retail prices without compromising on quality.' },
-  ],
-  testimonials: [
-    { name: 'Maria Santos', role: 'Restaurant Owner', content: 'KJP Ricemill has been our trusted supplier for 5 years. Their jasmine rice quality is consistently excellent.', rating: 5 },
-    { name: 'Juan Dela Cruz', role: 'Retail Store Owner', content: 'Fast delivery and great prices. My customers keep coming back for their rice products.', rating: 5 },
-    { name: 'Lisa Reyes', role: 'Catering Business', content: 'The quality of rice makes a huge difference in our dishes. KJP never disappoints!', rating: 5 },
-  ],
+  heroTitle: '',
+  heroTitleHighlight: '',
+  heroSubtitle: '',
+  heroTag: '',
+  aboutTitle: '',
+  aboutDescription: '',
+  aboutPoints: [],
+  stats: [],
+  features: [],
 };
 
 // Get initial content from localStorage/window (preloaded in index.html)
@@ -90,20 +71,24 @@ const Home = () => {
   const { settings } = useBusinessSettings();
   const logoFallback = settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : null;
 
+  // Fetch home content from API
+  const fetchHomeContent = async () => {
+    try {
+      const contentResult = await websiteContentApi.getHomeContent();
+      if (contentResult.success && contentResult.data) {
+        const newContent = { ...defaultContent, ...contentResult.data };
+        setContent(newContent);
+        localStorage.setItem('kjp-home-content', JSON.stringify(contentResult.data));
+      }
+    } catch (error) {
+      console.log('Using cached content');
+    }
+  };
+
   // Sync with API in background
   useEffect(() => {
     const syncData = async () => {
-      // Fetch website content in background
-      try {
-        const contentResult = await websiteContentApi.getHomeContent();
-        if (contentResult.success && contentResult.data) {
-          const newContent = { ...defaultContent, ...contentResult.data };
-          setContent(newContent);
-          localStorage.setItem('kjp-home-content', JSON.stringify(contentResult.data));
-        }
-      } catch (error) {
-        console.log('Using cached content');
-      }
+      await fetchHomeContent();
 
       // Fetch products in background
       try {
@@ -131,17 +116,29 @@ const Home = () => {
     syncData();
   }, []);
 
+  // Cross-tab sync: re-fetch when admin saves content (clears localStorage cache)
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === 'kjp-home-content' && !e.newValue) {
+        fetchHomeContent();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   // Map features with icons
   const features = (content.features || defaultContent.features).map(f => ({
     ...f,
     icon: iconMap[f.title] || Shield,
   }));
 
-  const testimonials = content.testimonials || defaultContent.testimonials;
+  const testimonials = content.testimonials || [];
   const stats = content.stats || defaultContent.stats;
 
   // Default hero image if none set
-  const heroImage = content.heroImage || 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=1920&h=1080&fit=crop';
+  const rawHeroImage = content.heroImage || 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=1920&h=1080&fit=crop';
+  const heroImage = rawHeroImage.startsWith('/storage') ? `${API_BASE_URL.replace('/api', '')}${rawHeroImage}` : rawHeroImage;
 
   return (
     <div className="overflow-hidden">
@@ -166,7 +163,7 @@ const Home = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-full text-green-300 text-sm font-medium mb-8">
             <Leaf size={16} />
-            <span>{content.heroTag}</span>
+            <span>{(content.heroTag || '').replace(/\d{4}/, settings.business_start_year || '2010')}</span>
           </div>
           
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
@@ -195,11 +192,14 @@ const Home = () => {
           </div>
 
           {/* Stats */}
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-3xl sm:text-4xl font-bold text-button-400 mb-2">{stat.value}</div>
-                <div className="text-sm text-gray-400">{stat.label}</div>
+          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {stats.map((stat, index) => (
+              <div key={stat.label} className="group relative bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:border-button-400/50 hover:bg-white/15 transition-all duration-300">
+                <div className="absolute inset-0 bg-gradient-to-br from-button-500/10 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="text-4xl sm:text-5xl font-extrabold bg-gradient-to-r from-button-300 to-button-500 bg-clip-text text-transparent mb-1">{stat.value}</div>
+                  <div className="text-sm text-gray-300 font-medium tracking-wide">{stat.label}</div>
+                </div>
               </div>
             ))}
           </div>
@@ -332,7 +332,7 @@ const Home = () => {
                     <Clock size={24} className="text-button-600 dark:text-button-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">15+</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{new Date().getFullYear() - (parseInt(settings.business_start_year) || 2010)}+</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Years of Excellence</p>
                   </div>
                 </div>
@@ -371,6 +371,7 @@ const Home = () => {
       </section>
 
       {/* Testimonials Section */}
+      {testimonials.length > 0 && (
       <section className="py-24 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
@@ -412,6 +413,7 @@ const Home = () => {
           </div>
         </div>
       </section>
+      )}
 
       {/* CTA Section */}
       <section className="py-24 bg-gradient-to-br from-button-700 via-button-600 to-button-700 relative overflow-hidden">

@@ -287,10 +287,41 @@ class ProductService
     public function getProductCostAnalysis(int $productId): array
     {
         $product = Product::with('variety')->findOrFail($productId);
-        $varietyId = $product->variety_id;
         $weight = (float) ($product->weight ?? 0);
+        $sellingPrice = (float) $product->price;
 
-        // Get all completed processings for this variety that have distributed stock
+        // Use stock logs as the primary source — they track costs per product distribution
+        $stockLogs = StockLog::where('product_id', $productId)
+            ->where('type', 'in')
+            ->whereNotNull('total_cost')
+            ->where('total_cost', '>', 0)
+            ->get();
+
+        if ($stockLogs->isNotEmpty()) {
+            $totalCost = $stockLogs->sum('total_cost');
+            $totalUnits = $stockLogs->sum('quantity_change');
+            $avgCostPerUnit = $totalUnits > 0 ? $totalCost / $totalUnits : 0;
+            $avgCostPerKg = $weight > 0 ? $avgCostPerUnit / $weight : $avgCostPerUnit;
+            $profitPerUnit = $sellingPrice - $avgCostPerUnit;
+            $profitMargin = $sellingPrice > 0 ? ($profitPerUnit / $sellingPrice) * 100 : 0;
+
+            return [
+                'has_data' => true,
+                'avg_cost_per_kg' => round($avgCostPerKg, 2),
+                'avg_cost_per_unit' => round($avgCostPerUnit, 2),
+                'selling_price' => round($sellingPrice, 2),
+                'profit_per_unit' => round($profitPerUnit, 2),
+                'profit_margin' => round($profitMargin, 2),
+                'total_procurement_cost' => round((float) $stockLogs->sum('procurement_cost'), 2),
+                'total_drying_cost' => round((float) $stockLogs->sum('drying_cost'), 2),
+                'total_production_cost' => round($totalCost, 2),
+                'total_distributed_kg' => round((float) $stockLogs->sum('kg_amount'), 2),
+                'processings_count' => $stockLogs->count(),
+            ];
+        }
+
+        // Fallback: compute from processings if no stock logs exist yet
+        $varietyId = $product->variety_id;
         $processings = Processing::with([
                 'dryingSources:id,procurement_id,batch_id,quantity_kg,price,total_price',
                 'dryingSources.procurement:id,quantity_kg,price_per_kg',
@@ -306,42 +337,11 @@ class ProductService
             ->get();
 
         if ($processings->isEmpty()) {
-            // Fallback: check stock logs for cost data (from previous distributions)
-            $stockLogs = StockLog::where('product_id', $productId)
-                ->where('type', 'in')
-                ->whereNotNull('total_cost')
-                ->where('total_cost', '>', 0)
-                ->get();
-
-            if ($stockLogs->isNotEmpty()) {
-                $totalCost = $stockLogs->sum('total_cost');
-                $totalUnits = $stockLogs->sum('quantity_change');
-                $avgCostPerUnit = $totalUnits > 0 ? $totalCost / $totalUnits : 0;
-                $avgCostPerKg = $weight > 0 ? $avgCostPerUnit / $weight : $avgCostPerUnit;
-                $sellingPrice = (float) $product->price;
-                $profitPerUnit = $sellingPrice - $avgCostPerUnit;
-                $profitMargin = $sellingPrice > 0 ? ($profitPerUnit / $sellingPrice) * 100 : 0;
-
-                return [
-                    'has_data' => true,
-                    'avg_cost_per_kg' => round($avgCostPerKg, 2),
-                    'avg_cost_per_unit' => round($avgCostPerUnit, 2),
-                    'selling_price' => round($sellingPrice, 2),
-                    'profit_per_unit' => round($profitPerUnit, 2),
-                    'profit_margin' => round($profitMargin, 2),
-                    'total_procurement_cost' => round((float) $stockLogs->sum('procurement_cost'), 2),
-                    'total_drying_cost' => round((float) $stockLogs->sum('drying_cost'), 2),
-                    'total_production_cost' => round($totalCost, 2),
-                    'total_distributed_kg' => round((float) $stockLogs->sum('kg_amount'), 2),
-                    'processings_count' => $stockLogs->count(),
-                ];
-            }
-
             return [
                 'has_data' => false,
                 'avg_cost_per_kg' => 0,
                 'avg_cost_per_unit' => 0,
-                'selling_price' => (float) $product->price,
+                'selling_price' => $sellingPrice,
                 'profit_per_unit' => 0,
                 'profit_margin' => 0,
                 'total_procurement_cost' => 0,
@@ -358,7 +358,6 @@ class ProductService
 
         foreach ($processings as $processing) {
             $cost = $this->computeProcessingCost($processing);
-            // Scale cost proportionally to what was actually distributed
             $distributedFraction = (float) $processing->stock_out / max(0.01, (float) $processing->output_kg);
             $totalProcurementCost += $cost['procurement_cost'] * $distributedFraction;
             $totalDryingCost += $cost['drying_cost'] * $distributedFraction;
@@ -368,7 +367,6 @@ class ProductService
         $totalCost = $totalProcurementCost + $totalDryingCost;
         $avgCostPerKg = $totalDistributedKg > 0 ? $totalCost / $totalDistributedKg : 0;
         $avgCostPerUnit = $weight > 0 ? $avgCostPerKg * $weight : $avgCostPerKg;
-        $sellingPrice = (float) $product->price;
         $profitPerUnit = $sellingPrice - $avgCostPerUnit;
         $profitMargin = $sellingPrice > 0 ? ($profitPerUnit / $sellingPrice) * 100 : 0;
 

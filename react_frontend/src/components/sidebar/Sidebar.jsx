@@ -78,7 +78,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
   const roleLabel = {
     super_admin: 'Super Admin',
     admin: 'Admin',
-    staff: 'Staff',
+    staff: 'Secretary',
   }[user?.role] || 'User';
 
   return (
@@ -110,7 +110,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             className="w-10 h-10 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25 overflow-hidden flex-shrink-0"
           >
             <img 
-              src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/logo.svg'} 
+              src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
               alt={settings.business_name || 'Business Logo'} 
               className="w-8 h-8 object-contain"
               onError={(e) => {
@@ -253,8 +253,8 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             />
             <SidebarSubMenuItem
               icon={UserCheck}
-              label="Client"
-              to={`${basePath}/partners/client`}
+              label="Customer"
+              to={`${basePath}/partners/customer`}
             />
           </SidebarMenuItem>
 

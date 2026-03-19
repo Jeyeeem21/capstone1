@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../components/ui';
 import { websiteContentApi } from '../../../api';
+import { API_BASE_URL } from '../../../api/config';
 
 // Icon mapping for values
 const iconMap = {
@@ -25,46 +26,20 @@ const iconMap = {
   'Excellence': Award,
 };
 
-// Default content fallback
+// Default content fallback (minimal - real data comes from DB seeder)
 const defaultContent = {
-  heroTitle: 'Our Story of',
-  heroTitleHighlight: 'Excellence & Quality',
-  heroSubtitle: 'For over 15 years, KJP Ricemill has been committed to delivering the finest quality rice products to Filipino households and businesses.',
-  missionTitle: 'Our Mission',
-  missionDescription: 'To provide Filipino families and businesses with the highest quality rice products at fair prices, while supporting local farmers and sustainable agricultural practices.',
-  missionPoints: [
-    'Deliver premium quality rice consistently',
-    'Support local farming communities',
-    'Ensure fair and competitive pricing',
-    'Provide exceptional customer service',
-  ],
-  visionTitle: 'Our Vision',
-  visionDescription: 'To become the most trusted and preferred rice supplier in the Philippines, known for our unwavering commitment to quality, innovation, and customer satisfaction.',
-  visionPoints: [
-    'Be the leading rice supplier in the region',
-    'Pioneer innovative milling technologies',
-    'Create lasting value for all stakeholders',
-    'Promote sustainable rice production',
-  ],
-  values: [
-    { title: 'Quality First', description: 'We never compromise on the quality of our rice products, ensuring every grain meets our high standards.' },
-    { title: 'Customer Care', description: 'Building lasting relationships with our customers through exceptional service and reliability.' },
-    { title: 'Sustainability', description: 'Supporting local farmers and implementing eco-friendly practices in our operations.' },
-    { title: 'Excellence', description: 'Striving for excellence in everything we do, from sourcing to delivery.' },
-  ],
-  timeline: [
-    { year: '2010', title: 'Foundation', description: 'KJP Ricemill was established with a small milling facility and a vision for quality.' },
-    { year: '2014', title: 'Expansion', description: 'Expanded operations with modern milling equipment and increased storage capacity.' },
-    { year: '2018', title: 'Growth', description: 'Reached 100+ regular customers and established partnerships with local farmers.' },
-    { year: '2022', title: 'Innovation', description: 'Implemented digital inventory system and launched online ordering platform.' },
-    { year: '2024', title: 'Present', description: 'Serving 500+ customers with a diverse range of premium rice products.' },
-  ],
-  team: [
-    { name: 'Jose P. Katipunan', role: 'Founder & CEO' },
-    { name: 'Maria Santos', role: 'Operations Manager' },
-    { name: 'Pedro Garcia', role: 'Quality Control Head' },
-    { name: 'Ana Reyes', role: 'Sales Manager' },
-  ],
+  heroTitle: '',
+  heroTitleHighlight: '',
+  heroSubtitle: '',
+  missionTitle: '',
+  missionDescription: '',
+  missionPoints: [],
+  visionTitle: '',
+  visionDescription: '',
+  visionPoints: [],
+  values: [],
+  timeline: [],
+  team: [],
 };
 
 // Default team images
@@ -90,22 +65,38 @@ const About = () => {
   const [content, setContent] = useState(getInitialAboutContent);
   const [loading, setLoading] = useState(() => !window.__ABOUT_CONTENT__);
 
+  // Fetch about content from API
+  const fetchAboutContent = async () => {
+    try {
+      const result = await websiteContentApi.getAboutContent();
+      if (result.success && result.data) {
+        const newContent = { ...defaultContent, ...result.data };
+        setContent(newContent);
+        localStorage.setItem('kjp-about-content', JSON.stringify(result.data));
+      }
+    } catch (error) {
+      console.log('Using cached content');
+    }
+  };
+
   // Sync with API in background
   useEffect(() => {
     const syncContent = async () => {
-      try {
-        const result = await websiteContentApi.getAboutContent();
-        if (result.success && result.data) {
-          const newContent = { ...defaultContent, ...result.data };
-          setContent(newContent);
-          localStorage.setItem('kjp-about-content', JSON.stringify(result.data));
-        }
-      } catch (error) {
-        console.log('Using cached content');
-      }
+      await fetchAboutContent();
       setLoading(false);
     };
     syncContent();
+  }, []);
+
+  // Cross-tab sync: re-fetch when admin saves content (clears localStorage cache)
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === 'kjp-about-content' && !e.newValue) {
+        fetchAboutContent();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   // Map values with icons
@@ -125,7 +116,8 @@ const About = () => {
   const stats = [];
 
   // Default hero image if none set
-  const heroImage = content.heroImage || 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=1920&h=800&fit=crop';
+  const rawHeroImage = content.heroImage || 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=1920&h=800&fit=crop';
+  const heroImage = rawHeroImage.startsWith('/storage') ? `${API_BASE_URL.replace('/api', '')}${rawHeroImage}` : rawHeroImage;
 
   return (
     <div className="overflow-hidden">

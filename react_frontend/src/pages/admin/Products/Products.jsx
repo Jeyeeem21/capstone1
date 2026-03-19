@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { Package, Box, Tag, DollarSign, CheckCircle, XCircle, Archive, Scale, Hash, Calendar, ShoppingCart, Upload, X, ImageIcon } from 'lucide-react';
+import { Package, Box, Tag, DollarSign, CheckCircle, XCircle, Archive, Scale, Hash, Calendar, ShoppingCart, Upload, X, ImageIcon, ClipboardList, Truck, Store } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -30,6 +30,11 @@ const Products = () => {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const imageInputRef = useRef(null);
+  // Order history modal state
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
+  const [orderHistoryProduct, setOrderHistoryProduct] = useState(null);
+  const [orderHistory, setOrderHistory] = useState([]);
+  const [loadingOrderHistory, setLoadingOrderHistory] = useState(false);
 
   // Super-fast data fetching with cache
   const { 
@@ -272,6 +277,27 @@ const Products = () => {
     }
   };
 
+  // Open order history modal for a product
+  const handleOrderHistory = useCallback(async (row) => {
+    setOrderHistoryProduct(row);
+    setOrderHistory([]);
+    setIsOrderHistoryOpen(true);
+    setLoadingOrderHistory(true);
+    try {
+      const res = await apiClient.get(`/products/${row.product_id}/order-history`);
+      if (res.success) {
+        setOrderHistory(res.data || []);
+        if (res.current_stock !== undefined) {
+          setOrderHistoryProduct(prev => prev ? { ...prev, current_stock: res.current_stock } : prev);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching order history:', err);
+    } finally {
+      setLoadingOrderHistory(false);
+    }
+  }, []);
+
   // Stats
   const totalProducts = products.length;
   const activeProducts = products.filter(p => p.status === 'active').length;
@@ -337,10 +363,19 @@ const Products = () => {
       header: 'Actions',
       accessor: 'actions',
       cell: (row) => (
-        <ActionButtons
-          onEdit={() => handleEdit(row)}
-          onArchive={isSuperAdmin() && (row.stocks || 0) === 0 && !row.has_pending_orders ? () => handleDelete(row) : undefined}
-        />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => handleOrderHistory(row)}
+            className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:text-blue-400 transition-colors"
+            title="Order History"
+          >
+            <ClipboardList size={15} />
+          </button>
+          <ActionButtons
+            onEdit={() => handleEdit(row)}
+            onArchive={isSuperAdmin() && (row.stocks || 0) === 0 && !row.has_pending_orders ? () => handleDelete(row) : undefined}
+          />
+        </div>
       )
     }
   ], [handleView, handleEdit, handleDelete]);
@@ -692,6 +727,169 @@ const Products = () => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Order History Modal */}
+      <Modal
+        isOpen={isOrderHistoryOpen}
+        onClose={() => { setIsOrderHistoryOpen(false); setOrderHistoryProduct(null); setOrderHistory([]); }}
+        title={`Order History — ${orderHistoryProduct?.product_name || ''}`}
+        size="xl"
+        footer={
+          <div className="flex justify-end">
+            <button
+              onClick={() => { setIsOrderHistoryOpen(false); setOrderHistoryProduct(null); setOrderHistory([]); }}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        }
+      >
+        {orderHistoryProduct && (
+          <div className="space-y-3">
+            {/* Product Info */}
+            <div className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <div className="p-2 bg-button-500 text-white rounded-lg">
+                <Package size={20} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">{orderHistoryProduct.product_name}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: `${orderHistoryProduct.variety_color}20`, color: orderHistoryProduct.variety_color }}>
+                    {orderHistoryProduct.variety_name}
+                  </span>
+                  {orderHistoryProduct.weight_formatted && <span className="ml-2">{orderHistoryProduct.weight_formatted}</span>}
+                  <span className="ml-2">{orderHistoryProduct.price_formatted}</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold text-gray-800 dark:text-gray-100">{(orderHistoryProduct.current_stock ?? orderHistoryProduct.stocks ?? 0).toLocaleString()}</p>
+                <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">Current Stock</p>
+              </div>
+            </div>
+
+            {/* Stats Summary */}
+            {!loadingOrderHistory && orderHistory.length > 0 && (() => {
+              const completed = orderHistory.filter(o => ['delivered', 'completed'].includes(o.status));
+              const pending = orderHistory.filter(o => !['delivered', 'completed', 'cancelled'].includes(o.status));
+              return (
+                <div className="space-y-2">
+                  {/* Completed / Delivered Stats */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-green-600 dark:text-green-400 uppercase mb-1 flex items-center gap-1">Delivered / Completed</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                        <p className="text-lg font-bold text-green-600 dark:text-green-400">{completed.length}</p>
+                        <p className="text-[10px] font-medium text-green-500 uppercase">Orders</p>
+                      </div>
+                      <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                        <p className="text-lg font-bold text-green-600 dark:text-green-400">{completed.reduce((sum, o) => sum + o.quantity, 0)}</p>
+                        <p className="text-[10px] font-medium text-green-500 uppercase">Units Sold</p>
+                      </div>
+                      <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-700">
+                        <p className="text-lg font-bold text-green-600 dark:text-green-400">₱{completed.reduce((sum, o) => sum + o.subtotal, 0).toLocaleString()}</p>
+                        <p className="text-[10px] font-medium text-green-500 uppercase">Revenue</p>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Pending Stats */}
+                  {pending.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 uppercase mb-1 flex items-center gap-1">Pending / Processing</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="text-center p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+                          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{pending.length}</p>
+                          <p className="text-[10px] font-medium text-amber-500 uppercase">Orders</p>
+                        </div>
+                        <div className="text-center p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+                          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{pending.reduce((sum, o) => sum + o.quantity, 0)}</p>
+                          <p className="text-[10px] font-medium text-amber-500 uppercase">Units Reserved</p>
+                        </div>
+                        <div className="text-center p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
+                          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">₱{pending.reduce((sum, o) => sum + o.subtotal, 0).toLocaleString()}</p>
+                          <p className="text-[10px] font-medium text-amber-500 uppercase">Pending Amount</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Overall Totals */}
+                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-[10px] font-semibold text-gray-600 dark:text-gray-300 uppercase mb-1 flex items-center gap-1">Overall</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="text-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{orderHistory.filter(o => o.status !== 'cancelled').length}</p>
+                        <p className="text-[10px] font-medium text-gray-500 uppercase">Total Orders</p>
+                      </div>
+                      <div className="text-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{orderHistory.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.quantity, 0)}</p>
+                        <p className="text-[10px] font-medium text-gray-500 uppercase">Total Units</p>
+                      </div>
+                      <div className="text-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <p className="text-lg font-bold text-gray-700 dark:text-gray-200">₱{orderHistory.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.subtotal, 0).toLocaleString()}</p>
+                        <p className="text-[10px] font-medium text-gray-500 uppercase">Total Amount</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Orders Table */}
+            {loadingOrderHistory ? (
+              <div className="flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-button-500 mr-2" />
+                Loading order history...
+              </div>
+            ) : orderHistory.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 dark:text-gray-500">
+                <ClipboardList size={32} className="mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No orders found for this product.</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden max-h-[360px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-primary-50 dark:bg-primary-900/20 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Transaction</th>
+                      <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Customer</th>
+                      <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Qty</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Subtotal</th>
+                      <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Type</th>
+                      <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Status</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {orderHistory.map((order, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">
+                        <td className="px-3 py-2 text-xs font-medium text-gray-800 dark:text-gray-100">{order.transaction_id}</td>
+                        <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 truncate max-w-[120px]">{order.customer_name}</td>
+                        <td className="px-3 py-2 text-center text-xs text-gray-600 dark:text-gray-300">{order.quantity}</td>
+                        <td className="px-3 py-2 text-right text-xs font-semibold text-gray-800 dark:text-gray-100">₱{order.subtotal.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-center">
+                          {order.is_delivery ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                              <Truck size={9} /> Delivery
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
+                              <Store size={9} /> Pick Up
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <StatusBadge status={order.status.charAt(0).toUpperCase() + order.status.slice(1).replace('_', ' ')} />
+                        </td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-500 dark:text-gray-400">{order.date_formatted}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </Modal>

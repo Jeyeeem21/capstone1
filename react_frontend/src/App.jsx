@@ -1,6 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
-import { MainLayout, StaffLayout, PublicLayout, ClientLayout, DriverLayout } from './layouts';
+import { MainLayout, StaffLayout, PublicLayout, CustomerLayout, DriverLayout } from './layouts';
 import { ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BusinessSettingsProvider, useBusinessSettings } from './context/BusinessSettingsContext';
@@ -20,7 +20,7 @@ import {
   AdminOrders,
   Partners,
   Supplier,
-  Client,
+  Customer,
   StaffManagement,
   Settings,
   // Shared pages
@@ -28,13 +28,13 @@ import {
   // Staff pages
   StaffDashboard,
   StaffProfile,
-  // Client pages
-  ClientDashboard,
-  Shop,
+  // Customer pages
+  CustomerDashboard,
+  Product,
   Orders,
   Cart,
   Profile,
-  ClientSettings,
+  CustomerSettings,
   // Driver pages
   DriverDashboard,
   Deliveries,
@@ -59,11 +59,11 @@ const RoleRedirect = () => {
   
   if (user?.role === 'staff') {
     if (user?.position === 'Driver') return <Navigate to="/driver/dashboard" replace />;
-    return <Navigate to="/staff/pos" replace />;
+    return <Navigate to="/secretary/pos" replace />;
   }
   
-  if (user?.role === 'client') {
-    return <Navigate to="/client/dashboard" replace />;
+  if (user?.role === 'customer') {
+    return <Navigate to="/customer/dashboard" replace />;
   }
   
   if (user?.role === 'super_admin') {
@@ -79,12 +79,23 @@ const PosRedirect = () => {
   if (!isAuthenticated) return <Navigate to="/?login=true" replace />;
   if (user?.role === 'super_admin') return <Navigate to="/superadmin/pos" replace />;
   if (user?.role === 'admin') return <Navigate to="/admin/pos" replace />;
-  if (user?.role === 'staff') return <Navigate to="/staff/pos" replace />;
-  if (user?.role === 'client') return <Navigate to="/client/pos" replace />;
+  if (user?.role === 'staff') return <Navigate to="/secretary/pos" replace />;
+  if (user?.role === 'customer') return <Navigate to="/customer/pos" replace />;
   return <Navigate to="/admin/pos" replace />;
 };
 
 function AppRoutes() {
+  const location = useLocation();
+
+  // Safety net: clear body scroll lock on every route change.
+  // This catches edge cases where body styles survive a route transition (e.g. login modal).
+  useEffect(() => {
+    document.body.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+  }, [location.pathname]);
+
   return (
     <Routes>
       {/* Public Routes */}
@@ -118,7 +129,7 @@ function AppRoutes() {
         
         <Route path="partners" element={<ErrorBoundary><Partners /></ErrorBoundary>} />
         <Route path="partners/supplier" element={<ErrorBoundary><Supplier /></ErrorBoundary>} />
-        <Route path="partners/client" element={<ErrorBoundary><Client /></ErrorBoundary>} />
+        <Route path="partners/customer" element={<ErrorBoundary><Customer /></ErrorBoundary>} />
         
         <Route path="staff-management" element={<ErrorBoundary><StaffManagement /></ErrorBoundary>} />
         <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
@@ -148,7 +159,7 @@ function AppRoutes() {
         
         <Route path="partners" element={<ErrorBoundary><Partners /></ErrorBoundary>} />
         <Route path="partners/supplier" element={<ErrorBoundary><Supplier /></ErrorBoundary>} />
-        <Route path="partners/client" element={<ErrorBoundary><Client /></ErrorBoundary>} />
+        <Route path="partners/customer" element={<ErrorBoundary><Customer /></ErrorBoundary>} />
         
         <Route path="staff-management" element={<ErrorBoundary><StaffManagement /></ErrorBoundary>} />
         <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
@@ -158,32 +169,32 @@ function AppRoutes() {
         <Route path="*" element={<NotFound />} />
       </Route>
       
-      {/* Staff Routes */}
-      <Route path="/staff" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'staff']}>
+      {/* Secretary Routes (Secretary staff only) */}
+      <Route path="/secretary" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'staff']} allowedPositions={['Secretary']}>
           <StaffLayout />
         </ProtectedRoute>
       }>
-        <Route index element={<Navigate to="/staff/pos" replace />} />
+        <Route index element={<Navigate to="/secretary/pos" replace />} />
         <Route path="dashboard" element={<ErrorBoundary><StaffDashboard /></ErrorBoundary>} />
         <Route path="profile" element={<ErrorBoundary><StaffProfile /></ErrorBoundary>} />
         <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>
 
-      {/* Client Routes */}
-      <Route path="/client" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'staff', 'client']}>
-          <ClientLayout />
+      {/* Customer Routes */}
+      <Route path="/customer" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'staff', 'customer']}>
+          <CustomerLayout />
         </ProtectedRoute>
       }>
-        <Route index element={<Navigate to="/client/dashboard" replace />} />
-        <Route path="dashboard" element={<ErrorBoundary><ClientDashboard /></ErrorBoundary>} />
-        <Route path="shop" element={<ErrorBoundary><Shop /></ErrorBoundary>} />
+        <Route index element={<Navigate to="/customer/dashboard" replace />} />
+        <Route path="dashboard" element={<ErrorBoundary><CustomerDashboard /></ErrorBoundary>} />
+        <Route path="products" element={<ErrorBoundary><Product /></ErrorBoundary>} />
         <Route path="orders" element={<ErrorBoundary><Orders /></ErrorBoundary>} />
         <Route path="cart" element={<ErrorBoundary><Cart /></ErrorBoundary>} />
         <Route path="profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
-        <Route path="settings" element={<ErrorBoundary><ClientSettings /></ErrorBoundary>} />
+        <Route path="settings" element={<ErrorBoundary><CustomerSettings /></ErrorBoundary>} />
         <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>
@@ -211,15 +222,35 @@ function AppRoutes() {
 // Dynamic document title & favicon from business settings
 const DynamicHead = () => {
   const { settings } = useBusinessSettings();
+  const location = useLocation();
 
   useEffect(() => {
-    if (settings.business_name) {
-      document.title = settings.business_name;
-    }
-  }, [settings.business_name]);
+    const name = settings.business_name || 'KJP Ricemill';
+    const path = location.pathname;
+    let page = '';
+    if (path === '/' || path === '') page = 'Home';
+    else if (path.startsWith('/about')) page = 'About';
+    else if (path.startsWith('/products')) page = 'Products';
+    else if (path.startsWith('/contact')) page = 'Contact';
+    else if (path.includes('/dashboard')) page = 'Dashboard';
+    else if (path.includes('/pos')) page = 'Point of Sale';
+    else if (path.includes('/orders')) page = 'Orders';
+    else if (path.includes('/products')) page = 'Products';
+    else if (path.includes('/procurement')) page = 'Procurement';
+    else if (path.includes('/sales')) page = 'Sales';
+    else if (path.includes('/inventory')) page = 'Inventory';
+    else if (path.includes('/drying')) page = 'Drying';
+    else if (path.includes('/settings')) page = 'Settings';
+    else if (path.includes('/profile')) page = 'Profile';
+    else if (path.includes('/deliveries')) page = 'Deliveries';
+    else if (path.includes('/partners')) page = 'Partners';
+    else if (path.includes('/predictive')) page = 'Predictive Analysis';
+    else if (path.includes('/products') && path.includes('/customer')) page = 'Products';
+    document.title = page ? `${page} | ${name}` : name;
+  }, [settings.business_name, location.pathname]);
 
   useEffect(() => {
-    if (settings.business_logo && settings.business_logo !== '/logo.svg') {
+    if (settings.business_logo) {
       const link = document.querySelector("link[rel~='icon']");
       if (link) link.href = settings.business_logo;
     }
@@ -232,9 +263,9 @@ function App() {
   return (
     <AuthProvider>
       <BusinessSettingsProvider>
-        <DynamicHead />
         <ToastProvider>
           <BrowserRouter>
+            <DynamicHead />
             <AppRoutes />
           </BrowserRouter>
         </ToastProvider>

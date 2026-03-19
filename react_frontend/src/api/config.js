@@ -116,7 +116,7 @@ export const ENDPOINTS = {
 // Request Configuration
 // ============================================
 export const REQUEST_CONFIG = {
-  TIMEOUT: 5000, // 5 seconds (faster timeout)
+  TIMEOUT: 15000, // 15 seconds
   RETRY_ATTEMPTS: 2,
   RETRY_DELAY: 500, // 0.5 second
 };

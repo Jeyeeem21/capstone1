@@ -22,7 +22,7 @@ return new class extends Migration
         // Insert default values
         $defaults = [
             ['key' => 'business_name', 'value' => 'KJP Ricemill', 'type' => 'string'],
-            ['key' => 'business_logo', 'value' => '/logo.svg', 'type' => 'string'],
+            ['key' => 'business_logo', 'value' => '/storage/logos/KJPLogo.png', 'type' => 'string'],
             ['key' => 'business_email', 'value' => 'info@kjpricemill.com', 'type' => 'string'],
             ['key' => 'business_phone', 'value' => '+63 917-123-4567', 'type' => 'string'],
             ['key' => 'business_address', 'value' => 'Calapan City, Oriental Mindoro, Philippines', 'type' => 'string'],

@@ -853,14 +853,13 @@ Procurement (price_per_kg × quantity_kg)
 ---
 
 ### 4.2 Product
-
 **File:** `Product.php`  
 **Custom PK:** `product_id`  
 **Soft Delete:** Custom implementation — `is_deleted` boolean field + global scope `notDeleted` (does NOT use Laravel's `SoftDeletes` trait)
 
 | Field | Type | Cast |
 |-------|------|------|
-| product_id | int (PK) | — |
+| product_id | int (PK) | — |   
 | product_name | string | — |
 | variety_id | int (FK) | — |
 | price | decimal | `decimal:2` |

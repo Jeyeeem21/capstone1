@@ -3,15 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\EmailService;
 use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
     use AuditLogger;
+
+    public function __construct(private EmailService $emailService)
+    {
+    }
+
     /**
      * Login and return token + user data
      */
@@ -56,6 +63,17 @@ class AuthController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
+        // Send login notification email after response to avoid blocking
+        $emailService = $this->emailService;
+        $ip = $request->ip();
+        dispatch(function () use ($emailService, $user, $ip) {
+            $emailService->sendLoginNotification($user, $ip);
+            // Also notify the customer themselves on their own email
+            if ($user->role === 'customer') {
+                $emailService->sendCustomerLoginNotification($user, $ip);
+            }
+        })->afterResponse();
+
         return response()->json([
             'success' => true,
             'token' => $token,
@@ -99,7 +117,7 @@ class AuthController extends Controller
      */
     private function formatUser(User $user): array
     {
-        return [
+        $data = [
             'id' => $user->id,
             'name' => $user->name,
             'first_name' => $user->first_name,
@@ -107,9 +125,92 @@ class AuthController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'role' => $user->role,
+            'position' => $user->position,
             'status' => $user->status,
             'created_at' => $user->created_at,
         ];
+
+        // Include customer address for customer-role users
+        if ($user->role === 'customer') {
+            $customer = $user->customer;
+            $data['address'] = $customer?->address;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Update own profile
+     */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'first_name' => 'sometimes|string|max:255',
+            'last_name'  => 'sometimes|string|max:255',
+            'email'      => ['sometimes', 'email', Rule::unique('users')->ignore($user->id)],
+            'phone'      => 'nullable|string|max:50',
+            'address'    => 'nullable|string|max:500',
+        ]);
+
+        // Build the name from first_name + last_name
+        if (isset($validated['first_name']) || isset($validated['last_name'])) {
+            $firstName = $validated['first_name'] ?? $user->first_name ?? '';
+            $lastName  = $validated['last_name'] ?? $user->last_name ?? '';
+            $validated['name'] = trim("$firstName $lastName");
+        }
+
+        // Handle address for customer users
+        $address = $validated['address'] ?? null;
+        unset($validated['address']);
+
+        $user->update($validated);
+
+        // Also update the linked customer record's address
+        if ($user->role === 'customer' && $address !== null) {
+            $customer = $user->customer;
+            if ($customer) {
+                $customer->update([
+                    'name'    => $user->name,
+                    'email'   => $user->email,
+                    'phone'   => $validated['phone'] ?? $customer->phone,
+                    'address' => $address,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'user'    => $this->formatUser($user->fresh()),
+            'message' => 'Profile updated successfully',
+        ]);
+    }
+
+    /**
+     * Change own password
+     */
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password'     => 'required|string|min:8|confirmed',
+        ]);
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['The current password is incorrect.'],
+            ]);
+        }
+
+        $user->update(['password' => Hash::make($request->new_password)]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully',
+        ]);
     }
 
     /**

@@ -351,7 +351,7 @@ const DeliveryView = ({ data }) => (
     <div className="space-y-3">
       <RecordHeader module="deliveries" id={data.id} name={data.delivery_number || `Delivery #${String(data.id).padStart(4, '0')}`} status={data.status} />
       <DetailItem icon={Car} iconBg="bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400" label="Driver" value={data.driver_name} />
-      <DetailItem icon={UserCheck} iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400" label="Client" value={data.customer_name} />
+      <DetailItem icon={UserCheck} iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400" label="Customer" value={data.customer_name} />
       <DetailItem icon={MapPin} iconBg="bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400" label="Destination" value={data.destination} />
     </div>
     <div className="space-y-3">

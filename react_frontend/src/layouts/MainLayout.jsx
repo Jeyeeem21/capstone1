@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/sidebar';
-import { Footer, Header, BottomNav } from '../components/common';
+import { Footer, Header, BottomNav, NotificationBell } from '../components/common';
 
 const MainLayout = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -36,13 +36,17 @@ const MainLayout = () => {
       `}>
         <div className="p-4 md:p-6 lg:p-8 flex-1">
           <div 
-            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
+            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300 relative"
             style={{ 
               backgroundColor: 'var(--color-bg-content)', 
               color: 'var(--color-text-content)',
               fontSize: 'var(--font-size-base)'
             }}
           >
+            {/* Desktop Notification Bell - top right inside content */}
+            <div className="hidden lg:block absolute top-4 right-4 z-10">
+              <NotificationBell />
+            </div>
             <Outlet />
           </div>
         </div>

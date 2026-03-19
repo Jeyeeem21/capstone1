@@ -120,6 +120,46 @@ class BusinessSettingService
     {
         $settings = $this->getAllSettings();
         
+        // Check for per-day schedule first
+        if (!empty($settings['business_hours_json'])) {
+            $schedule = json_decode($settings['business_hours_json'], true);
+            if (is_array($schedule)) {
+                $dayOrder = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                $shortNames = [
+                    'monday' => 'Mon', 'tuesday' => 'Tue', 'wednesday' => 'Wed',
+                    'thursday' => 'Thu', 'friday' => 'Fri', 'saturday' => 'Sat', 'sunday' => 'Sun',
+                ];
+
+                // Build a signature for each day
+                $groups = [];
+                foreach ($dayOrder as $day) {
+                    $d = $schedule[$day] ?? ['open' => '07:00', 'close' => '18:00', 'closed' => false];
+                    $sig = !empty($d['closed']) ? 'closed' : ($d['open'] ?? '07:00') . '-' . ($d['close'] ?? '18:00');
+                    if (!empty($groups) && end($groups)['sig'] === $sig) {
+                        $groups[array_key_last($groups)]['end'] = $day;
+                    } else {
+                        $groups[] = ['start' => $day, 'end' => $day, 'sig' => $sig, 'data' => $d];
+                    }
+                }
+
+                $lines = [];
+                foreach ($groups as $g) {
+                    $label = $g['start'] === $g['end']
+                        ? $shortNames[$g['start']]
+                        : $shortNames[$g['start']] . ' - ' . $shortNames[$g['end']];
+                    if ($g['sig'] === 'closed') {
+                        $lines[] = "{$label}: Closed";
+                    } else {
+                        $open = date('g:i A', strtotime($g['data']['open'] ?? '07:00'));
+                        $close = date('g:i A', strtotime($g['data']['close'] ?? '18:00'));
+                        $lines[] = "{$label}: {$open} - {$close}";
+                    }
+                }
+                return implode("\n", $lines);
+            }
+        }
+
+        // Fallback to simple format
         $openDays = $settings['business_open_days'] ?? 'Monday - Saturday';
         $openTime = $settings['business_open_time'] ?? '07:00';
         $closeTime = $settings['business_close_time'] ?? '18:00';

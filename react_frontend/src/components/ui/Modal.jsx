@@ -3,6 +3,14 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import Button from './Button';
 
+// Helper: reset body scroll lock styles
+const resetBodyStyles = () => {
+  document.body.style.overflow = '';
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.width = '';
+};
+
 const Modal = ({ 
   isOpen, 
   onClose, 
@@ -36,17 +44,11 @@ const Modal = ({
       document.body.style.top = `-${scrollPositionRef.current}px`;
       document.body.style.width = '100%';
     } else {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
+      resetBodyStyles();
       window.scrollTo(0, scrollPositionRef.current);
     }
     return () => {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
+      resetBodyStyles();
     };
   }, [isOpen]);
 
@@ -90,13 +92,13 @@ const Modal = ({
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 140px)' }}>
+        <div className="px-5 py-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 120px)' }}>
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t-2 border-primary-200 dark:border-primary-700 bg-primary-50/30 dark:bg-gray-700/30 rounded-b-2xl">
+          <div className="px-5 py-3 border-t-2 border-primary-200 dark:border-primary-700 bg-primary-50/30 dark:bg-gray-700/30 rounded-b-2xl">
             {footer}
           </div>
         )}
@@ -163,14 +165,16 @@ const FormModal = ({
   size = 'md',
   isLoading = false,
   loading = false, // alias for isLoading
+  submitDisabled = false,
 }) => {
   const isDisabled = isLoading || loading;
+  const isSubmitDisabled = isDisabled || submitDisabled;
   const [submitted, setSubmitted] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isDisabled) return; // Prevent double submission
+    if (isSubmitDisabled) return; // Prevent double submission
     setSubmitted(true);
     
     // Get all form inputs that have 'required' attribute or data-required
@@ -224,7 +228,7 @@ const FormModal = ({
           <Button variant="outline" onClick={handleClose} disabled={isDisabled}>
             {cancelText}
           </Button>
-          <Button type="submit" form="modal-form" disabled={isDisabled}>
+          <Button type="submit" form="modal-form" disabled={isSubmitDisabled}>
             {isDisabled ? 'Saving...' : submitText}
           </Button>
         </div>

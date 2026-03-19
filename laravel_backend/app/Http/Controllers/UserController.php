@@ -5,15 +5,21 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
+use App\Services\EmailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
     use ApiResponse, AuditLogger;
+
+    public function __construct(private EmailService $emailService)
+    {
+    }
 
     /**
      * List users with optional role filter and search.
@@ -99,6 +105,13 @@ class UserController extends Controller
             return $this->errorResponse('Only Super Admin can create admin accounts', 403);
         }
 
+        // Require email verification before account creation
+        $verifiedKey = "user_email_verified_" . md5($validated['email']);
+        if (!Cache::get($verifiedKey)) {
+            return $this->errorResponse('Email must be verified before creating an account.', 422);
+        }
+        Cache::forget($verifiedKey);
+
         $validated['status'] = $validated['status'] ?? 'active';
 
         $user = User::create($validated);
@@ -111,10 +124,91 @@ class UserController extends Controller
             'position' => $user->position,
         ]);
 
+        // Send welcome email to the new user
+        $this->emailService->sendWelcomeEmail($user);
+
         return $this->successResponse(
             $this->formatUser($user),
             'User created successfully',
             201
+        );
+    }
+
+    /**
+     * Send email verification code before user creation.
+     */
+    public function sendVerificationCode(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $email = $request->email;
+
+        // Check if email already exists
+        if (User::where('email', $email)->exists()) {
+            return $this->errorResponse('An account with this email already exists.', 422);
+        }
+
+        // Generate 6-digit code
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        // Store in cache for 10 minutes
+        $cacheKey = "user_email_verify_" . md5($email);
+        Cache::put($cacheKey, [
+            'code' => $code,
+            'email' => $email,
+            'attempts' => 0,
+        ], now()->addMinutes(10));
+
+        try {
+            $this->emailService->sendVerificationCode($email, $code);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to send verification email. Error: ' . $e->getMessage(), 500);
+        }
+
+        return $this->successResponse(
+            ['sent' => true],
+            'Verification code sent to ' . $email
+        );
+    }
+
+    /**
+     * Verify the code entered for user creation.
+     */
+    public function verifyEmailCode(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        $cacheKey = "user_email_verify_" . md5($request->email);
+        $cached = Cache::get($cacheKey);
+
+        if (!$cached) {
+            return $this->errorResponse('Verification code has expired. Please request a new one.', 422);
+        }
+
+        if ($cached['attempts'] >= 5) {
+            Cache::forget($cacheKey);
+            return $this->errorResponse('Too many failed attempts. Please request a new code.', 429);
+        }
+
+        if ($cached['code'] !== $request->code) {
+            $cached['attempts']++;
+            Cache::put($cacheKey, $cached, now()->addMinutes(10));
+            $remaining = 5 - $cached['attempts'];
+            return $this->errorResponse("Invalid verification code. {$remaining} attempts remaining.", 422);
+        }
+
+        // Code is valid — mark as verified in cache (keep for 15 min)
+        Cache::forget($cacheKey);
+        Cache::put("user_email_verified_" . md5($request->email), true, now()->addMinutes(15));
+
+        return $this->successResponse(
+            ['verified' => true, 'email' => $request->email],
+            'Email verified successfully'
         );
     }
 

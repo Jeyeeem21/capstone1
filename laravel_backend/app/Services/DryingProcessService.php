@@ -83,7 +83,7 @@ class DryingProcessService
                     'status'      => DryingProcess::STATUS_DRYING,
                 ]);
 
-                // Write pivot records
+                // Write pivot records & update procurement statuses
                 foreach ($dist['breakdown'] as $item) {
                     DryingBatchProcurement::create([
                         'drying_process_id' => $drying->id,
@@ -91,6 +91,22 @@ class DryingProcessService
                         'sacks_taken'       => $item['sacks_taken'],
                         'quantity_kg'       => $item['quantity_kg'],
                     ]);
+
+                    // Update procurement status if all sacks are now in drying
+                    $proc = Procurement::find($item['procurement_id']);
+                    if ($proc) {
+                        $usedInBatch = (int) DryingBatchProcurement::join('drying_processes', 'drying_processes.id', '=', 'drying_batch_procurements.drying_process_id')
+                            ->where('drying_batch_procurements.procurement_id', $proc->id)
+                            ->whereNull('drying_processes.deleted_at')
+                            ->sum('drying_batch_procurements.sacks_taken');
+                        $usedIndividual = (int) DryingProcess::where('procurement_id', $proc->id)
+                            ->whereNull('batch_id')
+                            ->whereNull('deleted_at')
+                            ->sum('sacks');
+                        if (($usedInBatch + $usedIndividual) >= (int) $proc->sacks) {
+                            $proc->update(['status' => 'Drying']);
+                        }
+                    }
                 }
 
                 // Decrement batch remaining

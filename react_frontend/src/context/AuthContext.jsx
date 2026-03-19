@@ -29,6 +29,16 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
+  // Listen for forced logout from apiClient (401 responses)
+  useEffect(() => {
+    const handleForcedLogout = () => {
+      setUser(null);
+      localStorage.removeItem('auth_token');
+    };
+    window.addEventListener('auth:logout', handleForcedLogout);
+    return () => window.removeEventListener('auth:logout', handleForcedLogout);
+  }, []);
+
   // Login function — calls real API
   const login = useCallback(async (email, password) => {
     const response = await authApi.login({ email, password });
@@ -63,6 +73,18 @@ export const AuthProvider = ({ children }) => {
   const isStaff = useCallback(() => user?.role === 'staff', [user]);
   const isAdminOrAbove = useCallback(() => ['super_admin', 'admin'].includes(user?.role), [user]);
 
+  // Refresh user data from API
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await authApi.getCurrentUser();
+      if (response.success && response.user) {
+        setUser(response.user);
+      }
+    } catch {
+      // Ignore errors — user stays as-is
+    }
+  }, []);
+
   // Base path for admin panel based on role
   const basePath = user?.role === 'super_admin' ? '/superadmin' : '/admin';
 
@@ -71,6 +93,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     logout,
+    refreshUser,
     hasRole,
     isSuperAdmin,
     isAdmin,

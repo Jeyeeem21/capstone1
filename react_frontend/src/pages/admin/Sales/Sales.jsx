@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
-import { TrendingUp, DollarSign, ShoppingBag, FileText, CheckCircle, XCircle, Ban, RotateCcw, Receipt, Brain, User, Calendar, CreditCard, MapPin, Package, Truck, Store, StickyNote, X } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingBag, FileText, CheckCircle, XCircle, Ban, RotateCcw, Receipt, Brain, User, Calendar, CreditCard, MapPin, Package, Truck, Store, StickyNote, X, Banknote, Loader2 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient, API_BASE_URL } from '../../../api';
-import useDataFetch from '../../../hooks/useDataFetch';
+import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
+import { suppressNotifToasts } from '../../../utils/notifToastGuard';
 import PredictiveAnalytics from './PredictiveAnalytics';
 
 const Sales = () => {
@@ -18,6 +19,13 @@ const Sales = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
   const [previewProofImage, setPreviewProofImage] = useState(null);
+  // Record Payment modal state
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payOrder, setPayOrder] = useState(null);
+  const [payMethod, setPayMethod] = useState('cash');
+  const [payCashTendered, setPayCashTendered] = useState('');
+  const [payGcashRef, setPayGcashRef] = useState('');
+  const [savingPay, setSavingPay] = useState(false);
   const [activeStatusTab, setActiveStatusTab] = useState('All');
   const [activeView, setActiveView] = useState('overview'); // 'overview' or 'predictions'
   const [payStatusFilter, setPayStatusFilter] = useState(''); // '' | 'paid' | 'not_paid'
@@ -27,6 +35,7 @@ const Sales = () => {
   const {
     data: salesRaw,
     loading,
+    refetch,
   } = useDataFetch('/sales', {
     cacheKey: '/sales',
     initialData: [],
@@ -43,6 +52,9 @@ const Sales = () => {
         items_count: s.items_count || 0,
         total_quantity: s.total_quantity || 0,
         total: s.total || 0,
+        total_cost: s.total_cost || 0,
+        total_profit: s.total_profit || 0,
+        profit_margin: s.profit_margin || 0,
         payment: s.payment_method === 'cod' ? 'COD' : s.payment_method === 'gcash' ? 'GCash' : s.payment_method === 'pay_later' ? 'Pay Later' : 'Cash',
         raw_payment_method: s.payment_method,
         payment_status: s.payment_status || 'paid',
@@ -82,6 +94,45 @@ const Sales = () => {
     }
     return sales.filter(s => s.status_display === activeStatusTab);
   }, [sales, activeStatusTab]);
+
+  // Record Payment handlers
+  const handleOpenPayModal = useCallback((sale) => {
+    setPayOrder(sale);
+    setPayMethod('cash');
+    setPayCashTendered('');
+    setPayGcashRef('');
+    setIsPayModalOpen(true);
+  }, []);
+
+  const handleConfirmPay = useCallback(async () => {
+    if (savingPay || !payOrder) return;
+    if (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < payOrder.total)) return;
+    if (payMethod === 'gcash' && !payGcashRef.trim()) return;
+
+    setSavingPay(true);
+    try {
+      const formData = new FormData();
+      formData.append('payment_method', payMethod);
+      if (payMethod === 'cash') formData.append('amount_tendered', parseFloat(payCashTendered));
+      if (payMethod === 'gcash' && payGcashRef) formData.append('reference_number', payGcashRef);
+
+      const response = await apiClient.post(`/sales/${payOrder.id}/pay`, formData);
+      if (response.success) {
+        invalidateCache('/sales');
+        refetch();
+        suppressNotifToasts();
+        toast.success('Payment Recorded', `Order ${payOrder.invoice} has been marked as paid.`);
+        setIsPayModalOpen(false);
+        setPayOrder(null);
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      toast.error('Payment Failed', error.message || 'Failed to record payment');
+    } finally {
+      setSavingPay(false);
+    }
+  }, [savingPay, payOrder, payMethod, payCashTendered, payGcashRef, refetch, toast]);
 
   const handleView = useCallback((sale) => {
     setSelectedSale(sale);
@@ -286,7 +337,7 @@ const Sales = () => {
 
   const columns = [
     { header: 'Transaction', accessor: 'invoice' },
-    { header: 'Client', accessor: 'customer' },
+    { header: 'Customer', accessor: 'customer' },
     { header: 'Products', accessor: 'products_summary', cell: (row) => {
       const items = row.items || [];
       if (items.length === 0) return <span className="text-gray-400 text-xs">No items</span>;
@@ -308,11 +359,30 @@ const Sales = () => {
       );
     }},
     { header: 'Amount', accessor: 'total', cell: (row) => `₱${row.total.toLocaleString()}` },
+    { header: 'Profit', accessor: 'total_profit', cell: (row) => {
+      const profit = row.total_profit || 0;
+      const hasCostData = (row.total_cost || 0) > 0;
+      if (!hasCostData) return <span className="text-xs text-gray-400">N/A</span>;
+      return (
+        <span className={`text-xs font-semibold ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+          {profit >= 0 ? '+' : ''}₱{profit.toLocaleString()}
+        </span>
+      );
+    }},
     { header: 'Payment', accessor: 'payment', cell: (row) => (
       <div className="flex flex-col gap-0.5">
         <span className="text-xs">{row.payment}</span>
         {row.payment_status === 'not_paid' && (
-          <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 w-fit">Not Paid</span>
+          <div className="flex items-center gap-1">
+            <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">Not Paid</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleOpenPayModal(row); }}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-semibold rounded bg-button-50 dark:bg-button-900/20 text-button-600 dark:text-button-400 hover:bg-button-100 dark:hover:bg-button-900/30 transition-colors"
+              title="Record Payment"
+            >
+              <Banknote size={10} /> Pay
+            </button>
+          </div>
         )}
       </div>
     )},
@@ -323,7 +393,7 @@ const Sales = () => {
           : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
       }`}>
         {row.is_delivery ? <Truck size={10} /> : <Store size={10} />}
-        {row.is_delivery ? 'Delivery' : 'Walk-in'}
+        {row.is_delivery ? 'Delivery' : 'Pick Up'}
       </span>
     )},
     { header: 'Date', accessor: 'date', cell: (row) => row.date_formatted },
@@ -368,10 +438,16 @@ const Sales = () => {
       {loading ? (
         <SkeletonStats count={4} className="mb-6" />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <StatsCard label="Total Revenue" value={`₱${chartFilteredDelivered.reduce((sum, s) => sum + s.total, 0).toLocaleString()}`} unit="from delivered orders" icon={DollarSign} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
+          <StatsCard label="Total Cost" value={`₱${chartFilteredDelivered.reduce((sum, s) => sum + (s.total_cost || 0), 0).toLocaleString()}`} unit="production cost" icon={Package} iconBgColor="bg-gradient-to-br from-orange-400 to-orange-600" />
+          {(() => {
+            const totalProfit = chartFilteredDelivered.reduce((sum, s) => sum + (s.total_profit || 0), 0);
+            const totalRevenue = chartFilteredDelivered.reduce((sum, s) => sum + s.total, 0);
+            const margin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0;
+            return <StatsCard label="Total Profit" value={`₱${totalProfit.toLocaleString()}`} unit={`${margin}% margin`} icon={TrendingUp} iconBgColor={totalProfit >= 0 ? "bg-gradient-to-br from-green-400 to-green-600" : "bg-gradient-to-br from-red-400 to-red-600"} />;
+          })()}
           <StatsCard label="Transactions" value={chartFilteredDelivered.length} unit="completed" icon={Receipt} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-          <StatsCard label="Items Sold" value={chartFilteredDelivered.reduce((sum, s) => sum + s.total_quantity, 0)} unit="items delivered" icon={ShoppingBag} iconBgColor="bg-gradient-to-br from-green-400 to-green-600" />
           <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-primary-200 dark:border-primary-700 p-4 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Payment Status</p>
@@ -583,13 +659,13 @@ const Sales = () => {
 
             {/* Details Grid */}
             <div className="grid grid-cols-2 gap-3">
-              {/* Client */}
+              {/* Customer */}
               <div className="flex items-start gap-2 p-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                 <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                   <User size={14} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Client</p>
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Customer</p>
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5 truncate">{selectedSale.customer}</p>
                 </div>
               </div>
@@ -643,7 +719,7 @@ const Sales = () => {
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Type</p>
                   <p className={`text-sm font-semibold mt-0.5 ${selectedSale.is_delivery ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                    {selectedSale.is_delivery ? 'Delivery' : 'Walk-in'}
+                    {selectedSale.is_delivery ? 'Delivery' : 'Pick Up'}
                   </p>
                 </div>
               </div>
@@ -698,6 +774,24 @@ const Sales = () => {
                     <Truck size={10} /> {selectedSale.driver_plate_number}
                   </span>
                 )}
+              </div>
+            )}
+
+            {/* Delivery Proof Images */}
+            {selectedSale.delivery_proof?.length > 0 && (
+              <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-700">
+                <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase tracking-wide mb-2">Proof of Delivery</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedSale.delivery_proof.map((url, idx) => (
+                    <img
+                      key={idx}
+                      src={`${API_BASE_URL.replace('/api', '')}${url}`}
+                      alt={`Delivery proof ${idx + 1}`}
+                      className="w-[80px] h-[80px] object-cover rounded-lg border border-green-200 dark:border-green-700 cursor-pointer hover:opacity-80"
+                      onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -796,7 +890,8 @@ const Sales = () => {
                       <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Product</th>
                       <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Qty</th>
                       <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Price</th>
-                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Subtotal</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Cost</th>
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Profit</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -809,26 +904,31 @@ const Sales = () => {
                           </div>
                         </td>
                         <td className="px-3 py-2 text-center text-gray-600 dark:text-gray-300 text-xs">{item.quantity}</td>
-                        <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300 text-xs">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-800 dark:text-gray-100 text-xs">₱{(item.subtotal || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300 text-xs">₱{(item.subtotal || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-xs text-gray-500 dark:text-gray-400">
+                          {(item.total_cost || 0) > 0 ? `₱${item.total_cost.toLocaleString()}` : <span className="text-gray-400">N/A</span>}
+                        </td>
+                        <td className={`px-3 py-2 text-right text-xs font-semibold ${(item.profit || 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          {(item.total_cost || 0) > 0 ? `${item.profit >= 0 ? '+' : ''}₱${item.profit.toLocaleString()}` : <span className="text-gray-400 font-normal">N/A</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50 dark:bg-gray-700/50">
                     {selectedSale.delivery_fee > 0 && (
                       <tr>
-                        <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500 dark:text-gray-400">Delivery Fee</td>
+                        <td colSpan={4} className="px-3 py-1.5 text-right text-xs text-gray-500 dark:text-gray-400">Delivery Fee</td>
                         <td className="px-3 py-1.5 text-right text-xs text-gray-600 dark:text-gray-300">₱{selectedSale.delivery_fee.toLocaleString()}</td>
                       </tr>
                     )}
                     {selectedSale.discount > 0 && (
                       <tr>
-                        <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500 dark:text-gray-400">Discount</td>
+                        <td colSpan={4} className="px-3 py-1.5 text-right text-xs text-gray-500 dark:text-gray-400">Discount</td>
                         <td className="px-3 py-1.5 text-right text-xs text-red-500">-₱{selectedSale.discount.toLocaleString()}</td>
                       </tr>
                     )}
                     <tr className="border-t border-gray-200 dark:border-gray-600">
-                      <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold text-gray-600 dark:text-gray-300">Total</td>
+                      <td colSpan={4} className="px-3 py-2 text-right text-xs font-bold text-gray-600 dark:text-gray-300">Total</td>
                       <td className="px-3 py-2 text-right font-bold text-gray-800 dark:text-gray-100">₱{selectedSale.total.toLocaleString()}</td>
                     </tr>
                   </tfoot>
@@ -836,7 +936,7 @@ const Sales = () => {
               </div>
             </div>
 
-            {/* Total Summary Card */}
+            {/* Total Summary Card with Profit */}
             <div className="p-3 bg-button-50 dark:bg-gray-700 rounded-xl border border-button-200 dark:border-gray-600">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-button-700 dark:text-button-300">Order Total</span>
@@ -849,7 +949,133 @@ const Sales = () => {
                   {selectedSale.discount > 0 && <span>- ₱{selectedSale.discount.toLocaleString()} discount</span>}
                 </div>
               )}
+              {(selectedSale.total_cost || 0) > 0 && (
+                <div className="mt-2 pt-2 border-t border-button-200 dark:border-gray-600">
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">Cost</p>
+                      <p className="text-sm font-bold text-orange-600 dark:text-orange-400">₱{selectedSale.total_cost.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">Profit</p>
+                      <p className={`text-sm font-bold ${selectedSale.total_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {selectedSale.total_profit >= 0 ? '+' : ''}₱{selectedSale.total_profit.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase">Margin</p>
+                      <p className={`text-sm font-bold ${selectedSale.profit_margin >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {selectedSale.profit_margin}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Record Payment Modal */}
+      <Modal
+        isOpen={isPayModalOpen}
+        onClose={() => { setIsPayModalOpen(false); setPayOrder(null); }}
+        title="Record Payment"
+        size="sm"
+        footer={
+          <div className="flex gap-3">
+            <button onClick={() => { setIsPayModalOpen(false); setPayOrder(null); }} className="flex-1 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">Cancel</button>
+            <button
+              onClick={handleConfirmPay}
+              disabled={savingPay || (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < (payOrder?.total || 0))) || (payMethod === 'gcash' && !payGcashRef.trim())}
+              className="flex-1 py-2 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {savingPay ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              {savingPay ? 'Processing...' : 'Confirm Payment'}
+            </button>
+          </div>
+        }
+      >
+        {payOrder && (
+          <div className="space-y-4">
+            {/* Order Summary */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-primary-200 dark:border-primary-700">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{payOrder.invoice}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{payOrder.customer}</p>
+                </div>
+                <p className="text-lg font-bold text-button-600 dark:text-button-400">₱{payOrder.total.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method <span className="text-red-500">*</span></label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'cash', label: 'Cash', icon: DollarSign, color: 'green' },
+                  { value: 'gcash', label: 'GCash', icon: CreditCard, color: 'blue' },
+                ].map(m => (
+                  <button
+                    key={m.value}
+                    onClick={() => setPayMethod(m.value)}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border-2 transition-all ${
+                      payMethod === m.value
+                        ? `border-${m.color}-500 bg-${m.color}-50 dark:bg-${m.color}-900/20 text-${m.color}-700 dark:text-${m.color}-400`
+                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
+                    }`}
+                  >
+                    <m.icon size={16} /> {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Cash Method */}
+            {payMethod === 'cash' ? (
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Cash Tendered <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">₱</span>
+                  <input
+                    type="number"
+                    value={payCashTendered}
+                    onChange={(e) => setPayCashTendered(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-2.5 text-lg font-bold border border-primary-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 dark:text-gray-100"
+                    autoFocus
+                  />
+                </div>
+                {/* Quick amounts */}
+                <div className="flex gap-2 mt-2">
+                  {[payOrder.total, Math.ceil(payOrder.total / 100) * 100, Math.ceil(payOrder.total / 500) * 500, Math.ceil(payOrder.total / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).map(amt => (
+                    <button key={amt} onClick={() => setPayCashTendered(String(amt))} className="flex-1 py-1.5 text-xs font-semibold rounded-lg border border-primary-200 dark:border-primary-600 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
+                      ₱{amt.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+                {/* Change */}
+                {payCashTendered && parseFloat(payCashTendered) >= payOrder.total && (
+                  <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-center border border-green-200 dark:border-green-700">
+                    <p className="text-xs text-green-600 dark:text-green-400 font-medium">Change</p>
+                    <p className="text-lg font-bold text-green-700 dark:text-green-300">₱{(parseFloat(payCashTendered) - payOrder.total).toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={payGcashRef}
+                  onChange={(e) => setPayGcashRef(e.target.value)}
+                  placeholder="e.g. 1234 5678 9012"
+                  className="w-full px-4 py-2.5 text-sm font-semibold border border-primary-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100"
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
         )}
       </Modal>

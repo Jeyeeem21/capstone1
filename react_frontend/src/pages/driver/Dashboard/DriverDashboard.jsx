@@ -80,7 +80,7 @@ const DriverDashboard = () => {
     return generateYearlyDeliveries();
   }, [deliveryPeriod]);
 
-  // Rich tooltip with % change like client dashboard
+  // Rich tooltip with % change like customer dashboard
   const DeliveryTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     const currentValue = payload[0].value || 0;
@@ -233,7 +233,7 @@ const DriverDashboard = () => {
               <h2 className="text-lg font-bold" style={{ color: theme.text_primary }}>{deliveryLabels[deliveryPeriod]}</h2>
               <p className="text-xs" style={{ color: theme.text_secondary }}>{deliveryDesc[deliveryPeriod]}</p>
             </div>
-            {/* Period Toggle - matching client style */}
+            {/* Period Toggle - matching customer style */}
             <div className="flex rounded-lg p-1 shadow-sm" style={{ backgroundColor: '#f9fafb', border: `1px solid ${theme.border_color}` }}>
               {['daily', 'monthly', 'yearly'].map(period => (
                 <button key={period} onClick={() => setDeliveryPeriod(period)}

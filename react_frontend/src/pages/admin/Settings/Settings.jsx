@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive } from 'lucide-react';
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { Card, CardContent, Button, Tabs, FormInput, FormSelect, FormTextarea, useToast, SkeletonSettings } from '../../../components/ui';
 import AuditTrail from '../AuditTrail/AuditTrail';
@@ -14,12 +14,20 @@ import { API_BASE_URL } from '../../../api/config';
 
 // Helper to get full logo URL
 const getFullLogoUrl = (logoPath) => {
-  if (!logoPath || logoPath === '/logo.svg') return '/logo.svg';
+  if (!logoPath || logoPath === '/logo.svg') return '/storage/logos/KJPLogo.png';
   if (logoPath.startsWith('http')) return logoPath;
   if (logoPath.startsWith('blob:')) return logoPath;
   // Convert Laravel storage path to full URL
   const backendUrl = API_BASE_URL.replace('/api', '');
   return `${backendUrl}${logoPath}`;
+};
+
+// Helper to get full image URL (for hero images, etc.)
+const getFullImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
+  const backendUrl = API_BASE_URL.replace('/api', '');
+  return `${backendUrl}${imagePath}`;
 };
 
 // Color picker component (extracted to module level to prevent remount on re-render)
@@ -138,7 +146,7 @@ const Settings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, updateTheme, saveTheme, resetTheme, defaultTheme, saving } = useTheme();
   const { user, isSuperAdmin } = useAuth();
-  const { settings: contextSettings, updateSettings: updateContextSettings } = useBusinessSettings();
+  const { settings: contextSettings, updateSettings: updateContextSettings, refreshSettings } = useBusinessSettings();
   const [activeSection, setActiveSection] = useState(() => {
     const tabFromUrl = searchParams.get('tab');
     const validTabs = ['general', 'profile', 'security', 'appearance', 'information', 'data', 'accounts', 'audit-trail', 'archives'];
@@ -156,16 +164,21 @@ const Settings = () => {
   const [businessInfo, setBusinessInfo] = useState({
     business_name: '',
     business_tagline: '',
+    business_start_year: '',
     business_email: '',
     business_phone: '',
     business_address: '',
     business_open_days: '',
     business_open_time: '',
     business_close_time: '',
+    business_hours_json: '',
     footer_tagline: '',
     footer_copyright: '',
     footer_powered_by: '',
+    footer_badge1: '',
+    footer_badge2: '',
     social_facebook: '',
+
     social_twitter: '',
     social_instagram: '',
     social_linkedin: '',
@@ -173,19 +186,21 @@ const Settings = () => {
     shipping_rate_per_km: '',
     shipping_base_km: '',
     warehouse_address: '',
+    google_maps_embed: '',
+    smtp_password: '',
   });
   const [businessLoading, setBusinessLoading] = useState(true);
   const [businessSaving, setBusinessSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
-  const [logoPreview, setLogoPreview] = useState('/logo.svg');
+  const [logoPreview, setLogoPreview] = useState('/storage/logos/KJPLogo.png');
   const logoInputRef = useRef(null);
   
   const [profileInfo, setProfileInfo] = useState({
-    firstName: 'Admin',
-    lastName: 'User',
-    email: 'admin@example.com',
-    phone: '+63 912 345 6789',
-    role: 'Administrator',
+    firstName: user?.name?.split(' ')[0] || '',
+    lastName: user?.name?.split(' ').slice(1).join(' ') || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    role: user?.role === 'super_admin' ? 'Super Admin' : 'Administrator',
   });
   
   const [securityInfo, setSecurityInfo] = useState({
@@ -212,16 +227,21 @@ const Settings = () => {
         setBusinessInfo({
           business_name: cachedData.business_name ?? '',
           business_tagline: cachedData.business_tagline ?? '',
+          business_start_year: cachedData.business_start_year ?? '',
           business_email: cachedData.business_email ?? '',
           business_phone: cachedData.business_phone ?? '',
           business_address: cachedData.business_address ?? '',
           business_open_days: cachedData.business_open_days ?? '',
           business_open_time: cachedData.business_open_time ?? '',
           business_close_time: cachedData.business_close_time ?? '',
+          business_hours_json: cachedData.business_hours_json ?? '',
           footer_tagline: cachedData.footer_tagline ?? '',
           footer_copyright: cachedData.footer_copyright ?? '',
           footer_powered_by: cachedData.footer_powered_by ?? '',
+          footer_badge1: cachedData.footer_badge1 ?? '',
+          footer_badge2: cachedData.footer_badge2 ?? '',
           social_facebook: cachedData.social_facebook ?? '',
+
           social_twitter: cachedData.social_twitter ?? '',
           social_instagram: cachedData.social_instagram ?? '',
           social_linkedin: cachedData.social_linkedin ?? '',
@@ -229,8 +249,10 @@ const Settings = () => {
           shipping_rate_per_km: cachedData.shipping_rate_per_km ?? '',
           shipping_base_km: cachedData.shipping_base_km ?? '',
           warehouse_address: cachedData.warehouse_address ?? '',
+          google_maps_embed: cachedData.google_maps_embed ?? '',
+          smtp_password: cachedData.smtp_password ?? '',
         });
-        if (cachedData.business_logo && cachedData.business_logo !== '/logo.svg' && !cachedData.business_logo.startsWith('blob:')) {
+        if (cachedData.business_logo && cachedData.business_logo !== '/logo.svg' && cachedData.business_logo !== '/storage/logos/KJPLogo.png' && !cachedData.business_logo.startsWith('blob:')) {
           setLogoPreview(getFullLogoUrl(cachedData.business_logo));
         }
         setBusinessLoading(false);
@@ -249,16 +271,21 @@ const Settings = () => {
           setBusinessInfo({
             business_name: data.business_name ?? '',
             business_tagline: data.business_tagline ?? '',
+            business_start_year: data.business_start_year ?? '',
             business_email: data.business_email ?? '',
             business_phone: data.business_phone ?? '',
             business_address: data.business_address ?? '',
             business_open_days: data.business_open_days ?? '',
             business_open_time: data.business_open_time ?? '',
             business_close_time: data.business_close_time ?? '',
+            business_hours_json: data.business_hours_json ?? '',
             footer_tagline: data.footer_tagline ?? '',
             footer_copyright: data.footer_copyright ?? '',
             footer_powered_by: data.footer_powered_by ?? '',
+            footer_badge1: data.footer_badge1 ?? '',
+            footer_badge2: data.footer_badge2 ?? '',
             social_facebook: data.social_facebook ?? '',
+
             social_twitter: data.social_twitter ?? '',
             social_instagram: data.social_instagram ?? '',
             social_linkedin: data.social_linkedin ?? '',
@@ -266,8 +293,10 @@ const Settings = () => {
             shipping_rate_per_km: data.shipping_rate_per_km ?? '',
             shipping_base_km: data.shipping_base_km ?? '',
             warehouse_address: data.warehouse_address ?? '',
+            google_maps_embed: data.google_maps_embed ?? '',
+            smtp_password: data.smtp_password ?? '',
           });
-          if (data.business_logo && data.business_logo !== '/logo.svg' && !data.business_logo.startsWith('blob:')) {
+          if (data.business_logo && data.business_logo !== '/logo.svg' && data.business_logo !== '/storage/logos/KJPLogo.png' && !data.business_logo.startsWith('blob:')) {
             setLogoPreview(getFullLogoUrl(data.business_logo));
           }
         }
@@ -379,14 +408,14 @@ const Settings = () => {
           console.error('Logo upload failed:', logoResult);
           toast.error('Upload Failed', 'Failed to upload logo. Please try again.');
           // Revert to previous logo
-          setLogoPreview(contextSettings.business_logo || '/logo.svg');
+          setLogoPreview(contextSettings.business_logo || '/storage/logos/KJPLogo.png');
           setLogoFile(null);
         }
       } catch (error) {
         console.error('Logo upload error:', error);
         toast.error('Upload Error', 'An error occurred while uploading the logo.');
         // Revert to previous logo
-        setLogoPreview(contextSettings.business_logo || '/logo.svg');
+        setLogoPreview(contextSettings.business_logo || '/storage/logos/KJPLogo.png');
         setLogoFile(null);
       } finally {
         setBusinessSaving(false);
@@ -406,15 +435,34 @@ const Settings = () => {
       // Logo is already uploaded in handleLogoChange, just use current preview
       const currentLogoUrl = logoPreview && !logoPreview.startsWith('blob:') 
         ? logoPreview 
-        : (contextSettings.business_logo || '/logo.svg');
+        : (contextSettings.business_logo || '/storage/logos/KJPLogo.png');
       
-      // Save other settings
-      console.log('Saving business settings...', businessInfo);
-      const updateResult = await businessSettingsApi.update(businessInfo);
+      // Save other settings — default warehouse_address to business_address if empty
+      const dataToSave = {
+        ...businessInfo,
+        warehouse_address: businessInfo.warehouse_address || businessInfo.business_address,
+        business_hours_json: JSON.stringify(hoursSchedule),
+      };
+      console.log('Saving business settings...', dataToSave);
+      const updateResult = await businessSettingsApi.update(dataToSave);
       console.log('Update result:', updateResult);
       
-      // Format hours for display
-      const formattedHours = `${businessInfo.business_open_days}: ${formatTime(businessInfo.business_open_time)} - ${formatTime(businessInfo.business_close_time)}`;
+      // Format hours for display — group consecutive days with same hours
+      const shortNames = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+      const groups = [];
+      daysOfWeek.forEach(day => {
+        const d = hoursSchedule[day];
+        const sig = d.closed ? 'closed' : `${d.open}-${d.close}`;
+        if (groups.length > 0 && groups[groups.length - 1].sig === sig) {
+          groups[groups.length - 1].end = day;
+        } else {
+          groups.push({ start: day, end: day, sig, data: d });
+        }
+      });
+      const formattedHours = groups.map(g => {
+        const label = g.start === g.end ? shortNames[g.start] : `${shortNames[g.start]} - ${shortNames[g.end]}`;
+        return g.sig === 'closed' ? `${label}: Closed` : `${label}: ${formatTime(g.data.open)} - ${formatTime(g.data.close)}`;
+      }).join('\n');
       
       // Update context for real-time changes across app (Sidebar, Footer, etc.)
       updateContextSettings({
@@ -423,6 +471,9 @@ const Settings = () => {
         business_hours: formattedHours,
         business_hours_formatted: formattedHours,
       });
+
+      // Trigger a fresh fetch so all tabs/roles get server-formatted data
+      refreshSettings();
       
       toast.success('Settings Saved', 'Business information has been updated.');
     } catch (error) {
@@ -446,12 +497,42 @@ const Settings = () => {
   const handleSaveSecurity = () => toast.success('Password Changed', 'Your password has been updated successfully.');
   const handleSaveNotifications = () => toast.success('Notifications Updated', 'Notification preferences saved.');
 
-  const dayOptions = [
-    { value: 'Monday - Saturday', label: 'Monday - Saturday' },
-    { value: 'Monday - Friday', label: 'Monday - Friday' },
-    { value: 'Monday - Sunday', label: 'Monday - Sunday (Everyday)' },
-    { value: 'Tuesday - Sunday', label: 'Tuesday - Sunday' },
-  ];
+  // Per-day schedule
+  const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const dayLabels = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+  const defaultSchedule = Object.fromEntries(daysOfWeek.map(d => [d, { open: '07:00', close: '18:00', closed: d === 'sunday' }]));
+
+  const [hoursSchedule, setHoursSchedule] = useState(defaultSchedule);
+
+  // Load schedule from business_hours_json when data loads
+  useEffect(() => {
+    if (businessInfo.business_hours_json) {
+      try {
+        const parsed = JSON.parse(businessInfo.business_hours_json);
+        if (parsed && typeof parsed === 'object') {
+          setHoursSchedule(prev => ({ ...prev, ...parsed }));
+        }
+      } catch {}
+    }
+  }, [businessInfo.business_hours_json]);
+
+  const handleScheduleChange = (day, field, value) => {
+    setHoursSchedule(prev => ({
+      ...prev,
+      [day]: { ...prev[day], [field]: value }
+    }));
+  };
+
+  const handleApplyToAll = () => {
+    const monday = hoursSchedule.monday;
+    setHoursSchedule(prev => {
+      const updated = { ...prev };
+      daysOfWeek.forEach(d => {
+        updated[d] = { ...monday, closed: prev[d].closed };
+      });
+      return updated;
+    });
+  };
 
   const allSettingsSections = [
     { id: 'general', icon: Building2, title: 'General', description: 'Business information', superAdminOnly: true },
@@ -475,7 +556,7 @@ const Settings = () => {
       switchRole(role);
       toast.success('Role Switched', `You are now viewing as ${role === 'admin' ? 'Administrator' : 'Staff'}`);
       if (role === 'staff') {
-        navigate('/staff/pos');
+        navigate('/secretary/pos');
       } else if (role === 'super_admin') {
         navigate('/superadmin/dashboard');
       } else {
@@ -604,12 +685,12 @@ const Settings = () => {
 
   // General Settings Section - render function to avoid re-creating component
   const renderGeneralSection = () => {
-    if (businessLoading) {
+    if (businessLoading && !localStorage.getItem('kjp-business-settings')) {
       return <SkeletonSettings />;
     }
     
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6 transition-opacity duration-200 ${businessSaving ? 'opacity-60 pointer-events-none' : ''}`}>
         {/* Logo Upload */}
         <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-700">
           <div className="w-24 h-24 bg-gradient-to-br from-button-500 to-button-600 rounded-2xl flex items-center justify-center shadow-lg overflow-hidden relative">
@@ -668,7 +749,16 @@ const Settings = () => {
             hint="This appears under your business name in the sidebar"
           />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormInput 
+            label="Year Established" 
+            name="business_start_year" 
+            type="number" 
+            value={businessInfo.business_start_year} 
+            onChange={handleBusinessChange} 
+            placeholder="e.g. 2010"
+            hint="Used for 'Since YYYY' labels and years of experience calculations"
+          />
           <FormInput 
             label="Business Email" 
             name="business_email" 
@@ -689,9 +779,6 @@ const Settings = () => {
             error={validationErrors.business_phone}
           />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormSelect label="Open Days" name="business_open_days" value={businessInfo.business_open_days} onChange={handleBusinessChange} options={dayOptions} required />
-        </div>
         <FormTextarea 
           label="Business Address" 
           name="business_address" 
@@ -702,20 +789,65 @@ const Settings = () => {
           placeholder="Enter full business address"
           error={validationErrors.business_address}
         />
+        <FormTextarea 
+          label="Google Maps Embed URL" 
+          name="google_maps_embed" 
+          value={businessInfo.google_maps_embed} 
+          onChange={handleBusinessChange} 
+          rows={2} 
+          placeholder="Paste Google Maps embed URL here (from Google Maps > Share > Embed a map)"
+          hint="Go to Google Maps → Search your location → Share → Embed a map → Copy the src URL"
+        />
         
         {/* Business Hours */}
         <div className="p-4 bg-button-50 dark:bg-gray-700/50 rounded-xl border border-button-200 dark:border-gray-600">
-          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center gap-2">
-            <Clock size={18} className="text-button-600 dark:text-button-400" />
-            Business Hours
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormInput label="Opening Time" name="business_open_time" type="time" value={businessInfo.business_open_time} onChange={handleBusinessChange} required />
-            <FormInput label="Closing Time" name="business_close_time" type="time" value={businessInfo.business_close_time} onChange={handleBusinessChange} required />
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+              <Clock size={18} className="text-button-600 dark:text-button-400" />
+              Business Hours
+            </h4>
+            <button 
+              type="button" 
+              onClick={handleApplyToAll}
+              className="text-xs text-button-600 dark:text-button-400 hover:underline"
+            >
+              Apply Monday's hours to all
+            </button>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-            <strong>Preview:</strong> {businessInfo.business_open_days}: {formatTime(businessInfo.business_open_time)} - {formatTime(businessInfo.business_close_time)}
-          </p>
+          <div className="space-y-1.5">
+            {daysOfWeek.map(day => (
+              <div key={day} className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${hoursSchedule[day]?.closed ? 'bg-red-50 dark:bg-red-900/10' : 'bg-white dark:bg-gray-800/50'}`}>
+                <span className="w-10 text-sm font-semibold text-gray-600 dark:text-gray-300">{dayLabels[day]}</span>
+                <label className="flex items-center gap-1.5 cursor-pointer shrink-0">
+                  <input 
+                    type="checkbox" 
+                    checked={hoursSchedule[day]?.closed || false} 
+                    onChange={(e) => handleScheduleChange(day, 'closed', e.target.checked)}
+                    className="w-3.5 h-3.5 rounded text-red-500 border-gray-300 dark:border-gray-500 focus:ring-red-400"
+                  />
+                  <span className={`text-xs ${hoursSchedule[day]?.closed ? 'text-red-500 dark:text-red-400 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>Closed</span>
+                </label>
+                {!hoursSchedule[day]?.closed && (
+                  <div className="flex items-center gap-2 flex-1 ml-1">
+                    <input 
+                      type="time" 
+                      value={hoursSchedule[day]?.open || '07:00'} 
+                      onChange={(e) => handleScheduleChange(day, 'open', e.target.value)}
+                      className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-button-500"
+                    />
+                    <span className="text-gray-400 text-xs">—</span>
+                    <input 
+                      type="time" 
+                      value={hoursSchedule[day]?.close || '18:00'} 
+                      onChange={(e) => handleScheduleChange(day, 'close', e.target.value)}
+                      className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-button-500"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Set the opening and closing time for each day. Check "Closed" for days off.</p>
         </div>
 
         {/* Footer Content */}
@@ -726,27 +858,48 @@ const Settings = () => {
           </h4>
           <div className="space-y-4">
             <FormTextarea 
-              label="Business Tagline" 
+              label="Footer Tagline" 
               name="footer_tagline" 
               value={businessInfo.footer_tagline} 
               onChange={handleBusinessChange} 
               rows={2} 
               placeholder="Your trusted partner in quality rice processing..." 
+              hint="Displayed in the footer under the business name"
             />
             <FormInput 
-              label="Copyright Text" 
+              label="Footer Copyright Text" 
               name="footer_copyright" 
               value={businessInfo.footer_copyright} 
               onChange={handleBusinessChange} 
               placeholder="Management System. All rights reserved." 
+              hint="Shown at the bottom of the footer after the business name and year"
             />
             <FormInput 
-              label="Powered By Text" 
+              label="Footer Powered By" 
               name="footer_powered_by" 
               value={businessInfo.footer_powered_by} 
               onChange={handleBusinessChange} 
               placeholder="Powered by XianFire Framework. Built at Mindoro State University" 
+              hint="Credit line displayed at the very bottom of the footer"
             />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormInput 
+                label="Footer Badge 1 (Outline)" 
+                name="footer_badge1" 
+                value={businessInfo.footer_badge1} 
+                onChange={handleBusinessChange} 
+                placeholder="Premium Quality" 
+                hint="Leave blank to hide this badge"
+              />
+              <FormInput 
+                label="Footer Badge 2 (Filled)" 
+                name="footer_badge2" 
+                value={businessInfo.footer_badge2} 
+                onChange={handleBusinessChange} 
+                placeholder="ISO Certified" 
+                hint="Leave blank to hide this badge"
+              />
+            </div>
           </div>
         </div>
 
@@ -811,6 +964,56 @@ const Settings = () => {
           </p>
         </div>
 
+        {/* Email / SMTP Configuration */}
+        <div className="p-4 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-500/30">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1 flex items-center gap-2">
+            <Mail size={18} className="text-violet-600 dark:text-violet-400" />
+            Email Notifications
+          </h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Enable email notifications by entering your Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 underline font-medium">App Password</a>. Emails will be sent from your <strong>Business Email</strong> ({businessInfo.business_email || 'not set'}).
+          </p>
+          <div className="space-y-4">
+            <div>
+              <div className="max-w-md">
+                <FormInput
+                  label={<span className="flex items-center gap-1.5"><Lock size={14} /> Gmail App Password</span>}
+                  name="smtp_password"
+                  type="password"
+                  value={businessInfo.smtp_password}
+                  onChange={handleBusinessChange}
+                  placeholder="Enter your 16-character app password"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const result = await businessSettingsApi.testEmail(businessInfo.smtp_password);
+                    if (result?.success) {
+                      toast.success('Test Email Sent', 'Check your inbox at ' + (businessInfo.business_email || 'your business email') + '.');
+                    } else {
+                      toast.error('Test Failed', result?.message || 'Could not send test email. Check your App Password.');
+                    }
+                  } catch (err) {
+                    toast.error('Test Failed', err?.response?.data?.message || 'Could not send test email. Check your App Password.');
+                  }
+                }}
+                disabled={!businessInfo.smtp_password || businessInfo.smtp_password === '••••••••'}
+                className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-violet-300 dark:border-violet-600 text-violet-700 dark:text-violet-300 bg-white dark:bg-violet-900/40 hover:bg-violet-100 dark:hover:bg-violet-800/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Mail size={15} />
+                Send Test Email
+              </button>
+            </div>
+            <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-violet-200 dark:border-violet-500/30">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                <strong>How to get an App Password:</strong> Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 underline">Google App Passwords</a> → Select app “Mail” → Generate → Copy the 16-character password and paste it here. Email notifications will only work when this is configured.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Shipping & Delivery Settings */}
         <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-500/30">
           <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1 flex items-center gap-2">
@@ -824,11 +1027,14 @@ const Settings = () => {
             <FormTextarea 
               label="Warehouse Address"
               name="warehouse_address"
-              value={businessInfo.warehouse_address}
+              value={businessInfo.warehouse_address || businessInfo.business_address}
               onChange={handleBusinessChange}
               rows={2}
-              placeholder="Enter your warehouse/business full address"
+              placeholder={businessInfo.business_address || "Enter your warehouse/business full address"}
             />
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+              Defaults to Business Address if left empty.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormInput 
                 label="Base Distance (km)"
@@ -1251,94 +1457,88 @@ const Settings = () => {
 
   // Information Section - Website Content Management
   const InformationSection = () => {
-    const [activeInfoTab, setActiveInfoTab] = useState('home');
-    const [loading, setLoading] = useState(true);
+    const [activeInfoTab, setActiveInfoTab] = useState(() => {
+      return searchParams.get('info') || 'home';
+    });
     const [savingHome, setSavingHome] = useState(false);
     const [savingAbout, setSavingAbout] = useState(false);
+    const [savingProducts, setSavingProducts] = useState(false);
+    const [savingContact, setSavingContact] = useState(false);
     const [uploadingHomeImage, setUploadingHomeImage] = useState(false);
     const [uploadingAboutImage, setUploadingAboutImage] = useState(false);
+    const [uploadingProductsImage, setUploadingProductsImage] = useState(false);
+    const [uploadingContactImage, setUploadingContactImage] = useState(false);
+    const homeImageInputRef = useRef(null);
+    const aboutImageInputRef = useRef(null);
+    const productsImageInputRef = useRef(null);
+    const contactImageInputRef = useRef(null);
     
-    // Home page content state
+    // Home page content state (populated from API)
     const [homeContent, setHomeContent] = useState({
-      heroTitle: 'Quality Rice',
-      heroTitleHighlight: 'From Farm to Table',
-      heroSubtitle: 'Experience the finest selection of premium rice products. From aromatic jasmine to nutritious brown rice, we deliver excellence in every grain.',
-      heroTag: 'Premium Quality Rice Since 2010',
+      heroTitle: '',
+      heroTitleHighlight: '',
+      heroSubtitle: '',
+      heroTag: '',
       heroImage: null,
-      aboutTitle: 'Committed to Quality Since 2010',
-      aboutDescription: 'KJP Ricemill has been a trusted name in the rice industry for over 15 years. We take pride in sourcing the finest quality rice from local farmers and delivering it fresh to your doorstep.',
-      aboutPoints: [
-        'Premium quality rice from trusted farmers',
-        'Modern milling facilities for best results',
-        'Strict quality control standards',
-        'Reliable delivery across the region',
-      ],
-      features: [
-        { title: 'Quality Assured', description: 'Every grain passes through rigorous quality checks to ensure premium standards.' },
-        { title: 'Farm Fresh', description: 'Sourced directly from local farmers, ensuring freshness from harvest to your table.' },
-        { title: 'Fast Delivery', description: 'Reliable delivery service to get your orders to you quickly and efficiently.' },
-        { title: 'Best Prices', description: 'Competitive wholesale and retail prices without compromising on quality.' },
-      ],
-      stats: [
-        { value: '15+', label: 'Years Experience' },
-        { value: '500+', label: 'Happy Customers' },
-        { value: '50K+', label: 'Bags Delivered' },
-        { value: '99%', label: 'Satisfaction Rate' },
-      ],
-      testimonials: [
-        { name: 'Maria Santos', role: 'Restaurant Owner', content: 'KJP Ricemill has been our trusted supplier for 5 years. Their jasmine rice quality is consistently excellent.', rating: 5 },
-        { name: 'Juan Dela Cruz', role: 'Retail Store Owner', content: 'Fast delivery and great prices. My customers keep coming back for their rice products.', rating: 5 },
-        { name: 'Lisa Reyes', role: 'Catering Business', content: 'The quality of rice makes a huge difference in our dishes. KJP never disappoints!', rating: 5 },
-      ],
+      aboutTitle: '',
+      aboutDescription: '',
+      aboutPoints: [],
+      features: [],
+      stats: [],
     });
 
-    // About page content state
+    // About page content state (populated from API)
     const [aboutContent, setAboutContent] = useState({
-      heroTitle: 'Our Story of',
-      heroTitleHighlight: 'Excellence & Quality',
-      heroSubtitle: 'For over 15 years, KJP Ricemill has been committed to delivering the finest quality rice products to Filipino households and businesses.',
+      heroTitle: '',
+      heroTitleHighlight: '',
+      heroSubtitle: '',
       heroImage: null,
-      missionTitle: 'Our Mission',
-      missionDescription: 'To provide Filipino families and businesses with the highest quality rice products at fair prices, while supporting local farmers and sustainable agricultural practices.',
-      missionPoints: [
-        'Deliver premium quality rice consistently',
-        'Support local farming communities',
-        'Ensure fair and competitive pricing',
-        'Provide exceptional customer service',
+      missionTitle: '',
+      missionDescription: '',
+      missionPoints: [],
+      visionTitle: '',
+      visionDescription: '',
+      visionPoints: [],
+      values: [],
+      timeline: [],
+      team: [],
+    });
+
+    // Products page content state (populated from API)
+    const [productsContent, setProductsContent] = useState({
+      heroTag: 'Our Products',
+      heroTitle: 'Premium Rice Selection',
+      heroSubtitle: 'Discover our wide range of quality rice products, from premium jasmine to nutritious brown rice',
+      heroImage: null,
+      badges: [
+        { title: 'Fresh from Farm', icon: 'Leaf' },
+        { title: 'Quality Guaranteed', icon: 'Award' },
+        { title: 'Fast Delivery', icon: 'Truck' },
       ],
-      visionTitle: 'Our Vision',
-      visionDescription: 'To become the most trusted and preferred rice supplier in the Philippines, known for our unwavering commitment to quality, innovation, and customer satisfaction.',
-      visionPoints: [
-        'Be the leading rice supplier in the region',
-        'Pioneer innovative milling technologies',
-        'Create lasting value for all stakeholders',
-        'Promote sustainable rice production',
+      ctaTitle: 'Need Bulk Orders or Custom Packaging?',
+      ctaDescription: 'Contact us for wholesale pricing, bulk orders, or custom packaging solutions for your business.',
+      ctaButtonText: 'Contact for Wholesale',
+    });
+
+    // Contact page content state (populated from API)
+    const [contactContent, setContactContent] = useState({
+      heroTag: 'Get In Touch',
+      heroTitle: 'Contact Us',
+      heroSubtitle: "Have questions or ready to place an order? We'd love to hear from you!",
+      heroImage: null,
+      formTitle: 'Send Us a Message',
+      faqs: [
+        { question: 'What is the minimum order for delivery?', answer: 'For deliveries within Rosario, we require a minimum of 2 sacks (50kg). For bulk orders outside Rosario, please contact us for arrangements.' },
+        { question: 'Do you offer wholesale pricing?', answer: 'Yes! We offer competitive wholesale prices for businesses, restaurants, and resellers. Contact us for our wholesale price list.' },
+        { question: 'What payment methods do you accept?', answer: 'We accept cash, bank transfer, GCash, Maya, and credit/debit cards for in-store purchases.' },
       ],
-      values: [
-        { title: 'Quality First', description: 'We never compromise on the quality of our rice products, ensuring every grain meets our high standards.' },
-        { title: 'Customer Care', description: 'Building lasting relationships with our customers through exceptional service and reliability.' },
-        { title: 'Sustainability', description: 'Supporting local farmers and implementing eco-friendly practices in our operations.' },
-        { title: 'Excellence', description: 'Striving for excellence in everything we do, from sourcing to delivery.' },
-      ],
-      timeline: [
-        { year: '2010', title: 'Foundation', description: 'KJP Ricemill was established with a small milling facility and a vision for quality.' },
-        { year: '2014', title: 'Expansion', description: 'Expanded operations with modern milling equipment and increased storage capacity.' },
-        { year: '2018', title: 'Growth', description: 'Reached 100+ regular customers and established partnerships with local farmers.' },
-        { year: '2022', title: 'Innovation', description: 'Implemented digital inventory system and launched online ordering platform.' },
-        { year: '2024', title: 'Present', description: 'Serving 500+ customers with a diverse range of premium rice products.' },
-      ],
-      team: [
-        { name: 'Jose P. Katipunan', role: 'Founder & CEO' },
-        { name: 'Maria Santos', role: 'Operations Manager' },
-        { name: 'Pedro Garcia', role: 'Quality Control Head' },
-        { name: 'Ana Reyes', role: 'Sales Manager' },
-      ],
+      socialTitle: 'Connect With Us',
+      socialDescription: 'Follow us on social media for updates and promotions',
     });
 
     // Fetch content from API on mount
     useEffect(() => {
       const fetchContent = async () => {
-        setLoading(true);
         try {
           const result = await websiteContentApi.getAll();
           if (result.success && result.data) {
@@ -1348,11 +1548,15 @@ const Settings = () => {
             if (result.data.about) {
               setAboutContent(prev => ({ ...prev, ...result.data.about }));
             }
+            if (result.data.products) {
+              setProductsContent(prev => ({ ...prev, ...result.data.products }));
+            }
+            if (result.data.contact) {
+              setContactContent(prev => ({ ...prev, ...result.data.contact }));
+            }
           }
         } catch (error) {
           console.log('Using default content - API not available');
-        } finally {
-          setLoading(false);
         }
       };
       fetchContent();
@@ -1401,8 +1605,9 @@ const Settings = () => {
       setUploadingHomeImage(true);
       try {
         const result = await websiteContentApi.uploadHeroImage(file, 'home');
-        if (result.data?.success) {
-          setHomeContent(prev => ({ ...prev, heroImage: result.data.data.image_url }));
+        if (result.success || result.data?.success) {
+          const imageUrl = result.data?.image_url || result.data?.data?.image_url;
+          setHomeContent(prev => ({ ...prev, heroImage: imageUrl }));
           localStorage.removeItem('kjp-home-content');
           toast.success('Image Uploaded', 'Home hero image has been updated.');
         } else {
@@ -1422,8 +1627,9 @@ const Settings = () => {
       setUploadingAboutImage(true);
       try {
         const result = await websiteContentApi.uploadHeroImage(file, 'about');
-        if (result.data?.success) {
-          setAboutContent(prev => ({ ...prev, heroImage: result.data.data.image_url }));
+        if (result.success || result.data?.success) {
+          const imageUrl = result.data?.image_url || result.data?.data?.image_url;
+          setAboutContent(prev => ({ ...prev, heroImage: imageUrl }));
           localStorage.removeItem('kjp-about-content');
           toast.success('Image Uploaded', 'About hero image has been updated.');
         } else {
@@ -1433,6 +1639,84 @@ const Settings = () => {
         toast.error('Error', 'Failed to upload image');
       } finally {
         setUploadingAboutImage(false);
+      }
+    };
+
+    const handleSaveProducts = async () => {
+      setSavingProducts(true);
+      try {
+        const result = await websiteContentApi.saveProductsContent(productsContent);
+        if (result.success) {
+          localStorage.removeItem('kjp-products-content');
+          toast.success('Products Content Saved', 'Products page content has been updated successfully.');
+        } else {
+          toast.error('Error', result.message || 'Failed to save products content');
+        }
+      } catch (error) {
+        toast.error('Error', 'Failed to connect to server');
+      } finally {
+        setSavingProducts(false);
+      }
+    };
+
+    const handleSaveContact = async () => {
+      setSavingContact(true);
+      try {
+        const result = await websiteContentApi.saveContactContent(contactContent);
+        if (result.success) {
+          localStorage.removeItem('kjp-contact-content');
+          toast.success('Contact Content Saved', 'Contact page content has been updated successfully.');
+        } else {
+          toast.error('Error', result.message || 'Failed to save contact content');
+        }
+      } catch (error) {
+        toast.error('Error', 'Failed to connect to server');
+      } finally {
+        setSavingContact(false);
+      }
+    };
+
+    const handleProductsHeroImageUpload = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      setUploadingProductsImage(true);
+      try {
+        const result = await websiteContentApi.uploadHeroImage(file, 'products');
+        if (result.success || result.data?.success) {
+          const imageUrl = result.data?.image_url || result.data?.data?.image_url;
+          setProductsContent(prev => ({ ...prev, heroImage: imageUrl }));
+          localStorage.removeItem('kjp-products-content');
+          toast.success('Image Uploaded', 'Products hero image has been updated.');
+        } else {
+          toast.error('Error', result.data?.message || 'Failed to upload image');
+        }
+      } catch (error) {
+        toast.error('Error', 'Failed to upload image');
+      } finally {
+        setUploadingProductsImage(false);
+      }
+    };
+
+    const handleContactHeroImageUpload = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      setUploadingContactImage(true);
+      try {
+        const result = await websiteContentApi.uploadHeroImage(file, 'contact');
+        if (result.success || result.data?.success) {
+          const imageUrl = result.data?.image_url || result.data?.data?.image_url;
+          setContactContent(prev => ({ ...prev, heroImage: imageUrl }));
+          localStorage.removeItem('kjp-contact-content');
+          toast.success('Image Uploaded', 'Contact hero image has been updated.');
+        } else {
+          toast.error('Error', result.data?.message || 'Failed to upload image');
+        }
+      } catch (error) {
+        toast.error('Error', 'Failed to upload image');
+      } finally {
+        setUploadingContactImage(false);
       }
     };
 
@@ -1454,20 +1738,6 @@ const Settings = () => {
       const updated = [...homeContent.features];
       updated[index][field] = value;
       setHomeContent({ ...homeContent, features: updated });
-    };
-
-    const handleAddTestimonial = () => {
-      setHomeContent({
-        ...homeContent,
-        testimonials: [...homeContent.testimonials, { name: 'Customer Name', role: 'Business', content: 'Testimonial content here', rating: 5 }],
-      });
-    };
-
-    const handleRemoveTestimonial = (index) => {
-      setHomeContent({
-        ...homeContent,
-        testimonials: homeContent.testimonials.filter((_, i) => i !== index),
-      });
     };
 
     const handleAddTimeline = () => {
@@ -1504,7 +1774,7 @@ const Settings = () => {
         <div className="flex justify-center">
           <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1.5 gap-1">
             <button
-              onClick={() => setActiveInfoTab('home')}
+              onClick={() => { setActiveInfoTab('home'); setSearchParams({ tab: 'information', info: 'home' }, { replace: true }); }}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'home'
                   ? 'bg-button-500 text-white shadow-md'
@@ -1515,7 +1785,7 @@ const Settings = () => {
               Home Page
             </button>
             <button
-              onClick={() => setActiveInfoTab('about')}
+              onClick={() => { setActiveInfoTab('about'); setSearchParams({ tab: 'information', info: 'about' }, { replace: true }); }}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'about'
                   ? 'bg-button-500 text-white shadow-md'
@@ -1525,12 +1795,34 @@ const Settings = () => {
               <FileText size={16} />
               About Page
             </button>
+            <button
+              onClick={() => { setActiveInfoTab('products'); setSearchParams({ tab: 'information', info: 'products' }, { replace: true }); }}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeInfoTab === 'products'
+                  ? 'bg-button-500 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              <Package size={16} />
+              Products Page
+            </button>
+            <button
+              onClick={() => { setActiveInfoTab('contact'); setSearchParams({ tab: 'information', info: 'contact' }, { replace: true }); }}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeInfoTab === 'contact'
+                  ? 'bg-button-500 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              <MessageCircle size={16} />
+              Contact Page
+            </button>
           </div>
         </div>
 
         {/* Home Page Content */}
         {activeInfoTab === 'home' && (
-          <div className="space-y-6">
+          <div className={`space-y-6 transition-opacity duration-200 ${savingHome ? 'opacity-60 pointer-events-none' : ''}`}>
             {/* Hero Section */}
             <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
               <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
@@ -1543,7 +1835,7 @@ const Settings = () => {
                 <div className="flex items-center gap-4">
                   <div className="w-32 h-20 bg-gray-100 dark:bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
                     {homeContent.heroImage ? (
-                      <img src={homeContent.heroImage} alt="Hero" className="w-full h-full object-cover" />
+                      <img src={getFullImageUrl(homeContent.heroImage)} alt="Hero" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
                     )}
@@ -1551,28 +1843,27 @@ const Settings = () => {
                   <div className="flex-1">
                     <h5 className="font-medium text-gray-700 dark:text-gray-200 mb-1">Hero Background Image</h5>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/svg+xml,image/webp"
-                        onChange={handleHomeHeroImageUpload}
-                        className="hidden"
-                        disabled={uploadingHomeImage}
-                      />
-                      <Button variant="outline" size="sm" as="span" disabled={uploadingHomeImage}>
-                        {uploadingHomeImage ? (
-                          <>
-                            <Loader2 size={14} className="mr-1.5 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Camera size={14} className="mr-1.5" />
-                            Change Image
-                          </>
-                        )}
-                      </Button>
-                    </label>
+                    <input
+                      ref={homeImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/svg+xml,image/webp"
+                      onChange={handleHomeHeroImageUpload}
+                      className="hidden"
+                      disabled={uploadingHomeImage}
+                    />
+                    <Button variant="outline" size="sm" onClick={() => homeImageInputRef.current?.click()} disabled={uploadingHomeImage}>
+                      {uploadingHomeImage ? (
+                        <>
+                          <Loader2 size={14} className="mr-1.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Camera size={14} className="mr-1.5" />
+                          Change Image
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1604,22 +1895,20 @@ const Settings = () => {
 
             {/* Statistics */}
             <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
-              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-1 flex items-center gap-2">
                 <Award size={18} className="text-primary-600 dark:text-primary-400" />
                 Statistics
               </h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Values are auto-calculated from real database records. You can customize the labels.</p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {homeContent.stats.map((stat, index) => (
                   <div key={index} className="space-y-2">
-                    <FormInput 
-                      label="Value" 
-                      value={stat.value} 
-                      onChange={(e) => {
-                        const updated = [...homeContent.stats];
-                        updated[index].value = e.target.value;
-                        setHomeContent({ ...homeContent, stats: updated });
-                      }} 
-                    />
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Value <span className="text-gray-400">(Auto)</span></label>
+                      <div className="px-3 py-2 bg-gray-100 dark:bg-gray-600 rounded-lg border-2 border-primary-200 dark:border-primary-600 text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-not-allowed">
+                        {stat.value}
+                      </div>
+                    </div>
                     <FormInput 
                       label="Label" 
                       value={stat.label} 
@@ -1663,59 +1952,6 @@ const Settings = () => {
                       label="Description" 
                       value={feature.description} 
                       onChange={(e) => handleUpdateFeature(index, 'description', e.target.value)} 
-                      rows={2}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Testimonials */}
-            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                  <Users size={18} className="text-primary-600 dark:text-primary-400" />
-                  Testimonials ({homeContent.testimonials.length})
-                </h4>
-                <Button size="sm" variant="outline" onClick={handleAddTestimonial}>
-                  <Plus size={14} className="mr-1" /> Add Testimonial
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {homeContent.testimonials.map((testimonial, index) => (
-                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
-                    <button
-                      onClick={() => handleRemoveTestimonial(index)}
-                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
-                    >
-                      <X size={14} />
-                    </button>
-                    <FormInput 
-                      label="Name" 
-                      value={testimonial.name} 
-                      onChange={(e) => {
-                        const updated = [...homeContent.testimonials];
-                        updated[index].name = e.target.value;
-                        setHomeContent({ ...homeContent, testimonials: updated });
-                      }} 
-                    />
-                    <FormInput 
-                      label="Role" 
-                      value={testimonial.role} 
-                      onChange={(e) => {
-                        const updated = [...homeContent.testimonials];
-                        updated[index].role = e.target.value;
-                        setHomeContent({ ...homeContent, testimonials: updated });
-                      }} 
-                    />
-                    <FormTextarea 
-                      label="Content" 
-                      value={testimonial.content} 
-                      onChange={(e) => {
-                        const updated = [...homeContent.testimonials];
-                        updated[index].content = e.target.value;
-                        setHomeContent({ ...homeContent, testimonials: updated });
-                      }} 
                       rows={2}
                     />
                   </div>
@@ -1773,7 +2009,7 @@ const Settings = () => {
 
         {/* About Page Content */}
         {activeInfoTab === 'about' && (
-          <div className="space-y-6">
+          <div className={`space-y-6 transition-opacity duration-200 ${savingAbout ? 'opacity-60 pointer-events-none' : ''}`}>
             {/* Hero Section */}
             <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
               <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
@@ -1786,7 +2022,7 @@ const Settings = () => {
                 <div className="flex items-center gap-4">
                   <div className="w-32 h-20 bg-gray-100 dark:bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
                     {aboutContent.heroImage ? (
-                      <img src={aboutContent.heroImage} alt="Hero" className="w-full h-full object-cover" />
+                      <img src={getFullImageUrl(aboutContent.heroImage)} alt="Hero" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
                     )}
@@ -1794,28 +2030,27 @@ const Settings = () => {
                   <div className="flex-1">
                     <h5 className="font-medium text-gray-700 dark:text-gray-200 mb-1">Hero Background Image</h5>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/svg+xml,image/webp"
-                        onChange={handleAboutHeroImageUpload}
-                        className="hidden"
-                        disabled={uploadingAboutImage}
-                      />
-                      <Button variant="outline" size="sm" as="span" disabled={uploadingAboutImage}>
-                        {uploadingAboutImage ? (
-                          <>
-                            <Loader2 size={14} className="mr-1.5 animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Camera size={14} className="mr-1.5" />
-                            Change Image
-                          </>
-                        )}
-                      </Button>
-                    </label>
+                    <input
+                      ref={aboutImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/svg+xml,image/webp"
+                      onChange={handleAboutHeroImageUpload}
+                      className="hidden"
+                      disabled={uploadingAboutImage}
+                    />
+                    <Button variant="outline" size="sm" onClick={() => aboutImageInputRef.current?.click()} disabled={uploadingAboutImage}>
+                      {uploadingAboutImage ? (
+                        <>
+                          <Loader2 size={14} className="mr-1.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Camera size={14} className="mr-1.5" />
+                          Change Image
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -2013,13 +2248,29 @@ const Settings = () => {
 
             {/* Team Members */}
             <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
-              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
-                <Users size={18} className="text-primary-600 dark:text-primary-400" />
-                Team Members
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Users size={18} className="text-primary-600 dark:text-primary-400" />
+                  Team Members ({aboutContent.team.length})
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => setAboutContent({ ...aboutContent, team: [...aboutContent.team, { name: '', role: '' }] })}>
+                  <Plus size={14} className="mr-1" /> Add Member
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {aboutContent.team.map((member, index) => (
-                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700">
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative group">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = aboutContent.team.filter((_, i) => i !== index);
+                        setAboutContent({ ...aboutContent, team: updated });
+                      }}
+                      className="absolute top-2 right-2 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remove member"
+                    >
+                      <X size={14} />
+                    </button>
                     <FormInput 
                       label="Name" 
                       value={member.name} 
@@ -2041,6 +2292,9 @@ const Settings = () => {
                   </div>
                 ))}
               </div>
+              {aboutContent.team.length === 0 && (
+                <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-6">No team members added. Click "Add Member" to get started.</p>
+              )}
             </div>
 
             <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
@@ -2049,6 +2303,296 @@ const Settings = () => {
                   <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
                 ) : (
                   <><Save size={16} className="mr-1.5" /> Save About Content</>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Products Page Content */}
+        {activeInfoTab === 'products' && (
+          <div className={`space-y-6 transition-opacity duration-200 ${savingProducts ? 'opacity-60 pointer-events-none' : ''}`}>
+            {/* Hero Section */}
+            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Target size={18} className="text-primary-600 dark:text-primary-400" />
+                Products Hero Section
+              </h4>
+              
+              {/* Hero Image Upload */}
+              <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-xl border-2 border-dashed border-primary-300 dark:border-primary-700">
+                <div className="flex items-center gap-4">
+                  <div className="w-32 h-20 bg-gray-100 dark:bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
+                    {productsContent.heroImage ? (
+                      <img src={getFullImageUrl(productsContent.heroImage)} alt="Hero" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="font-medium text-gray-700 dark:text-gray-200 mb-1">Hero Background Image</h5>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
+                    <input
+                      ref={productsImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/svg+xml,image/webp"
+                      onChange={handleProductsHeroImageUpload}
+                      className="hidden"
+                      disabled={uploadingProductsImage}
+                    />
+                    <Button variant="outline" size="sm" onClick={() => productsImageInputRef.current?.click()} disabled={uploadingProductsImage}>
+                      {uploadingProductsImage ? (
+                        <>
+                          <Loader2 size={14} className="mr-1.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Camera size={14} className="mr-1.5" />
+                          Change Image
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              <FormInput 
+                label="Hero Tag" 
+                value={productsContent.heroTag} 
+                onChange={(e) => setProductsContent({ ...productsContent, heroTag: e.target.value })} 
+              />
+              <FormInput 
+                label="Hero Title" 
+                value={productsContent.heroTitle} 
+                onChange={(e) => setProductsContent({ ...productsContent, heroTitle: e.target.value })} 
+              />
+              <FormTextarea 
+                label="Hero Subtitle" 
+                value={productsContent.heroSubtitle} 
+                onChange={(e) => setProductsContent({ ...productsContent, heroSubtitle: e.target.value })} 
+                rows={2}
+              />
+            </div>
+
+            {/* Feature Badges */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Award size={18} className="text-primary-600 dark:text-primary-400" />
+                  Feature Badges ({productsContent.badges.length})
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => setProductsContent({ ...productsContent, badges: [...productsContent.badges, { title: 'New Badge', icon: 'Award' }] })}>
+                  <Plus size={14} className="mr-1" /> Add Badge
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {productsContent.badges.map((badge, index) => (
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
+                    <button
+                      onClick={() => setProductsContent({ ...productsContent, badges: productsContent.badges.filter((_, i) => i !== index) })}
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
+                    >
+                      <X size={14} />
+                    </button>
+                    <FormInput 
+                      label="Badge Text" 
+                      value={badge.title} 
+                      onChange={(e) => {
+                        const updated = [...productsContent.badges];
+                        updated[index].title = e.target.value;
+                        setProductsContent({ ...productsContent, badges: updated });
+                      }} 
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CTA Section */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Shield size={18} className="text-primary-600 dark:text-primary-400" />
+                Call-to-Action Section
+              </h4>
+              <FormInput 
+                label="CTA Title" 
+                value={productsContent.ctaTitle} 
+                onChange={(e) => setProductsContent({ ...productsContent, ctaTitle: e.target.value })} 
+              />
+              <FormTextarea 
+                label="CTA Description" 
+                value={productsContent.ctaDescription} 
+                onChange={(e) => setProductsContent({ ...productsContent, ctaDescription: e.target.value })} 
+                rows={2}
+              />
+              <FormInput 
+                label="CTA Button Text" 
+                value={productsContent.ctaButtonText} 
+                onChange={(e) => setProductsContent({ ...productsContent, ctaButtonText: e.target.value })} 
+              />
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
+              <Button onClick={handleSaveProducts} disabled={savingProducts}>
+                {savingProducts ? (
+                  <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
+                ) : (
+                  <><Save size={16} className="mr-1.5" /> Save Products Content</>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Contact Page Content */}
+        {activeInfoTab === 'contact' && (
+          <div className={`space-y-6 transition-opacity duration-200 ${savingContact ? 'opacity-60 pointer-events-none' : ''}`}>
+            {/* Hero Section */}
+            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Target size={18} className="text-primary-600 dark:text-primary-400" />
+                Contact Hero Section
+              </h4>
+              
+              {/* Hero Image Upload */}
+              <div className="mb-4 p-4 bg-white dark:bg-gray-700 rounded-xl border-2 border-dashed border-primary-300 dark:border-primary-700">
+                <div className="flex items-center gap-4">
+                  <div className="w-32 h-20 bg-gray-100 dark:bg-gray-600 rounded-lg overflow-hidden flex-shrink-0">
+                    {contactContent.heroImage ? (
+                      <img src={getFullImageUrl(contactContent.heroImage)} alt="Hero" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h5 className="font-medium text-gray-700 dark:text-gray-200 mb-1">Hero Background Image</h5>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Upload an image for the hero section background (JPG, PNG, SVG, WebP - Max 10MB)</p>
+                    <input
+                      ref={contactImageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/svg+xml,image/webp"
+                      onChange={handleContactHeroImageUpload}
+                      className="hidden"
+                      disabled={uploadingContactImage}
+                    />
+                    <Button variant="outline" size="sm" onClick={() => contactImageInputRef.current?.click()} disabled={uploadingContactImage}>
+                      {uploadingContactImage ? (
+                        <>
+                          <Loader2 size={14} className="mr-1.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Camera size={14} className="mr-1.5" />
+                          Change Image
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              <FormInput 
+                label="Hero Tag" 
+                value={contactContent.heroTag} 
+                onChange={(e) => setContactContent({ ...contactContent, heroTag: e.target.value })} 
+              />
+              <FormInput 
+                label="Hero Title" 
+                value={contactContent.heroTitle} 
+                onChange={(e) => setContactContent({ ...contactContent, heroTitle: e.target.value })} 
+              />
+              <FormTextarea 
+                label="Hero Subtitle" 
+                value={contactContent.heroSubtitle} 
+                onChange={(e) => setContactContent({ ...contactContent, heroSubtitle: e.target.value })} 
+                rows={2}
+              />
+            </div>
+
+            {/* Form Section */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Edit3 size={18} className="text-primary-600 dark:text-primary-400" />
+                Form Section
+              </h4>
+              <FormInput 
+                label="Form Title" 
+                value={contactContent.formTitle} 
+                onChange={(e) => setContactContent({ ...contactContent, formTitle: e.target.value })} 
+              />
+            </div>
+
+            {/* FAQs */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <Info size={18} className="text-primary-600 dark:text-primary-400" />
+                  FAQs ({contactContent.faqs.length})
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => setContactContent({ ...contactContent, faqs: [...contactContent.faqs, { question: 'New Question?', answer: 'Answer here' }] })}>
+                  <Plus size={14} className="mr-1" /> Add FAQ
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {contactContent.faqs.map((faq, index) => (
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
+                    <button
+                      onClick={() => setContactContent({ ...contactContent, faqs: contactContent.faqs.filter((_, i) => i !== index) })}
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
+                    >
+                      <X size={14} />
+                    </button>
+                    <FormInput 
+                      label="Question" 
+                      value={faq.question} 
+                      onChange={(e) => {
+                        const updated = [...contactContent.faqs];
+                        updated[index].question = e.target.value;
+                        setContactContent({ ...contactContent, faqs: updated });
+                      }} 
+                    />
+                    <FormTextarea 
+                      label="Answer" 
+                      value={faq.answer} 
+                      onChange={(e) => {
+                        const updated = [...contactContent.faqs];
+                        updated[index].answer = e.target.value;
+                        setContactContent({ ...contactContent, faqs: updated });
+                      }} 
+                      rows={2}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Social Section */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Share2 size={18} className="text-primary-600 dark:text-primary-400" />
+                Social Section
+              </h4>
+              <FormInput 
+                label="Social Title" 
+                value={contactContent.socialTitle} 
+                onChange={(e) => setContactContent({ ...contactContent, socialTitle: e.target.value })} 
+              />
+              <FormTextarea 
+                label="Social Description" 
+                value={contactContent.socialDescription} 
+                onChange={(e) => setContactContent({ ...contactContent, socialDescription: e.target.value })} 
+                rows={2}
+              />
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
+              <Button onClick={handleSaveContact} disabled={savingContact}>
+                {savingContact ? (
+                  <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
+                ) : (
+                  <><Save size={16} className="mr-1.5" /> Save Contact Content</>
                 )}
               </Button>
             </div>
@@ -2071,7 +2615,7 @@ const Settings = () => {
     const importableTables = [
       { value: 'products', label: 'Products' },
       { value: 'varieties', label: 'Varieties' },
-      { value: 'customers', label: 'Clients' },
+      { value: 'customers', label: 'Customers' },
       { value: 'suppliers', label: 'Suppliers' },
       { value: 'procurements', label: 'Procurements' },
       { value: 'processings', label: 'Processings' },

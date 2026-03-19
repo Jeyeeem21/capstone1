@@ -1,4 +1,4 @@
-﻿import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
+import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
 import { useState, useMemo, memo, useCallback, useRef, useEffect } from 'react';
 import { PageHeader } from '../../../components/common';
 import { Button, StatsCard, useToast } from '../../../components/ui';
@@ -8,16 +8,23 @@ import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { debouncedSearchAddress, calculateDistance, geocodeAddress } from '../../../api/openRouteService';
 
-// client combobox component - select existing or add new (requires name + contact or email)
-const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, onInputChange, onContactChange, onEmailChange, clientOptions, error, emailError }) => {
+const posPaymentMethods = [
+  { value: 'cash', label: 'Cash', icon: DollarSign, color: '#22c55e' },
+  { value: 'gcash', label: 'GCash', icon: Smartphone, color: '#3b82f6' },
+  { value: 'cod', label: 'COD', icon: Banknote, color: '#f59e0b' },
+  { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#8b5cf6' },
+];
+
+// customer combobox component - select existing or add new (requires name + contact or email)
+const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange, onInputChange, onContactChange, onEmailChange, customerOptions, selectedEmail, error, emailError }) => {
   return (
     <div className="mb-3">
       <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
         <User size={14} className="text-gray-400" />
-        Client <span className="text-red-500">*</span>
+        Customer <span className="text-red-500">*</span>
       </label>
       
-      {/* Dropdown for existing clients */}
+      {/* Dropdown for existing customers */}
       <div className="relative">
         <select
           value={value}
@@ -30,7 +37,7 @@ const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, o
                 : 'border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
           }`}
         >
-          {clientOptions.map(opt => (
+          {customerOptions.map(opt => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
@@ -43,6 +50,14 @@ const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, o
         </div>
       </div>
 
+      {/* Show selected customer's email */}
+      {value && !newName && selectedEmail && (
+        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 pl-1">
+          <Mail size={12} className="text-gray-400" />
+          {selectedEmail}
+        </p>
+      )}
+
       {/* OR divider */}
       <div className="flex items-center gap-2 my-2">
         <div className="flex-1 h-px bg-gray-200"></div>
@@ -50,13 +65,13 @@ const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, o
         <div className="flex-1 h-px bg-gray-200"></div>
       </div>
 
-      {/* Input for new client name */}
+      {/* Input for new customer name */}
       <div className="relative">
         <input
           type="text"
           value={newName}
           onChange={onInputChange}
-          placeholder="Type new client name..."
+          placeholder="Type new customer name..."
           className={`w-full px-3 py-2.5 pl-8 text-sm border-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
             newName 
               ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20' 
@@ -71,7 +86,7 @@ const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, o
         )}
       </div>
 
-      {/* Contact & Email fields - shown when adding new client */}
+      {/* Contact & Email fields - shown when adding new customer */}
       {newName && (
         <div className="mt-2 space-y-2">
           <div className="relative">
@@ -110,12 +125,12 @@ const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, o
         </div>
       )}
 
-      {/* Info when new client is valid */}
+      {/* Info when new customer is valid */}
       {newName && newEmail && !emailError && (
         <div className="flex items-start gap-1.5 p-1.5 mt-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
           <AlertCircle size={12} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
           <p className="text-[10px] text-green-700 dark:text-green-300">
-            New client "<strong>{newName}</strong>" will be created.
+            New customer "<strong>{newName}</strong>" will be created.
           </p>
         </div>
       )}
@@ -128,7 +143,7 @@ const ClientCombobox = memo(({ value, newName, newContact, newEmail, onChange, o
   );
 });
 
-ClientCombobox.displayName = 'ClientCombobox';
+CustomerCombobox.displayName = 'CustomerCombobox';
 
 const PointOfSale = () => {
   const toast = useToast();
@@ -141,7 +156,7 @@ const PointOfSale = () => {
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [showSaleCompleteModal, setShowSaleCompleteModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showClientModal, setShowClientModal] = useState(false);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [cashTendered, setCashTendered] = useState('');
   const [gcashReference, setGcashReference] = useState('');
   const [gcashRefError, setGcashRefError] = useState('');
@@ -159,15 +174,16 @@ const PointOfSale = () => {
   const [voidPassword, setVoidPassword] = useState('');
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientContact, setNewClientContact] = useState('');
-  const [newClientEmail, setNewClientEmail] = useState('');
-  const [clientError, setClientError] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerContact, setNewCustomerContact] = useState('');
+  const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [customerError, setCustomerError] = useState('');
   const [emailError, setEmailError] = useState('');
   const emailCheckTimeout = useRef(null);
   // Delivery / Shipping state
   const [forDelivery, setForDelivery] = useState(false);
+  const [showWalkInConfirm, setShowWalkInConfirm] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [distanceKm, setDistanceKm] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -189,6 +205,15 @@ const PointOfSale = () => {
     }
   }, [businessSettings.warehouse_address]);
 
+  // Helper: get warehouse coords, geocoding on-demand if needed
+  const getWarehouseCoords = useCallback(async () => {
+    if (warehouseCoords) return warehouseCoords;
+    if (!businessSettings.warehouse_address) return null;
+    const coords = await geocodeAddress(businessSettings.warehouse_address);
+    if (coords) setWarehouseCoords(coords);
+    return coords;
+  }, [warehouseCoords, businessSettings.warehouse_address]);
+
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -201,17 +226,53 @@ const PointOfSale = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle address input change with autocomplete
+  // Auto-calculate distance from an address string (geocode ? route)
+  const autoCalcDistance = useCallback(async (address) => {
+    if (!address) return;
+    setCalculatingDistance(true);
+    try {
+      const wCoords = await getWarehouseCoords();
+      if (!wCoords) { setCalculatingDistance(false); return; }
+      const coords = await geocodeAddress(address);
+      if (coords) {
+        setSelectedCoords(coords);
+        const result = await calculateDistance(
+          wCoords.lat, wCoords.lng,
+          coords.lat, coords.lng
+        );
+        setDistanceKm(String(result.distanceKm));
+        setEstimatedDuration(result.durationMin);
+        setIsEstimate(result.isEstimate || false);
+      }
+    } catch (err) {
+      console.error('Distance calc failed:', err);
+    } finally {
+      setCalculatingDistance(false);
+    }
+  }, [getWarehouseCoords]);
+
+  // Debounce timer for auto-calculating distance after address typing stops
+  const distanceCalcTimer = useRef(null);
+
+  // Handle address input change with autocomplete + debounced distance calc
   const handleAddressInput = useCallback((value) => {
     setDeliveryAddress(value);
     setSelectedCoords(null);
     setDistanceKm('');
     setEstimatedDuration(null);
+    // Trigger autocomplete suggestions
     debouncedSearchAddress(value, (results) => {
       setAddressSuggestions(results);
       setShowSuggestions(results.length > 0);
     }, warehouseCoords || {});
-  }, [warehouseCoords]);
+    // Also debounce auto-calc distance after user stops typing (1.5s)
+    if (distanceCalcTimer.current) clearTimeout(distanceCalcTimer.current);
+    if (value && value.length >= 5) {
+      distanceCalcTimer.current = setTimeout(() => {
+        autoCalcDistance(value);
+      }, 1500);
+    }
+  }, [warehouseCoords, autoCalcDistance]);
 
   // Handle selecting an address suggestion
   const handleSelectAddress = useCallback(async (suggestion) => {
@@ -219,33 +280,36 @@ const PointOfSale = () => {
     setSelectedCoords({ lat: suggestion.lat, lng: suggestion.lng });
     setShowSuggestions(false);
     setAddressSuggestions([]);
+    // Cancel any pending debounced calc
+    if (distanceCalcTimer.current) clearTimeout(distanceCalcTimer.current);
 
-    // Auto-calculate distance if warehouse coords are available
-    if (warehouseCoords) {
-      setCalculatingDistance(true);
-      try {
+    // Auto-calculate distance
+    setCalculatingDistance(true);
+    try {
+      const wCoords = await getWarehouseCoords();
+      if (wCoords) {
         const result = await calculateDistance(
-          warehouseCoords.lat, warehouseCoords.lng,
+          wCoords.lat, wCoords.lng,
           suggestion.lat, suggestion.lng
         );
         setDistanceKm(String(result.distanceKm));
         setEstimatedDuration(result.durationMin);
         setIsEstimate(result.isEstimate || false);
-      } catch (err) {
-        console.error('Distance calc failed:', err);
-      } finally {
-        setCalculatingDistance(false);
       }
+    } catch (err) {
+      console.error('Distance calc failed:', err);
+    } finally {
+      setCalculatingDistance(false);
     }
-  }, [warehouseCoords]);
+  }, [getWarehouseCoords]);
 
   // Fetch real data from API
   const { data: productsRaw, refetch: refetchProducts } = useDataFetch('/products');
   const { data: salesRaw, refetch: refetchSales } = useDataFetch('/sales');
   const { data: varietiesRaw } = useDataFetch('/varieties');
-  const { data: clientsRaw, refetch: refetchClients } = useDataFetch('/customers');
+  const { data: customersRaw, refetch: refetchCustomers } = useDataFetch('/customers');
 
-  // Map products to POS format — include all active products even with 0 stock
+  // Map products to POS format × include all active products even with 0 stock
   const products = useMemo(() =>
     (productsRaw || [])
       .filter(p => p.status === 'active' && !p.is_deleted)
@@ -268,68 +332,72 @@ const PointOfSale = () => {
     [varietiesRaw]
   );
 
-  // client options for combobox
-  const clientOptions = useMemo(() => {
-    const opts = (clientsRaw || [])
+  // customer options for combobox
+  const customerOptions = useMemo(() => {
+    const opts = (customersRaw || [])
       .filter(c => c.status === 'Active')
-      .map(c => ({ value: String(c.id), label: c.name }));
-    return [{ value: '', label: 'Select a client...' }, ...opts];
-  }, [clientsRaw]);
+      .map(c => ({ value: String(c.id), label: c.name, email: c.email || '' }));
+    return [{ value: '', label: 'Select a customer...', email: '' }, ...opts];
+  }, [customersRaw]);
 
-  // Check if selected existing client has contact or email
-  const selectedClientHasContactInfo = useMemo(() => {
-    if (!selectedClientId) return false;
-    const client = (clientsRaw || []).find(c => String(c.id) === selectedClientId);
-    if (!client) return false;
-    return !!(client.contact || client.phone || client.email);
-  }, [selectedClientId, clientsRaw]);
+  // Check if selected existing customer has contact or email
+  const selectedCustomerHasContactInfo = useMemo(() => {
+    if (!selectedCustomerId) return false;
+    const cust = (customersRaw || []).find(c => String(c.id) === selectedCustomerId);
+    if (!cust) return false;
+    return !!(cust.contact || cust.phone || cust.email);
+  }, [selectedCustomerId, customersRaw]);
 
-  const handleClientSelect = useCallback((e) => {
+  const handleCustomerSelect = useCallback((e) => {
     const id = e.target.value;
-    setSelectedClientId(id);
+    setSelectedCustomerId(id);
     if (id) {
-      setNewClientName('');
-      setNewClientContact('');
-      setNewClientEmail('');
+      setNewCustomerName('');
+      setNewCustomerContact('');
+      setNewCustomerEmail('');
       setEmailError('');
-      // Auto-fill delivery address from client's saved address
+      // Auto-fill delivery address from customer's saved address
       if (forDelivery) {
-        const client = (clientsRaw || []).find(c => String(c.id) === id);
-        if (client?.address) {
-          setDeliveryAddress(client.address);
+        const cust = (customersRaw || []).find(c => String(c.id) === id);
+        if (cust?.address) {
+          setDeliveryAddress(cust.address);
+          // Auto-calculate distance immediately
+          setDistanceKm('');
+          setEstimatedDuration(null);
+          setSelectedCoords(null);
+          autoCalcDistance(cust.address);
         } else {
           setDeliveryAddress('');
+          setDistanceKm('');
+          setEstimatedDuration(null);
+          setSelectedCoords(null);
         }
-        // Reset distance — will be recalculated on confirm
-        setDistanceKm('');
-        setEstimatedDuration(null);
-        setSelectedCoords(null);
       }
     }
-    setClientError('');
-  }, [forDelivery, clientsRaw]);
+    setCustomerError('');
+  }, [forDelivery, customersRaw, autoCalcDistance]);
 
-  const handleNewClientInput = useCallback((e) => {
+  const handleNewCustomerInput = useCallback((e) => {
     const val = e.target.value;
-    setNewClientName(val);
-    setClientError('');
+    setNewCustomerName(val);
+    setCustomerError('');
     if (val) {
-      // Check if typed name matches existing client
-      const match = (clientsRaw || []).find(c => c.name.toLowerCase() === val.toLowerCase());
+      // Check if typed name matches existing customer
+      const match = (customersRaw || []).find(c => c.name.toLowerCase() === val.toLowerCase());
       if (match) {
-        setSelectedClientId(String(match.id));
-        setNewClientName('');
-        setNewClientContact('');
-        setNewClientEmail('');
+        setSelectedCustomerId(String(match.id));
+        setNewCustomerName('');
+        setNewCustomerContact('');
+        setNewCustomerEmail('');
         return;
       }
-      setSelectedClientId('');
+      setSelectedCustomerId('');
     }
-  }, [clientsRaw]);
+  }, [customersRaw]);
 
-  const handleNewClientContact = useCallback((e) => {
-    setNewClientContact(e.target.value);
-    setClientError('');
+  const handleNewCustomerContact = useCallback((e) => {
+    setNewCustomerContact(e.target.value);
+    setCustomerError('');
   }, []);
 
   const checkGcashReference = useCallback((ref) => {
@@ -368,10 +436,10 @@ const PointOfSale = () => {
     }, 500);
   }, []);
 
-  const handleNewClientEmail = useCallback((e) => {
+  const handleNewCustomerEmail = useCallback((e) => {
     const value = e.target.value;
-    setNewClientEmail(value);
-    setClientError('');
+    setNewCustomerEmail(value);
+    setCustomerError('');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (value && !emailRegex.test(value)) {
       setEmailError('Please enter a valid email address.');
@@ -471,7 +539,7 @@ const PointOfSale = () => {
         invalidateCache('/products');
         refetchSales();
         refetchProducts();
-        toast.success('Transaction Voided', `${selectedVoidTxn.id} voided — refund processed`);
+        toast.success('Transaction Voided', `${selectedVoidTxn.id} voided × refund processed`);
         setShowVoidModal(false);
         setSelectedVoidTxn(null);
         setVoidReason('');
@@ -493,72 +561,98 @@ const PointOfSale = () => {
 
   const completeSale = () => {
     if (cart.length === 0) return;
-    // Reset client fields and show client modal
-    setSelectedClientId('');
-    setNewClientName('');
-    setNewClientContact('');
-    setNewClientEmail('');
-    setClientError('');
-    setEmailError('');
-    setShowClientModal(true);
+    // If not for delivery, confirm walk-in first
+    if (!forDelivery) {
+      setShowWalkInConfirm(true);
+      return;
+    }
+    proceedToCustomerModal();
   };
 
-  const confirmClient = async () => {
-    // Validate client: must have name + (contact or email)
-    if (!selectedClientId && !newClientName) {
-      setClientError('Please select a client or add a new one.');
+  const proceedToCustomerModal = () => {
+    setShowWalkInConfirm(false);
+    // Reset customer fields and show customer modal
+    setSelectedCustomerId('');
+    setNewCustomerName('');
+    setNewCustomerContact('');
+    setNewCustomerEmail('');
+    setCustomerError('');
+    setEmailError('');
+    setShowCustomerModal(true);
+  };
+
+  const confirmCustomer = async () => {
+    // Validate customer: must have name + (contact or email)
+    if (!selectedCustomerId && !newCustomerName) {
+      setCustomerError('Please select a customer or add a new one.');
       return;
     }
 
-    // If existing client selected, check they have contact info
-    if (selectedClientId && !selectedClientHasContactInfo) {
-      setClientError('Selected client has no contact or email on file. Please update their info or add a new client.');
+    // If existing customer selected, check they have contact info
+    if (selectedCustomerId && !selectedCustomerHasContactInfo) {
+      setCustomerError('Selected customer has no contact or email on file. Please update their info or add a new customer.');
       return;
     }
 
-    // If new client, require email
-    if (newClientName && !newClientEmail.trim()) {
-      setClientError('Email address is required for new clients.');
+    // If new customer, require email
+    if (newCustomerName && !newCustomerEmail.trim()) {
+      setCustomerError('Email address is required for new customers.');
       return;
     }
 
     // Block if email has a uniqueness/format error
-    if (newClientName && emailError) {
-      setClientError('Please fix the email error before proceeding.');
+    if (newCustomerName && emailError) {
+      setCustomerError('Please fix the email error before proceeding.');
       return;
     }
 
     // If for delivery, require address
     if (forDelivery && !deliveryAddress.trim()) {
-      setClientError('Delivery address is required for delivery orders.');
+      setCustomerError('Delivery address is required for delivery orders.');
       return;
     }
 
-    // Auto-calculate distance if for delivery and address is set
+    // Auto-calculate distance if for delivery and address is set but no distance yet
     if (forDelivery && deliveryAddress.trim() && !distanceKm) {
       setCalculatingDistance(true);
       try {
+        // Ensure warehouse coords are available
+        const wCoords = await getWarehouseCoords();
         // Geocode delivery address
         const destCoords = await geocodeAddress(deliveryAddress);
-        if (destCoords && warehouseCoords) {
+        if (destCoords && wCoords) {
           setSelectedCoords(destCoords);
           const result = await calculateDistance(
-            warehouseCoords.lat, warehouseCoords.lng,
+            wCoords.lat, wCoords.lng,
             destCoords.lat, destCoords.lng
           );
           setDistanceKm(String(result.distanceKm));
           setEstimatedDuration(result.durationMin);
           setIsEstimate(result.isEstimate || false);
+        } else {
+          // Geocoding failed × ask user to enter distance manually
+          setCalculatingDistance(false);
+          setCustomerError('Could not auto-calculate distance. Please enter the distance (km) manually.');
+          return;
         }
       } catch (err) {
         console.error('Distance calc failed:', err);
+        setCalculatingDistance(false);
+        setCustomerError('Distance calculation failed. Please enter the distance (km) manually.');
+        return;
       } finally {
         setCalculatingDistance(false);
       }
     }
 
-    setClientError('');
-    setShowClientModal(false);
+    // Require distance for delivery orders
+    if (forDelivery && (!distanceKm || parseFloat(distanceKm) <= 0)) {
+      setCustomerError('Please enter the delivery distance in km.');
+      return;
+    }
+
+    setCustomerError('');
+    setShowCustomerModal(false);
     setCashTendered('');
     setGcashReference('');
     setGcashRefError('');
@@ -648,10 +742,10 @@ const PointOfSale = () => {
           formData.append(`items[${i}][quantity]`, item.quantity);
           formData.append(`items[${i}][unit_price]`, item.price);
         });
-        if (selectedClientId) formData.append('customer_id', parseInt(selectedClientId));
-        if (newClientName) formData.append('new_customer_name', newClientName);
-        if (newClientContact) formData.append('new_customer_contact', newClientContact);
-        if (newClientEmail) formData.append('new_customer_email', newClientEmail);
+        if (selectedCustomerId) formData.append('customer_id', parseInt(selectedCustomerId));
+        if (newCustomerName) formData.append('new_customer_name', newCustomerName);
+        if (newCustomerContact) formData.append('new_customer_contact', newCustomerContact);
+        if (newCustomerEmail) formData.append('new_customer_email', newCustomerEmail);
         formData.append('payment_method', paymentMethod);
         formData.append('amount_tendered', total);
         formData.append('reference_number', gcashReference);
@@ -671,10 +765,10 @@ const PointOfSale = () => {
             quantity: item.quantity,
             unit_price: item.price,
           })),
-          customer_id: selectedClientId ? parseInt(selectedClientId) : null,
-          new_customer_name: newClientName || null,
-          new_customer_contact: newClientContact || null,
-          new_customer_email: newClientEmail || null,
+          customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+          new_customer_name: newCustomerName || null,
+          new_customer_contact: newCustomerContact || null,
+          new_customer_email: newCustomerEmail || null,
           payment_method: paymentMethod,
           amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
           reference_number: paymentMethod === 'gcash' ? gcashReference : null,
@@ -686,12 +780,14 @@ const PointOfSale = () => {
       }
       
       if (response.success && response.data) {
-        const clientName = newClientName || (selectedClientId ? clientOptions.find(o => o.value === selectedClientId)?.label : null);
+        const customerName = newCustomerName || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.label : null);
+        const customerEmail = newCustomerEmail || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.email : null);
         const saleData = {
           items: [...cart],
           total,
           totalItems,
-          clientName,
+          customerName,
+          customerEmail,
           paymentMethod: paymentMethod === 'cash' ? 'CASH' : paymentMethod === 'gcash' ? 'GCASH' : paymentMethod === 'pay_later' ? 'PAY LATER' : 'COD',
           transactionId: response.data.transaction_id,
           time: response.data.date_formatted || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' }),
@@ -706,11 +802,11 @@ const PointOfSale = () => {
         setShowPaymentModal(false);
         setShowSaleCompleteModal(true);
         setCart([]);
-        setSelectedClientId('');
-        setNewClientName('');
-        setNewClientContact('');
-        setNewClientEmail('');
-        setClientError('');
+        setSelectedCustomerId('');
+        setNewCustomerName('');
+        setNewCustomerContact('');
+        setNewCustomerEmail('');
+        setCustomerError('');
         setEmailError('');
         setForDelivery(false);
         setDeliveryAddress('');
@@ -724,9 +820,9 @@ const PointOfSale = () => {
         invalidateCache('/products');
         refetchSales();
         refetchProducts();
-        if (newClientName) {
+        if (newCustomerName) {
           invalidateCache('/customers');
-          refetchClients();
+          refetchCustomers();
         }
       } else {
         throw response;
@@ -771,14 +867,14 @@ const PointOfSale = () => {
       />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         <StatsCard label="Today's Sales" value={`₱${todayStats.totalSales.toLocaleString()}`} unit="revenue" icon={DollarSign} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
         <StatsCard label="Transactions" value={todayStats.transactions} unit="orders" icon={Receipt} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
         <StatsCard label="Items Sold" value={todayStats.itemsSold} unit="items" icon={Package} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
         <StatsCard label="Avg Transaction" value={`₱${todayStats.avgTransaction.toLocaleString()}`} unit="per order" icon={ShoppingCart} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
       </div>
 
-      <div className="flex gap-6" style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}>
+      <div className="flex gap-6" style={{ height: 'calc(100vh - 148px)', minHeight: '540px' }}>
         {/* Products Section - scrollable */}
         <div className="lg:col-span-2 flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4 flex flex-col overflow-hidden">
           {/* Search and Variety Filter */}
@@ -859,9 +955,9 @@ const PointOfSale = () => {
               </h3>
             </div>
 
-            <div className="flex-1 flex flex-col min-h-0 p-4">
+            <div className="flex-1 flex flex-col min-h-0 p-3">
               {/* Cart Items - scrollable */}
-              <div className="flex-1 overflow-y-auto min-h-0 mb-4">
+              <div className="flex-1 overflow-y-auto min-h-[120px] mb-4">
                 {cart.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 flex flex-col items-center justify-center h-full">
                     <ShoppingCart size={40} className="mx-auto mb-2 opacity-30" />
@@ -907,78 +1003,35 @@ const PointOfSale = () => {
                 )}
               </div>
 
-              {/* Payment Method - always visible */}
-              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 mb-4 shrink-0">
-                <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
-                <div className="grid grid-cols-4 gap-2">
-                  <button
-                    onClick={() => setPaymentMethod('cash')}
-                    className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
-                      ${paymentMethod === 'cash' 
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' 
-                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
-                      }
-                    `}
-                  >
-                    <DollarSign size={16} />
-                    Cash
+              {/* Order Type */}
+              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-4 shrink-0">
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Order Type</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => { setForDelivery(false); setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }}
+                    className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
+                    style={!forDelivery
+                      ? { backgroundColor: '#10b98115', border: '2px solid #10b981', color: '#10b981' }
+                      : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                    }>
+                    <Package size={14} />
+                    Pick Up
                   </button>
-                  <button
-                    onClick={() => setPaymentMethod('gcash')}
-                    className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
-                      ${paymentMethod === 'gcash' 
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
-                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
+                  <button onClick={() => {
+                      setForDelivery(true);
+                      if (!deliveryAddress && selectedCustomerId) {
+                        const cust = (customersRaw || []).find(c => String(c.id) === selectedCustomerId);
+                        if (cust?.address) { setDeliveryAddress(cust.address); autoCalcDistance(cust.address); }
                       }
-                    `}
-                  >
-                    <Smartphone size={16} />
-                    GCash
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('cod')}
-                    className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
-                      ${paymentMethod === 'cod' 
-                        ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' 
-                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
-                      }
-                    `}
-                  >
-                    <Banknote size={16} />
-                    COD
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('pay_later')}
-                    className={`flex items-center justify-center gap-1.5 p-2.5 rounded-lg border-2 transition-all font-semibold text-xs
-                      ${paymentMethod === 'pay_later' 
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' 
-                        : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
-                      }
-                    `}
-                  >
-                    <Clock size={16} />
-                    Pay Later
+                    }}
+                    className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
+                    style={forDelivery
+                      ? { backgroundColor: '#f9731615', border: '2px solid #f97316', color: '#f97316' }
+                      : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                    }>
+                    <Truck size={14} />
+                    Delivery
                   </button>
                 </div>
-              </div>
-
-              {/* Delivery Toggle */}
-              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 shrink-0">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <div className={`relative w-10 h-5 rounded-full transition-colors ${forDelivery ? 'bg-orange-500' : 'bg-gray-300'}`}
-                    onClick={() => {
-                      const next = !forDelivery;
-                      setForDelivery(next);
-                      if (!next) { setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }
-                    }}
-                  >
-                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white dark:bg-gray-800 shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                  </div>
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
-                    <Truck size={14} className={forDelivery ? 'text-orange-500' : 'text-gray-400'} />
-                    For Delivery
-                  </span>
-                </label>
 
                 {forDelivery && (deliveryAddress || distanceKm || calculatingDistance) && (
                   <div className="mt-2 space-y-1">
@@ -1008,6 +1061,28 @@ const PointOfSale = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Payment Method - always visible */}
+              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 mb-4 shrink-0">
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {posPaymentMethods.map(method => {
+                    const Icon = method.icon;
+                    const isSelected = paymentMethod === method.value;
+                    return (
+                      <button key={method.value} onClick={() => setPaymentMethod(method.value)}
+                        className="flex items-center justify-center gap-2 p-2.5 rounded-lg transition-all font-semibold text-xs"
+                        style={isSelected
+                          ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
+                          : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                        }>
+                        <Icon size={16} />
+                        {method.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Total Section - always visible */}
@@ -1088,84 +1163,63 @@ const PointOfSale = () => {
                       ))}
                     </div>
 
-                    {/* Payment Method */}
+                    {/* Order Type - Mobile */}
                     <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
-                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
-                      <div className="grid grid-cols-4 gap-2">
-                        <button
-                          onClick={() => setPaymentMethod('cash')}
-                          className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
-                            ${paymentMethod === 'cash' 
-                              ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400' 
-                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
-                            }
-                          `}
-                        >
-                          <DollarSign size={14} />
-                          Cash
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Order Type</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { setForDelivery(false); setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }}
+                          className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
+                          style={!forDelivery
+                            ? { backgroundColor: '#10b98115', border: '2px solid #10b981', color: '#10b981' }
+                            : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                          }>
+                          <Package size={14} />
+                          Pick Up
                         </button>
-                        <button
-                          onClick={() => setPaymentMethod('gcash')}
-                          className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
-                            ${paymentMethod === 'gcash' 
-                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
-                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
+                        <button onClick={() => {
+                            setForDelivery(true);
+                            if (!deliveryAddress && selectedCustomerId) {
+                              const cust = (customersRaw || []).find(c => String(c.id) === selectedCustomerId);
+                              if (cust?.address) { setDeliveryAddress(cust.address); autoCalcDistance(cust.address); }
                             }
-                          `}
-                        >
-                          <Smartphone size={14} />
-                          GCash
-                        </button>
-                        <button
-                          onClick={() => setPaymentMethod('cod')}
-                          className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
-                            ${paymentMethod === 'cod' 
-                              ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' 
-                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
-                            }
-                          `}
-                        >
-                          <Banknote size={14} />
-                          COD
-                        </button>
-                        <button
-                          onClick={() => setPaymentMethod('pay_later')}
-                          className={`flex items-center justify-center gap-1.5 p-2 rounded-lg border-2 transition-all font-semibold text-xs
-                            ${paymentMethod === 'pay_later' 
-                              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400' 
-                              : 'border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-primary-50 dark:hover:bg-gray-700'
-                            }
-                          `}
-                        >
-                          <Clock size={14} />
-                          Pay Later
+                          }}
+                          className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
+                          style={forDelivery
+                            ? { backgroundColor: '#f9731615', border: '2px solid #f97316', color: '#f97316' }
+                            : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                          }>
+                          <Truck size={14} />
+                          Delivery
                         </button>
                       </div>
-                    </div>
-
-                    {/* Delivery Toggle - Mobile */}
-                    <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <div className={`relative w-10 h-5 rounded-full transition-colors ${forDelivery ? 'bg-orange-500' : 'bg-gray-300'}`}
-                          onClick={() => {
-                            const next = !forDelivery;
-                            setForDelivery(next);
-                            if (!next) { setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); }
-                          }}
-                        >
-                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white dark:bg-gray-800 shadow transition-transform ${forDelivery ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                        </div>
-                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
-                          <Truck size={14} className={forDelivery ? 'text-orange-500' : 'text-gray-400'} />
-                          For Delivery
-                        </span>
-                      </label>
                       {forDelivery && (deliveryAddress || distanceKm) && (
                         <div className="mt-1">
                           {deliveryAddress && <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate"><MapPin size={10} className="inline mr-0.5 text-orange-400" />{deliveryAddress}</p>}
                           {distanceKm && <p className="text-[10px] text-orange-500 font-medium"><Navigation size={10} className="inline mr-0.5" />{distanceKm} km</p>}
                         </div>
                       )}
+                    </div>
+
+                    {/* Payment Method */}
+                    <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {posPaymentMethods.map(method => {
+                          const Icon = method.icon;
+                          const isSelected = paymentMethod === method.value;
+                          return (
+                            <button key={method.value} onClick={() => setPaymentMethod(method.value)}
+                              className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
+                              style={isSelected
+                                ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
+                                : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                              }>
+                              <Icon size={14} />
+                              {method.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Total */}
@@ -1202,7 +1256,7 @@ const PointOfSale = () => {
                 className="w-full flex items-center justify-between px-5 py-3 text-white bg-button-500 hover:bg-button-600 transition-all rounded-t-xl shadow-lg">
                 <span className="font-medium text-sm flex items-center gap-2">
                   <ShoppingCart size={16} />
-                  {totalItems} item(s) · ₱{total.toLocaleString()}
+                  {totalItems} item(s) × ₱{total.toLocaleString()}
                 </span>
                 <span className="flex items-center gap-1 text-sm font-medium">
                   {mobileCartOpen ? 'Close' : 'View Cart'} {mobileCartOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -1213,19 +1267,60 @@ const PointOfSale = () => {
         )}
       </div>
 
-      {/* client Selection Modal */}
-      {showClientModal && (
+      {/* Pick Up Confirmation Modal */}
+      {showWalkInConfirm && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowClientModal(false)} />
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowWalkInConfirm(false)} />
+          <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border-2 border-primary-200 dark:border-primary-700">
+              <div className="p-5 bg-gradient-to-r from-amber-500 to-amber-600 text-white shrink-0">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <AlertCircle size={20} />
+                  Pick Up Order
+                </h3>
+                <p className="text-amber-100 text-sm mt-1">Delivery is not enabled for this order</p>
+              </div>
+              <div className="p-5">
+                <p className="text-sm text-gray-700 dark:text-gray-200 mb-4">
+                  This order will be processed as a <span className="font-semibold text-amber-600 dark:text-amber-400">pick up transaction</span>. The customer will pick up or receive the items at the store.
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+                  If this should be a delivery order, cancel and toggle "Delivery" first.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowWalkInConfirm(false)}
+                    className="flex-1 py-2.5 border-2 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-xl text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={proceedToCustomerModal}
+                    className="flex-1 py-2.5 bg-button-500 hover:bg-button-600 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle size={16} />
+                    Yes, Pick Up
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Customer Selection Modal */}
+      {showCustomerModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowCustomerModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700">
               {/* Header */}
               <div className="p-5 bg-gradient-to-r from-button-500 to-button-600 text-white shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <User size={20} />
-                  Client Information
+                  Customer Information
                 </h3>
-                <p className="text-sm text-white/80 mt-1">Select an existing client or add a new one</p>
+                <p className="text-sm text-white/80 mt-1">Select an existing customer or add a new one</p>
               </div>
 
               <div className="p-5">
@@ -1241,22 +1336,23 @@ const PointOfSale = () => {
                   </div>
                 </div>
 
-                {/* client Combobox */}
-                <ClientCombobox
-                  value={selectedClientId}
-                  newName={newClientName}
-                  newContact={newClientContact}
-                  newEmail={newClientEmail}
-                  onChange={handleClientSelect}
-                  onInputChange={handleNewClientInput}
-                  onContactChange={handleNewClientContact}
-                  onEmailChange={handleNewClientEmail}
-                  clientOptions={clientOptions}
-                  error={clientError}
+                {/* Customer Combobox */}
+                <CustomerCombobox
+                  value={selectedCustomerId}
+                  newName={newCustomerName}
+                  newContact={newCustomerContact}
+                  newEmail={newCustomerEmail}
+                  onChange={handleCustomerSelect}
+                  onInputChange={handleNewCustomerInput}
+                  onContactChange={handleNewCustomerContact}
+                  onEmailChange={handleNewCustomerEmail}
+                  customerOptions={customerOptions}
+                  selectedEmail={selectedCustomerId ? (customerOptions.find(o => o.value === selectedCustomerId)?.email || '') : ''}
+                  error={customerError}
                   emailError={emailError}
                 />
 
-                {/* Delivery Address — shown when For Delivery is toggled on */}
+                {/* Delivery Address × shown when For Delivery is toggled on */}
                 {forDelivery && (
                   <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border-2 border-orange-200 dark:border-orange-700">
                     <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
@@ -1269,16 +1365,24 @@ const PointOfSale = () => {
                         ref={addressInputRef}
                         value={deliveryAddress}
                         onChange={(e) => {
-                          setDeliveryAddress(e.target.value);
+                          const val = e.target.value;
+                          setDeliveryAddress(val);
                           setDistanceKm('');
                           setEstimatedDuration(null);
                           setSelectedCoords(null);
-                          setClientError('');
+                          setCustomerError('');
                           // Trigger autocomplete
-                          debouncedSearchAddress(e.target.value, (results) => {
+                          debouncedSearchAddress(val, (results) => {
                             setAddressSuggestions(results);
                             setShowSuggestions(results.length > 0);
                           }, warehouseCoords || {});
+                          // Debounce auto-calc distance after typing stops
+                          if (distanceCalcTimer.current) clearTimeout(distanceCalcTimer.current);
+                          if (val && val.length >= 5) {
+                            distanceCalcTimer.current = setTimeout(() => {
+                              autoCalcDistance(val);
+                            }, 1500);
+                          }
                         }}
                         onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
                         placeholder="Enter delivery address..."
@@ -1296,19 +1400,22 @@ const PointOfSale = () => {
                                 setShowSuggestions(false);
                                 setAddressSuggestions([]);
                                 setSelectedCoords({ lat: s.lat, lng: s.lng });
+                                // Cancel pending debounced calc
+                                if (distanceCalcTimer.current) clearTimeout(distanceCalcTimer.current);
                                 // Auto-calculate distance
-                                if (warehouseCoords) {
-                                  setCalculatingDistance(true);
-                                  try {
-                                    const result = await calculateDistance(warehouseCoords.lat, warehouseCoords.lng, s.lat, s.lng);
+                                setCalculatingDistance(true);
+                                try {
+                                  const wCoords = await getWarehouseCoords();
+                                  if (wCoords) {
+                                    const result = await calculateDistance(wCoords.lat, wCoords.lng, s.lat, s.lng);
                                     setDistanceKm(String(result.distanceKm));
                                     setEstimatedDuration(result.durationMin);
                                     setIsEstimate(result.isEstimate || false);
-                                  } catch (err) {
-                                    console.error('Distance calc failed:', err);
-                                  } finally {
-                                    setCalculatingDistance(false);
                                   }
+                                } catch (err) {
+                                  console.error('Distance calc failed:', err);
+                                } finally {
+                                  setCalculatingDistance(false);
                                 }
                               }}
                               className="w-full text-left px-3 py-2 text-xs hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 last:border-0 transition-colors"
@@ -1321,20 +1428,34 @@ const PointOfSale = () => {
                       )}
                     </div>
                     {/* Distance info */}
-                    {(distanceKm || calculatingDistance) && (
+                    {(deliveryAddress.trim() || distanceKm || calculatingDistance) && (
                       <div className="mt-2 space-y-1.5">
                         {calculatingDistance ? (
                           <p className="text-[10px] text-orange-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Calculating distance...</p>
                         ) : (
                           <>
-                            <p className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold flex items-center gap-1">
-                              <Navigation size={10} /> {distanceKm} km
+                            <div className="flex items-center gap-1.5">
+                              <Navigation size={10} className="text-orange-500 shrink-0" />
+                              <input
+                                type="number"
+                                value={distanceKm}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '' || parseFloat(val) >= 0) setDistanceKm(val);
+                                }}
+                                min="0"
+                                step="0.1"
+                                placeholder="0"
+                                className="w-16 px-1.5 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-700 border border-orange-300 dark:border-orange-600 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              />
+                              <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400">km</span>
                               {estimatedDuration && (
-                                <span className="text-gray-400 font-normal ml-1">
+                                <span className="text-[10px] text-gray-400 font-normal ml-1">
                                   (~{estimatedDuration >= 60 ? `${Math.floor(estimatedDuration / 60)}h ${estimatedDuration % 60}m` : `${estimatedDuration} min`} drive)
                                 </span>
                               )}
-                            </p>
+                            </div>
+                            <p className="text-[9px] text-gray-400 dark:text-gray-500 italic">{distanceKm ? 'Auto-calculated × adjust if inaccurate' : 'Enter distance in km from warehouse'}</p>
                             {deliveryFee > 0 && (() => {
                               const distance = parseFloat(distanceKm) || 0;
                               const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
@@ -1378,13 +1499,13 @@ const PointOfSale = () => {
               {/* Footer */}
               <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => setShowClientModal(false)}
+                  onClick={() => setShowCustomerModal(false)}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={confirmClient}
+                  onClick={confirmCustomer}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 transition-all"
                 >
                   <Receipt size={14} /> Continue to Payment
@@ -1408,7 +1529,7 @@ const PointOfSale = () => {
                   {paymentMethod === 'cash' ? 'Cash Payment' : paymentMethod === 'gcash' ? 'GCash Payment' : paymentMethod === 'pay_later' ? 'Pay Later' : 'Cash on Delivery'}
                 </h3>
                 <p className="text-sm text-white/80 mt-1">
-                  {paymentMethod === 'cash' ? 'Enter amount tendered by client' : paymentMethod === 'gcash' ? 'Enter GCash reference number' : paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 'Order will be paid upon delivery'}
+                  {paymentMethod === 'cash' ? 'Enter amount tendered by customer' : paymentMethod === 'gcash' ? 'Enter GCash reference number' : paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 'Order will be paid upon delivery'}
                 </p>
               </div>
 
@@ -1469,7 +1590,7 @@ const PointOfSale = () => {
                     <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Cash Tendered</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">₱</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">?</span>
                         <input
                           type="number"
                           value={cashTendered}
@@ -1630,7 +1751,7 @@ const PointOfSale = () => {
                     <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
                       <Clock size={32} className="mx-auto mb-2 text-purple-500" />
                       <p className="text-sm font-bold text-purple-700 dark:text-purple-300 mb-1">Pay Later</p>
-                      <p className="text-xs text-purple-600 dark:text-purple-400">The order will be placed with payment pending. Client can pay at a later time.</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">The order will be placed with payment pending. Customer can pay at a later time.</p>
                     </div>
                   </>
                 ) : (
@@ -1648,10 +1769,10 @@ const PointOfSale = () => {
               {/* Footer */}
               <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => { setShowPaymentModal(false); setShowClientModal(true); }}
+                  onClick={() => { setShowPaymentModal(false); setShowCustomerModal(true); }}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
                 >
-                  ← Back
+                  ? Back
                 </button>
                 <button
                   onClick={confirmPayment}
@@ -1719,9 +1840,9 @@ const PointOfSale = () => {
                             <div className="flex items-center gap-2 mt-0.5">
                               <Clock size={11} className="text-gray-400" />
                               <span className="text-xs text-gray-500 dark:text-gray-400">{txn.time}</span>
-                              <span className="text-xs text-gray-400">•</span>
+                              <span className="text-xs text-gray-400">×</span>
                               <span className="text-xs text-gray-500 dark:text-gray-400">{txn.items} items</span>
-                              <span className="text-xs text-gray-400">•</span>
+                              <span className="text-xs text-gray-400">×</span>
                               <span className="text-xs text-gray-500 dark:text-gray-400">{txn.payment}</span>
                             </div>
                           </div>
@@ -1742,7 +1863,7 @@ const PointOfSale = () => {
                                   <span className="text-gray-700 dark:text-gray-200 font-medium">{item.product_name || item.name}</span>
                                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                                     <span>×{item.quantity}</span>
-                                    <span className="font-semibold text-primary-600 dark:text-primary-400">₱{(item.unit_price || item.price || 0).toLocaleString()}</span>
+                                    <span className="font-semibold text-primary-600 dark:text-primary-400">?{(item.unit_price || item.price || 0).toLocaleString()}</span>
                                   </div>
                                 </div>
                               ))}
@@ -1836,10 +1957,15 @@ const PointOfSale = () => {
                     <span className="text-gray-500 dark:text-gray-400">Time</span>
                     <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.time}</span>
                   </div>
-                  {lastSale.clientName && (
+                  {lastSale.customerName && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500 dark:text-gray-400">Client</span>
-                      <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.clientName}</span>
+                      <span className="text-gray-500 dark:text-gray-400">Customer</span>
+                      <div className="text-right">
+                        <span className="font-medium text-gray-800 dark:text-gray-100">{lastSale.customerName}</span>
+                        {lastSale.customerEmail && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{lastSale.customerEmail}</p>
+                        )}
+                      </div>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
@@ -1894,7 +2020,7 @@ const PointOfSale = () => {
                   {lastSale.items.map(item => (
                     <div key={item.id} className="flex justify-between text-xs py-0.5">
                       <span className="text-gray-600 dark:text-gray-300">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''} ×{item.quantity}</span>
-                      <span className="font-medium text-gray-700 dark:text-gray-200">₱{(item.price * item.quantity).toLocaleString()}</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-200">?{(item.price * item.quantity).toLocaleString()}</span>
                     </div>
                   ))}
                 </div>

@@ -207,12 +207,12 @@ const cache = {
  */
 const handle401 = (response) => {
   if (response.status === 401) {
-    // Clear token and redirect to login
+    // Clear token and dispatch event for React to handle navigation
     localStorage.removeItem('auth_token');
     cache.clear();
-    // Only redirect if not already on login page
+    // Use custom event instead of window.location to avoid navigation chain warning
     if (window.location.pathname !== '/') {
-      window.location.href = '/?login=true';
+      window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'unauthenticated' } }));
     }
   }
   return response;
@@ -483,6 +483,11 @@ const apiClient = {
   
   // Expose cache methods
   cache,
+  
+  /**
+   * Clear a specific cache key
+   */
+  clearCache: (key) => cache.remove(key),
 };
 
 export default apiClient;

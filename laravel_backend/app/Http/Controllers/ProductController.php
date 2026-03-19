@@ -7,6 +7,7 @@ use App\Http\Resources\ProcessingResource;
 use App\Http\Resources\StockLogResource;
 use App\Models\StockLog;
 use App\Models\Product;
+use App\Models\SaleItem;
 use App\Services\ProductService;
 use App\Services\ProcessingService;
 use App\Traits\AuditLogger;
@@ -436,6 +437,50 @@ class ProductController extends Controller
                 'message' => 'Failed to compute cost analysis',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Get order history for a specific product.
+     */
+    public function orderHistory(int $id): JsonResponse
+    {
+        try {
+            $product = Product::findOrFail($id);
+
+            $saleItems = SaleItem::with(['sale.customer'])
+                ->where('product_id', $id)
+                ->orderByDesc('created_at')
+                ->get();
+
+            $orders = $saleItems->map(function ($item) {
+                $sale = $item->sale;
+                return [
+                    'sale_id' => $sale->id,
+                    'transaction_id' => $sale->transaction_id,
+                    'customer_name' => $sale->customer?->name ?? 'Walk-in',
+                    'quantity' => (int) $item->quantity,
+                    'unit_price' => (float) $item->unit_price,
+                    'subtotal' => (float) $item->subtotal,
+                    'status' => $sale->status,
+                    'payment_method' => $sale->payment_method,
+                    'payment_status' => $sale->payment_status ?? 'paid',
+                    'is_delivery' => !empty($sale->delivery_address),
+                    'date' => $sale->created_at?->toISOString(),
+                    'date_formatted' => $sale->created_at?->format('M d, Y h:i A'),
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $orders,
+                'current_stock' => (int) $product->stocks,
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product not found',
+            ], 404);
         }
     }
 

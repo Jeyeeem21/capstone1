@@ -79,15 +79,26 @@ const LoginModal = ({ isOpen, onClose }) => {
 
     try {
       const response = await login(formData.email, formData.password);
+      // Close modal first and wait for React to flush the update
+      // so the Modal portal and body scroll lock are fully cleaned up
+      // before the route transition unmounts PublicLayout.
       onClose();
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Safety: force-clear body scroll lock before navigating
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+
       if (response?.user?.role === 'staff') {
         if (response?.user?.position === 'Driver') {
           navigate('/driver/dashboard');
         } else {
-          navigate('/staff/pos');
+          navigate('/secretary/pos');
         }
-      } else if (response?.user?.role === 'client') {
-        navigate('/client/dashboard');
+      } else if (response?.user?.role === 'customer') {
+        navigate('/customer/dashboard');
       } else if (response?.user?.role === 'super_admin') {
         navigate('/superadmin/dashboard');
       } else {

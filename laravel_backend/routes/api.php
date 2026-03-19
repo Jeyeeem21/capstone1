@@ -23,6 +23,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\NotificationController;
 
 // ========================================
 // Public Routes (no auth required)
@@ -46,6 +47,8 @@ Route::prefix('website-content')->group(function () {
     Route::get('/', [WebsiteContentController::class, 'getAllContent']);
     Route::get('/home', [WebsiteContentController::class, 'getHomeContent']);
     Route::get('/about', [WebsiteContentController::class, 'getAboutContent']);
+    Route::get('/products', [WebsiteContentController::class, 'getProductsContent']);
+    Route::get('/contact', [WebsiteContentController::class, 'getContactContent']);
 });
 
 Route::prefix('business-settings')->group(function () {
@@ -68,10 +71,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
+        Route::put('/profile', [AuthController::class, 'updateProfile']);
+        Route::put('/password', [AuthController::class, 'updatePassword']);
     });
 
     Route::get('/user', function (Request $request) {
         return $request->user();
+    });
+
+    // Notification Routes
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
     });
 
     // Product Routes
@@ -86,6 +99,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}/completed-processings', [ProductController::class, 'completedProcessingsByVariety']);
         Route::post('/{id}/distribute-stock', [ProductController::class, 'distributeStock']);
         Route::get('/{id}/cost-analysis', [ProductController::class, 'costAnalysis']);
+        Route::get('/{id}/order-history', [ProductController::class, 'orderHistory']);
         Route::post('/{id}/toggle-status', [ProductController::class, 'toggleStatus']);
     });
 
@@ -94,6 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Sales / POS / Orders Routes
     Route::prefix('sales')->group(function () {
         Route::get('/', [SaleController::class, 'index']);
+        Route::get('/my-orders', [SaleController::class, 'myOrders']);
         Route::post('/order', [SaleController::class, 'storeOrder']);
         Route::post('/check-reference', [SaleController::class, 'checkReference']);
         Route::get('/stats', [SaleController::class, 'stats']);
@@ -101,6 +116,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [SaleController::class, 'show']);
         Route::post('/{id}/void', [SaleController::class, 'void']);
         Route::put('/{id}/status', [SaleController::class, 'updateStatus']);
+        Route::post('/{id}/notify', [SaleController::class, 'sendOrderEmail']);
         Route::post('/{id}/return', [SaleController::class, 'processReturn']);
         Route::post('/{id}/return/accept', [SaleController::class, 'acceptReturn']);
         Route::post('/{id}/return/reject', [SaleController::class, 'rejectReturn']);
@@ -131,6 +147,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('website-content')->group(function () {
             Route::post('/home', [WebsiteContentController::class, 'saveHomeContent']);
             Route::post('/about', [WebsiteContentController::class, 'saveAboutContent']);
+            Route::post('/products', [WebsiteContentController::class, 'saveProductsContent']);
+            Route::post('/contact', [WebsiteContentController::class, 'saveContactContent']);
             Route::post('/hero-image', [WebsiteContentController::class, 'uploadHeroImage']);
             Route::post('/seed', [WebsiteContentController::class, 'seedDefaults']);
         });
@@ -139,6 +157,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('business-settings')->group(function () {
             Route::put('/', [BusinessSettingController::class, 'update']);
             Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']);
+            Route::post('/test-email', [BusinessSettingController::class, 'testEmail']);
         });
 
         // Database Backup Routes
@@ -275,6 +294,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::get('/statistics', [UserController::class, 'statistics']);
+        Route::post('/send-verification', [UserController::class, 'sendVerificationCode']);
+        Route::post('/verify-code', [UserController::class, 'verifyEmailCode']);
         Route::post('/', [UserController::class, 'store']);
         Route::get('/{id}', [UserController::class, 'show']);
         Route::put('/{id}', [UserController::class, 'update']);

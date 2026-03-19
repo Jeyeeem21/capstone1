@@ -1421,16 +1421,34 @@ const Inventory = () => {
               {
                 header: 'Type',
                 accessor: 'type',
-                cell: (row) => (
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    row.type === 'in'
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700'
-                      : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700'
-                  }`}>
-                    {row.type === 'in' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                    {row.type === 'in' ? 'IN' : 'OUT'}
-                  </span>
-                )
+                cell: (row) => {
+                  const sourceLabels = {
+                    'processing_distribution': { label: 'Processing', color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-700' },
+                    'order': { label: 'Order', color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700' },
+                    'order_cancelled': { label: 'Cancelled', color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-700' },
+                    'order_return': { label: 'Restocked', color: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-700' },
+                    'return_loss': { label: 'Return Loss', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-700' },
+                    'sale_void': { label: 'Voided', color: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-700' },
+                  };
+                  const source = sourceLabels[row.source_type] || null;
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                        row.type === 'in'
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700'
+                          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700'
+                      }`}>
+                        {row.type === 'in' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                        {row.type === 'in' ? 'IN' : 'OUT'}
+                      </span>
+                      {source && (
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${source.color} w-fit`}>
+                          {source.label}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
               },
               {
                 header: 'Units',

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Package, 
@@ -13,8 +13,18 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Button, Skeleton } from '../../../components/ui';
-import { productsApi } from '../../../api';
+import { productsApi, websiteContentApi } from '../../../api';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
+import { API_BASE_URL } from '../../../api/config';
+
+const iconMap = { Leaf, Award, Truck, Package };
+
+const getFullImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
+  const backendUrl = API_BASE_URL.replace('/api', '');
+  return `${backendUrl}${imagePath}`;
+};
 
 // Fallback products — empty until real products loaded from API
 const fallbackProducts = [];
@@ -32,6 +42,7 @@ const Products = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [sortBy, setSortBy] = useState('popular');
   const [isFromCache, setIsFromCache] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Fetch products from API
   useEffect(() => {
@@ -44,9 +55,10 @@ const Products = () => {
         sort: sortBy,
       });
 
-      if (result.success && result.data.length > 0) {
-        setProducts(result.data);
-        setIsFromCache(result.fromCache || false);
+      if (result.success) {
+        setProducts(result.data || []);
+        // Only show cache banner if data came from cache due to a server error
+        setIsFromCache(result.fromCache && result.error ? true : false);
       } else {
         setProducts(fallbackProducts);
         setIsFromCache(true);
@@ -57,7 +69,7 @@ const Products = () => {
 
     const timeoutId = setTimeout(fetchProducts, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, selectedVariety, sortBy]);
+  }, [searchTerm, selectedVariety, sortBy, retryCount]);
 
   // Fetch varieties
   useEffect(() => {
@@ -106,16 +118,49 @@ const Products = () => {
   const { settings } = useBusinessSettings();
   const logoFallback = settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : null;
 
-  const features = [
-    { icon: Leaf, text: 'Fresh from Farm' },
-    { icon: Award, text: 'Quality Guaranteed' },
-    { icon: Truck, text: 'Fast Delivery' },
-  ];
+  const [pageContent, setPageContent] = useState({
+    heroTag: 'Our Products',
+    heroTitle: 'Premium Rice Selection',
+    heroSubtitle: 'Discover our wide range of quality rice products, from premium jasmine to nutritious brown rice',
+    heroImage: null,
+    badges: [
+      { title: 'Fresh from Farm', icon: 'Leaf' },
+      { title: 'Quality Guaranteed', icon: 'Award' },
+      { title: 'Fast Delivery', icon: 'Truck' },
+    ],
+    ctaTitle: 'Need Bulk Orders or Custom Packaging?',
+    ctaDescription: 'Contact us for wholesale pricing, bulk orders, or custom packaging solutions for your business.',
+    ctaButtonText: 'Contact for Wholesale',
+  });
 
-  const handleRetry = () => {
-    productsApi.resetAvailability();
-    window.location.reload();
-  };
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        const result = await websiteContentApi.getProductsContent();
+        if (result.success && result.data) {
+          setPageContent(prev => ({ ...prev, ...result.data }));
+        }
+      } catch (error) {
+        // Use defaults
+      }
+    };
+    fetchContent();
+
+    const handleStorageSync = (e) => {
+      if (e.key === 'kjp-products-content') fetchContent();
+    };
+    window.addEventListener('storage', handleStorageSync);
+    return () => window.removeEventListener('storage', handleStorageSync);
+  }, []);
+
+  const features = pageContent.badges.map(badge => ({
+    icon: iconMap[badge.icon] || Award,
+    text: badge.title,
+  }));
+
+  const handleRetry = useCallback(() => {
+    setRetryCount(c => c + 1);
+  }, []);
 
   return (
     <div className="overflow-hidden">
@@ -124,20 +169,22 @@ const Products = () => {
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
           style={{ 
-            backgroundImage: 'url(https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=1920&h=600&fit=crop)',
+            backgroundImage: pageContent.heroImage 
+              ? `url(${getFullImageUrl(pageContent.heroImage)})`
+              : 'url(https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=1920&h=600&fit=crop)',
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-gray-900/50 to-gray-900" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <span className="inline-block px-4 py-1 bg-button-500/20 border border-button-500/30 text-button-300 rounded-full text-sm font-medium mb-6">
-            Our Products
+            {pageContent.heroTag}
           </span>
           <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
-            Premium Rice Selection
+            {pageContent.heroTitle}
           </h1>
           <p className="text-lg text-gray-300 max-w-2xl mx-auto mb-8">
-            Discover our wide range of quality rice products, from premium jasmine to nutritious brown rice
+            {pageContent.heroSubtitle}
           </p>
           
           {/* Feature Pills */}
@@ -423,14 +470,14 @@ const Products = () => {
 
         <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-            Need Bulk Orders or Custom Packaging?
+            {pageContent.ctaTitle}
           </h2>
           <p className="text-lg text-white/80 mb-10 max-w-2xl mx-auto">
-            Contact us for wholesale pricing, bulk orders, or custom packaging solutions for your business.
+            {pageContent.ctaDescription}
           </p>
           <Link to="/contact">
             <Button size="lg" className="px-8 bg-white dark:bg-gray-700 !text-button-700 dark:text-button-300 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 group font-semibold">
-              Contact for Wholesale
+              {pageContent.ctaButtonText}
               <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>

@@ -49,7 +49,7 @@ const StaffProfile = () => {
     <div className="space-y-6">
       <PageHeader 
         title="My Profile" 
-        description="View your account information and login history"
+        description="View your secretary account information and login history"
         icon={User}
       />
 

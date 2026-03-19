@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import NotificationBell from '../../components/common/NotificationBell';
+import { Footer } from '../../components/common';
 
 // Driver data — will connect to real auth
 const mockDriver = {
@@ -127,10 +129,16 @@ const DriverHeader = ({ driver }) => {
 
             <Link to="/driver" className="flex items-center gap-3 group">
               <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform"
+                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform overflow-hidden"
                 style={{ background: `linear-gradient(135deg, ${theme.button_primary}, ${theme.button_primary}dd)` }}
               >
-                <Truck size={20} className="text-white" />
+                <img 
+                  src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                  alt={businessName} 
+                  className="w-8 h-8 object-contain"
+                  onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                />
+                <span style={{display:'none'}} className="text-white font-bold text-lg items-center justify-center">{(businessName || 'K').substring(0, 1)}</span>
               </div>
               <div>
                 <h1 className="font-bold text-sm sm:text-lg leading-tight" style={{ color: theme.text_primary }}>
@@ -166,8 +174,9 @@ const DriverHeader = ({ driver }) => {
             ))}
           </nav>
 
-          {/* Right side - Profile */}
+          {/* Right side - Notifications + Profile */}
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <div className="relative profile-dropdown">
               <button
                 onClick={(e) => { e.stopPropagation(); setIsProfileOpen(!isProfileOpen); }}
@@ -250,44 +259,6 @@ const DriverHeader = ({ driver }) => {
   );
 };
 
-// Driver Footer
-const DriverFooter = () => {
-  const { theme } = useTheme();
-  const { settings } = useBusinessSettings();
-
-  return (
-    <footer 
-      className="border-t py-6"
-      style={{ 
-        backgroundColor: theme.bg_footer || '#111827',
-        borderColor: theme.border_color
-      }}
-    >
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-gray-400">
-            © {new Date().getFullYear()} {settings?.business_name || 'KJP Ricemill'}. All rights reserved.
-          </p>
-          <div className="flex items-center gap-4">
-            {settings?.business_phone && (
-              <a href={`tel:${settings.business_phone}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-300 transition-colors">
-                <Phone size={12} />
-                {settings.business_phone}
-              </a>
-            )}
-            {settings?.business_email && (
-              <a href={`mailto:${settings.business_email}`} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-300 transition-colors">
-                <Mail size={12} />
-                {settings.business_email}
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-};
-
 // Main Driver Layout
 const DriverLayout = () => {
   return (
@@ -296,7 +267,9 @@ const DriverLayout = () => {
       <main className="flex-1 pt-16 pb-20 md:pb-0">
         <Outlet />
       </main>
-      <DriverFooter />
+      <div className="hidden md:block px-4 pb-4">
+        <Footer />
+      </div>
       <DriverBottomNav />
     </div>
   );

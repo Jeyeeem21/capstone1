@@ -102,7 +102,7 @@ const StaffDashboard = () => {
   return (
     <div className="space-y-6">
       <PageHeader 
-        title="Staff Dashboard" 
+        title="Secretary Dashboard" 
         description="Quick overview of today's activities and alerts"
         icon={LayoutDashboard}
       />
@@ -220,7 +220,7 @@ const StaffDashboard = () => {
         <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <a 
-            href="/staff/pos" 
+            href="/secretary/pos" 
             className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-button-200 dark:border-button-700 hover:border-button-400 hover:shadow-md transition-all"
           >
             <div className="p-3 bg-button-500 rounded-xl">
@@ -229,7 +229,7 @@ const StaffDashboard = () => {
             <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Open POS</span>
           </a>
           <a 
-            href="/staff/profile" 
+            href="/secretary/profile" 
             className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-gray-800 rounded-xl border border-button-200 dark:border-button-700 hover:border-button-400 hover:shadow-md transition-all"
           >
             <div className="p-3 bg-blue-500 rounded-xl">

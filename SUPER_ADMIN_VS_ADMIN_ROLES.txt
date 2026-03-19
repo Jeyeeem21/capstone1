@@ -26,6 +26,7 @@
         - Appearance Settings (theme colors, dark mode)
         - Account Management (manage all user accounts)
         - System Configuration (backup, maintenance)
+         -All archive data
 
    EXCLUSIVE TO SUPER ADMIN:
    * Create / deactivate Admin accounts
@@ -44,13 +45,13 @@
 
    ACCESS & PERMISSIONS:
    [x] Dashboard (operational analytics)
-   [x] Procurement (create, edit — NO delete)
+   [x] Procurement (create, edit — archive)
    [x] Drying & Processing (manage operations)
-   [x] Products / Varieties / Inventory (add, edit — NO delete)
+   [x] Products / Varieties / Inventory (add, edit — archive)
    [x] Point of Sale (access)
    [x] Orders (manage, update status, process returns)
    [x] Sales (view, create — NO void)
-   [x] Partners - Suppliers & Customers (add, edit — NO delete)
+   [x] Partners - Suppliers & Customers (add, edit — archive)
    [x] Staff Management — can manage Staff & Drivers only
         (CANNOT create/edit other Admins)
    [ ] Audit Trail — NO access (or view-only)

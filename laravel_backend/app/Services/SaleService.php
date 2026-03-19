@@ -49,10 +49,12 @@ class SaleService
                 Cache::forget('customers_all');
             }
 
-            // Generate transaction ID: ORD-YYYYMMDD-NNN
+            // Generate transaction ID: ORD-YYYYMMDD-NNN (counter resets yearly, min 3 digits)
             $today = now()->format('Ymd');
-            $count = Sale::whereDate('created_at', now()->toDateString())->count() + 1;
-            $transactionId = 'ORD-' . $today . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+            $year = now()->format('Y');
+            $count = Sale::whereYear('created_at', $year)->count() + 1;
+            $padLength = max(3, strlen((string) $count));
+            $transactionId = 'ORD-' . $today . '-' . str_pad($count, $padLength, '0', STR_PAD_LEFT);
 
             // Create order header — status = pending, no stock deduction
             $sale = Sale::create([
@@ -380,6 +382,49 @@ class SaleService
                 ]);
 
                 $item->update(['restocked' => true]);
+            }
+
+            // Log return losses — items returned but not restocked (damaged/unsellable)
+            foreach ($sale->items as $item) {
+                if ($item->restocked) {
+                    $restockedQty = $quantityMap->has($item->id) ? min($quantityMap[$item->id], $item->quantity) : 0;
+                    $lossQty = $item->quantity - $restockedQty;
+                    if ($lossQty > 0) {
+                        $product = Product::find($item->product_id);
+                        $currentStock = $product ? (int) $product->stocks : 0;
+                        StockLog::create([
+                            'product_id' => $item->product_id,
+                            'type' => 'out',
+                            'quantity_before' => $currentStock,
+                            'quantity_change' => $lossQty,
+                            'quantity_after' => $currentStock,
+                            'kg_amount' => $product && $product->weight ? $lossQty * (float) $product->weight : null,
+                            'source_type' => 'return_loss',
+                            'source_id' => $sale->id,
+                            'notes' => "Damaged/unsellable from return ({$sale->transaction_id}) — {$sale->return_reason}",
+                        ]);
+                    }
+                }
+            }
+
+            // Also log items that were skipped entirely (qty set to 0 / unchecked)
+            foreach ($sale->items as $item) {
+                if (!$item->restocked && !$quantityMap->has($item->id)) {
+                    $product = Product::find($item->product_id);
+                    $currentStock = $product ? (int) $product->stocks : 0;
+                    StockLog::create([
+                        'product_id' => $item->product_id,
+                        'type' => 'out',
+                        'quantity_before' => $currentStock,
+                        'quantity_change' => $item->quantity,
+                        'quantity_after' => $currentStock,
+                        'kg_amount' => $product && $product->weight ? $item->quantity * (float) $product->weight : null,
+                        'source_type' => 'return_loss',
+                        'source_id' => $sale->id,
+                        'notes' => "Damaged/unsellable from return ({$sale->transaction_id}) — {$sale->return_reason}",
+                    ]);
+                    $item->update(['restocked' => true]); // Mark as handled
+                }
             }
 
             $this->clearCache();

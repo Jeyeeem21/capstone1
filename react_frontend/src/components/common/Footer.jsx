@@ -6,12 +6,17 @@ const Footer = ({
   className = ''
 }) => {
   const { settings } = useBusinessSettings();
-  const { basePath, isStaff } = useAuth();
+  const { basePath, isStaff, user } = useAuth();
   const currentYear = new Date().getFullYear();
+  const isCustomer = user?.role === 'customer';
 
   const quickLinks = isStaff() ? [
-    { icon: Monitor, label: 'Point of Sale', href: '/staff/pos' },
-    { icon: User, label: 'My Profile', href: '/staff/profile' },
+    { icon: Monitor, label: 'Point of Sale', href: '/secretary/pos' },
+    { icon: User, label: 'My Profile', href: '/secretary/profile' },
+  ] : isCustomer ? [
+    { icon: Package, label: 'Products', href: '/customer/products' },
+    { icon: ClipboardList, label: 'My Orders', href: '/customer/orders' },
+    { icon: User, label: 'My Profile', href: '/customer/profile' },
   ] : [
     { icon: Package, label: 'Products', href: `${basePath}/products` },
     { icon: Monitor, label: 'Point of Sale', href: `${basePath}/pos` },
@@ -54,7 +59,7 @@ const Footer = ({
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-xl bg-button-500 flex items-center justify-center shadow-lg shadow-button-500/30 overflow-hidden">
                 <img 
-                  src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/logo.svg'} 
+                  src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
                   alt={settings.business_name || 'Business Logo'} 
                   className="w-10 h-10 object-contain"
                   onError={(e) => {
@@ -67,15 +72,19 @@ const Footer = ({
               <h3 className="text-xl font-bold text-white">{settings.business_name || 'KJP Rice Mill'}</h3>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed mb-5">
-              {settings.footer_tagline || 'Your trusted partner in quality rice processing and distribution. Serving communities with excellence since 2020.'}
+              {settings.footer_tagline || 'Your trusted partner in quality rice processing and distribution.'}
             </p>
             <div className="flex items-center gap-3">
-              <span className="px-4 py-1.5 rounded-full border-2 border-button-500 text-button-400 text-xs font-semibold">
-                Premium Quality
-              </span>
-              <span className="px-4 py-1.5 rounded-full bg-button-500 text-white text-xs font-semibold">
-                ISO Certified
-              </span>
+              {(settings.footer_badge1 ?? 'Premium Quality') && (
+                <span className="px-4 py-1.5 rounded-full border-2 border-button-500 text-button-400 text-xs font-semibold">
+                  {settings.footer_badge1 || 'Premium Quality'}
+                </span>
+              )}
+              {(settings.footer_badge2 ?? 'ISO Certified') && (
+                <span className="px-4 py-1.5 rounded-full bg-button-500 text-white text-xs font-semibold">
+                  {settings.footer_badge2 || 'ISO Certified'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -110,7 +119,7 @@ const Footer = ({
               {contactInfo.map((item, index) => (
                 <li key={index} className="flex items-start gap-3 text-gray-400 text-sm">
                   <item.icon size={16} className="text-button-500 mt-0.5 flex-shrink-0" />
-                  <span>{item.text}</span>
+                  <span className="whitespace-pre-line">{item.text}</span>
                 </li>
               ))}
             </ul>
@@ -127,8 +136,7 @@ const Footer = ({
             </p>
             <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
               Powered by <span className="text-button-400 font-medium">{frameworkText}</span>
-              <Heart size={10} className="inline mx-1 text-red-500 fill-red-500" />
-              Built at <span className="text-gray-400">{institutionText}</span>
+              {' '}Built at <span className="text-gray-400">{institutionText}</span>
             </p>
           </div>
           

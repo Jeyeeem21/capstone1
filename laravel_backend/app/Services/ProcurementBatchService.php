@@ -207,12 +207,16 @@ class ProcurementBatchService
         $remaining  = $sacksRequested;
         $totalKg    = 0.0;
 
+        // Calculate the actual total kg available across all procurements being used
+        $actualTotalKg = $available->sum(fn($p) => $p['available_sacks'] * $p['kg_per_sack']);
+
         foreach ($available as $idx => $proc) {
             $isLast     = ($idx === count($available) - 1);
-            $proportion = $proc['available_sacks'] / $totalAvailable;
-            $sacks      = $isLast ? $remaining : (int) floor($sacksRequested * $proportion);
-            $sacks      = min($sacks, $proc['available_sacks']);
-            $kg         = round($sacks * $proc['kg_per_sack'], 2);
+            $sacks      = $isLast ? $remaining : (int) round($sacksRequested * $proc['available_sacks'] / $totalAvailable);
+            $sacks      = min($sacks, $proc['available_sacks'], $remaining);
+            if ($sacks <= 0 && !$isLast) continue;
+
+            $kg = round($sacks * $proc['kg_per_sack'], 2);
 
             $breakdown[] = [
                 'procurement_id' => $proc['procurement_id'],
@@ -221,6 +225,16 @@ class ProcurementBatchService
             ];
             $remaining -= $sacks;
             $totalKg   += $kg;
+        }
+
+        // If requesting all available sacks, use exact batch remaining_kg to avoid rounding drift
+        if ($sacksRequested === $totalAvailable && count($breakdown) > 0) {
+            $exactTotalKg = (float) $batch->remaining_kg;
+            $diff = round($exactTotalKg - $totalKg, 2);
+            if (abs($diff) > 0 && abs($diff) < 100) {
+                $breakdown[count($breakdown) - 1]['quantity_kg'] = round($breakdown[count($breakdown) - 1]['quantity_kg'] + $diff, 2);
+                $totalKg = $exactTotalKg;
+            }
         }
 
         return [

@@ -33,6 +33,23 @@ export const usersApi = {
   },
   
   /**
+   * Send email verification code
+   * @param {string} email - Email to verify
+   */
+  sendVerification: async (email) => {
+    return apiClient.post(`${ENDPOINTS.USERS.BASE}/send-verification`, { email });
+  },
+
+  /**
+   * Verify the email code
+   * @param {string} email - Email address
+   * @param {string} code - 6-digit verification code
+   */
+  verifyCode: async (email, code) => {
+    return apiClient.post(`${ENDPOINTS.USERS.BASE}/verify-code`, { email, code });
+  },
+
+  /**
    * Create a new user
    * @param {Object} userData - User data
    */

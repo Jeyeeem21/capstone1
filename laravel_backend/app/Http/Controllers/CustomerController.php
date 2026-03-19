@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Models\Sale;
 use App\Services\CustomerService;
+use App\Services\EmailService;
 use App\Http\Resources\CustomerResource;
 use App\Http\Resources\SaleResource;
 use App\Traits\ApiResponse;
@@ -23,10 +24,12 @@ class CustomerController extends Controller
     use ApiResponse, AuditLogger, HasCaching;
 
     protected CustomerService $customerService;
+    protected EmailService $emailService;
 
-    public function __construct(CustomerService $customerService)
+    public function __construct(CustomerService $customerService, EmailService $emailService)
     {
         $this->customerService = $customerService;
+        $this->emailService = $emailService;
     }
 
     /**
@@ -77,6 +80,15 @@ class CustomerController extends Controller
             'customer_id' => $customer->id,
             'name' => $customer->name,
         ]);
+
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $customer) {
+            $emailService->sendAdminAlert(
+                "New Customer Added — {$customer->name}",
+                'New Customer Added',
+                "A new customer \"{$customer->name}\" ({$customer->email}) has been added to the system."
+            );
+        })->afterResponse();
 
         return $this->successResponse(
             new CustomerResource($customer),
@@ -143,6 +155,15 @@ class CustomerController extends Controller
             'customer_id' => $customer->id,
             'changes' => $validated,
         ]);
+
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $customer) {
+            $emailService->sendAdminAlert(
+                "Customer Updated — {$customer->name}",
+                'Customer Information Updated',
+                "The customer \"{$customer->name}\" ({$customer->email}) has been updated in the system."
+            );
+        })->afterResponse();
 
         return $this->successResponse(
             new CustomerResource($customer),
@@ -241,13 +262,7 @@ class CustomerController extends Controller
 
         // Send email
         try {
-            Mail::raw(
-                "Your KJP Ricemill email verification code is: {$code}\n\nThis code will expire in 10 minutes.\n\nIf you did not request this, please ignore this email.",
-                function ($message) use ($customer) {
-                    $message->to($customer->email)
-                            ->subject('KJP Ricemill - Email Verification Code');
-                }
-            );
+            $this->emailService->sendVerificationCode($customer->email, $code);
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to send verification email. Please check mail configuration. Error: ' . $e->getMessage(), 500);
         }
@@ -334,16 +349,19 @@ class CustomerController extends Controller
             'last_name' => $customer->contact ? (count(explode(' ', $customer->contact)) > 1 ? implode(' ', array_slice(explode(' ', $customer->contact), 1)) : null) : null,
             'email' => $customer->email,
             'password' => Hash::make($validated['password']),
-            'role' => 'client',
+            'role' => 'customer',
             'phone' => $customer->phone,
             'status' => 'active',
         ]);
 
-        $this->logAudit('CREATE_ACCOUNT', 'Customer', "Created client account for {$customer->name} ({$customer->email})", [
+        $this->logAudit('CREATE_ACCOUNT', 'Customer', "Created customer account for {$customer->name} ({$customer->email})", [
             'customer_id' => $customer->id,
             'user_id' => $user->id,
             'email' => $customer->email,
         ]);
+
+        // Send welcome email to the new customer
+        $this->emailService->sendWelcomeEmail($user);
 
         return $this->successResponse(
             [
@@ -351,7 +369,7 @@ class CustomerController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
             ],
-            'Client account created successfully'
+            'Customer account created successfully'
         );
     }
 }

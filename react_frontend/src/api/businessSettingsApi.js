@@ -18,12 +18,20 @@ const businessSettingsApi = {
   },
 
   /**
+   * Get fresh business settings (bypass cache — used for polling)
+   */
+  getFresh: async () => {
+    return apiClient.get('/business-settings');
+  },
+
+  /**
    * Update business settings
    * @param {Object} data - Business settings data
    */
   update: async (data) => {
-    // Clear cache when updating
+    // Clear all caches when updating
     localStorage.removeItem('kjp-business-settings');
+    apiClient.clearCache?.('business-settings');
     return apiClient.put('/business-settings', data);
   },
 
@@ -35,10 +43,18 @@ const businessSettingsApi = {
     const formData = new FormData();
     formData.append('logo', file);
     
-    // Clear cache when uploading logo
+    // Clear all caches when uploading logo
     localStorage.removeItem('kjp-business-settings');
+    apiClient.clearCache?.('business-settings');
     
     return apiClient.post('/business-settings/logo', formData);
+  },
+
+  /**
+   * Send a test email to verify SMTP configuration
+   */
+  testEmail: async (smtpPassword) => {
+    return apiClient.post('/business-settings/test-email', { smtp_password: smtpPassword });
   },
 };
 

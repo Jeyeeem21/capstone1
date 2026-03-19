@@ -38,7 +38,7 @@ const Partners = () => {
       id: `customer-${c.id}`,
       originalId: c.id,
       name: c.name,
-      type: 'Client',
+      type: 'Customer',
       contact: c.contact || c.name,
       phone: c.phone,
       status: c.status,
@@ -71,12 +71,12 @@ const Partners = () => {
 
   const partnerSections = [
     { icon: Truck, title: 'Suppliers', description: 'Manage supplier relationships', to: `${basePath}/partners/supplier`, count: totalSuppliers },
-    { icon: UserCheck, title: 'Clients', description: 'Track client information', to: `${basePath}/partners/customer`, count: totalCustomers },
+    { icon: UserCheck, title: 'Customers', description: 'Track customer information', to: `${basePath}/partners/customer`, count: totalCustomers },
   ];
 
   const partnerBreakdown = useMemo(() => [
     { name: 'Suppliers', value: totalSuppliers, color: '#f97316' },
-    { name: 'Clients', value: totalCustomers, color: '#3b82f6' },
+    { name: 'Customers', value: totalCustomers, color: '#3b82f6' },
   ], [totalSuppliers, totalCustomers]);
 
   const handleView = (row) => {
@@ -106,7 +106,7 @@ const Partners = () => {
     <div>
       <PageHeader 
         title="Partners" 
-        description="Manage your business relationships with suppliers and clients"
+        description="Manage your business relationships with suppliers and customers"
         icon={Users}
         action={isRefreshing ? (
           <span className="text-xs text-gray-500 dark:text-gray-400 animate-pulse">Syncing...</span>
@@ -120,7 +120,7 @@ const Partners = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <StatsCard label="Total Partners" value={totalPartners} unit="partners" icon={Users} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
           <StatsCard label="Suppliers" value={activeSuppliers} unit="active" icon={Truck} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-          <StatsCard label="Clients" value={activeCustomers} unit="active" icon={UserCheck} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
+          <StatsCard label="Customers" value={activeCustomers} unit="active" icon={UserCheck} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
           <DonutChart
             title="Partner Mix"
             data={partnerBreakdown}
@@ -164,7 +164,7 @@ const Partners = () => {
       ) : (
         <DataTable 
           title="Recent Partners"
-          subtitle="10 most recent partners from clients and suppliers"
+          subtitle="10 most recent partners from customers and suppliers"
           columns={columns} 
           data={allPartners} 
           searchPlaceholder="Search partners..." 

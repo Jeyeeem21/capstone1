@@ -1,23 +1,36 @@
-import { useState, useEffect } from 'react';
-import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Monitor, 
   User,
   LogOut,
-  X,
-  Menu
+  Menu,
+  X
 } from 'lucide-react';
 import { Footer } from '../../components/common';
 import { Avatar } from '../../components/ui';
 import { ConfirmModal } from '../../components/ui/Modal';
 import { useAuth } from '../../context/AuthContext';
+import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 
-const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose }) => {
-  const location = useLocation();
+const menuItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', to: '/secretary/dashboard' },
+  { icon: Monitor, label: 'Point of Sale', to: '/secretary/pos' },
+  { icon: User, label: 'My Profile', to: '/secretary/profile' },
+];
+
+const StaffLayout = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { settings } = useBusinessSettings();
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+
+  const staffName = user?.first_name && user?.last_name 
+    ? `${user.first_name} ${user.last_name}` 
+    : user?.name || 'Secretary';
 
   const handleLogout = async () => {
     setIsLogoutModalOpen(false);
@@ -25,231 +38,153 @@ const StaffSidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClo
     navigate('/?login=true');
   };
 
-  const staffName = user?.first_name && user?.last_name 
-    ? `${user.first_name} ${user.last_name}` 
-    : user?.name || 'Staff User';
-
-  // Close mobile sidebar when route changes
-  useEffect(() => {
-    if (onMobileClose) {
-      onMobileClose();
-    }
-  }, [location.pathname]);
-
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', to: '/staff/dashboard' },
-    { icon: Monitor, label: 'Point of Sale', to: '/staff/pos' },
-    { icon: User, label: 'My Profile', to: '/staff/profile' },
-  ];
-
-  return (
-    <>
-      {/* Backdrop for mobile/tablet */}
-      {isMobileOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={onMobileClose}
-        />
-      )}
-      
-      <aside 
-        className={`
-          fixed left-0 top-0 h-screen border-r-2 border-primary-300 dark:border-primary-700 
-          flex flex-col transition-all duration-300 z-50
-          shadow-[4px_0_20px_-3px_rgba(0,0,0,0.2)]
-          w-72
-          ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}
-          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0
-        `}
-        style={{ backgroundColor: 'var(--color-bg-sidebar)', color: 'var(--color-text-sidebar)' }}
-      >
-        {/* Header / Logo */}
-        <div className="p-4 border-b-2 border-primary-200 dark:border-primary-700">
-          <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'justify-between'}`}>
-            <div className={`flex items-center gap-3 ${isCollapsed ? 'lg:hidden' : ''}`}>
-              <div className="w-10 h-10 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
-                <img src="/logo.svg" alt="KJP Logo" className="w-8 h-8 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
-                <span className="text-white font-bold text-lg hidden">K</span>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-800 dark:text-gray-100">KJP Ricemill</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Staff Portal</p>
-              </div>
-            </div>
-            
-            {/* Close button for mobile */}
-            <button 
-              onClick={onMobileClose}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 lg:hidden"
-            >
-              <X size={20} className="text-gray-500 dark:text-gray-400" />
-            </button>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-3 overflow-y-auto">
-          <div className="space-y-1">
-            {menuItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                title={isCollapsed ? item.label : ''}
-                className={({ isActive }) => `
-                  flex items-center ${isCollapsed ? 'lg:justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 mb-0.5 group
-                  ${isActive
-                    ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25'
-                    : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:text-button-300 dark:hover:text-button-300'
-                  }
-                `}
-                style={({ isActive }) => !isActive ? { color: 'var(--color-text-sidebar)' } : undefined}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
-                    {!isCollapsed && <span className="font-medium" style={{ fontSize: 'var(--font-size-sidebar)' }}>{item.label}</span>}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        </nav>
-
-        {/* User Profile Section */}
-        <div className="p-3 border-t-2 border-primary-200 dark:border-primary-700">
-          <div className={`flex items-center ${isCollapsed ? 'lg:justify-center' : 'gap-3'} p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl`}>
-            <Avatar name={staffName} size="md" />
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">
-                  {staffName}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
-              </div>
-            )}
-          </div>
-          
-          <button 
-            onClick={() => setIsLogoutModalOpen(true)}
-            className={`w-full mt-2 flex items-center ${isCollapsed ? 'lg:justify-center' : 'justify-center gap-2'} px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors`}
-            title={isCollapsed ? 'Logout' : ''}
-          >
-            <LogOut size={18} />
-            {!isCollapsed && <span>Logout</span>}
-          </button>
-        </div>
-
-        {/* Logout Confirmation Modal */}
-        <ConfirmModal
-          isOpen={isLogoutModalOpen}
-          onClose={() => setIsLogoutModalOpen(false)}
-          onConfirm={handleLogout}
-          title="Confirm Logout"
-          message="Are you sure you want to logout? You will need to login again to access the system."
-          confirmText="Logout"
-          cancelText="Cancel"
-          variant="danger"
-          icon={LogOut}
-        />
-      </aside>
-    </>
-  );
-};
-
-// Staff Header for mobile
-const StaffHeader = ({ onMenuClick }) => {
-  return (
-    <header className="lg:hidden sticky top-0 z-50 bg-white dark:bg-gray-700 border-b-2 border-primary-300 dark:border-primary-700 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">K</span>
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-800 dark:text-gray-100">KJP Ricemill</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Staff Portal</p>
-          </div>
-        </div>
-        
-        <button 
-          onClick={onMenuClick}
-          className="hidden md:block p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700"
-        >
-          <Menu size={24} className="text-gray-600 dark:text-gray-300" />
-        </button>
-      </div>
-    </header>
-  );
-};
-
-// Staff Bottom Navigation
-const StaffBottomNav = () => {
-  const location = useLocation();
-  
-  const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', to: '/staff/dashboard' },
-    { icon: Monitor, label: 'POS', to: '/staff/pos' },
-    { icon: User, label: 'Profile', to: '/staff/profile' },
-  ];
-
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-700 border-t-2 border-primary-300 dark:border-primary-700 shadow-lg z-40 md:hidden">
-      <div className="flex justify-around items-center h-16">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.to;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={`flex flex-col items-center justify-center flex-1 h-full px-2 transition-colors ${
-                isActive ? 'text-button-600 dark:text-button-400' : 'text-gray-500 dark:text-gray-400'
-              }`}
-            >
-              <item.icon size={22} className={isActive ? 'text-button-500' : ''} />
-              <span className="text-xs mt-1 font-medium">{item.label}</span>
-              {isActive && (
-                <div className="absolute bottom-0 w-12 h-1 bg-button-500 rounded-t-full" />
-              )}
-            </NavLink>
-          );
-        })}
-      </div>
-    </nav>
-  );
-};
-
-const StaffLayout = () => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
   return (
     <div 
       className="min-h-screen transition-colors duration-300 flex flex-col"
       style={{ backgroundColor: 'var(--color-bg-body)' }}
     >
-      {/* Mobile/Tablet Header */}
-      <StaffHeader onMenuClick={() => setIsMobileSidebarOpen(true)} />
+      {/* Header Navigation */}
+      <header 
+        className="sticky top-0 z-50 border-b-2 border-primary-300 dark:border-primary-700 shadow-sm"
+        style={{ backgroundColor: 'var(--color-bg-sidebar)', color: 'var(--color-text-sidebar)' }}
+      >
+        <div className="flex items-center justify-between px-4 py-3 md:px-6">
+          {/* Logo & Business Name */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center overflow-hidden shadow-md">
+              <img 
+                src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                alt={settings.business_name || 'Logo'} 
+                className="w-7 h-7 object-contain" 
+                onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} 
+              />
+              <span style={{display:'none'}} className="text-white font-bold text-sm items-center justify-center">
+                {(settings.business_name || 'K').substring(0, 1)}
+              </span>
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-gray-800 dark:text-gray-100 leading-tight">
+                {settings.business_name || 'KJP Ricemill'}
+              </h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Secretary Portal</p>
+            </div>
+          </div>
 
-      {/* Sidebar */}
-      <StaffSidebar 
-        isCollapsed={isSidebarCollapsed} 
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        isMobileOpen={isMobileSidebarOpen}
-        onMobileClose={() => setIsMobileSidebarOpen(false)}
-      />
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center gap-1">
+            {menuItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `
+                  flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
+                  ${isActive
+                    ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-md shadow-button-500/25'
+                    : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:hover:text-button-300'
+                  }
+                `}
+                style={({ isActive }) => !isActive ? { color: 'var(--color-text-sidebar)' } : undefined}
+              >
+                <item.icon size={18} />
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          {/* Desktop User & Logout */}
+          <div className="hidden md:flex items-center gap-3 relative">
+            <button 
+              onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+            >
+              <Avatar name={staffName} size="sm" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200 max-w-[120px] truncate">
+                {staffName}
+              </span>
+            </button>
+
+            {/* User Dropdown */}
+            {isUserDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsUserDropdownOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-700 rounded-lg shadow-lg border border-primary-200 dark:border-primary-700 z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-600">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{staffName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Secretary</p>
+                  </div>
+                  <button 
+                    onClick={() => { setIsUserDropdownOpen(false); setIsLogoutModalOpen(true); }}
+                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut size={16} />
+                    <span>Logout</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Mobile Hamburger */}
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600"
+          >
+            {isMobileMenuOpen ? (
+              <X size={24} className="text-gray-600 dark:text-gray-300" />
+            ) : (
+              <Menu size={24} className="text-gray-600 dark:text-gray-300" />
+            )}
+          </button>
+        </div>
+
+        {/* Mobile Dropdown Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-t border-primary-200 dark:border-primary-700 px-4 py-3 space-y-1">
+            {menuItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={({ isActive }) => `
+                  flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
+                  ${isActive
+                    ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-md shadow-button-500/25'
+                    : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:hover:text-button-300'
+                  }
+                `}
+                style={({ isActive }) => !isActive ? { color: 'var(--color-text-sidebar)' } : undefined}
+              >
+                <item.icon size={20} />
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+            
+            {/* Mobile User Info & Logout */}
+            <div className="pt-2 mt-2 border-t border-primary-200 dark:border-primary-700">
+              <div className="flex items-center gap-3 px-4 py-2">
+                <Avatar name={staffName} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{staffName}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Secretary</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setIsMobileMenuOpen(false); setIsLogoutModalOpen(true); }}
+                className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </header>
 
       {/* Main Content */}
-      <main className={`
-        transition-all duration-300 flex-1 flex flex-col
-        ml-0 pb-20
-        md:pb-0
-        lg:pb-0
-        ${isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-72'}
-      `}>
+      <main className="flex-1 flex flex-col">
         <div className="p-4 md:p-6 lg:p-8 flex-1">
           <div 
-            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-10rem)] md:min-h-[calc(100vh-12rem)] lg:min-h-[calc(100vh-16rem)] transition-colors duration-300"
+            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-12rem)] transition-colors duration-300"
             style={{ 
               backgroundColor: 'var(--color-bg-content)', 
               color: 'var(--color-text-content)',
@@ -266,8 +201,18 @@ const StaffLayout = () => {
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <StaffBottomNav />
+      {/* Logout Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleLogout}
+        title="Confirm Logout"
+        message="Are you sure you want to logout? You will need to login again to access the system."
+        confirmText="Logout"
+        cancelText="Cancel"
+        variant="danger"
+        icon={LogOut}
+      />
     </div>
   );
 };

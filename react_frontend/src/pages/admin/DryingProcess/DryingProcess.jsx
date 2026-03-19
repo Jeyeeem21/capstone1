@@ -79,10 +79,10 @@ const DryingProcess = () => {
   // Procurement options for dropdown - only Pending with available quantity
   const procurementOptions = useMemo(() => {
     return procurements
-      .filter(p => p.status === 'Pending')
+      .filter(p => p.status === 'Pending' && !p.batch_id)
       .map(p => ({
         value: String(p.id),
-        label: `#${String(p.id).padStart(4, '0')} - ${p.supplier_name} (${parseInt(p.sacks || 0)} sacks / ${parseFloat(p.quantity_kg).toLocaleString()} kg)`,
+        label: `#${String(p.id).padStart(4, '0')} - ${p.supplier_name}${p.variety_name ? ` — ${p.variety_name}` : ''} (${parseInt(p.sacks || 0)} sacks / ${parseFloat(p.quantity_kg).toLocaleString()} kg)`,
       }));
   }, [procurements]);
 
@@ -195,10 +195,18 @@ const DryingProcess = () => {
 
   const handleBatchFormChange = useCallback((e) => {
     const { name, value } = e.target;
-    setBatchFormData(prev => ({ ...prev, [name]: value }));
+    setBatchFormData(prev => {
+      const updated = { ...prev, [name]: value };
+      // Auto-fill max sacks when batch is selected
+      if (name === 'batch_id' && value) {
+        const batch = allBatches.find(b => String(b.id) === value);
+        if (batch) updated.sacks = String(batch.remaining_sacks);
+      }
+      return updated;
+    });
     setBatchErrors(prev => { const n = { ...prev }; delete n[name]; return n; });
     if (name === 'batch_id' || name === 'sacks') setBatchPreview(null);
-  }, []);
+  }, [allBatches]);
 
   // Auto-fetch distribution preview when batch + sacks are both filled
   useEffect(() => {
@@ -218,12 +226,14 @@ const DryingProcess = () => {
     const { name, value } = e.target;
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
-      // Auto-fill quantity_kg and sacks when procurement is selected
+      // Auto-fill quantity_kg and sacks (remaining) when procurement is selected
       if (name === 'procurement_id' && value) {
         const proc = procurements.find(p => String(p.id) === value);
         if (proc) {
+          const alreadyDrying = proc.drying_sacks || 0;
+          const remaining = Math.max(0, parseInt(proc.sacks || 0) - alreadyDrying);
           updated.quantity_kg = String(proc.quantity_kg);
-          updated.sacks = String(proc.sacks || 0);
+          updated.sacks = String(remaining);
         }
       }
       return updated;
@@ -236,6 +246,19 @@ const DryingProcess = () => {
       }
       return prev;
     });
+    // Real-time sacks validation
+    if (name === 'sacks') {
+      const num = parseInt(value);
+      const procId = formData.procurement_id || (name === 'procurement_id' ? value : null);
+      if (procId) {
+        const proc = procurements.find(p => String(p.id) === procId);
+        const alreadyDrying = proc?.drying_sacks || 0;
+        const remaining = Math.max(0, parseInt(proc?.sacks || 0) - alreadyDrying);
+        if (num > remaining) {
+          setErrors(prev => ({ ...prev, sacks: [`Maximum is ${remaining} sacks.`] }));
+        }
+      }
+    }
   }, [procurements]);
 
   const handleAddSubmit = async () => {
@@ -264,8 +287,18 @@ const DryingProcess = () => {
           price: parseFloat(batchFormData.price),
         };
       } else {
+        const localErrors = {};
+        if (!formData.procurement_id) localErrors.procurement_id = ['Please select a procurement.'];
+        const proc = procurements.find(p => String(p.id) === formData.procurement_id);
+        const alreadyDrying = proc?.drying_sacks || 0;
+        const remaining = Math.max(0, parseInt(proc?.sacks || 0) - alreadyDrying);
+        if (!formData.sacks || parseInt(formData.sacks) <= 0) localErrors.sacks = ['Enter number of sacks.'];
+        else if (parseInt(formData.sacks) > remaining) localErrors.sacks = [`Only ${remaining} sacks remaining.`];
+        if (!formData.price) localErrors.price = ['Price is required.'];
+        if (Object.keys(localErrors).length) { setErrors(localErrors); setSaving(false); throw new Error('Validation'); }
         submitData = {
           procurement_id: parseInt(formData.procurement_id),
+          sacks: parseInt(formData.sacks),
           price: parseFloat(formData.price),
         };
       }
@@ -987,6 +1020,7 @@ const DryingProcess = () => {
         submitText="Start Drying"
         size="lg"
         loading={saving}
+        submitDisabled={!!(errors.sacks?.length || batchErrors.sacks?.length)}
       >
         {({ submitted }) => (
           <>
@@ -999,7 +1033,7 @@ const DryingProcess = () => {
                   dryingSource === 'procurement' ? 'bg-white dark:bg-gray-700 shadow text-button-600 dark:text-button-400 border border-button-200 dark:border-button-700' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200'
                 }`}
               >
-                <Package size={14} /> Single Procurement
+                <Package size={14} /> Standalone
               </button>
               <button
                 type="button"
@@ -1026,13 +1060,45 @@ const DryingProcess = () => {
                   submitted={submitted}
                   error={errors.procurement_id?.[0]}
                 />
-                {formData.procurement_id && (
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-2">
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
-                      Auto-filled: <strong>{parseInt(formData.sacks || 0)} sacks</strong> / <strong>{parseFloat(formData.quantity_kg || 0).toLocaleString()} kg</strong>
-                    </p>
-                  </div>
-                )}
+                {formData.procurement_id && (() => {
+                  const proc = procurements.find(p => String(p.id) === formData.procurement_id);
+                  const alreadyDrying = proc?.drying_sacks || 0;
+                  const totalSacks = parseInt(proc?.sacks || 0);
+                  const remaining = Math.max(0, totalSacks - alreadyDrying);
+                  const enteredSacks = parseInt(formData.sacks) || 0;
+                  const proportionalKg = totalSacks > 0 ? ((enteredSacks / totalSacks) * parseFloat(proc?.quantity_kg || 0)).toFixed(2) : 0;
+                  return (
+                    <>
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-2">
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          {totalSacks} total sacks / {parseFloat(proc?.quantity_kg || 0).toLocaleString()} kg
+                          {alreadyDrying > 0 && <span className="text-orange-600 dark:text-orange-400 ml-1">({alreadyDrying} already drying)</span>}
+                          {' · '}<strong>{remaining} sacks available</strong>
+                        </p>
+                      </div>
+                      <FormInput
+                        label={`Sacks to Dry (max ${remaining})`}
+                        name="sacks"
+                        type="number"
+                        value={formData.sacks}
+                        onChange={handleFormChange}
+                        required
+                        placeholder={`1 - ${remaining}`}
+                        submitted={submitted}
+                        error={errors.sacks?.[0]}
+                        min="1"
+                        max={remaining}
+                      />
+                      {enteredSacks > 0 && enteredSacks <= remaining && (
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg mb-2">
+                          <p className="text-xs text-green-700 dark:text-green-300">
+                            <strong>{enteredSacks} sacks</strong> → <strong>{parseFloat(proportionalKg).toLocaleString()} kg</strong> will be sent to drying.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 <FormInput label="Price (₱)" name="price" type="number" value={formData.price}
                   onChange={handleFormChange} required placeholder="0.00" submitted={submitted}
                   error={errors.price?.[0]} step="0.01"

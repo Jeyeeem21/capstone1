@@ -165,6 +165,15 @@ const Procurement = () => {
   const [isStandaloneConfirmOpen, setIsStandaloneConfirmOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [batchFilter, setBatchFilter] = useState('');
+  // Accumulator state for sacks and kg entries in Add modal
+  const [sacksEntries, setSacksEntries] = useState([]);
+  const [kgEntries, setKgEntries] = useState([]);
+  const [sacksInput, setSacksInput] = useState('');
+  const [kgInput, setKgInput] = useState('');
+  const [editingSacksIdx, setEditingSacksIdx] = useState(null);
+  const [editingKgIdx, setEditingKgIdx] = useState(null);
+  const [editingSacksValue, setEditingSacksValue] = useState('');
+  const [editingKgValue, setEditingKgValue] = useState('');
   const [formData, setFormData] = useState({ 
     supplier_id: '', 
     new_supplier_name: '',
@@ -202,6 +211,19 @@ const Procurement = () => {
   const [individualDryingPrice, setIndividualDryingPrice] = useState('');
   const [individualDryingSacks, setIndividualDryingSacks] = useState('');
   const [individualDryingErrors, setIndividualDryingErrors] = useState({});
+
+  // Unified Send to Drying modal state (top-level button)
+  const [isUnifiedDryingOpen, setIsUnifiedDryingOpen] = useState(false);
+  const [unifiedDryingSource, setUnifiedDryingSource] = useState('standalone');
+  const [unifiedDryingProcId, setUnifiedDryingProcId] = useState('');
+  const [unifiedDryingPrice, setUnifiedDryingPrice] = useState('');
+  const [unifiedDryingStandaloneSacks, setUnifiedDryingStandaloneSacks] = useState('');
+  const [unifiedDryingErrors, setUnifiedDryingErrors] = useState({});
+  const [unifiedDryingBatchId, setUnifiedDryingBatchId] = useState('');
+  const [unifiedDryingSacks, setUnifiedDryingSacks] = useState('');
+  const [unifiedDryingBatchPreview, setUnifiedDryingBatchPreview] = useState(null);
+  const [loadingUnifiedBatchPreview, setLoadingUnifiedBatchPreview] = useState(false);
+  const [unifiedDryingBatchErrors, setUnifiedDryingBatchErrors] = useState({});
 
   // Batch view state
   const [isBatchViewOpen, setIsBatchViewOpen] = useState(false);
@@ -278,6 +300,27 @@ const Procurement = () => {
         label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks)`,
       }));
     return [{ value: '', label: 'None (standalone)' }, ...opts];
+  }, [batches]);
+
+  // Standalone procurement options for unified drying modal (only pending, no batch)
+  const standaloneProcOptions = useMemo(() => {
+    return procurements
+      .filter(p => p.status === 'Pending' && !p.batch_id)
+      .map(p => ({
+        value: String(p.id),
+        label: `#${String(p.id).padStart(4, '0')} - ${p.supplier_name}${p.variety_name ? ` — ${p.variety_name}` : ''} (${parseInt(p.sacks || 0)} sacks / ${parseFloat(p.quantity_kg).toLocaleString()} kg)`,
+      }));
+  }, [procurements]);
+
+  // Open batch options for unified drying modal
+  const dryingBatchOptions = useMemo(() => {
+    const opts = batches
+      .filter(b => b.status === 'Open' && b.remaining_sacks > 0)
+      .map(b => ({
+        value: String(b.id),
+        label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks remaining)`,
+      }));
+    return [{ value: '', label: 'Select batch...' }, ...opts];
   }, [batches]);
 
   // Helper: get the week ranges for a given month/year
@@ -410,6 +453,67 @@ const Procurement = () => {
     return qty * price;
   }, [formData.quantity_kg, formData.price_per_kg]);
 
+  // Sync accumulator totals into formData whenever entries change
+  useEffect(() => {
+    const totalSacks = sacksEntries.reduce((sum, v) => sum + v, 0);
+    const totalKg = kgEntries.reduce((sum, v) => sum + v, 0);
+    setFormData(prev => ({
+      ...prev,
+      sacks: totalSacks > 0 ? String(totalSacks) : '',
+      quantity_kg: totalKg > 0 ? String(totalKg) : '',
+    }));
+  }, [sacksEntries, kgEntries]);
+
+  // Accumulator handlers for sacks
+  const handleAddSacks = useCallback(() => {
+    const val = parseInt(sacksInput);
+    if (!val || val <= 0) return;
+    setSacksEntries(prev => [...prev, val]);
+    setSacksInput('');
+  }, [sacksInput]);
+
+  const handleRemoveSacks = useCallback((idx) => {
+    setSacksEntries(prev => prev.filter((_, i) => i !== idx));
+    if (editingSacksIdx === idx) setEditingSacksIdx(null);
+  }, [editingSacksIdx]);
+
+  const handleStartEditSacks = useCallback((idx) => {
+    setEditingSacksIdx(idx);
+    setEditingSacksValue(String(sacksEntries[idx]));
+  }, [sacksEntries]);
+
+  const handleConfirmEditSacks = useCallback(() => {
+    const val = parseInt(editingSacksValue);
+    if (!val || val <= 0) { setEditingSacksIdx(null); return; }
+    setSacksEntries(prev => prev.map((v, i) => i === editingSacksIdx ? val : v));
+    setEditingSacksIdx(null);
+  }, [editingSacksValue, editingSacksIdx]);
+
+  // Accumulator handlers for kg
+  const handleAddKg = useCallback(() => {
+    const val = parseFloat(kgInput);
+    if (!val || val <= 0) return;
+    setKgEntries(prev => [...prev, val]);
+    setKgInput('');
+  }, [kgInput]);
+
+  const handleRemoveKg = useCallback((idx) => {
+    setKgEntries(prev => prev.filter((_, i) => i !== idx));
+    if (editingKgIdx === idx) setEditingKgIdx(null);
+  }, [editingKgIdx]);
+
+  const handleStartEditKg = useCallback((idx) => {
+    setEditingKgIdx(idx);
+    setEditingKgValue(String(kgEntries[idx]));
+  }, [kgEntries]);
+
+  const handleConfirmEditKg = useCallback(() => {
+    const val = parseFloat(editingKgValue);
+    if (!val || val <= 0) { setEditingKgIdx(null); return; }
+    setKgEntries(prev => prev.map((v, i) => i === editingKgIdx ? val : v));
+    setEditingKgIdx(null);
+  }, [editingKgValue, editingKgIdx]);
+
   const handleAdd = useCallback(() => {
     setFormData({ 
       supplier_id: '', 
@@ -429,6 +533,12 @@ const Procurement = () => {
     setErrors({});
     setIsCreatingBatch(false);
     setNewBatchNotes('');
+    setSacksEntries([]);
+    setKgEntries([]);
+    setSacksInput('');
+    setKgInput('');
+    setEditingSacksIdx(null);
+    setEditingKgIdx(null);
     refetchBatches();
     setIsAddModalOpen(true);
   }, [refetchBatches]);
@@ -858,6 +968,123 @@ const Procurement = () => {
     }
   };
 
+  // ---- Unified Send to Drying Modal ----
+  const handleOpenUnifiedDrying = useCallback(() => {
+    setUnifiedDryingProcId('');
+    setUnifiedDryingPrice('');
+    setUnifiedDryingStandaloneSacks('');
+    setUnifiedDryingErrors({});
+    setUnifiedDryingBatchPreview(null);
+    setUnifiedDryingBatchErrors({});
+
+    // If a batch filter is active, auto-select batch mode with that batch
+    if (batchFilter) {
+      const b = batches.find(b => String(b.id) === batchFilter);
+      setUnifiedDryingSource('batch');
+      setUnifiedDryingBatchId(batchFilter);
+      setUnifiedDryingSacks(b ? String(b.remaining_sacks) : '');
+    } else {
+      setUnifiedDryingSource('standalone');
+      setUnifiedDryingBatchId('');
+      setUnifiedDryingSacks('');
+    }
+
+    setIsUnifiedDryingOpen(true);
+  }, [batchFilter, batches]);
+
+  // Auto-fill sacks/kg when standalone procurement is selected
+  const selectedUnifiedProc = useMemo(() => {
+    if (!unifiedDryingProcId) return null;
+    return procurements.find(p => String(p.id) === unifiedDryingProcId);
+  }, [unifiedDryingProcId, procurements]);
+
+  // Batch preview for unified drying modal
+  useEffect(() => {
+    if (!isUnifiedDryingOpen || unifiedDryingSource !== 'batch' || !unifiedDryingBatchId || !unifiedDryingSacks) return;
+    const sacks = parseInt(unifiedDryingSacks);
+    if (!sacks || sacks <= 0) { setUnifiedDryingBatchPreview(null); return; }
+    let cancelled = false;
+    setLoadingUnifiedBatchPreview(true);
+    apiClient.get(`/procurement-batches/${unifiedDryingBatchId}/drying-distribution?sacks=${sacks}`)
+      .then(res => { if (!cancelled && res.success) setUnifiedDryingBatchPreview(res.data); })
+      .catch(() => { if (!cancelled) setUnifiedDryingBatchPreview(null); })
+      .finally(() => { if (!cancelled) setLoadingUnifiedBatchPreview(false); });
+    return () => { cancelled = true; };
+  }, [unifiedDryingBatchId, unifiedDryingSacks, isUnifiedDryingOpen, unifiedDryingSource]);
+
+  const handleUnifiedDryingSubmit = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      let submitData;
+      if (unifiedDryingSource === 'batch') {
+        const localErrors = {};
+        if (!unifiedDryingBatchId) localErrors.batch_id = ['Please select a batch.'];
+        if (!unifiedDryingSacks || parseInt(unifiedDryingSacks) <= 0) localErrors.sacks = ['Enter number of sacks to dry.'];
+        else {
+          const selBatch = batches.find(b => String(b.id) === unifiedDryingBatchId);
+          if (selBatch && parseInt(unifiedDryingSacks) > selBatch.remaining_sacks) {
+            localErrors.sacks = [`Cannot exceed ${selBatch.remaining_sacks} available sacks.`];
+          }
+        }
+        if (!unifiedDryingPrice) localErrors.price = ['Price is required.'];
+        if (Object.keys(localErrors).length) { setUnifiedDryingBatchErrors(localErrors); setSaving(false); return; }
+        submitData = {
+          batch_id: parseInt(unifiedDryingBatchId),
+          sacks: parseInt(unifiedDryingSacks),
+          price: parseFloat(unifiedDryingPrice),
+        };
+      } else {
+        const localErrors = {};
+        if (!unifiedDryingProcId) localErrors.procurement_id = ['Please select a procurement.'];
+        const proc = procurements.find(p => String(p.id) === unifiedDryingProcId);
+        const alreadyDrying = proc?.drying_sacks || 0;
+        const remaining = Math.max(0, parseInt(proc?.sacks || 0) - alreadyDrying);
+        if (!unifiedDryingStandaloneSacks || parseInt(unifiedDryingStandaloneSacks) <= 0) localErrors.sacks = ['Enter number of sacks.'];
+        else if (parseInt(unifiedDryingStandaloneSacks) > remaining) localErrors.sacks = [`Only ${remaining} sacks remaining.`];
+        if (!unifiedDryingPrice) localErrors.price = ['Price is required.'];
+        if (Object.keys(localErrors).length) { setUnifiedDryingErrors(localErrors); setSaving(false); return; }
+        submitData = {
+          procurement_id: parseInt(unifiedDryingProcId),
+          sacks: parseInt(unifiedDryingStandaloneSacks),
+          price: parseFloat(unifiedDryingPrice),
+        };
+      }
+
+      const response = await apiClient.post('/drying-processes', submitData);
+      if (response.success && response.data) {
+        setIsUnifiedDryingOpen(false);
+        toast.success('Sent to Drying',
+          unifiedDryingSource === 'batch'
+            ? `${unifiedDryingSacks} sacks have been sent to drying.`
+            : `Procurement #${String(unifiedDryingProcId).padStart(4, '0')} sent to drying.`
+        );
+        invalidateCache(CACHE_KEY);
+        invalidateCache(BATCHES_CACHE_KEY);
+        invalidateCache('/drying-processes');
+        refetch();
+        refetchBatches();
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      console.error('Error sending to drying:', error);
+      if (error.response?.data?.errors || error.errors) {
+        const backendErrors = error.response?.data?.errors || error.errors;
+        if (unifiedDryingSource === 'batch') {
+          setUnifiedDryingBatchErrors(backendErrors);
+        } else {
+          setUnifiedDryingErrors(backendErrors);
+        }
+        toast.error('Validation Error', 'Please fix the highlighted fields.');
+      } else {
+        toast.error('Error', error.message || 'Failed to send to drying.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     if (saving) return; // Prevent double submit
     setSaving(true);
@@ -1160,15 +1387,7 @@ const Procurement = () => {
           >
             <Edit size={15} />
           </button>
-          {canSendToDrying && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleOpenIndividualDrying(row); }}
-              className="p-1.5 rounded-md hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-yellow-500 hover:text-yellow-700 dark:text-yellow-300 transition-colors"
-              title="Send to Drying"
-            >
-              <Sun size={15} />
-            </button>
-          )}
+          {/* Sun icon disabled - use top-level Send to Drying button instead */}
 
           {isSuperAdmin() && (
           <button
@@ -1185,7 +1404,7 @@ const Procurement = () => {
         </div>
       );
     }},
-  ], [handleView, handleEdit, handleDelete, handleOpenIndividualDrying]);
+  ], [handleView, handleEdit, handleDelete]);
 
   // Batch table columns
   const batchColumns = useMemo(() => [
@@ -1491,17 +1710,6 @@ const Procurement = () => {
                 </div>
               ) : null;
             })()}
-            {batchFilter && (() => {
-              const b = batches.find(b => String(b.id) === batchFilter);
-              return b && b.remaining_sacks > 0 ? (
-                <button
-                  onClick={handleOpenSendToDrying}
-                  className="ml-auto px-3 py-1.5 text-sm font-semibold text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
-                >
-                  <Sun size={14} /> Send to Drying
-                </button>
-              ) : null;
-            })()}
           </div>
 
           {/* Table - Show data immediately, skeleton only on true first load */}
@@ -1520,6 +1728,14 @@ const Procurement = () => {
               onAdd={handleAdd} 
               addLabel="Add Procurement"
               onRowDoubleClick={handleView}
+              headerRight={
+                <button
+                  onClick={handleOpenUnifiedDrying}
+                  className="px-3 py-1.5 text-sm font-semibold text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Sun size={14} /> Send to Drying
+                </button>
+              }
             />
           )}
         </>
@@ -1862,30 +2078,117 @@ const Procurement = () => {
               )}
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
-              <FormInput 
-                label="Sacks/Bags" 
-                name="sacks" 
-                type="number" 
-                value={formData.sacks} 
-                onChange={handleFormChange} 
-                required 
-                placeholder="0" 
-                submitted={submitted} 
-                error={errors.sacks?.[0]}
-              />
-              <FormInput 
-                label="Quantity (kg)" 
-                name="quantity_kg" 
-                type="number" 
-                value={formData.quantity_kg} 
-                onChange={handleFormChange} 
-                required 
-                placeholder="0" 
-                submitted={submitted} 
-                error={errors.quantity_kg?.[0]}
-                step="0.01"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              {/* Sacks Accumulator */}
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  Sacks/Bags <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    value={sacksInput}
+                    onChange={e => setSacksInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSacks(); } }}
+                    placeholder={sacksEntries.length > 0 ? `Total: ${sacksEntries.reduce((s,v)=>s+v,0)}` : 'Enter sacks'}
+                    min="1"
+                    className="flex-1 min-w-0 px-3 py-2 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
+                  />
+                  <button type="button" onClick={handleAddSacks} className="px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-all flex-shrink-0">
+                    <PlusCircle size={16} />
+                  </button>
+                </div>
+                {sacksEntries.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {sacksEntries.map((val, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700 rounded-lg pl-1 pr-0.5 py-0.5">
+                        {editingSacksIdx === idx ? (
+                          <input
+                            type="number"
+                            value={editingSacksValue}
+                            onChange={e => setEditingSacksValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleConfirmEditSacks(); } if (e.key === 'Escape') setEditingSacksIdx(null); }}
+                            onBlur={handleConfirmEditSacks}
+                            autoFocus
+                            className="w-14 px-1 py-0 text-xs border border-primary-300 dark:border-primary-600 rounded bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none"
+                            min="1"
+                          />
+                        ) : (
+                          <button type="button" onClick={() => handleStartEditSacks(idx)} className="px-1 hover:underline cursor-pointer" title="Click to edit">
+                            {val}
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleRemoveSacks(idx)} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-400 hover:text-red-600 transition-colors" title="Remove">
+                          <XCircle size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    <span className="inline-flex items-center text-xs font-bold text-primary-600 dark:text-primary-400 px-1.5 py-0.5">
+                      = {sacksEntries.reduce((s,v)=>s+v,0)}
+                    </span>
+                  </div>
+                )}
+                {submitted && !formData.sacks && <p className="text-xs text-red-500 mt-1">Sacks is required</p>}
+                {errors.sacks?.[0] && <p className="text-xs text-red-500 mt-1">{errors.sacks[0]}</p>}
+              </div>
+
+              {/* Kg Accumulator */}
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                  Quantity (kg) <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    value={kgInput}
+                    onChange={e => setKgInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddKg(); } }}
+                    placeholder={kgEntries.length > 0 ? `Total: ${kgEntries.reduce((s,v)=>s+v,0)}` : 'Enter kg'}
+                    min="0.01"
+                    step="0.01"
+                    className="flex-1 min-w-0 px-3 py-2 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-primary-500/20 focus:border-primary-400 transition-all"
+                  />
+                  <button type="button" onClick={handleAddKg} className="px-3 py-2 text-sm font-medium text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-all flex-shrink-0">
+                    <PlusCircle size={16} />
+                  </button>
+                </div>
+                {kgEntries.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {kgEntries.map((val, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 text-xs font-medium bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-700 rounded-lg pl-1 pr-0.5 py-0.5">
+                        {editingKgIdx === idx ? (
+                          <input
+                            type="number"
+                            value={editingKgValue}
+                            onChange={e => setEditingKgValue(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleConfirmEditKg(); } if (e.key === 'Escape') setEditingKgIdx(null); }}
+                            onBlur={handleConfirmEditKg}
+                            autoFocus
+                            className="w-16 px-1 py-0 text-xs border border-primary-300 dark:border-primary-600 rounded bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none"
+                            min="0.01"
+                            step="0.01"
+                          />
+                        ) : (
+                          <button type="button" onClick={() => handleStartEditKg(idx)} className="px-1 hover:underline cursor-pointer" title="Click to edit">
+                            {val}
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleRemoveKg(idx)} className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-400 hover:text-red-600 transition-colors" title="Remove">
+                          <XCircle size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    <span className="inline-flex items-center text-xs font-bold text-primary-600 dark:text-primary-400 px-1.5 py-0.5">
+                      = {kgEntries.reduce((s,v)=>s+v,0)} kg
+                    </span>
+                  </div>
+                )}
+                {submitted && !formData.quantity_kg && <p className="text-xs text-red-500 mt-1">Quantity is required</p>}
+                {errors.quantity_kg?.[0] && <p className="text-xs text-red-500 mt-1">{errors.quantity_kg[0]}</p>}
+              </div>
+            </div>
+
+            <div>
               <FormInput 
                 label="Price per KG (₱)" 
                 name="price_per_kg" 
@@ -2298,13 +2601,222 @@ const Procurement = () => {
               {enteredSacks > 0 && !(parseInt(individualDryingSacks) > remaining) && (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
-                    <strong>{enteredSacks.toLocaleString()} sacks</strong> ≈ <strong>{parseFloat(proportionalKg).toLocaleString()} kg</strong> will be sent to drying. Days start at <strong>0</strong>.
+                    <strong>{enteredSacks.toLocaleString()} sacks</strong> → <strong>{parseFloat(proportionalKg).toLocaleString()} kg</strong> will be sent to drying. Days start at <strong>0</strong>.
                   </p>
                 </div>
               )}
             </>
           );
         }}
+      </FormModal>
+
+      {/* Unified Send to Drying Modal (top-level button) */}
+      <FormModal
+        isOpen={isUnifiedDryingOpen}
+        onClose={() => setIsUnifiedDryingOpen(false)}
+        onSubmit={handleUnifiedDryingSubmit}
+        title="Send to Drying"
+        submitText="Start Drying"
+        size="lg"
+        loading={saving}
+        submitDisabled={!!(unifiedDryingErrors.sacks?.length || unifiedDryingBatchErrors.sacks?.length)}
+      >
+        {({ submitted }) => (
+          <>
+            {/* Source Toggle */}
+            <div className="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-xl mb-4">
+              <button
+                type="button"
+                onClick={() => { setUnifiedDryingSource('standalone'); setUnifiedDryingBatchPreview(null); setUnifiedDryingBatchErrors({}); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
+                  unifiedDryingSource === 'standalone' ? 'bg-white dark:bg-gray-700 shadow text-button-600 dark:text-button-400 border border-button-200 dark:border-button-700' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                <Package size={14} /> Standalone
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUnifiedDryingSource('batch'); setUnifiedDryingErrors({}); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
+                  unifiedDryingSource === 'batch' ? 'bg-white dark:bg-gray-700 shadow text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                <Layers size={14} /> From Batch
+              </button>
+            </div>
+
+            {/* Standalone mode */}
+            {unifiedDryingSource === 'standalone' && (
+              <>
+                <FormSelect
+                  label="Procurement Source"
+                  name="procurement_id"
+                  value={unifiedDryingProcId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setUnifiedDryingProcId(val);
+                    setUnifiedDryingErrors(prev => { const n = {...prev}; delete n.procurement_id; return n; });
+                    // Auto-fill remaining sacks
+                    if (val) {
+                      const proc = procurements.find(p => String(p.id) === val);
+                      if (proc) {
+                        const alreadyDrying = proc.drying_sacks || 0;
+                        const remaining = Math.max(0, parseInt(proc.sacks || 0) - alreadyDrying);
+                        setUnifiedDryingStandaloneSacks(String(remaining));
+                      }
+                    } else {
+                      setUnifiedDryingStandaloneSacks('');
+                    }
+                  }}
+                  options={[{ value: '', label: 'Select procurement to dry...' }, ...standaloneProcOptions]}
+                  required
+                  submitted={submitted}
+                  error={unifiedDryingErrors.procurement_id?.[0]}
+                />
+                {selectedUnifiedProc && (() => {
+                  const alreadyDrying = selectedUnifiedProc.drying_sacks || 0;
+                  const totalSacks = parseInt(selectedUnifiedProc.sacks || 0);
+                  const remaining = Math.max(0, totalSacks - alreadyDrying);
+                  const enteredSacks = parseInt(unifiedDryingStandaloneSacks) || 0;
+                  const proportionalKg = totalSacks > 0 ? ((enteredSacks / totalSacks) * parseFloat(selectedUnifiedProc.quantity_kg || 0)).toFixed(2) : 0;
+                  return (
+                    <>
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg mb-2">
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
+                          {totalSacks} total sacks / {parseFloat(selectedUnifiedProc.quantity_kg || 0).toLocaleString()} kg
+                          {alreadyDrying > 0 && <span className="text-orange-600 dark:text-orange-400 ml-1">({alreadyDrying} already drying)</span>}
+                          {' \u00b7 '}<strong>{remaining} sacks available</strong>
+                        </p>
+                      </div>
+                      <FormInput
+                        label={`Sacks to Dry (max ${remaining})`}
+                        name="sacks"
+                        type="number"
+                        value={unifiedDryingStandaloneSacks}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUnifiedDryingStandaloneSacks(val);
+                          const num = parseInt(val);
+                          if (num > remaining) {
+                            setUnifiedDryingErrors(prev => ({ ...prev, sacks: [`Maximum is ${remaining} sacks.`] }));
+                          } else {
+                            setUnifiedDryingErrors(prev => { const n = {...prev}; delete n.sacks; return n; });
+                          }
+                        }}
+                        required
+                        placeholder={`1 - ${remaining}`}
+                        submitted={submitted}
+                        error={unifiedDryingErrors.sacks?.[0]}
+                        min="1"
+                        max={remaining}
+                      />
+                      {enteredSacks > 0 && enteredSacks <= remaining && (
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg mb-2">
+                          <p className="text-xs text-green-700 dark:text-green-300">
+                            <strong>{enteredSacks} sacks</strong> → <strong>{parseFloat(proportionalKg).toLocaleString()} kg</strong> will be sent to drying.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                <FormInput label="Price (₱)" name="price" type="number" value={unifiedDryingPrice}
+                  onChange={(e) => { setUnifiedDryingPrice(e.target.value); setUnifiedDryingErrors(prev => { const n = {...prev}; delete n.price; return n; }); }}
+                  required placeholder="0.00" submitted={submitted}
+                  error={unifiedDryingErrors.price?.[0]} step="0.01"
+                />
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg">
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the Drying page to increment days. Total = (Sacks × Price) × Days.</p>
+                </div>
+              </>
+            )}
+
+            {/* Batch mode */}
+            {unifiedDryingSource === 'batch' && (
+              <>
+                <div className="mb-3">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Batch <span className="text-red-500">*</span></label>
+                  <select name="batch_id" value={unifiedDryingBatchId} onChange={(e) => { const val = e.target.value; setUnifiedDryingBatchId(val); setUnifiedDryingBatchErrors(prev => { const n = {...prev}; delete n.batch_id; return n; }); setUnifiedDryingBatchPreview(null); if (val) { const b = batches.find(b => String(b.id) === val); if (b) setUnifiedDryingSacks(String(b.remaining_sacks)); } else { setUnifiedDryingSacks(''); } }}
+                    className={`w-full px-4 py-2.5 text-sm border-2 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 transition-all ${
+                      unifiedDryingBatchErrors.batch_id ? 'border-red-400 focus:ring-red-500/20' : 'border-gray-200 dark:border-gray-600 focus:ring-indigo-500/20 focus:border-indigo-400'
+                    }`}
+                  >
+                    {dryingBatchOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  </select>
+                  {unifiedDryingBatchErrors.batch_id && <p className="mt-1 text-xs text-red-500">{unifiedDryingBatchErrors.batch_id[0]}</p>}
+                </div>
+
+                {unifiedDryingBatchId && (() => {
+                  const selBatch = batches.find(b => String(b.id) === unifiedDryingBatchId);
+                  return selBatch ? (
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg mb-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{selBatch.batch_number}</span>
+                      </div>
+                      <div className="flex gap-4 text-xs text-gray-600 dark:text-gray-300">
+                        <div><span className="font-medium">Variety:</span> {selBatch.variety_name}</div>
+                        <div><span className="font-medium">Available:</span> <span className="font-bold text-green-600 dark:text-green-400">{selBatch.remaining_sacks} sacks / {parseFloat(selBatch.remaining_kg).toLocaleString()} kg</span></div>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                <FormInput
+                  label="Sacks to Dry"
+                  name="sacks"
+                  type="number"
+                  value={unifiedDryingSacks}
+                  onChange={(e) => { setUnifiedDryingSacks(e.target.value); setUnifiedDryingBatchErrors(prev => { const n = {...prev}; delete n.sacks; return n; }); }}
+                  required
+                  placeholder="0"
+                  submitted={submitted}
+                  error={unifiedDryingBatchErrors.sacks?.[0]}
+                />
+
+                {loadingUnifiedBatchPreview && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg mb-2 animate-pulse">
+                    <p className="text-xs text-gray-400">Calculating distribution...</p>
+                  </div>
+                )}
+                {unifiedDryingBatchPreview && !loadingUnifiedBatchPreview && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg mb-2">
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1.5">Proportional distribution:</p>
+                    <div className="space-y-1">
+                      {unifiedDryingBatchPreview.breakdown?.map((item, i) => (
+                        <div key={i} className="flex justify-between text-xs text-gray-700 dark:text-gray-200">
+                          <span>Procurement #{String(item.procurement_id).padStart(4,'0')}</span>
+                          <span>{item.sacks_taken} sacks → {parseFloat(item.quantity_kg).toLocaleString()} kg</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1.5 pt-1.5 border-t border-green-200 dark:border-green-700 flex justify-between text-xs font-bold text-green-700 dark:text-green-300">
+                      <span>Total</span>
+                      <span>{unifiedDryingSacks} sacks → {parseFloat(unifiedDryingBatchPreview.total_kg || 0).toLocaleString()} kg</span>
+                    </div>
+                  </div>
+                )}
+
+                <FormInput
+                  label="Drying Price (₱/sack)"
+                  name="price"
+                  type="number"
+                  value={unifiedDryingPrice}
+                  onChange={(e) => { setUnifiedDryingPrice(e.target.value); setUnifiedDryingBatchErrors(prev => { const n = {...prev}; delete n.price; return n; }); }}
+                  required
+                  placeholder="0.00"
+                  submitted={submitted}
+                  error={unifiedDryingBatchErrors.price?.[0]}
+                  step="0.01"
+                />
+
+                <div className="p-3 bg-gray-50 dark:bg-gray-700/50 border border-primary-200 dark:border-primary-700 rounded-lg">
+                  <p className="text-xs text-gray-600 dark:text-gray-300">Days start at <strong>0</strong>. Use the <strong>+</strong> button in the Drying page to increment days. Total = (Sacks × Price) × Days.</p>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </FormModal>
 
       {/* Batch View Modal */}

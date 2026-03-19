@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   MapPin, 
@@ -16,8 +16,19 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Button, FormInput } from '../../../components/ui';
+import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
+import { websiteContentApi } from '../../../api';
+import { API_BASE_URL } from '../../../api/config';
+
+const getFullImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
+  const backendUrl = API_BASE_URL.replace('/api', '');
+  return `${backendUrl}${imagePath}`;
+};
 
 const Contact = () => {
+  const { settings } = useBusinessSettings();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -30,6 +41,41 @@ const Contact = () => {
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [pageContent, setPageContent] = useState({
+    heroTag: 'Get In Touch',
+    heroTitle: 'Contact Us',
+    heroSubtitle: "Have questions or ready to place an order? We'd love to hear from you!",
+    heroImage: null,
+    formTitle: 'Send Us a Message',
+    faqs: [
+      { question: 'What is the minimum order for delivery?', answer: 'For deliveries within Rosario, we require a minimum of 2 sacks (50kg). For bulk orders outside Rosario, please contact us for arrangements.' },
+      { question: 'Do you offer wholesale pricing?', answer: 'Yes! We offer competitive wholesale prices for businesses, restaurants, and resellers. Contact us for our wholesale price list.' },
+      { question: 'What payment methods do you accept?', answer: 'We accept cash, bank transfer, GCash, Maya, and credit/debit cards for in-store purchases.' },
+    ],
+    socialTitle: 'Connect With Us',
+    socialDescription: 'Follow us on social media for updates and promotions',
+  });
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        const result = await websiteContentApi.getContactContent();
+        if (result.success && result.data) {
+          setPageContent(prev => ({ ...prev, ...result.data }));
+        }
+      } catch (error) {
+        // Use defaults
+      }
+    };
+    fetchContent();
+
+    const handleStorageSync = (e) => {
+      if (e.key === 'kjp-contact-content') fetchContent();
+    };
+    window.addEventListener('storage', handleStorageSync);
+    return () => window.removeEventListener('storage', handleStorageSync);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,25 +97,25 @@ const Contact = () => {
     {
       icon: MapPin,
       title: 'Visit Us',
-      details: ['Barangay San Pedro', 'Rosario, Batangas 4225', 'Philippines'],
+      details: settings.business_address ? settings.business_address.split(',').map(s => s.trim()) : [],
       color: 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
     },
     {
       icon: Phone,
       title: 'Call Us',
-      details: ['+63 917 123 4567', '+63 (043) 123-4567'],
+      details: settings.business_phone ? [settings.business_phone] : [],
       color: 'bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400',
     },
     {
       icon: Mail,
       title: 'Email Us',
-      details: ['info@kjpricemill.com', 'orders@kjpricemill.com'],
+      details: settings.business_email ? [settings.business_email] : [],
       color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
     },
     {
       icon: Clock,
       title: 'Business Hours',
-      details: ['Monday - Saturday: 7AM - 6PM', 'Sunday: 8AM - 12PM'],
+      details: settings.business_hours ? settings.business_hours.split('\n').filter(Boolean) : ['Monday - Saturday: 7AM - 6PM'],
       color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
     },
   ];
@@ -80,21 +126,6 @@ const Contact = () => {
     { value: 'retail', label: 'Retail Purchase' },
     { value: 'partnership', label: 'Business Partnership' },
     { value: 'feedback', label: 'Feedback / Suggestions' },
-  ];
-
-  const faqs = [
-    {
-      question: 'What is the minimum order for delivery?',
-      answer: 'For deliveries within Rosario, we require a minimum of 2 sacks (50kg). For bulk orders outside Rosario, please contact us for arrangements.',
-    },
-    {
-      question: 'Do you offer wholesale pricing?',
-      answer: 'Yes! We offer competitive wholesale prices for businesses, restaurants, and resellers. Contact us for our wholesale price list.',
-    },
-    {
-      question: 'What payment methods do you accept?',
-      answer: 'We accept cash, bank transfer, GCash, Maya, and credit/debit cards for in-store purchases.',
-    },
   ];
 
   if (isSubmitted) {
@@ -137,20 +168,22 @@ const Contact = () => {
         <div 
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
           style={{ 
-            backgroundImage: 'url(https://images.unsplash.com/photo-1423666639041-f56000c27a9a?w=1920&h=600&fit=crop)',
+            backgroundImage: pageContent.heroImage
+              ? `url(${getFullImageUrl(pageContent.heroImage)})`
+              : 'url(https://images.unsplash.com/photo-1423666639041-f56000c27a9a?w=1920&h=600&fit=crop)',
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-gray-900/50 to-gray-900" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <span className="inline-block px-4 py-1 bg-button-500/20 border border-button-500/30 text-button-300 rounded-full text-sm font-medium mb-6">
-            Get In Touch
+            {pageContent.heroTag}
           </span>
           <h1 className="text-4xl sm:text-5xl font-bold text-white mb-4">
-            Contact Us
+            {pageContent.heroTitle}
           </h1>
           <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-            Have questions or ready to place an order? We'd love to hear from you!
+            {pageContent.heroSubtitle}
           </p>
         </div>
       </section>
@@ -183,7 +216,7 @@ const Contact = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Contact Form */}
             <div className="bg-white dark:bg-gray-700 rounded-xl shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 p-8">
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Send Us a Message</h2>
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">{pageContent.formTitle}</h2>
               
               <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Inquiry Type */}
@@ -346,21 +379,30 @@ const Contact = () => {
                   </h3>
                 </div>
                 <div className="h-64 bg-gray-200 dark:bg-gray-600 relative">
-                  <iframe
-                    title="KJP Rice Mill Location"
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3878.9854426739024!2d121.2092!3d13.8428!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTPCsDUwJzM0LjEiTiAxMjHCsDEyJzMzLjEiRQ!5e0!3m2!1sen!2sph!4v1234567890"
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen=""
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    className="absolute inset-0"
-                  />
+                  {settings.google_maps_embed ? (
+                    <iframe
+                      title={`${settings.business_name || 'Business'} Location`}
+                      src={settings.google_maps_embed}
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen=""
+                      loading="lazy"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      className="absolute inset-0"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                      <div className="text-center">
+                        <MapPin size={32} className="mx-auto mb-2 text-gray-400" />
+                        <p className="text-sm">Map not configured</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50">
                   <p className="text-sm text-gray-600 dark:text-gray-300 text-center">
-                    📍 Barangay San Pedro, Rosario, Batangas 4225
+                    📍 {settings.business_address || 'Our Location'}
                   </p>
                 </div>
               </div>
@@ -369,7 +411,7 @@ const Contact = () => {
               <div className="bg-white dark:bg-gray-700 rounded-xl shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 border-2 border-primary-300 dark:border-primary-700 p-6">
                 <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-4">Frequently Asked Questions</h3>
                 <div className="space-y-4">
-                  {faqs.map((faq, index) => (
+                  {pageContent.faqs.map((faq, index) => (
                     <div key={index} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                       <h4 className="font-medium text-gray-800 dark:text-gray-100 mb-2">{faq.question}</h4>
                       <p className="text-sm text-gray-600 dark:text-gray-300">{faq.answer}</p>
@@ -387,9 +429,9 @@ const Contact = () => {
 
               {/* Social Links */}
               <div className="bg-gradient-to-br from-button-600 to-button-700 rounded-xl p-6 text-white shadow-lg shadow-button-500/25">
-                <h3 className="font-semibold mb-2">Connect With Us</h3>
+                <h3 className="font-semibold mb-2">{pageContent.socialTitle}</h3>
                 <p className="text-white/80 text-sm mb-4">
-                  Follow us on social media for updates and promotions
+                  {pageContent.socialDescription}
                 </p>
                 <div className="flex gap-3">
                   <a 

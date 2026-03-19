@@ -136,7 +136,7 @@ const Dashboard = () => {
   // Recent sales columns
   const recentSalesColumns = [
     { header: 'Transaction', accessor: 'transaction_id' },
-    { header: 'Client', accessor: 'customer' },
+    { header: 'Customer', accessor: 'customer' },
     { header: 'Amount', accessor: 'total', cell: (row) => fmt(row.total) },
     { header: 'Payment', accessor: 'payment_method' },
     { header: 'Date', accessor: 'date' },
@@ -221,7 +221,7 @@ const Dashboard = () => {
             trendLabel="vs last month"
           />
           <StatsCard
-            label="Clients"
+            label="Customers"
             value={overview.total_customers || 0}
             unit={`+${overview.new_customers_this_month || 0} this month`}
             icon={Users}

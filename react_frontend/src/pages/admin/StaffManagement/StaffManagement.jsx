@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { UserCog, Shield, Users, CheckCircle, XCircle, Briefcase, Archive, Truck } from 'lucide-react';
+import { UserCog, Shield, Users, CheckCircle, XCircle, Briefcase, Archive, Truck, Mail, Loader2 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
@@ -18,6 +18,12 @@ const StaffManagement = () => {
   const [formData, setFormData] = useState({
     name: '', position: '', truck_plate_number: '', email: '', phone: '', date_hired: '', status: 'active', password: '',
   });
+
+  // Email verification state
+  const [verificationStep, setVerificationStep] = useState('form'); // 'form' | 'code-sent' | 'verified'
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [verificationError, setVerificationError] = useState('');
 
   const positionOptions = [
     { value: 'Secretary', label: 'Secretary' },
@@ -54,6 +60,9 @@ const StaffManagement = () => {
       date_hired: new Date().toISOString().split('T')[0],
       status: 'active', password: '',
     });
+    setVerificationStep('form');
+    setVerificationCode('');
+    setVerificationError('');
     setIsAddModalOpen(true);
   };
 
@@ -79,7 +88,50 @@ const StaffManagement = () => {
 
   const handleFormChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
+  const handleSendVerification = async () => {
+    if (!formData.email?.trim()) {
+      toast.error('Error', 'Please enter an email address first.');
+      return;
+    }
+    try {
+      setVerificationLoading(true);
+      const response = await usersApi.sendVerification(formData.email);
+      if (response?.success) {
+        setVerificationStep('code-sent');
+        toast.success('Code Sent', `Verification code sent to ${formData.email}`);
+      } else {
+        toast.error('Error', response?.message || 'Failed to send verification code.');
+      }
+    } catch (error) {
+      toast.error('Error', error.response?.data?.message || 'Failed to send verification code.');
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (code) => {
+    try {
+      setVerificationLoading(true);
+      setVerificationError('');
+      const response = await usersApi.verifyCode(formData.email, code);
+      if (response?.success) {
+        setVerificationStep('verified');
+        toast.success('Verified', 'Email verified successfully!');
+      } else {
+        setVerificationError(response?.message || 'The verification code is incorrect.');
+      }
+    } catch (error) {
+      setVerificationError(error.response?.data?.message || 'Verification failed.');
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
   const handleAddSubmit = async () => {
+    if (verificationStep !== 'verified') {
+      toast.error('Error', 'Please verify the email address first.');
+      return;
+    }
     try {
       setSubmitting(true);
       await usersApi.create({
@@ -217,7 +269,7 @@ const StaffManagement = () => {
       )}
 
       {/* Add Modal */}
-      <FormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSubmit} title="Add New Staff Member" submitText={submitting ? 'Adding...' : 'Add Staff'} size="lg" disabled={submitting}>
+      <FormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddSubmit} title="Add New Staff Member" submitText={submitting ? 'Adding...' : 'Add Staff'} size="lg" disabled={submitting || verificationStep !== 'verified'}>
         {({ submitted }) => (
           <>
             <FormInput label="Full Name" name="name" value={formData.name} onChange={handleFormChange} required placeholder="Enter full name" submitted={submitted} />
@@ -226,7 +278,38 @@ const StaffManagement = () => {
               <FormInput label="Truck Plate Number" name="truck_plate_number" value={formData.truck_plate_number} onChange={handleFormChange} placeholder="e.g. ABC 1234" submitted={submitted} />
             )}
             <div className="grid grid-cols-2 gap-4">
-              <FormInput label="Email" name="email" type="email" value={formData.email} onChange={handleFormChange} required placeholder="email@kjp.com" submitted={submitted} />
+              <div>
+                <FormInput label="Email" name="email" type="email" value={formData.email} onChange={(e) => { handleFormChange(e); if (verificationStep !== 'form') { setVerificationStep('form'); setVerificationCode(''); setVerificationError(''); } }} required placeholder="email@kjp.com" submitted={submitted} disabled={verificationStep === 'verified'} />
+                {/* Verification UI */}
+                {verificationStep === 'form' && (
+                  <button type="button" onClick={handleSendVerification} disabled={verificationLoading || !formData.email?.trim()} className="mt-1 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-button-500 hover:bg-button-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    {verificationLoading ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />}
+                    Send Verification Code
+                  </button>
+                )}
+                {verificationStep === 'code-sent' && (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="relative">
+                      <input type="text" value={verificationCode} onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setVerificationCode(val);
+                        setVerificationError('');
+                        if (val.length === 6) handleVerifyCode(val);
+                      }} placeholder="Enter 6-digit code" maxLength={6} disabled={verificationLoading} className={`w-full px-3 py-1.5 text-sm border-2 rounded-lg bg-white dark:bg-gray-700 focus:border-button-500 focus:outline-none ${verificationError ? 'border-red-400 dark:border-red-500' : 'border-primary-300 dark:border-primary-700'} ${verificationLoading ? 'opacity-60' : ''}`} />
+                      {verificationLoading && <Loader2 size={14} className="animate-spin text-button-500 absolute right-3 top-1/2 -translate-y-1/2" />}
+                    </div>
+                    {verificationError && <p className="text-xs text-red-500">{verificationError}</p>}
+                    <button type="button" onClick={handleSendVerification} disabled={verificationLoading} className="text-xs text-button-500 hover:text-button-600 font-medium">
+                      Resend Code
+                    </button>
+                  </div>
+                )}
+                {verificationStep === 'verified' && (
+                  <p className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                    <CheckCircle size={12} /> Email verified
+                  </p>
+                )}
+              </div>
               <FormInput label="Phone" name="phone" value={formData.phone} onChange={handleFormChange} placeholder="+63 XXX XXX XXXX" submitted={submitted} />
             </div>
             <div className="grid grid-cols-2 gap-4">

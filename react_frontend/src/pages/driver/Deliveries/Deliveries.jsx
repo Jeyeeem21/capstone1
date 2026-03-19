@@ -134,7 +134,7 @@ const Deliveries = () => {
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: theme.text_secondary }} />
             <input
               type="text"
-              placeholder="Search by delivery #, destination, or client..."
+              placeholder="Search by delivery #, destination, or customer..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2.5 text-sm border-2 rounded-xl focus:outline-none transition-all"

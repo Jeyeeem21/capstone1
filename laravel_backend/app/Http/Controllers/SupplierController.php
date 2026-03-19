@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Supplier;
 use App\Models\Procurement;
 use App\Services\SupplierService;
+use App\Services\EmailService;
 use App\Http\Resources\SupplierResource;
 use App\Http\Resources\ProcurementResource;
 use App\Traits\ApiResponse;
@@ -18,10 +19,12 @@ class SupplierController extends Controller
     use ApiResponse, AuditLogger;
 
     protected SupplierService $supplierService;
+    protected EmailService $emailService;
 
-    public function __construct(SupplierService $supplierService)
+    public function __construct(SupplierService $supplierService, EmailService $emailService)
     {
         $this->supplierService = $supplierService;
+        $this->emailService = $emailService;
     }
 
     /**
@@ -72,6 +75,15 @@ class SupplierController extends Controller
             'supplier_id' => $supplier->id,
             'name' => $supplier->name,
         ]);
+
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $supplier) {
+            $emailService->sendAdminAlert(
+                "New Supplier Added — {$supplier->name}",
+                'New Supplier Added',
+                "A new supplier \"{$supplier->name}\" ({$supplier->email}) has been added to the system."
+            );
+        })->afterResponse();
 
         return $this->successResponse(
             new SupplierResource($supplier),
@@ -138,6 +150,15 @@ class SupplierController extends Controller
             'supplier_id' => $supplier->id,
             'changes' => $validated,
         ]);
+
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $supplier) {
+            $emailService->sendAdminAlert(
+                "Supplier Updated — {$supplier->name}",
+                'Supplier Information Updated',
+                "The supplier \"{$supplier->name}\" ({$supplier->email}) has been updated in the system."
+            );
+        })->afterResponse();
 
         return $this->successResponse(
             new SupplierResource($supplier),

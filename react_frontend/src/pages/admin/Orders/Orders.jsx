@@ -6,6 +6,7 @@ import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart
 import { apiClient, API_BASE_URL } from '../../../api';
 import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
 import { useAuth } from '../../../context/AuthContext';
+import { suppressNotifToasts } from '../../../utils/notifToastGuard';
 
 const AdminOrders = () => {
   const toast = useToast();
@@ -48,9 +49,14 @@ const AdminOrders = () => {
   const payProofInputRef = useRef(null);
   const [activeStatusTab, setActiveStatusTab] = useState(() => {
     const tabFromUrl = searchParams.get('tab');
-    const validTabs = ['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Return Requested', 'Picking Up', 'Returned', 'Cancelled', 'Voided'];
-    return tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : 'All';
+    const validTabs = ['All', 'Pending', 'Processing', 'Shipped', 'Delivered & Completed', 'Returns & Cancelled'];
+    if (tabFromUrl && validTabs.includes(tabFromUrl)) return tabFromUrl;
+    // Support legacy tab values from URL
+    if (['Delivered', 'Completed'].includes(tabFromUrl)) return 'Delivered & Completed';
+    if (['Return Requested', 'Picking Up', 'Returned', 'Cancelled', 'Voided'].includes(tabFromUrl)) return 'Returns & Cancelled';
+    return 'All';
   });
+  const [statusSubFilter, setStatusSubFilter] = useState('');
   const [saving, setSaving] = useState(false);
   const [isShipModalOpen, setIsShipModalOpen] = useState(false);
   const [shipOrder, setShipOrder] = useState(null);
@@ -59,6 +65,15 @@ const AdminOrders = () => {
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
+  // Deliver proof state
+  const [isDeliverModalOpen, setIsDeliverModalOpen] = useState(false);
+  const [deliverOrder, setDeliverOrder] = useState(null);
+  const [deliverProofFiles, setDeliverProofFiles] = useState([]);
+  const [deliverProofPreviews, setDeliverProofPreviews] = useState([]);
+  const [deliverShowCamera, setDeliverShowCamera] = useState(false);
+  const deliverVideoRef = useRef(null);
+  const deliverStreamRef = useRef(null);
+  const deliverProofInputRef = useRef(null);
   // Void state
   const [isVoidModalOpen, setIsVoidModalOpen] = useState(false);
   const [voidOrder, setVoidOrder] = useState(null);
@@ -150,14 +165,15 @@ const AdminOrders = () => {
     { value: 'Pending', label: 'Pending', icon: Clock, color: 'text-yellow-600 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20', activeBg: 'bg-yellow-500', activeText: 'text-white' },
     { value: 'Processing', label: 'Processing', icon: Package, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', activeBg: 'bg-blue-500', activeText: 'text-white' },
     { value: 'Shipped', label: 'Shipped', icon: Truck, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-900/40', activeBg: 'bg-indigo-500', activeText: 'text-white' },
-    { value: 'Delivered', label: 'Delivered', icon: CheckCircle, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', activeBg: 'bg-green-500', activeText: 'text-white' },
-    { value: 'Completed', label: 'Completed', icon: Store, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', activeBg: 'bg-emerald-500', activeText: 'text-white' },
-    { value: 'Return Requested', label: 'Return', icon: RotateCcw, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/20', activeBg: 'bg-orange-500', activeText: 'text-white' },
-    { value: 'Picking Up', label: 'Picking Up', icon: Truck, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20', activeBg: 'bg-amber-500', activeText: 'text-white' },
-    { value: 'Returned', label: 'Returned', icon: RotateCcw, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white' },
-    { value: 'Cancelled', label: 'Cancelled', icon: XCircle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white' },
-    { value: 'Voided', label: 'Voided', icon: Ban, color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-100 dark:bg-gray-700', activeBg: 'bg-gray-500', activeText: 'text-white' },
+    { value: 'Delivered & Completed', label: 'Delivered & Completed', icon: CheckCircle, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', activeBg: 'bg-green-500', activeText: 'text-white', statuses: ['Delivered', 'Completed'] },
+    { value: 'Returns & Cancelled', label: 'Returns & Cancelled', icon: RotateCcw, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white', statuses: ['Return Requested', 'Picking Up', 'Returned', 'Cancelled', 'Voided'] },
   ];
+
+  // Helper to get statuses for a tab
+  const getTabStatuses = (tabValue) => {
+    const tab = statusTabs.find(t => t.value === tabValue);
+    return tab?.statuses || [tabValue];
+  };
 
   const ORDER_STATUS_SORT = { 'Pending': 0, 'Processing': 1, 'Picking Up': 2, 'Shipped': 3, 'Delivered': 4, 'Completed': 5, 'Return Requested': 6, 'Returned': 7, 'Cancelled': 8, 'Voided': 9 };
 
@@ -165,7 +181,8 @@ const AdminOrders = () => {
     if (activeStatusTab === 'All') {
       return [...mappedOrders].sort((a, b) => (ORDER_STATUS_SORT[a.status] ?? 99) - (ORDER_STATUS_SORT[b.status] ?? 99));
     }
-    return mappedOrders.filter(o => o.status === activeStatusTab);
+    const statuses = getTabStatuses(activeStatusTab);
+    return mappedOrders.filter(o => statuses.includes(o.status));
   }, [mappedOrders, activeStatusTab]);
 
   // ─── Handlers ────────────────────────────────────────────
@@ -241,6 +258,15 @@ const AdminOrders = () => {
       return;
     }
 
+    // If delivering, show proof upload modal instead
+    if (nextStatus === 'delivered') {
+      setDeliverOrder(order);
+      setDeliverProofFiles([]);
+      setDeliverProofPreviews([]);
+      setIsDeliverModalOpen(true);
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await apiClient.put(`/sales/${order.id}/status`, { status: nextStatus });
@@ -249,6 +275,7 @@ const AdminOrders = () => {
         invalidateCache('/products');
         refetch();
         const labels = { processing: 'Processing', shipped: 'Shipped', delivered: 'Delivered', completed: 'Completed' };
+        suppressNotifToasts();
         toast.success('Status Updated', `Order ${order.order_id} moved to ${labels[nextStatus]}.`);
       } else {
         throw response;
@@ -280,6 +307,7 @@ const AdminOrders = () => {
       invalidateCache('/products');
       invalidateCache('/users');
       refetch();
+      suppressNotifToasts();
       toast.success('Order Shipped', `Order ${shipOrder.order_id} has been shipped with ${selectedDriver?.name || 'a driver'} assigned.`);
       setIsShipModalOpen(false);
     } catch (error) {
@@ -288,6 +316,57 @@ const AdminOrders = () => {
       setSaving(false);
     }
   }, [shipOrder, selectedDriverId, deliveryDate, deliveryNotes, saving, refetch, toast]);
+
+  // Open payment modal for an order
+  const handleOpenPayModal = useCallback((order) => {
+    setPayOrder(order);
+    setPayMethod('cash');
+    setPayCashTendered('');
+    setPayGcashRef('');
+    setPayProofFiles([]);
+    setPayProofPreviews([]);
+    setPayShowCamera(false);
+    setIsPayModalOpen(true);
+  }, []);
+
+  // Confirm deliver with proof upload
+  const handleDeliverConfirm = useCallback(async () => {
+    if (!deliverOrder || deliverProofFiles.length === 0 || saving) return;
+    setSaving(true);
+    try {
+      const formData = new FormData();
+      formData.append('_method', 'PUT');
+      formData.append('status', 'delivered');
+      deliverProofFiles.forEach((file) => {
+        formData.append('delivery_proof[]', file);
+      });
+      const response = await apiClient.post(`/sales/${deliverOrder.id}/status`, formData);
+      if (!response.success) throw response;
+      invalidateCache('/sales');
+      invalidateCache('/products');
+      refetch();
+      suppressNotifToasts();
+      toast.success('Order Delivered', `Order ${deliverOrder.order_id} has been marked as delivered.`);
+
+      // If COD and not paid, auto-open payment modal
+      const wasCod = deliverOrder.raw_payment_method === 'cod';
+      const wasUnpaid = deliverOrder.payment_status === 'not_paid';
+      const orderForPay = { ...deliverOrder };
+
+      setIsDeliverModalOpen(false);
+      setDeliverOrder(null);
+      setDeliverProofFiles([]);
+      setDeliverProofPreviews([]);
+
+      if (wasCod && wasUnpaid) {
+        setTimeout(() => handleOpenPayModal(orderForPay), 300);
+      }
+    } catch (error) {
+      toast.error('Delivery Failed', error.message || 'Failed to mark order as delivered');
+    } finally {
+      setSaving(false);
+    }
+  }, [deliverOrder, deliverProofFiles, saving, refetch, toast, handleOpenPayModal]);
 
   // Void order handler
   const handleVoidConfirm = useCallback(async () => {
@@ -302,6 +381,7 @@ const AdminOrders = () => {
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
+        suppressNotifToasts();
         toast.success('Order Voided', `Order ${voidOrder.order_id} has been voided. Stock restored.`);
         setIsVoidModalOpen(false);
         setVoidOrder(null);
@@ -326,6 +406,7 @@ const AdminOrders = () => {
         const cancelledId = selectedOrder.id;
         // Immediately update status in local data for instant UI
         optimisticUpdate(prev => prev.map(o => o.id === cancelledId ? { ...o, status: 'cancelled' } : o));
+        suppressNotifToasts();
         toast.success('Order Cancelled', `Order ${selectedOrder.order_id} has been cancelled.`);
         setIsCancelModalOpen(false);
         // Refetch in background to confirm
@@ -343,7 +424,7 @@ const AdminOrders = () => {
   }, [selectedOrder, saving, refetch, optimisticUpdate, toast]);
 
   const handleReturnConfirm = useCallback(async () => {
-    if (!selectedOrder || !returnReason || saving) return;
+    if (!selectedOrder || !returnReason || !returnProofFiles.length || saving) return;
     setSaving(true);
     try {
       const formData = new FormData();
@@ -356,6 +437,7 @@ const AdminOrders = () => {
         const returnedId = selectedOrder.id;
         // Immediately update status in local data for instant UI
         optimisticUpdate(prev => prev.map(o => o.id === returnedId ? { ...o, status: 'return_requested' } : o));
+        suppressNotifToasts();
         toast.success('Return Requested', `Return request submitted for order ${selectedOrder.order_id}. Awaiting review.`);
         setIsReturnModalOpen(false);
         // Refetch in background to confirm
@@ -415,6 +497,7 @@ const AdminOrders = () => {
       if (response.success) {
         invalidateCache('/sales');
         refetch();
+        suppressNotifToasts();
         toast.success('Return Accepted', `Pickup assigned for order ${acceptReturnOrder.order_id}. Driver is on the way.`);
         setIsAcceptReturnModalOpen(false);
       } else {
@@ -436,6 +519,7 @@ const AdminOrders = () => {
       if (response.success) {
         invalidateCache('/sales');
         refetch();
+        suppressNotifToasts();
         toast.success('Return Rejected', `Return rejected for order ${order.order_id}. Reverted to delivered.`);
       } else {
         throw response;
@@ -463,6 +547,7 @@ const AdminOrders = () => {
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
+        suppressNotifToasts();
         toast.success('Order Returned', `Order ${markReturnOrder.order_id} has been returned. Use "Restock Items" to restore stock.`);
         setIsMarkReturnModalOpen(false);
         setMarkReturnOrder(null);
@@ -500,6 +585,7 @@ const AdminOrders = () => {
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
+        suppressNotifToasts();
         toast.success('Items Restocked', `${items.length} item(s) have been restocked.`);
         setIsRestockModalOpen(false);
         setRestockOrder(null);
@@ -515,17 +601,6 @@ const AdminOrders = () => {
   }, [saving, restockOrder, restockQuantities, refetch, toast]);
 
   // ─── Mark as Paid ────────────────────────────────────────
-
-  const handleOpenPayModal = useCallback((order) => {
-    setPayOrder(order);
-    setPayMethod('cash');
-    setPayCashTendered('');
-    setPayGcashRef('');
-    setPayProofFiles([]);
-    setPayProofPreviews([]);
-    setPayShowCamera(false);
-    setIsPayModalOpen(true);
-  }, []);
 
   const stopPayCamera = useCallback(() => {
     if (payStreamRef.current) {
@@ -599,6 +674,7 @@ const AdminOrders = () => {
       if (response.success) {
         invalidateCache('/sales');
         refetch();
+        suppressNotifToasts();
         toast.success('Payment Recorded', `Order ${payOrder.order_id} has been marked as paid.`);
         setIsPayModalOpen(false);
         setPayOrder(null);
@@ -693,13 +769,18 @@ const AdminOrders = () => {
   }, [mappedOrders, isInChartScope, activeChartPoint, matchesChartPoint]);
 
   const chartFilteredOrdersByTab = useMemo(() => {
-    let result = activeStatusTab === 'All'
-      ? [...chartFilteredOrders].sort((a, b) => (ORDER_STATUS_SORT[a.status] ?? 99) - (ORDER_STATUS_SORT[b.status] ?? 99))
-      : chartFilteredOrders.filter(o => o.status === activeStatusTab);
+    let result;
+    if (activeStatusTab === 'All') {
+      result = [...chartFilteredOrders].sort((a, b) => (ORDER_STATUS_SORT[a.status] ?? 99) - (ORDER_STATUS_SORT[b.status] ?? 99));
+    } else {
+      const statuses = getTabStatuses(activeStatusTab);
+      result = chartFilteredOrders.filter(o => statuses.includes(o.status));
+    }
+    if (statusSubFilter) result = result.filter(o => o.status === statusSubFilter);
     if (payStatusFilter) result = result.filter(o => (o.payment_status || 'paid') === payStatusFilter);
     if (payMethodFilter) result = result.filter(o => o.raw_payment_method === payMethodFilter);
     return result;
-  }, [chartFilteredOrders, activeStatusTab, payStatusFilter, payMethodFilter]);
+  }, [chartFilteredOrders, activeStatusTab, statusSubFilter, payStatusFilter, payMethodFilter]);
 
   // ─── Stats ───────────────────────────────────────────────
 
@@ -835,7 +916,7 @@ const AdminOrders = () => {
 
   const baseColumns = [
     { header: 'Order ID', accessor: 'order_id' },
-    { header: 'Client', accessor: 'customer' },
+    { header: 'Customer', accessor: 'customer' },
     { header: 'Products', accessor: 'products_summary', cell: (row) => {
       const items = row.items || [];
       if (items.length === 0) return <span className="text-gray-400 text-xs">No items</span>;
@@ -873,7 +954,7 @@ const AdminOrders = () => {
         </span>
       ) : (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-          <Store size={10} /> Walk-in
+          <Store size={10} /> Pick Up
         </span>
       )
     )},
@@ -887,7 +968,8 @@ const AdminOrders = () => {
       const hasAnyAction = nextAction || canVoid ||
         row.raw_status === 'pending' || row.raw_status === 'processing' ||
         row.raw_status === 'delivered' || row.raw_status === 'return_requested' ||
-        row.raw_status === 'picking_up' || row.payment_status === 'not_paid';
+        row.raw_status === 'picking_up' || row.raw_status === 'returned' ||
+        row.payment_status === 'not_paid';
 
       if (!hasAnyAction) return null;
 
@@ -990,7 +1072,7 @@ const AdminOrders = () => {
 
   return (
     <div>
-      <PageHeader title="Orders" description="Manage client orders" icon={ClipboardList} />
+      <PageHeader title="Orders" description="Manage customer orders" icon={ClipboardList} />
 
       {/* Stats Cards */}
       {loading ? (
@@ -1010,7 +1092,7 @@ const AdminOrders = () => {
           <div className="lg:col-span-2">
             <LineChart
               title="Order Trends"
-              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Revenue from client orders"}
+              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Revenue from customer orders"}
               data={chartData}
               lines={[{ dataKey: 'value', name: 'Revenue (₱)' }]}
               height={280}
@@ -1096,11 +1178,11 @@ const AdminOrders = () => {
                 {statusTabs.map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeStatusTab === tab.value;
-                  const count = tab.value === 'All' ? mappedOrders.length : mappedOrders.filter(o => o.status === tab.value).length;
+                  const count = tab.value === 'All' ? mappedOrders.length : mappedOrders.filter(o => (tab.statuses || [tab.value]).includes(o.status)).length;
                   return (
                     <button
                       key={tab.value}
-                      onClick={() => setActiveStatusTab(tab.value)}
+                      onClick={() => { setActiveStatusTab(tab.value); setStatusSubFilter(''); }}
                       className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-xs font-semibold transition-all whitespace-nowrap border-2 border-b-0 ${
                         isActive
                           ? `${tab.activeBg} ${tab.activeText} border-transparent shadow-md`
@@ -1123,7 +1205,7 @@ const AdminOrders = () => {
 
           <DataTable
             title="Order Records"
-            subtitle={activeStatusTab === 'All' ? 'All client orders' : `Showing ${activeStatusTab.toLowerCase()} orders`}
+            subtitle={activeStatusTab === 'All' ? 'All customer orders' : statusSubFilter ? `Showing ${statusSubFilter.toLowerCase()} orders` : `Showing ${activeStatusTab.toLowerCase()} orders`}
             columns={columns}
             data={chartFilteredOrdersByTab}
             searchPlaceholder="Search orders..."
@@ -1131,6 +1213,31 @@ const AdminOrders = () => {
             onRowDoubleClick={handleView}
             headerRight={
               <div className="flex items-center gap-2 flex-wrap">
+                {activeStatusTab === 'Delivered & Completed' && (
+                  <select
+                    value={statusSubFilter}
+                    onChange={e => setStatusSubFilter(e.target.value)}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-primary-200 dark:border-primary-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-button-500"
+                  >
+                    <option value="">All (Delivered & Completed)</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                )}
+                {activeStatusTab === 'Returns & Cancelled' && (
+                  <select
+                    value={statusSubFilter}
+                    onChange={e => setStatusSubFilter(e.target.value)}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-primary-200 dark:border-primary-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-button-500"
+                  >
+                    <option value="">All (Returns & Cancelled)</option>
+                    <option value="Return Requested">Return Requested</option>
+                    <option value="Picking Up">Picking Up</option>
+                    <option value="Returned">Returned</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Voided">Voided</option>
+                  </select>
+                )}
                 <select
                   value={payStatusFilter}
                   onChange={e => setPayStatusFilter(e.target.value)}
@@ -1165,6 +1272,14 @@ const AdminOrders = () => {
         size="full"
         footer={
           <div className="flex gap-3 justify-end">
+            {selectedOrder?.raw_status === 'returned' && (selectedOrder.items || []).some(i => !i.restocked) && (
+              <button
+                onClick={() => { setIsViewModalOpen(false); handleOpenRestock(selectedOrder); }}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              >
+                <Package size={16} /> Restock Items
+              </button>
+            )}
             <button
               onClick={() => setIsViewModalOpen(false)}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
@@ -1175,86 +1290,61 @@ const AdminOrders = () => {
         }
       >
         {selectedOrder && (
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col lg:flex-row gap-3">
             {/* Left Column — Order Info */}
-            <div className="flex-1 min-w-0 space-y-3">
+            <div className="flex-1 min-w-0 space-y-2">
               {/* Header with Order ID & Status */}
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary-50 dark:from-gray-700 to-button-50 dark:to-gray-700 rounded-xl border-2 border-primary-200 dark:border-primary-700">
-                <div className="flex items-start gap-2">
-                  <div className="p-2 bg-button-500 text-white rounded-lg">
-                    <Receipt size={20} />
+              <div className="flex items-center justify-between p-2 bg-gradient-to-r from-primary-50 dark:from-gray-700 to-button-50 dark:to-gray-700 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-button-500 text-white rounded-lg">
+                    <Receipt size={16} />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{selectedOrder.order_id}</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{selectedOrder.date_formatted}</p>
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">{selectedOrder.order_id}</h3>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{selectedOrder.date_formatted}</p>
                   </div>
                 </div>
                 <StatusBadge status={selectedOrder.status} />
               </div>
 
               {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-2">
-                {/* Client */}
-                <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                  <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                    <User size={14} />
+              <div className="grid grid-cols-3 gap-1.5">
+                {/* Customer */}
+                <div className="flex items-center gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className="p-1 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                    <User size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Client</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5 truncate">{selectedOrder.customer}</p>
+                    <p className="text-[10px] font-medium text-gray-400 uppercase">Customer</p>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{selectedOrder.customer}</p>
                   </div>
                 </div>
 
                 {/* Payment Method */}
-                <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                  <div className={`p-1.5 rounded-lg ${selectedOrder.payment_status === 'not_paid' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'}`}>
-                    <CreditCard size={14} />
+                <div className="flex items-center gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className={`p-1 rounded-md ${selectedOrder.payment_status === 'not_paid' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'}`}>
+                    <CreditCard size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Payment</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{selectedOrder.payment_method}</p>
-                    {selectedOrder.reference_number && (
-                      <p className="text-xs text-gray-400 truncate">Ref: {selectedOrder.reference_number}</p>
-                    )}
+                    <p className="text-[10px] font-medium text-gray-400 uppercase">Payment</p>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{selectedOrder.payment_method}</p>
                     {selectedOrder.payment_status === 'not_paid' ? (
-                      <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 mt-0.5">Not Paid</span>
+                      <span className="inline-flex px-1 py-0.5 text-[9px] font-semibold rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400">Not Paid</span>
                     ) : selectedOrder.paid_at_formatted && (
-                      <p className="text-[10px] text-gray-400 mt-0.5">Paid: {selectedOrder.paid_at_formatted}</p>
+                      <p className="text-[9px] text-gray-400">Paid: {selectedOrder.paid_at_formatted}</p>
                     )}
-                  </div>
-                </div>
-
-                {/* Items Count */}
-                <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                  <div className="p-1.5 rounded-lg bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400">
-                    <Package size={14} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Items</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{selectedOrder.items_count} item{selectedOrder.items_count > 1 ? 's' : ''} ({selectedOrder.total_quantity} pcs)</p>
-                  </div>
-                </div>
-
-                {/* Date */}
-                <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-                  <div className="p-1.5 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
-                    <Calendar size={14} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Order Date</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{selectedOrder.date_formatted}</p>
                   </div>
                 </div>
 
                 {/* Order Type */}
-                <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl col-span-2">
-                  <div className={`p-1.5 rounded-lg ${selectedOrder.is_delivery ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'}`}>
-                    {selectedOrder.is_delivery ? <Truck size={14} /> : <Store size={14} />}
+                <div className="flex items-center gap-1.5 p-1.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                  <div className={`p-1 rounded-md ${selectedOrder.is_delivery ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'}`}>
+                    {selectedOrder.is_delivery ? <Truck size={12} /> : <Store size={12} />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Type</p>
-                    <p className={`text-sm font-semibold mt-0.5 ${selectedOrder.is_delivery ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                      {selectedOrder.is_delivery ? 'Delivery' : 'Walk-in'}
+                    <p className="text-[10px] font-medium text-gray-400 uppercase">Type</p>
+                    <p className={`text-xs font-semibold ${selectedOrder.is_delivery ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                      {selectedOrder.is_delivery ? 'Delivery' : 'Pick Up'}
                     </p>
                   </div>
                 </div>
@@ -1262,15 +1352,15 @@ const AdminOrders = () => {
 
               {/* Payment Proof Images */}
               {selectedOrder.payment_proof?.length > 0 && (
-                <div className="bg-button-50 dark:bg-gray-700 rounded-xl p-3 border border-button-200 dark:border-button-700">
-                  <p className="text-xs font-bold text-button-600 dark:text-button-400 uppercase tracking-wide mb-2">Payment Proof</p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="bg-button-50 dark:bg-gray-700 rounded-lg p-2 border border-button-200 dark:border-button-700">
+                  <p className="text-[10px] font-bold text-button-600 dark:text-button-400 uppercase tracking-wide mb-1.5">Payment Proof</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {selectedOrder.payment_proof.map((url, idx) => (
                       <img
                         key={idx}
                         src={`${API_BASE_URL.replace('/api', '')}${url}`}
                         alt={`Payment proof ${idx + 1}`}
-                        className="w-[80px] h-[80px] object-cover rounded-lg border border-button-200 dark:border-button-700 cursor-pointer hover:opacity-80"
+                        className="w-[60px] h-[60px] object-cover rounded-lg border border-button-200 dark:border-button-700 cursor-pointer hover:opacity-80"
                         onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
                       />
                     ))}
@@ -1280,15 +1370,15 @@ const AdminOrders = () => {
 
               {/* Delivery Address */}
               {selectedOrder.delivery_address && (
-                <div className="flex items-start gap-2 p-2.5 bg-button-50 dark:bg-gray-700 rounded-xl border border-button-200 dark:border-button-700">
-                  <div className="p-1.5 rounded-lg bg-button-100 dark:bg-button-800/50 text-button-600 dark:text-button-400">
-                    <MapPin size={14} />
+                <div className="flex items-start gap-2 p-2 bg-button-50 dark:bg-gray-700 rounded-lg border border-button-200 dark:border-button-700">
+                  <div className="p-1 rounded-md bg-button-100 dark:bg-button-800/50 text-button-600 dark:text-button-400">
+                    <MapPin size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-button-600 dark:text-button-400 uppercase tracking-wide">Delivery Address</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">{selectedOrder.delivery_address}</p>
+                    <p className="text-[10px] font-medium text-button-600 dark:text-button-400 uppercase">Delivery Address</p>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{selectedOrder.delivery_address}</p>
                     {selectedOrder.distance_km && (
-                      <p className="text-xs text-button-500 dark:text-button-400 mt-0.5">{parseFloat(selectedOrder.distance_km).toFixed(1)} km from warehouse</p>
+                      <p className="text-[10px] text-button-500 dark:text-button-400">{parseFloat(selectedOrder.distance_km).toFixed(1)} km from warehouse</p>
                     )}
                   </div>
                 </div>
@@ -1296,51 +1386,69 @@ const AdminOrders = () => {
 
               {/* Assigned Driver */}
               {selectedOrder.driver_name && (
-                <div className="flex items-center gap-3 p-2.5 bg-button-50 dark:bg-gray-700 rounded-xl border border-button-200 dark:border-button-700">
-                  <div className="w-9 h-9 bg-button-200 dark:bg-button-800/50 rounded-full flex items-center justify-center">
-                    <User size={16} className="text-button-600 dark:text-button-400" />
+                <div className="flex items-center gap-2 p-2 bg-button-50 dark:bg-gray-700 rounded-lg border border-button-200 dark:border-button-700">
+                  <div className="w-7 h-7 bg-button-200 dark:bg-button-800/50 rounded-full flex items-center justify-center">
+                    <User size={12} className="text-button-600 dark:text-button-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-button-600 dark:text-button-400 uppercase tracking-wide">Assigned Driver</p>
-                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{selectedOrder.driver_name}</p>
+                    <p className="text-[10px] font-medium text-button-600 dark:text-button-400 uppercase">Assigned Driver</p>
+                    <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{selectedOrder.driver_name}</p>
                   </div>
                   {selectedOrder.driver_plate_number && (
-                    <span className="text-xs font-bold text-button-600 dark:text-button-400 bg-button-100 dark:bg-button-800/50 px-2 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0">
-                      <Truck size={10} /> {selectedOrder.driver_plate_number}
+                    <span className="text-[10px] font-bold text-button-600 dark:text-button-400 bg-button-100 dark:bg-button-800/50 px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 shrink-0">
+                      <Truck size={9} /> {selectedOrder.driver_plate_number}
                     </span>
                   )}
                 </div>
               )}
 
+              {/* Delivery Proof Images */}
+              {selectedOrder.delivery_proof?.length > 0 && (
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2.5 border border-green-200 dark:border-green-700">
+                  <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-wide mb-1.5">Proof of Delivery</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedOrder.delivery_proof.map((url, idx) => (
+                      <img
+                        key={idx}
+                        src={`${API_BASE_URL.replace('/api', '')}${url}`}
+                        alt={`Delivery proof ${idx + 1}`}
+                        className="w-[80px] h-[80px] object-cover rounded-lg border border-green-200 dark:border-green-700 cursor-pointer hover:opacity-80"
+                        onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Notes / Void Reason */}
               {selectedOrder.notes && selectedOrder.raw_status !== 'voided' && (
-                <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-gray-700 rounded-xl border border-amber-200 dark:border-amber-700">
-                  <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-                    <StickyNote size={14} />
+                <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-gray-700 rounded-lg border border-amber-200 dark:border-amber-700">
+                  <div className="p-1 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                    <StickyNote size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">Order Notes</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-200 mt-0.5">{selectedOrder.notes}</p>
+                    <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase">Order Notes</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-200">{selectedOrder.notes}</p>
                   </div>
                 </div>
               )}
 
               {/* Void Reason */}
               {selectedOrder.raw_status === 'voided' && (
-                <div className="flex items-start gap-2 p-2.5 bg-red-50 dark:bg-gray-700 rounded-xl border border-red-200 dark:border-red-700">
-                  <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
-                    <Ban size={14} />
+                <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-gray-700 rounded-lg border border-red-200 dark:border-red-700">
+                  <div className="p-1 rounded-md bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                    <Ban size={12} />
                   </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">Void Information</p>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-[10px] font-medium text-red-600 dark:text-red-400 uppercase">Void Information</p>
                     {selectedOrder.notes && (
-                      <p className="text-sm text-gray-700 dark:text-gray-200"><span className="font-semibold">Reason:</span> {selectedOrder.notes}</p>
+                      <p className="text-xs text-gray-700 dark:text-gray-200"><span className="font-semibold">Reason:</span> {selectedOrder.notes}</p>
                     )}
                     {selectedOrder.voided_by && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400"><span className="font-medium">Voided by:</span> {selectedOrder.voided_by}</p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400"><span className="font-medium">Voided by:</span> {selectedOrder.voided_by}</p>
                     )}
                     {selectedOrder.authorized_by && selectedOrder.authorized_by !== selectedOrder.voided_by && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400"><span className="font-medium">Authorized by:</span> {selectedOrder.authorized_by}</p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400"><span className="font-medium">Authorized by:</span> {selectedOrder.authorized_by}</p>
                     )}
                   </div>
                 </div>
@@ -1348,27 +1456,27 @@ const AdminOrders = () => {
 
               {/* Return Info */}
               {selectedOrder.return_reason && (
-                <div className="p-2.5 bg-orange-50 dark:bg-gray-700 rounded-xl border border-orange-200 dark:border-orange-700">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="p-1.5 rounded-lg bg-orange-100 dark:bg-orange-800/50 text-orange-600 dark:text-orange-400">
-                      <RotateCcw size={14} />
+                <div className="p-2 bg-orange-50 dark:bg-gray-700 rounded-lg border border-orange-200 dark:border-orange-700">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="p-1 rounded-md bg-orange-100 dark:bg-orange-800/50 text-orange-600 dark:text-orange-400">
+                      <RotateCcw size={12} />
                     </div>
-                    <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wide">Return Information</p>
+                    <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase">Return Information</p>
                   </div>
-                  <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">{selectedOrder.return_reason}</p>
+                  <p className="text-xs font-semibold text-orange-800 dark:text-orange-300">{selectedOrder.return_reason}</p>
                   {selectedOrder.return_notes && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 italic">{selectedOrder.return_notes}</p>
+                    <p className="text-[10px] text-orange-600 dark:text-orange-400 mt-0.5 italic">{selectedOrder.return_notes}</p>
                   )}
                   {selectedOrder.return_proof?.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-orange-600 dark:text-orange-400 mb-1">Proof {selectedOrder.return_proof.length > 1 ? 'Images' : 'Image'}</p>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="mt-1.5">
+                      <p className="text-[10px] font-medium text-orange-600 dark:text-orange-400 mb-1">Proof {selectedOrder.return_proof.length > 1 ? 'Images' : 'Image'}</p>
+                      <div className="flex flex-wrap gap-1.5">
                         {selectedOrder.return_proof.map((url, idx) => (
                           <img
                             key={idx}
                             src={`${API_BASE_URL.replace('/api', '')}${url}`}
                             alt={`Return proof ${idx + 1}`}
-                            className="w-[80px] h-[80px] object-cover rounded-lg border border-orange-200 dark:border-orange-700 cursor-pointer hover:opacity-80"
+                            className="w-[60px] h-[60px] object-cover rounded-lg border border-orange-200 dark:border-orange-700 cursor-pointer hover:opacity-80"
                             onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
                           />
                         ))}
@@ -1376,21 +1484,17 @@ const AdminOrders = () => {
                     </div>
                   )}
                   {selectedOrder.return_pickup_driver && (
-                    <div className="mt-2 pt-2 border-t border-orange-200 dark:border-orange-700 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Truck size={12} className="text-orange-500" />
-                        <span className="text-xs text-orange-700 dark:text-orange-300">
-                          <span className="font-semibold">Pickup Driver:</span> {selectedOrder.return_pickup_driver}
-                          {selectedOrder.return_pickup_plate && ` — ${selectedOrder.return_pickup_plate}`}
-                        </span>
-                      </div>
+                    <div className="mt-1.5 pt-1.5 border-t border-orange-200 dark:border-orange-700 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                      <span className="text-[10px] text-orange-700 dark:text-orange-300 flex items-center gap-1">
+                        <Truck size={10} className="text-orange-500" />
+                        <span className="font-semibold">Pickup:</span> {selectedOrder.return_pickup_driver}
+                        {selectedOrder.return_pickup_plate && ` — ${selectedOrder.return_pickup_plate}`}
+                      </span>
                       {selectedOrder.return_pickup_date_formatted && (
-                        <div className="flex items-center gap-2">
-                          <Calendar size={12} className="text-orange-500" />
-                          <span className="text-xs text-orange-700 dark:text-orange-300">
-                            <span className="font-semibold">Est. Pickup:</span> {selectedOrder.return_pickup_date_formatted}
-                          </span>
-                        </div>
+                        <span className="text-[10px] text-orange-700 dark:text-orange-300 flex items-center gap-1">
+                          <Calendar size={10} className="text-orange-500" />
+                          <span className="font-semibold">Est.:</span> {selectedOrder.return_pickup_date_formatted}
+                        </span>
                       )}
                     </div>
                   )}
@@ -1399,70 +1503,55 @@ const AdminOrders = () => {
             </div>
 
             {/* Right Column — Items Table & Total */}
-            <div className="lg:w-[420px] shrink-0 space-y-3">
+            <div className="lg:w-[380px] shrink-0">
               {/* Items Table */}
               <div>
-                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Order Items</p>
+                <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Order Items</p>
                 <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-primary-50 dark:bg-primary-900/20">
                       <tr>
-                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Product</th>
-                        <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Qty</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Price</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Subtotal</th>
+                        <th className="text-left px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300">Product</th>
+                        <th className="text-center px-2 py-1.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300">Qty</th>
+                        <th className="text-right px-2 py-1.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300">Price</th>
+                        <th className="text-right px-2.5 py-1.5 text-[10px] font-semibold text-gray-600 dark:text-gray-300">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {(selectedOrder.items || []).map((item, idx) => (
                         <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.variety_color || '#6B7280' }} />
+                          <td className="px-2.5 py-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.variety_color || '#6B7280' }} />
                               <span className="text-gray-800 dark:text-gray-100 text-xs font-medium">{item.product_name || item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</span>
                             </div>
                           </td>
-                          <td className="px-3 py-2 text-center text-gray-600 dark:text-gray-300 text-xs">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300 text-xs">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-800 dark:text-gray-100 text-xs">₱{(item.subtotal || 0).toLocaleString()}</td>
+                          <td className="px-2 py-1.5 text-center text-gray-600 dark:text-gray-300 text-xs">{item.quantity}</td>
+                          <td className="px-2 py-1.5 text-right text-gray-600 dark:text-gray-300 text-xs">₱{(item.unit_price || item.price || 0).toLocaleString()}</td>
+                          <td className="px-2.5 py-1.5 text-right font-semibold text-gray-800 dark:text-gray-100 text-xs">₱{(item.subtotal || 0).toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-50 dark:bg-gray-700/50">
                       {selectedOrder.delivery_fee > 0 && (
                         <tr>
-                          <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500 dark:text-gray-400">Delivery Fee</td>
-                          <td className="px-3 py-1.5 text-right text-xs text-gray-600 dark:text-gray-300">₱{selectedOrder.delivery_fee.toLocaleString()}</td>
+                          <td colSpan={3} className="px-2.5 py-1 text-right text-[10px] text-gray-500 dark:text-gray-400">Delivery Fee</td>
+                          <td className="px-2.5 py-1 text-right text-[10px] text-gray-600 dark:text-gray-300">₱{selectedOrder.delivery_fee.toLocaleString()}</td>
                         </tr>
                       )}
                       {selectedOrder.discount > 0 && (
                         <tr>
-                          <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-gray-500 dark:text-gray-400">Discount</td>
-                          <td className="px-3 py-1.5 text-right text-xs text-red-500">-₱{selectedOrder.discount.toLocaleString()}</td>
+                          <td colSpan={3} className="px-2.5 py-1 text-right text-[10px] text-gray-500 dark:text-gray-400">Discount</td>
+                          <td className="px-2.5 py-1 text-right text-[10px] text-red-500">-₱{selectedOrder.discount.toLocaleString()}</td>
                         </tr>
                       )}
                       <tr className="border-t border-gray-200 dark:border-gray-600">
-                        <td colSpan={3} className="px-3 py-2 text-right text-xs font-bold text-gray-600 dark:text-gray-300">Total</td>
-                        <td className="px-3 py-2 text-right font-bold text-gray-800 dark:text-gray-100">₱{selectedOrder.total.toLocaleString()}</td>
+                        <td colSpan={3} className="px-2.5 py-2 text-right text-xs font-bold text-gray-600 dark:text-gray-300">Total</td>
+                        <td className="px-2.5 py-2 text-right font-bold text-gray-800 dark:text-gray-100">₱{selectedOrder.total.toLocaleString()}</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
-              </div>
-
-              {/* Total Summary Card */}
-              <div className="p-3 bg-button-50 dark:bg-gray-700 rounded-xl border border-button-200 dark:border-gray-600">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-button-700 dark:text-button-300">Order Total</span>
-                  <span className="text-xl font-bold text-button-600 dark:text-button-400">₱{selectedOrder.total.toLocaleString()}</span>
-                </div>
-                {(selectedOrder.delivery_fee > 0 || selectedOrder.discount > 0) && (
-                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
-                    <span>Subtotal: ₱{selectedOrder.subtotal?.toLocaleString() || selectedOrder.total.toLocaleString()}</span>
-                    {selectedOrder.delivery_fee > 0 && <span>+ ₱{selectedOrder.delivery_fee.toLocaleString()} delivery</span>}
-                    {selectedOrder.discount > 0 && <span>- ₱{selectedOrder.discount.toLocaleString()} discount</span>}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1495,7 +1584,7 @@ const AdminOrders = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Client</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Customer</p>
                 <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{selectedOrder?.customer}</p>
               </div>
               <div>
@@ -1538,7 +1627,7 @@ const AdminOrders = () => {
                 { value: 'Wrong Item', label: 'Wrong Item Received' },
                 { value: 'Quality Issue', label: 'Quality Issue' },
                 { value: 'Excess Order', label: 'Excess Order / Overstock' },
-                { value: 'Customer Changed Mind', label: 'Client Changed Mind' },
+                { value: 'Customer Changed Mind', label: 'Customer Changed Mind' },
                 { value: 'Other', label: 'Other' },
               ]}
               required
@@ -1556,7 +1645,7 @@ const AdminOrders = () => {
             {/* Proof Image Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
-                Proof Images (Optional)
+                Proof Images <span className="text-red-500">*</span>
               </label>
               <p className="text-xs text-gray-400 mb-2">Upload photos showing the reason for return (damaged item, wrong product, etc.)</p>
               {returnProofPreviews.length > 0 && (
@@ -1598,6 +1687,9 @@ const AdminOrders = () => {
                   }}
                 />
               </label>
+              {submitted && returnProofFiles.length === 0 && (
+                <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">Please upload at least one proof image</p>
+              )}
             </div>
           </div>
         )}
@@ -1634,7 +1726,7 @@ const AdminOrders = () => {
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Client</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Customer</p>
                   <p className="font-semibold text-gray-800 dark:text-gray-100">{acceptReturnOrder.customer}</p>
                 </div>
                 <div>
@@ -1648,7 +1740,7 @@ const AdminOrders = () => {
               </div>
               {acceptReturnOrder.delivery_address && (
                 <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Pickup Address (client delivery address)</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Pickup Address (customer delivery address)</p>
                   <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{acceptReturnOrder.delivery_address}</p>
                   {acceptReturnOrder.distance_km && (
                     <p className="text-xs text-gray-400 mt-0.5">{parseFloat(acceptReturnOrder.distance_km).toFixed(1)} km from warehouse</p>
@@ -1703,7 +1795,7 @@ const AdminOrders = () => {
             {/* Pickup Driver Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Assign Pickup Driver *</label>
-              <p className="text-xs text-gray-400 mb-2">Select a driver to pick up the returned items from the client.</p>
+              <p className="text-xs text-gray-400 mb-2">Select a driver to pick up the returned items from the customer.</p>
               {loadingPickupDrivers ? (
                 <div className="flex items-center gap-2 p-4 text-gray-500 dark:text-gray-400">
                   <Loader2 size={18} className="animate-spin" /> Loading drivers...
@@ -1812,6 +1904,181 @@ const AdminOrders = () => {
         )}
       </Modal>
 
+      {/* Deliver Order — Proof Upload Modal */}
+      <Modal
+        isOpen={isDeliverModalOpen}
+        onClose={() => { setIsDeliverModalOpen(false); setDeliverOrder(null); setDeliverProofFiles([]); setDeliverProofPreviews([]); if (deliverStreamRef.current) { deliverStreamRef.current.getTracks().forEach(t => t.stop()); deliverStreamRef.current = null; } setDeliverShowCamera(false); }}
+        title={`Proof of Delivery — ${deliverOrder?.order_id || ''}`}
+        size="lg"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => { setIsDeliverModalOpen(false); setDeliverOrder(null); setDeliverProofFiles([]); setDeliverProofPreviews([]); if (deliverStreamRef.current) { deliverStreamRef.current.getTracks().forEach(t => t.stop()); deliverStreamRef.current = null; } setDeliverShowCamera(false); }}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeliverConfirm}
+              disabled={saving || deliverProofFiles.length === 0}
+              className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+              {saving ? 'Processing...' : 'Confirm Delivery'}
+            </button>
+          </div>
+        }
+      >
+        {deliverOrder && (
+          <div className="space-y-4">
+            {/* Order Summary */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Customer</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100">{deliverOrder.customer}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100">₱{deliverOrder.total?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Driver</p>
+                  <p className="font-semibold text-gray-800 dark:text-gray-100">{deliverOrder.driver_name || 'N/A'}</p>
+                </div>
+              </div>
+              {deliverOrder.delivery_address && (
+                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Delivery Address</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{deliverOrder.delivery_address}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Proof Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Upload Proof of Delivery *</label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Take a photo or upload images as proof that the order was delivered.</p>
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => deliverProofInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 text-button-600 dark:text-button-400 rounded-lg text-xs font-medium hover:bg-button-100 dark:hover:bg-button-900/30 transition-colors"
+                >
+                  <ImageIcon size={14} /> Upload Photo
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setDeliverShowCamera(true);
+                    try {
+                      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                      deliverStreamRef.current = stream;
+                      if (deliverVideoRef.current) deliverVideoRef.current.srcObject = stream;
+                    } catch (err) {
+                      toast.error('Camera Error', 'Could not access camera');
+                      setDeliverShowCamera(false);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-600 dark:text-green-400 rounded-lg text-xs font-medium hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                >
+                  <Camera size={14} /> Take Photo
+                </button>
+              </div>
+              <input
+                ref={deliverProofInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setDeliverProofFiles(prev => [...prev, ...files]);
+                  files.forEach(f => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setDeliverProofPreviews(prev => [...prev, reader.result]);
+                    reader.readAsDataURL(f);
+                  });
+                  e.target.value = '';
+                }}
+              />
+
+              {/* Camera view */}
+              {deliverShowCamera && (
+                <div className="relative mb-2 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                  <video ref={deliverVideoRef} autoPlay playsInline className="w-full max-h-48 object-cover" />
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const video = deliverVideoRef.current;
+                        if (!video) return;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        canvas.getContext('2d').drawImage(video, 0, 0);
+                        canvas.toBlob((blob) => {
+                          if (!blob) return;
+                          const file = new File([blob], `delivery-proof-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                          setDeliverProofFiles(prev => [...prev, file]);
+                          const reader = new FileReader();
+                          reader.onloadend = () => setDeliverProofPreviews(prev => [...prev, reader.result]);
+                          reader.readAsDataURL(file);
+                        }, 'image/jpeg', 0.8);
+                      }}
+                      className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
+                    >
+                      <Camera size={20} className="text-green-600" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (deliverStreamRef.current) { deliverStreamRef.current.getTracks().forEach(t => t.stop()); deliverStreamRef.current = null; }
+                        setDeliverShowCamera(false);
+                      }}
+                      className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100"
+                    >
+                      <X size={20} className="text-red-600" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview thumbnails */}
+              {deliverProofPreviews.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {deliverProofPreviews.map((src, idx) => (
+                    <div key={idx} className="relative group">
+                      <img src={src} alt={`Proof ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeliverProofFiles(prev => prev.filter((_, i) => i !== idx));
+                          setDeliverProofPreviews(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {deliverProofFiles.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">At least one proof photo is required.</p>
+              )}
+            </div>
+
+            {/* Info Note */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+              <p className="text-xs text-blue-800 dark:text-blue-300">
+                <span className="font-semibold">Note:</span> Uploading proof of delivery confirms that the order has been successfully delivered to the customer. This cannot be undone.
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Ship Order — Driver Selection Modal */}
       <Modal
         isOpen={isShipModalOpen}
@@ -1843,7 +2110,7 @@ const AdminOrders = () => {
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Client</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Customer</p>
                   <p className="font-semibold text-gray-800 dark:text-gray-100">{shipOrder.customer}</p>
                 </div>
                 <div>
@@ -1951,13 +2218,13 @@ const AdminOrders = () => {
               />
             </div>
 
-            {/* Client Delivery Note Preview */}
+            {/* Customer Delivery Note Preview */}
             {selectedDriverId && (() => {
               const selectedDriver = drivers.find(d => String(d.id) === selectedDriverId);
               if (!selectedDriver) return null;
               return (
                 <div className="bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg p-3">
-                  <p className="text-xs font-bold text-button-600 dark:text-button-400 uppercase tracking-wide mb-1.5">Client Delivery Note</p>
+                  <p className="text-xs font-bold text-button-600 dark:text-button-400 uppercase tracking-wide mb-1.5">Customer Delivery Note</p>
                   <div className="text-xs text-gray-700 dark:text-gray-200 space-y-1">
                     <p><span className="font-semibold">Driver:</span> {selectedDriver.name}</p>
                     {selectedDriver.truck_plate_number && (
@@ -2277,7 +2544,7 @@ const AdminOrders = () => {
                 <div className="text-right">
                   <p className="text-lg font-bold text-red-600 dark:text-red-400">₱{voidOrder.total.toLocaleString()}</p>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-                    <Store size={10} /> Walk-in
+                    <Store size={10} /> {voidOrder.is_delivery ? 'Delivery' : 'Pick Up'}
                   </span>
                 </div>
               </div>

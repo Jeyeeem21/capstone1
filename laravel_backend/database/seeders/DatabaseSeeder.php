@@ -13,13 +13,19 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed default user accounts (Super Admin, Admin, Staff)
-        $this->call(SuperAdminSeeder::class);
+        // // Seed default user accounts (Super Admin, Admin, Staff)
+        // $this->call(SuperAdminSeeder::class);
 
-        // Seed appearance settings with defaults
-        $this->call(AppearanceSettingSeeder::class);
+        // // Seed appearance settings with defaults
+        // $this->call(AppearanceSettingSeeder::class);
         
-        // Seed varieties (rice types)
-        $this->call(VarietySeeder::class);
+        // // Seed varieties (rice types)
+        // $this->call(VarietySeeder::class);
+
+        //  // Seed procurements
+        // $this->call(ProcurementSeeder::class);
+
+        // Seed default website content (Home & About pages)
+        $this->call(WebsiteContentSeeder::class);
     }
 }

@@ -1,14 +1,14 @@
 /**
  * Website Content API
  * 
- * Handles API calls for website content management (Home and About pages)
+ * Handles API calls for website content management (Home, About, Products, Contact pages)
  */
 
 import apiClient from './apiClient';
 
 const websiteContentApi = {
   /**
-   * Get all website content (home and about)
+   * Get all website content (home, about, products, contact)
    */
   getAll: async () => {
     return apiClient.get('/website-content');
@@ -29,6 +29,20 @@ const websiteContentApi = {
   },
 
   /**
+   * Get products page content
+   */
+  getProductsContent: async () => {
+    return apiClient.get('/website-content/products');
+  },
+
+  /**
+   * Get contact page content
+   */
+  getContactContent: async () => {
+    return apiClient.get('/website-content/contact');
+  },
+
+  /**
    * Save home page content
    * @param {Object} data - Home page content data
    */
@@ -45,9 +59,25 @@ const websiteContentApi = {
   },
 
   /**
-   * Upload hero image for home or about page
+   * Save products page content
+   * @param {Object} data - Products page content data
+   */
+  saveProductsContent: async (data) => {
+    return apiClient.post('/website-content/products', data);
+  },
+
+  /**
+   * Save contact page content
+   * @param {Object} data - Contact page content data
+   */
+  saveContactContent: async (data) => {
+    return apiClient.post('/website-content/contact', data);
+  },
+
+  /**
+   * Upload hero image for any page
    * @param {File} file - Image file
-   * @param {string} page - 'home' or 'about'
+   * @param {string} page - 'home', 'about', 'products', or 'contact'
    */
   uploadHeroImage: async (file, page) => {
     const formData = new FormData();

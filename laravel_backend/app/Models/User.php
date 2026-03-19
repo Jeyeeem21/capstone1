@@ -93,4 +93,12 @@ class User extends Authenticatable
     {
         return $this->status === 'active';
     }
+
+    /**
+     * Get the linked customer record (matched by email).
+     */
+    public function customer()
+    {
+        return $this->hasOne(Customer::class, 'email', 'email');
+    }
 }

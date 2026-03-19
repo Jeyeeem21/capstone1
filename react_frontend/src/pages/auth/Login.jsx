@@ -28,10 +28,10 @@ const Login = () => {
         if (user.position === 'Driver') {
           navigate('/driver/dashboard', { replace: true });
         } else {
-          navigate('/staff/pos', { replace: true });
+          navigate('/secretary/pos', { replace: true });
         }
-      } else if (user.role === 'client') {
-        navigate('/client/dashboard', { replace: true });
+      } else if (user.role === 'customer') {
+        navigate('/customer/dashboard', { replace: true });
       } else if (user.role === 'super_admin') {
         navigate('/superadmin/dashboard', { replace: true });
       } else {
@@ -147,7 +147,7 @@ const Login = () => {
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 bg-gradient-to-br from-button-500 to-button-600 rounded-2xl flex items-center justify-center shadow-lg shadow-button-500/25 overflow-hidden">
               <img 
-                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/logo.svg'} 
+                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
                 alt={settings.business_name || 'KJP Ricemill'} 
                 className="w-16 h-16 object-contain"
                 onError={(e) => {
