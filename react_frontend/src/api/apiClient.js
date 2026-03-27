@@ -18,7 +18,7 @@ let apiAvailable = null;
 // In-memory cache for instant access (faster than localStorage)
 const memoryCache = new Map();
 const memoryCacheTimestamps = new Map();
-const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MEMORY_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 const STALE_TTL = 10 * 1000; // 10 seconds before considered stale
 
 /**
@@ -262,6 +262,7 @@ const apiClient = {
       
       const response = await fetchWithTimeout(url, {
         method: 'GET',
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',

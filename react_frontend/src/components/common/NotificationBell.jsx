@@ -12,6 +12,7 @@ const NOTIFICATION_ICONS = {
   order_cancelled: X,
   return_requested: ArrowLeftRight,
   picking_up: Truck,
+  order_picked_up: Truck,
   order_returned: RotateCcw,
   order_restocked: Package,
   delivery_assigned: Truck,
@@ -26,6 +27,7 @@ const NOTIFICATION_COLORS = {
   order_cancelled: 'text-red-500',
   return_requested: 'text-orange-500',
   picking_up: 'text-purple-500',
+  order_picked_up: 'text-amber-600',
   order_returned: 'text-rose-500',
   order_restocked: 'text-emerald-500',
   delivery_assigned: 'text-blue-500',
@@ -59,20 +61,32 @@ const NotificationBell = ({ className = '' }) => {
 
       // Detect new notifications and show toasts (debounce across instances)
       const now = Date.now();
-      if (prevUnreadCountRef.current !== null && count > prevUnreadCountRef.current && now - _lastToastTime > 5000 && !isNotifToastSuppressed()) {
-        _lastToastTime = now;
+      const isFirstPoll = prevUnreadCountRef.current === null;
+      const hasNewNotifs = !isFirstPoll && count > prevUnreadCountRef.current;
+
+      if (isFirstPoll || hasNewNotifs) {
         try {
           const notifRes = await apiClient.get('/notifications');
           const data = notifRes?.data?.data || notifRes?.data || [];
           const allNotifs = Array.isArray(data) ? data : [];
-          const newUnread = allNotifs
-            .filter(n => !n.read_at && !_shownNotifIds.has(n.id));
-          newUnread.forEach(n => {
-            _shownNotifIds.add(n.id);
-            const type = n.type || 'info';
-            const toastType = type.includes('cancel') || type.includes('return') ? 'warning' : 'info';
-            toast.addToast({ type: toastType, title: n.title || 'New Notification', message: n.message || '', duration: 3000 });
-          });
+
+          if (isFirstPoll) {
+            // First poll: seed shown IDs so existing unreads don't toast
+            allNotifs.forEach(n => _shownNotifIds.add(n.id));
+          } else if (hasNewNotifs && now - _lastToastTime > 5000 && !isNotifToastSuppressed()) {
+            _lastToastTime = now;
+            // Only toast truly new notifications (max 2 to avoid flooding)
+            const newUnread = allNotifs
+              .filter(n => !n.read_at && !_shownNotifIds.has(n.id))
+              .slice(0, 2);
+            // Mark all fetched as shown regardless
+            allNotifs.forEach(n => _shownNotifIds.add(n.id));
+            newUnread.forEach(n => {
+              const type = n.type || 'info';
+              const toastType = type.includes('cancel') || type.includes('return') ? 'warning' : 'info';
+              toast.addToast({ type: toastType, title: n.title || 'New Notification', message: n.message || '', duration: 3000 });
+            });
+          }
         } catch {
           // Silently fail
         }
@@ -214,7 +228,7 @@ const NotificationBell = ({ className = '' }) => {
                     className={`flex items-start gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-700 transition-colors cursor-pointer ${
                       isUnread 
                         ? 'bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        : 'hover:bg-button-500/10 dark:hover:bg-button-500/20'
                     }`}
                   >
                     {/* Icon */}

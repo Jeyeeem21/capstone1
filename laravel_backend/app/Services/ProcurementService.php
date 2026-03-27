@@ -45,15 +45,25 @@ class ProcurementService
         return DB::transaction(function () use ($data, $newSupplierName, $newSupplierData) {
             // If new supplier name is provided, create the supplier first
             if ($newSupplierName && !isset($data['supplier_id'])) {
-                $supplier = Supplier::create([
-                    'name' => $newSupplierName,
-                    'contact' => $newSupplierData['contact'] ?? null,
-                    'phone' => $newSupplierData['phone'] ?? null,
-                    'email' => $newSupplierData['email'] ?? null,
-                    'address' => $newSupplierData['address'] ?? null,
-                    'status' => 'Active',
-                ]);
-                $data['supplier_id'] = $supplier->id;
+                // If email matches an existing supplier, link to that supplier instead of creating a duplicate
+                $existingSupplier = null;
+                if (!empty($newSupplierData['email'])) {
+                    $existingSupplier = Supplier::where('email', $newSupplierData['email'])->first();
+                }
+
+                if ($existingSupplier) {
+                    $data['supplier_id'] = $existingSupplier->id;
+                } else {
+                    $supplier = Supplier::create([
+                        'name' => $newSupplierName,
+                        'contact' => $newSupplierData['contact'] ?? null,
+                        'phone' => $newSupplierData['phone'] ?? null,
+                        'email' => $newSupplierData['email'] ?? null,
+                        'address' => $newSupplierData['address'] ?? null,
+                        'status' => 'Active',
+                    ]);
+                    $data['supplier_id'] = $supplier->id;
+                }
                 
                 // Clear supplier cache too
                 Cache::forget('suppliers_all');

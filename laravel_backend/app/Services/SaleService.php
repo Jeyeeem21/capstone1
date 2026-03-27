@@ -183,7 +183,8 @@ class SaleService
                 'processing' => ['shipped', 'completed', 'cancelled'],
                 'shipped' => ['delivered', 'cancelled'],
                 'delivered' => ['return_requested'],
-                'picking_up' => ['returned'],
+                'picking_up' => ['picked_up'],
+                'picked_up' => ['returned'],
             ];
 
             $allowed = $validTransitions[$oldStatus] ?? [];
@@ -312,15 +313,15 @@ class SaleService
     }
 
     /**
-     * Mark a picking_up order as returned — restore stock + decrement customer orders.
+     * Mark a picked_up order as returned — decrement customer orders.
      */
     public function markReturned(int $saleId): Sale
     {
         return DB::transaction(function () use ($saleId) {
             $sale = Sale::with('items.product')->findOrFail($saleId);
 
-            if ($sale->status !== 'picking_up') {
-                throw new \Exception('Only orders being picked up can be marked as returned.');
+            if ($sale->status !== 'picked_up') {
+                throw new \Exception('Only orders that have been picked up can be marked as returned.');
             }
 
             // Decrement customer orders

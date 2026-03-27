@@ -294,6 +294,8 @@ const Customer = () => {
         setIsAddModalOpen(false);
         
         toast.success('Customer Added', `${customerName} has been added successfully.`);
+        // Fire-and-forget email
+        apiClient.post(`/customers/${response.data.id}/store-email`).catch(() => {});
         // Refetch in background
         invalidateCache(CACHE_KEY);
         refetch();
@@ -336,6 +338,8 @@ const Customer = () => {
         setIsEditModalOpen(false);
         
         toast.success('Customer Updated', `${customerName} has been updated.`);
+        // Fire-and-forget email
+        apiClient.post(`/customers/${selectedItem.id}/update-email`, { changes: response._changes || [] }).catch(() => {});
         // Refetch in background
         invalidateCache(CACHE_KEY);
         refetch();
@@ -791,7 +795,7 @@ const Customer = () => {
       <Modal
         isOpen={isOrdersModalOpen}
         onClose={() => setIsOrdersModalOpen(false)}
-        title={`Orders � ${selectedItem?.name || ''}`}
+        title={`Orders — ${selectedItem?.name || ''}`}
         size="full"
         footer={
           <div className="flex justify-between items-center">
@@ -832,17 +836,17 @@ const Customer = () => {
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 text-center">
                     <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">Pending</p>
-                    <p className="text-lg font-bold text-yellow-700 dark:text-yellow-300">?{pendingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-lg font-bold text-yellow-700 dark:text-yellow-300">₱{pendingTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                     <p className="text-xs text-yellow-500">{pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''}</p>
                   </div>
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 text-center">
                     <p className="text-xs text-green-600 dark:text-green-400 font-medium">Completed / Delivered</p>
-                    <p className="text-lg font-bold text-green-700 dark:text-green-300">?{completedTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-lg font-bold text-green-700 dark:text-green-300">₱{completedTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                     <p className="text-xs text-green-500">{completedOrders.length} order{completedOrders.length !== 1 ? 's' : ''}</p>
                   </div>
                   <div className="bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg p-3 text-center">
                     <p className="text-xs text-button-600 dark:text-button-400 font-medium">Grand Total</p>
-                    <p className="text-lg font-bold text-button-700 dark:text-button-300">?{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p className="text-lg font-bold text-button-700 dark:text-button-300">₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                     <p className="text-xs text-button-500">{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
@@ -870,8 +874,8 @@ const Customer = () => {
                           <div key={idx} className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.variety_color }}></span>
                             <span className="text-gray-700 dark:text-gray-200">{item.product_name}</span>
-                            <span className="text-gray-400">�{item.quantity}</span>
-                            <span className="text-gray-500 dark:text-gray-400">?{item.unit_price?.toLocaleString()}</span>
+                            <span className="text-gray-400">×{item.quantity}</span>
+                            <span className="text-gray-500 dark:text-gray-400">₱{item.unit_price?.toLocaleString()}</span>
                           </div>
                         ))}
                       </div>
@@ -890,7 +894,7 @@ const Customer = () => {
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t flex justify-between items-center text-sm">
               <span className="text-gray-500 dark:text-gray-400">{customerOrders.length} order{customerOrders.length !== 1 ? 's' : ''}</span>
               <span className="font-semibold text-gray-700 dark:text-gray-200">
-                Grand Total: ?{customerOrders.reduce((sum, o) => sum + o.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                Grand Total: ₱{customerOrders.reduce((sum, o) => sum + o.total, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>

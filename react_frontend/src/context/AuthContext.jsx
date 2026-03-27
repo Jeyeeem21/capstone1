@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi } from '../api';
+import apiClient from '../api/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -45,6 +46,10 @@ export const AuthProvider = ({ children }) => {
 
     if (response.success && response.user) {
       setUser(response.user);
+
+      // Fire-and-forget: send login notification email without blocking
+      apiClient.post('/auth/login-email').catch(() => {});
+
       return response;
     }
 

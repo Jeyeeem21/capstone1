@@ -197,6 +197,8 @@ const Supplier = () => {
         setIsAddModalOpen(false);
         
         toast.success('Supplier Added', `${supplierName} has been added successfully.`);
+        // Fire-and-forget email
+        apiClient.post(`/suppliers/${response.data.id}/store-email`).catch(() => {});
         // Refetch in background
         invalidateCache(CACHE_KEY);
         refetch();
@@ -236,6 +238,8 @@ const Supplier = () => {
         setIsEditModalOpen(false);
         
         toast.success('Supplier Updated', `${supplierName} has been updated.`);
+        // Fire-and-forget email
+        apiClient.post(`/suppliers/${selectedItem.id}/update-email`, { changes: response._changes || [] }).catch(() => {});
         // Refetch in background
         invalidateCache(CACHE_KEY);
         refetch();

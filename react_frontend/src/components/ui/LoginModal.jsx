@@ -83,13 +83,21 @@ const LoginModal = ({ isOpen, onClose }) => {
       // so the Modal portal and body scroll lock are fully cleaned up
       // before the route transition unmounts PublicLayout.
       onClose();
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Safety: force-clear body scroll lock before navigating
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.top = '';
       document.body.style.width = '';
+
+      // Force-remove any orphaned modal backdrop portals from document.body
+      document.body.querySelectorAll(':scope > div.fixed.inset-0').forEach(el => {
+        const cls = el.className || '';
+        if (cls.includes('bg-black') || cls.includes('backdrop')) {
+          el.remove();
+        }
+      });
 
       if (response?.user?.role === 'staff') {
         if (response?.user?.position === 'Driver') {

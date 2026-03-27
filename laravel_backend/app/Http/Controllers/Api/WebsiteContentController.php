@@ -28,6 +28,9 @@ class WebsiteContentController extends Controller
             // Overlay real stats from database
             $content['stats'] = $this->computeRealStats($content['stats'] ?? []);
             
+            // Dynamically replace year-related values in text fields
+            $content = $this->replaceYearPlaceholders($content);
+            
             return response()->json([
                 'success' => true,
                 'data' => $content,
@@ -48,6 +51,9 @@ class WebsiteContentController extends Controller
     {
         try {
             $content = WebsiteContent::getAboutContent();
+            
+            // Dynamically replace year-related values in text fields
+            $content = $this->replaceYearPlaceholders($content);
             
             return response()->json([
                 'success' => true,
@@ -70,7 +76,9 @@ class WebsiteContentController extends Controller
         try {
             $home = WebsiteContent::getHomeContent();
             $home['stats'] = $this->computeRealStats($home['stats'] ?? []);
+            $home = $this->replaceYearPlaceholders($home);
             $about = WebsiteContent::getAboutContent();
+            $about = $this->replaceYearPlaceholders($about);
             $products = WebsiteContent::getProductsContent();
             $contact = WebsiteContent::getContactContent();
             
@@ -436,6 +444,32 @@ class WebsiteContentController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Replace year-related placeholders in text content dynamically.
+     * Ensures "X years" and "Since YYYY" always reflect current business_start_year.
+     */
+    private function replaceYearPlaceholders(array $content): array
+    {
+        $startYear = (int) (BusinessSetting::where('key', 'business_start_year')->value('value') ?? now()->year);
+        $yearsInBusiness = now()->year - $startYear;
+
+        // Fields that may contain "over X years" or "X years"
+        $textFields = ['aboutDescription', 'heroSubtitle', 'heroTag', 'aboutTitle'];
+
+        foreach ($textFields as $field) {
+            if (!empty($content[$field]) && is_string($content[$field])) {
+                // Replace "over X years" → "over {computed} years"
+                $content[$field] = preg_replace('/\bover\s+\d+\s+years\b/i', "over {$yearsInBusiness} years", $content[$field]);
+                // Replace "for X years" → "for {computed} years"  
+                $content[$field] = preg_replace('/\bfor\s+\d+\s+years\b/i', "for {$yearsInBusiness} years", $content[$field]);
+                // Replace "Since YYYY" → "Since {startYear}"
+                $content[$field] = preg_replace('/\bSince\s+\d{4}\b/', "Since {$startYear}", $content[$field]);
+            }
+        }
+
+        return $content;
     }
 
     /**

@@ -287,14 +287,17 @@ const Inventory = () => {
   // Update kg for a specific selected processing
   const updateProcessingKg = useCallback((processingId, newKg) => {
     setSelectedProcessings(prev => {
-      const updated = prev.map(p =>
-        p.processing_id === processingId ? { ...p, kg_to_take: parseFloat(newKg) || 0 } : p
-      );
+      const updated = prev.map(p => {
+        if (p.processing_id !== processingId) return p;
+        const maxKg = availableProcessings.find(ap => ap.id === processingId)?.remaining_stock || 0;
+        const clamped = Math.min(Math.max(parseFloat(newKg) || 0, 0), maxKg);
+        return { ...p, kg_to_take: clamped };
+      });
       const totalKg = updated.reduce((sum, s) => sum + s.kg_to_take, 0);
       setAddStockKg(String(totalKg));
       return updated;
     });
-  }, []);
+  }, [availableProcessings]);
 
   // Select all processings at once
   const handleSelectAll = useCallback(() => {
@@ -2478,7 +2481,7 @@ const Inventory = () => {
         isOpen={isAddStockModalOpen}
         onClose={() => setIsAddStockModalOpen(false)}
         title="Distribute Stock from Processing"
-        size="lg"
+        size="xl"
       >
         {selectedItem && (
           <div className="space-y-5">

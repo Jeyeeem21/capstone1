@@ -4,14 +4,17 @@ namespace App\Services;
 
 use App\Mail\DailyUnpaidOrdersReport;
 use App\Mail\DeliveryAssigned;
+use App\Mail\DeliveryAssignmentNotification;
 use App\Mail\LoginNotification;
 use App\Mail\NewOrderNotification;
 use App\Mail\OrderPlacedCustomer;
 use App\Mail\OrderStatusUpdate;
+use App\Mail\ProcurementAdminNotification;
 use App\Mail\ProcurementNotification;
 use App\Mail\VerificationCode;
 use App\Mail\WelcomeAccount;
 use App\Models\BusinessSetting;
+use App\Models\DeliveryAssignment;
 use App\Models\Procurement;
 use App\Models\Sale;
 use App\Models\Supplier;
@@ -158,12 +161,20 @@ class EmailService
 
         $mailable = new class($subject, $heading, $body, $businessName) extends \Illuminate\Mail\Mailable {
             use \Illuminate\Bus\Queueable, \Illuminate\Queue\SerializesModels;
+            public string $heading;
+            public string $body;
+            public string $businessName;
             public function __construct(
-                public string $subject,
-                public string $heading,
-                public string $body,
-                public string $businessName,
-            ) {}
+                string $subject,
+                string $heading,
+                string $body,
+                string $businessName,
+            ) {
+                $this->subject = $subject;
+                $this->heading = $heading;
+                $this->body = $body;
+                $this->businessName = $businessName;
+            }
             public function envelope(): \Illuminate\Mail\Mailables\Envelope {
                 return new \Illuminate\Mail\Mailables\Envelope(subject: $this->subject);
             }
@@ -192,11 +203,17 @@ class EmailService
 
         $mailable = new class($subject, $heading, $body) extends \Illuminate\Mail\Mailable {
             use \Illuminate\Bus\Queueable, \Illuminate\Queue\SerializesModels;
+            public string $heading;
+            public string $body;
             public function __construct(
-                public string $subject,
-                public string $heading,
-                public string $body,
-            ) {}
+                string $subject,
+                string $heading,
+                string $body,
+            ) {
+                $this->subject = $subject;
+                $this->heading = $heading;
+                $this->body = $body;
+            }
             public function envelope(): \Illuminate\Mail\Mailables\Envelope {
                 return new \Illuminate\Mail\Mailables\Envelope(subject: $this->subject);
             }
@@ -221,8 +238,19 @@ class EmailService
     {
         if (!$driverUser->email) return;
 
-        $sale->load('customer');
+        $sale->load(['customer', 'items.product.variety']);
         $this->sendSafely($driverUser->email, new DeliveryAssigned($sale, $driverUser->name));
+    }
+
+    /**
+     * Email driver when a standalone delivery assignment is created.
+     */
+    public function sendDeliveryAssignmentNotification(User $driverUser, DeliveryAssignment $delivery): void
+    {
+        if (!$driverUser->email) return;
+
+        $delivery->load(['customer', 'items']);
+        $this->sendSafely($driverUser->email, new DeliveryAssignmentNotification($delivery, $driverUser->name));
     }
 
     /**
@@ -243,11 +271,20 @@ class EmailService
     {
         if (!$user->email) return;
 
-        $this->sendSafely($user->email, new class($user, $ipAddress) extends \Illuminate\Mail\Mailable {
+        $businessName = $this->getBusinessName();
+
+        $this->sendSafely($user->email, new class($user, $ipAddress, $businessName) extends \Illuminate\Mail\Mailable {
             use \Illuminate\Bus\Queueable, \Illuminate\Queue\SerializesModels;
-            public function __construct(public User $user, public string $ipAddress) {}
+            public User $user;
+            public string $ipAddress;
+            public string $businessName;
+            public function __construct(User $user, string $ipAddress, string $businessName) {
+                $this->user = $user;
+                $this->ipAddress = $ipAddress;
+                $this->businessName = $businessName;
+            }
             public function envelope(): \Illuminate\Mail\Mailables\Envelope {
-                return new \Illuminate\Mail\Mailables\Envelope(subject: 'Login Alert — ' . config('app.name'));
+                return new \Illuminate\Mail\Mailables\Envelope(subject: 'Login Alert — ' . $this->businessName);
             }
             public function content(): \Illuminate\Mail\Mailables\Content {
                 return new \Illuminate\Mail\Mailables\Content(
@@ -287,6 +324,25 @@ class EmailService
         if (!$supplier || !$supplier->email) return;
 
         $this->sendSafely($supplier->email, new ProcurementNotification($procurement, $supplier));
+    }
+
+    /**
+     * Email all admins and super admins when a procurement purchase is created.
+     */
+    public function sendProcurementToAdmin(Procurement $procurement): void
+    {
+        $procurement->load(['supplier', 'variety']);
+
+        $adminUsers = User::whereIn('role', [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN])
+            ->where('status', 'active')
+            ->whereNotNull('email')
+            ->get();
+
+        $mailable = new ProcurementAdminNotification($procurement);
+
+        foreach ($adminUsers as $admin) {
+            $this->sendSafely($admin->email, clone $mailable);
+        }
     }
 
     /**

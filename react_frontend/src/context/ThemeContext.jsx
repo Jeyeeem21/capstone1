@@ -50,12 +50,12 @@ const defaultTheme = {
   font_size_sidebar: '12',
 };
 
-// Dark mode default colors - better contrast
+// Dark mode default colors - uses Tailwind gray scale for consistency with admin pages
 const darkModeColors = {
-  bg_primary: '#0f172a',
-  bg_secondary: '#1e293b',
-  text_primary: '#f1f5f9',
-  text_secondary: '#cbd5e1',
+  bg_primary: '#111827',
+  bg_secondary: '#1f2937',
+  text_primary: '#f3f4f6',
+  text_secondary: '#9ca3af',
 };
 
 // Generate color palette from a base color
@@ -137,17 +137,11 @@ export const ThemeProvider = ({ children }) => {
   // Sync with API in background (no loading state shown)
   useEffect(() => {
     const syncThemeWithAPI = async () => {
-      // Skip API call if we already know it's unavailable
-      if (apiAvailable === false) {
-        setLoading(false);
-        return;
-      }
-
       // Try to fetch from API in background (only if online)
       if (navigator.onLine) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2000); // Faster timeout
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
           
           const response = await fetch(`${API_BASE_URL}/appearance`, {
             signal: controller.signal
@@ -174,8 +168,8 @@ export const ThemeProvider = ({ children }) => {
             }
           }
         } catch (error) {
-          // Mark API as unavailable to skip future attempts
-          apiAvailable = false;
+          // Don't permanently block API - just log and continue with local theme
+          console.warn('Initial theme sync failed, using local theme:', error.message);
         }
       }
       
@@ -216,14 +210,14 @@ export const ThemeProvider = ({ children }) => {
     if (isDark) {
       root.style.setProperty('--color-bg-primary', darkModeColors.bg_primary);
       root.style.setProperty('--color-bg-secondary', darkModeColors.bg_secondary);
-      root.style.setProperty('--color-bg-sidebar', '#1e293b');
-      root.style.setProperty('--color-bg-body', '#0f172a');
-      root.style.setProperty('--color-bg-content', '#1e293b');
-      root.style.setProperty('--color-bg-footer', '#0f172a');
+      root.style.setProperty('--color-bg-sidebar', '#1f2937');
+      root.style.setProperty('--color-bg-body', '#111827');
+      root.style.setProperty('--color-bg-content', '#1f2937');
+      root.style.setProperty('--color-bg-footer', '#111827');
       root.style.setProperty('--color-text-primary', darkModeColors.text_primary);
       root.style.setProperty('--color-text-secondary', darkModeColors.text_secondary);
-      root.style.setProperty('--color-text-sidebar', '#e2e8f0');
-      root.style.setProperty('--color-text-content', '#f1f5f9');
+      root.style.setProperty('--color-text-sidebar', '#e5e7eb');
+      root.style.setProperty('--color-text-content', '#f3f4f6');
       document.documentElement.classList.add('dark');
     } else {
       root.style.setProperty('--color-bg-primary', theme.bg_primary || theme.bgPrimary || defaultTheme.bg_primary);
@@ -263,7 +257,7 @@ export const ThemeProvider = ({ children }) => {
     root.style.fontSize = `${baseFontSize}px`;
     
     // Apply text colors directly to document body
-    const textContent = isDark ? '#f1f5f9' : (theme.text_content || theme.textContent || defaultTheme.text_content);
+    const textContent = isDark ? '#f3f4f6' : (theme.text_content || theme.textContent || defaultTheme.text_content);
     document.body.style.color = textContent;
     
     // Save to localStorage immediately when mode changes
@@ -281,15 +275,15 @@ export const ThemeProvider = ({ children }) => {
     // Always save to localStorage first
     localStorage.setItem('kjp-theme', JSON.stringify(theme));
     
-    // Skip API if unavailable or offline
-    if (apiAvailable === false || !navigator.onLine) {
+    // Skip API only if offline
+    if (!navigator.onLine) {
       setSaving(false);
-      return { success: true, message: 'Theme saved locally' };
+      return { success: true, message: 'Theme saved locally (offline)' };
     }
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
       // Exclude personal preferences from API sync - they stay local per user
       const settings = Object.entries(theme)
@@ -311,7 +305,8 @@ export const ThemeProvider = ({ children }) => {
       apiAvailable = true;
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
@@ -320,8 +315,9 @@ export const ThemeProvider = ({ children }) => {
       }
       return { success: false, message: data.message || 'Failed to save theme' };
     } catch (error) {
-      apiAvailable = false;
-      return { success: true, message: 'Theme saved locally' };
+      // Don't permanently mark API as unavailable on save failure
+      console.error('Failed to save theme to API:', error);
+      return { success: false, message: 'Failed to save theme to server. Changes saved locally only.' };
     } finally {
       setSaving(false);
     }
@@ -331,17 +327,17 @@ export const ThemeProvider = ({ children }) => {
   const resetTheme = async () => {
     setSaving(true);
     
-    // Skip API if unavailable or offline - just reset locally
-    if (apiAvailable === false || !navigator.onLine) {
+    // If offline, just reset locally
+    if (!navigator.onLine) {
       setTheme(defaultTheme);
       localStorage.setItem('kjp-theme', JSON.stringify(defaultTheme));
       setSaving(false);
-      return { success: true, message: 'Theme reset to defaults' };
+      return { success: true, message: 'Theme reset to defaults (offline)' };
     }
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
       const token = localStorage.getItem('auth_token');
       const response = await fetch(`${API_BASE_URL}/appearance/reset`, {
@@ -368,11 +364,11 @@ export const ThemeProvider = ({ children }) => {
       }
       return { success: false, message: 'Failed to reset theme' };
     } catch (error) {
-      // Fallback to local defaults
-      apiAvailable = false;
+      // Fallback to local defaults but report the failure
+      console.error('Failed to reset theme on server:', error);
       setTheme(defaultTheme);
       localStorage.setItem('kjp-theme', JSON.stringify(defaultTheme));
-      return { success: true, message: 'Theme reset to defaults' };
+      return { success: false, message: 'Failed to reset on server. Reset locally only.' };
     } finally {
       setSaving(false);
     }

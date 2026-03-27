@@ -74,53 +74,53 @@
 
 /* Dark mode overrides - only html.dark is used (Tailwind dark: variant) */
 html.dark {
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #cbd5e1;
+  --color-bg-primary: #111827;
+  --color-bg-secondary: #1f2937;
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #9ca3af;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
 }
 
-/* Dark mode component overrides - in @layer base so Tailwind dark: utilities can override */
+/* Dark mode component overrides - uses Tailwind gray scale to match admin pages */
 @layer base {
   .dark .bg-white {
-    background-color: #1e293b;
+    background-color: #1f2937;
   }
 
   .dark .bg-gray-50,
   .dark .bg-gray-100 {
-    background-color: #334155;
+    background-color: #374151;
   }
 
   .dark .text-gray-800,
   .dark .text-gray-900 {
-    color: #f1f5f9;
+    color: #f3f4f6;
   }
 
   .dark .text-gray-700 {
-    color: #e2e8f0;
+    color: #e5e7eb;
   }
 
   .dark .text-gray-600 {
-    color: #cbd5e1;
+    color: #d1d5db;
   }
 
   .dark .text-gray-500 {
-    color: #94a3b8;
+    color: #9ca3af;
   }
 
   .dark .text-gray-400 {
-    color: #94a3b8;
+    color: #9ca3af;
   }
 
   .dark .border-gray-200,
   .dark .border-gray-100 {
-    border-color: #475569;
+    border-color: #374151;
   }
 
   .dark .border-gray-300 {
-    border-color: #64748b;
+    border-color: #4b5563;
   }
 } /* end @layer base */
 
@@ -128,7 +128,7 @@ html.dark {
 
 /* Dark mode sidebar */
 .dark aside {
-  background-color: #1e293b !important;
+  background-color: #1f2937 !important;
 }
 
 /* Dark mode cards */
@@ -141,13 +141,13 @@ html.dark {
 .dark input,
 .dark select,
 .dark textarea {
-  background-color: #334155 !important;
-  color: #f1f5f9 !important;
+  background-color: #374151 !important;
+  color: #f3f4f6 !important;
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: #94a3b8 !important;
+  color: #9ca3af !important;
 }
 
 .dark input:focus,
@@ -159,17 +159,17 @@ html.dark {
 
 /* Dark mode modals */
 .dark .bg-white\/80 {
-  background-color: rgba(30, 41, 59, 0.9);
+  background-color: rgba(31, 41, 55, 0.9);
 }
 
 /* Dark mode tables */
 .dark table th {
-  background-color: #334155 !important;
-  color: #f1f5f9 !important;
+  background-color: #374151 !important;
+  color: #f3f4f6 !important;
 }
 
 .dark table td {
-  color: #e2e8f0 !important;
+  color: #e5e7eb !important;
 }
 
 /* Table row hover using dynamic hover color */
@@ -219,15 +219,15 @@ html.dark {
 
 /* Dark mode scrollbar */
 .dark ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: #1f2937;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #4b5563;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #6b7280;
 }
 
 /* bg-primary and gradient-primary classes use CSS variables from DB theme - no override needed */
@@ -243,14 +243,14 @@ html.dark {
 /* Ensure upload photo area border is visible in dark mode - @layer base */
 @layer base {
   .dark .border-dashed:not(.border-primary-200):not(.border-primary-300):not(.border-button-200) {
-    border-color: #64748b;
+    border-color: #4b5563;
   }
 }
 
 /* Dark mode colored info boxes & semantic overrides - @layer base for Tailwind utility override */
 @layer base {
   .dark .bg-gray-50.rounded-xl {
-    background-color: #334155;
+    background-color: #374151;
   }
 
   /* Dark mode semantic colored backgrounds */
@@ -331,13 +331,13 @@ html.dark {
 
   /* Dark mode skeleton shimmer */
   .dark .from-gray-300 {
-    --tw-gradient-from: #475569;
+    --tw-gradient-from: #4b5563;
   }
   .dark .via-gray-200 {
-    --tw-gradient-via: #334155;
+    --tw-gradient-via: #374151;
   }
   .dark .to-gray-300 {
-    --tw-gradient-to: #475569;
+    --tw-gradient-to: #4b5563;
   }
 
   /* Dark mode additional border colors */
@@ -371,10 +371,10 @@ html.dark {
 
 /* Dark mode hover & opacity selectors (outside @layer base - escaped chars not supported inside) */
 .dark .hover\:bg-gray-50:hover {
-  background-color: #334155;
+  background-color: #374151;
 }
 .dark .hover\:bg-gray-100:hover {
-  background-color: #475569;
+  background-color: #4b5563;
 }
 .dark .hover\:bg-yellow-50:hover {
   background-color: rgba(234, 179, 8, 0.1);
@@ -488,7 +488,7 @@ aside a:hover {
   background-color: var(--color-button-800);
 }
 .dark .hover\:bg-gray-200:hover {
-  background-color: #475569;
+  background-color: #4b5563;
 }
 
 aside button:hover span,
@@ -541,9 +541,15 @@ label {
   font-size: calc(var(--font-size-base, 16px) - 1px);
 }
 
-/* Descriptions and hints */
+/* Descriptions and hints - only in light mode, dark mode handled by @layer base overrides */
 .text-gray-400, .text-gray-500 {
   color: var(--color-text-secondary, #6b7280);
+}
+.dark .text-gray-400 {
+  color: #9ca3af;
+}
+.dark .text-gray-500 {
+  color: #9ca3af;
 }
 
 #root {
@@ -572,17 +578,17 @@ label {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f3f4f6;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d1d5db;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #9ca3af;
 }
 
 /* Animations */

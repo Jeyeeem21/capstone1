@@ -221,7 +221,7 @@ class SaleController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|string|in:pending,processing,shipped,delivered,completed,return_requested,picking_up,returned,cancelled',
+                'status' => 'required|string|in:pending,processing,shipped,delivered,completed,return_requested,picking_up,picked_up,returned,cancelled',
                 'driver_name' => 'nullable|string|max:255',
                 'driver_plate_number' => 'nullable|string|max:20',
                 'delivery_proof' => 'nullable|array|min:1',
@@ -286,6 +286,10 @@ class SaleController extends Controller
                     'admin' => ['Picking Up', "Order #{$sale->transaction_id} is being picked up for return."],
                     'customer' => ['Picking Up', "Your order #{$sale->transaction_id} is being picked up for return."],
                 ],
+                'picked_up' => [
+                    'admin' => ['Return Picked Up', "Order #{$sale->transaction_id} has been picked up by the driver. Awaiting verification."],
+                    'customer' => ['Return Picked Up', "Your order #{$sale->transaction_id} has been picked up. We'll process your return shortly."],
+                ],
                 'returned' => [
                     'admin' => ['Order Returned', "Order #{$sale->transaction_id} has been returned."],
                     'customer' => ['Order Returned', "Your order #{$sale->transaction_id} has been returned successfully."],
@@ -328,33 +332,11 @@ class SaleController extends Controller
                 }
             }
 
-            // Build response first, send emails AFTER response to avoid timeout
-            $response = response()->json([
+            return response()->json([
                 'success' => true,
                 'message' => 'Order status updated successfully',
                 'data' => new SaleResource($sale),
             ]);
-
-            // Send email notifications completely in background
-            $emailService = $this->emailService;
-            $capturedStatus = $status;
-            $capturedNotif = $statusNotifications[$status] ?? null;
-            $capturedDriverUser = $driverUser ?? null;
-            dispatch(function () use ($emailService, $sale, $capturedStatus, $capturedNotif, $capturedDriverUser) {
-                try {
-                    if ($capturedNotif) {
-                        $emailService->sendOrderStatusToAdmin($sale, $capturedNotif['admin'][0], $capturedNotif['admin'][1]);
-                        $emailService->sendOrderStatusToCustomer($sale, $capturedNotif['customer'][0], $capturedNotif['customer'][1]);
-                    }
-                    if ($capturedStatus === 'shipped' && $capturedDriverUser) {
-                        $emailService->sendDeliveryAssigned($sale, $capturedDriverUser);
-                    }
-                } catch (\Throwable $e) {
-                    // Silent — don't block the action
-                }
-            })->afterResponse();
-
-            return $response;
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -399,24 +381,11 @@ class SaleController extends Controller
                 "Return requested for order #{$sale->transaction_id} by {$customerName}. Reason: {$validated['return_reason']}",
             );
 
-            // Build response first, send emails AFTER response to avoid timeout
-            $response = response()->json([
+            return response()->json([
                 'success' => true,
                 'message' => 'Return request submitted successfully',
                 'data' => new SaleResource($sale),
             ]);
-
-            $emailService = $this->emailService;
-            $reason = $validated['return_reason'];
-            dispatch(function () use ($emailService, $sale, $customerName, $reason) {
-                try {
-                    $emailService->sendOrderStatusToAdmin($sale, 'Return Requested', "Return requested for order #{$sale->transaction_id} by {$customerName}. Reason: {$reason}");
-                } catch (\Throwable $e) {
-                    // Silent
-                }
-            })->afterResponse();
-
-            return $response;
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -483,27 +452,11 @@ class SaleController extends Controller
                 }
             }
 
-            // Build response first, send emails AFTER response to avoid timeout
-            $response = response()->json([
+            return response()->json([
                 'success' => true,
                 'message' => 'Return accepted. Pickup driver assigned.',
                 'data' => new SaleResource($sale),
             ]);
-
-            $emailService = $this->emailService;
-            dispatch(function () use ($emailService, $sale, $capturedDriverUser) {
-                try {
-                    $emailService->sendOrderStatusToAdmin($sale, 'Pickup Assigned', "Pickup assigned for return order #{$sale->transaction_id}.");
-                    $emailService->sendOrderStatusToCustomer($sale, 'Return Pickup Scheduled', "Your return for order #{$sale->transaction_id} has been accepted. Pickup is on the way!");
-                    if ($capturedDriverUser) {
-                        $emailService->sendDeliveryAssigned($sale, $capturedDriverUser);
-                    }
-                } catch (\Throwable $e) {
-                    // Silent
-                }
-            })->afterResponse();
-
-            return $response;
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -676,17 +629,13 @@ class SaleController extends Controller
                 "Your payment for order #{$sale->transaction_id} via {$payMethod} has been confirmed."
             );
 
-            $emailService = $this->emailService;
-            $response = response()->json([
+            return response()->json([
                 'success' => true,
                 'message' => 'Payment recorded successfully',
                 'data' => new SaleResource($sale),
             ]);
-            dispatch(function () use ($emailService, $sale, $payMethod) {
-                $emailService->sendOrderStatusToAdmin($sale, 'Payment Received', "Payment received for order #{$sale->transaction_id} via {$payMethod}.");
-                $emailService->sendOrderStatusToCustomer($sale, 'Payment Confirmed', "Your payment for order #{$sale->transaction_id} via {$payMethod} has been confirmed.");
-            })->afterResponse();
-            return $response;
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -825,16 +774,128 @@ class SaleController extends Controller
     {
         $sale = \App\Models\Sale::with(['customer', 'items.product.variety'])->find($id);
         if ($sale) {
-            $emailService = $this->emailService;
-            dispatch(function () use ($emailService, $sale) {
-                try {
-                    $emailService->sendNewOrderToAdmin($sale);
-                    $emailService->sendOrderPlacedToCustomer($sale);
-                } catch (\Throwable $e) {
-                    // Silent
-                }
-            })->afterResponse();
+            try {
+                $this->emailService->sendNewOrderToAdmin($sale);
+                $this->emailService->sendOrderPlacedToCustomer($sale);
+            } catch (\Throwable $e) {
+                // Silent — don't fail the request
+            }
         }
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Send status-related emails — called fire-and-forget from frontend after status update.
+     * Keeps email sending separate from the status update so the UI isn't blocked.
+     */
+    public function sendStatusEmail(int $id): JsonResponse
+    {
+        $sale = \App\Models\Sale::with(['customer', 'items.product.variety'])->find($id);
+        if (!$sale) {
+            return response()->json(['success' => true]);
+        }
+
+        $statusNotifications = [
+            'processing' => [
+                'admin' => ['Order Processing', "Order #{$sale->transaction_id} is now being processed."],
+                'customer' => ['Order Processing', "Your order #{$sale->transaction_id} is now being processed."],
+            ],
+            'shipped' => [
+                'admin' => ['Order Shipped', "Order #{$sale->transaction_id} has been shipped."],
+                'customer' => ['Order Shipped', "Your order #{$sale->transaction_id} has been shipped and is on its way!"],
+            ],
+            'delivered' => [
+                'admin' => ['Order Delivered', "Order #{$sale->transaction_id} has been delivered."],
+                'customer' => ['Order Delivered', "Your order #{$sale->transaction_id} has been delivered. Enjoy!"],
+            ],
+            'cancelled' => [
+                'admin' => ['Order Cancelled', "Order #{$sale->transaction_id} has been cancelled."],
+                'customer' => ['Order Cancelled', "Your order #{$sale->transaction_id} has been cancelled."],
+            ],
+            'return_requested' => [
+                'admin' => ['Return Requested', "A return has been requested for order #{$sale->transaction_id}."],
+                'customer' => ['Return Requested', "Your return request for order #{$sale->transaction_id} has been submitted."],
+            ],
+            'picking_up' => [
+                'admin' => ['Picking Up', "Order #{$sale->transaction_id} is being picked up for return."],
+                'customer' => ['Picking Up', "Your order #{$sale->transaction_id} is being picked up for return."],
+            ],
+            'picked_up' => [
+                'admin' => ['Return Picked Up', "Order #{$sale->transaction_id} has been picked up by the driver. Awaiting verification."],
+                'customer' => ['Return Picked Up', "Your order #{$sale->transaction_id} has been picked up. We'll process your return shortly."],
+            ],
+            'returned' => [
+                'admin' => ['Order Returned', "Order #{$sale->transaction_id} has been returned."],
+                'customer' => ['Order Returned', "Your order #{$sale->transaction_id} has been returned successfully."],
+            ],
+        ];
+
+        $status = $sale->status;
+        $notif = $statusNotifications[$status] ?? null;
+
+        try {
+            if ($notif) {
+                $this->emailService->sendOrderStatusToAdmin($sale, $notif['admin'][0], $notif['admin'][1]);
+                $this->emailService->sendOrderStatusToCustomer($sale, $notif['customer'][0], $notif['customer'][1]);
+            }
+
+            // Send driver delivery email if shipped
+            if ($status === 'shipped' && $sale->driver_name) {
+                $driverUser = User::where('role', 'staff')
+                    ->where('position', 'Driver')
+                    ->where('status', 'active')
+                    ->where(function ($q) use ($sale) {
+                        $q->where('name', $sale->driver_name)
+                          ->orWhere('truck_plate_number', $sale->driver_plate_number ?? '');
+                    })
+                    ->first();
+
+                if ($driverUser) {
+                    $this->emailService->sendDeliveryAssigned($sale, $driverUser);
+                }
+            }
+
+            // Send driver pickup email if picking_up (return)
+            if ($status === 'picking_up' && $sale->return_pickup_driver) {
+                $driverUser = User::where('role', 'staff')
+                    ->where('position', 'Driver')
+                    ->where('status', 'active')
+                    ->where(function ($q) use ($sale) {
+                        $q->where('name', $sale->return_pickup_driver)
+                          ->orWhere('truck_plate_number', $sale->return_pickup_plate ?? '');
+                    })
+                    ->first();
+
+                if ($driverUser) {
+                    $this->emailService->sendDeliveryAssigned($sale, $driverUser);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silent — don't fail the request
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Send payment-related emails — called fire-and-forget from frontend after payment.
+     */
+    public function sendPaymentEmail(int $id): JsonResponse
+    {
+        $sale = \App\Models\Sale::with(['customer'])->find($id);
+        if (!$sale) {
+            return response()->json(['success' => true]);
+        }
+
+        $payMethod = strtoupper($sale->payment_method ?? 'UNKNOWN');
+
+        try {
+            $this->emailService->sendOrderStatusToAdmin($sale, 'Payment Received', "Payment received for order #{$sale->transaction_id} via {$payMethod}.");
+            $this->emailService->sendOrderStatusToCustomer($sale, 'Payment Confirmed', "Your payment for order #{$sale->transaction_id} via {$payMethod} has been confirmed.");
+        } catch (\Throwable $e) {
+            // Silent
+        }
+
         return response()->json(['success' => true]);
     }
 }

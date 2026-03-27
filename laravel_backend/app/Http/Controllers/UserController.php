@@ -124,9 +124,6 @@ class UserController extends Controller
             'position' => $user->position,
         ]);
 
-        // Send welcome email to the new user
-        $this->emailService->sendWelcomeEmail($user);
-
         return $this->successResponse(
             $this->formatUser($user),
             'User created successfully',
@@ -255,6 +252,22 @@ class UserController extends Controller
 
         $oldValues = $user->only(['name', 'email', 'role', 'position', 'phone', 'status']);
 
+        // Track changes before updating
+        $changes = [];
+        $fieldLabels = [
+            'name' => 'Name', 'first_name' => 'First Name', 'last_name' => 'Last Name',
+            'email' => 'Email', 'role' => 'Role', 'position' => 'Position',
+            'phone' => 'Phone', 'status' => 'Status',
+        ];
+        foreach ($validated as $field => $newValue) {
+            if ($field === 'password') continue;
+            $oldValue = $user->$field;
+            if ((string) $oldValue !== (string) $newValue) {
+                $label = $fieldLabels[$field] ?? ucfirst($field);
+                $changes[] = "{$label}: \"{$oldValue}\" → \"{$newValue}\"";
+            }
+        }
+
         $user->update($validated);
 
         $this->logAudit('UPDATE', 'Users', "Updated user: {$user->name}", [
@@ -263,10 +276,12 @@ class UserController extends Controller
             'new_values' => $user->only(['name', 'email', 'role', 'position', 'phone', 'status']),
         ]);
 
-        return $this->successResponse(
-            $this->formatUser($user),
-            'User updated successfully'
-        );
+        return response()->json([
+            'success' => true,
+            'message' => 'User updated successfully',
+            'data' => $this->formatUser($user),
+            '_changes' => $changes,
+        ]);
     }
 
     /**
@@ -347,6 +362,51 @@ class UserController extends Controller
     /**
      * Format user for API response.
      */
+    /**
+     * Fire-and-forget: send welcome email after user creation.
+     */
+    public function sendWelcomeEmailEndpoint(string $id): JsonResponse
+    {
+        $user = User::find($id);
+        if ($user) {
+            try {
+                $this->emailService->sendWelcomeEmail($user);
+            } catch (\Throwable $e) { /* silent */ }
+        }
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Fire-and-forget: send update notification emails.
+     */
+    public function sendUpdateEmail(string $id, Request $request): JsonResponse
+    {
+        $user = User::find($id);
+        if (!$user) return response()->json(['success' => true]);
+
+        $changes = $request->input('changes', []);
+        if (empty($changes)) return response()->json(['success' => true]);
+
+        $changesSummary = "Changes made:\n" . implode("\n", $changes);
+
+        try {
+            $this->emailService->sendAdminAlert(
+                "User Updated — {$user->name}",
+                'User Information Updated',
+                "The user \"{$user->name}\" ({$user->email}) has been updated.\n\n{$changesSummary}"
+            );
+
+            $this->emailService->sendAlertTo(
+                $user->email,
+                'Your Account Information Has Been Updated',
+                'Your Account Was Updated',
+                "Hi {$user->name},\n\nYour account information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
+            );
+        } catch (\Throwable $e) { /* silent */ }
+
+        return response()->json(['success' => true]);
+    }
+
     private function formatUser(User $user): array
     {
         return [

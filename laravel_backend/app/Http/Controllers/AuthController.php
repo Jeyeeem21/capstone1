@@ -63,23 +63,32 @@ class AuthController extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
-        // Send login notification email after response to avoid blocking
-        $emailService = $this->emailService;
-        $ip = $request->ip();
-        dispatch(function () use ($emailService, $user, $ip) {
-            $emailService->sendLoginNotification($user, $ip);
-            // Also notify the customer themselves on their own email
-            if ($user->role === 'customer') {
-                $emailService->sendCustomerLoginNotification($user, $ip);
-            }
-        })->afterResponse();
-
         return response()->json([
             'success' => true,
             'token' => $token,
             'user' => $this->formatUser($user),
             'message' => 'Login successful',
         ]);
+    }
+
+    /**
+     * Send login notification emails — called fire-and-forget from frontend after login.
+     */
+    public function sendLoginEmail(Request $request)
+    {
+        $user = $request->user();
+        $ip = $request->ip();
+
+        try {
+            $this->emailService->sendLoginNotification($user, $ip);
+            if ($user->role === 'customer') {
+                $this->emailService->sendCustomerLoginNotification($user, $ip);
+            }
+        } catch (\Throwable $e) {
+            // Silent — don't fail the request
+        }
+
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -136,6 +145,12 @@ class AuthController extends Controller
             $data['address'] = $customer?->address;
         }
 
+        // Include truck plate number for driver staff
+        if ($user->role === 'staff' && $user->position === 'Driver') {
+            $data['truck_plate_number'] = $user->truck_plate_number;
+            $data['date_hired'] = $user->date_hired;
+        }
+
         return $data;
     }
 
@@ -149,7 +164,25 @@ class AuthController extends Controller
         $validated = $request->validate([
             'first_name' => 'sometimes|string|max:255',
             'last_name'  => 'sometimes|string|max:255',
-            'email'      => ['sometimes', 'email', Rule::unique('users')->ignore($user->id)],
+            'email'      => [
+                'sometimes',
+                'email',
+                Rule::unique('users')->ignore($user->id),
+                function ($attribute, $value, $fail) use ($user) {
+                    // Check customers table but allow the linked customer record
+                    $query = \App\Models\Customer::where('email', $value);
+                    if ($user->role === 'customer') {
+                        $query->where('email', '!=', $user->email);
+                    }
+                    if ($query->exists()) {
+                        $fail('This email is already registered.');
+                    }
+                    // Check suppliers table
+                    if (\App\Models\Supplier::where('email', $value)->exists()) {
+                        $fail('This email is already registered.');
+                    }
+                },
+            ],
             'phone'      => 'nullable|string|max:50',
             'address'    => 'nullable|string|max:500',
         ]);
@@ -165,18 +198,23 @@ class AuthController extends Controller
         $address = $validated['address'] ?? null;
         unset($validated['address']);
 
+        $oldEmail = $user->email;
         $user->update($validated);
 
-        // Also update the linked customer record's address
-        if ($user->role === 'customer' && $address !== null) {
-            $customer = $user->customer;
+        // Sync all changed fields to linked customer record
+        if ($user->role === 'customer') {
+            $customer = \App\Models\Customer::where('email', $oldEmail)->first();
             if ($customer) {
-                $customer->update([
+                $customerUpdates = [
                     'name'    => $user->name,
                     'email'   => $user->email,
                     'phone'   => $validated['phone'] ?? $customer->phone,
-                    'address' => $address,
-                ]);
+                    'contact' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                ];
+                if ($address !== null) {
+                    $customerUpdates['address'] = $address;
+                }
+                $customer->update($customerUpdates);
             }
         }
 

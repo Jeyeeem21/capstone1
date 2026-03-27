@@ -157,8 +157,8 @@ const DryingProcess = () => {
     try {
       const response = await apiClient.post(`/drying-processes/${item.id}/increment-day`);
       if (response.success) {
-        await invalidateAndRefetch();
         toast.success('Day Added', `Day ${item.days + 1} added. Total: ₱${((parseInt(item.sacks || 0) * parseFloat(item.price)) * (item.days + 1)).toLocaleString()}`);
+        invalidateAndRefetch();
       } else {
         throw new Error(response.message || 'Failed to increment day');
       }
@@ -178,8 +178,8 @@ const DryingProcess = () => {
     try {
       const response = await apiClient.post(`/drying-processes/${item.id}/mark-dried`);
       if (response.success) {
-        await invalidateAndRefetch();
         toast.success('Marked as Dried', `Drying #${String(item.id).padStart(4, '0')} is now dried and ready for processing.`);
+        invalidateAndRefetch();
       } else {
         throw new Error(response.message || 'Failed to mark as dried');
       }

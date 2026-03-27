@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
+use App\Models\Customer;
 use App\Models\Procurement;
+use App\Models\User;
 use App\Services\SupplierService;
 use App\Services\EmailService;
 use App\Http\Resources\SupplierResource;
@@ -60,7 +62,13 @@ class SupplierController extends Controller
                 'string',
                 'regex:/^(\+63\d{10}|09\d{9})$/'
             ],
-            'email' => 'required|email|unique:suppliers,email',
+            'email' => [
+                'required',
+                'email',
+                'unique:suppliers,email',
+                'unique:customers,email',
+                'unique:users,email',
+            ],
             'address' => 'required|string',
             'status' => 'required|in:Active,Inactive',
         ], [
@@ -75,15 +83,6 @@ class SupplierController extends Controller
             'supplier_id' => $supplier->id,
             'name' => $supplier->name,
         ]);
-
-        $emailService = $this->emailService;
-        dispatch(function () use ($emailService, $supplier) {
-            $emailService->sendAdminAlert(
-                "New Supplier Added — {$supplier->name}",
-                'New Supplier Added',
-                "A new supplier \"{$supplier->name}\" ({$supplier->email}) has been added to the system."
-            );
-        })->afterResponse();
 
         return $this->successResponse(
             new SupplierResource($supplier),
@@ -134,7 +133,9 @@ class SupplierController extends Controller
             'email' => [
                 'required',
                 'email',
-                Rule::unique('suppliers', 'email')->ignore($supplier->id)
+                Rule::unique('suppliers', 'email')->ignore($supplier->id),
+                'unique:customers,email',
+                'unique:users,email',
             ],
             'address' => 'required|string',
             'status' => 'required|in:Active,Inactive',
@@ -144,26 +145,34 @@ class SupplierController extends Controller
             'phone.regex' => 'Phone must be in format: +63 followed by 10 digits (e.g., +63 912 345 6789) or 09 followed by 9 digits (e.g., 09171234567).',
         ]);
 
+        // Track what changed before updating
+        $changes = [];
+        $fieldLabels = [
+            'name' => 'Business Name', 'contact' => 'Contact Person',
+            'phone' => 'Phone', 'email' => 'Email',
+            'address' => 'Address', 'status' => 'Status',
+        ];
+        foreach ($validated as $field => $newValue) {
+            $oldValue = $supplier->$field;
+            if ((string) $oldValue !== (string) $newValue) {
+                $label = $fieldLabels[$field] ?? ucfirst($field);
+                $changes[] = "{$label}: \"{$oldValue}\" → \"{$newValue}\"";
+            }
+        }
+
         $supplier = $this->supplierService->updateSupplier($supplier, $validated);
 
         $this->logAudit('UPDATE', 'Supplier', "Updated supplier: {$supplier->name}", [
             'supplier_id' => $supplier->id,
-            'changes' => $validated,
+            'changes' => $changes,
         ]);
 
-        $emailService = $this->emailService;
-        dispatch(function () use ($emailService, $supplier) {
-            $emailService->sendAdminAlert(
-                "Supplier Updated — {$supplier->name}",
-                'Supplier Information Updated',
-                "The supplier \"{$supplier->name}\" ({$supplier->email}) has been updated in the system."
-            );
-        })->afterResponse();
-
-        return $this->successResponse(
-            new SupplierResource($supplier),
-            'Supplier updated successfully'
-        );
+        return response()->json([
+            'success' => true,
+            'message' => 'Supplier updated successfully',
+            'data' => new SupplierResource($supplier),
+            '_changes' => $changes,
+        ]);
     }
 
     /**
@@ -203,12 +212,18 @@ class SupplierController extends Controller
         $email = $request->email;
         $supplierId = $request->supplier_id;
 
-        // SoftDeletes trait automatically excludes soft-deleted records
-        $exists = Supplier::where('email', $email)
+        // Check suppliers table
+        $existsInSuppliers = Supplier::where('email', $email)
             ->when($supplierId, function ($query) use ($supplierId) {
                 return $query->where('id', '!=', $supplierId);
             })
             ->exists();
+
+        // Also check customers and users tables
+        $existsInCustomers = Customer::where('email', $email)->exists();
+        $existsInUsers = User::where('email', $email)->exists();
+
+        $exists = $existsInSuppliers || $existsInCustomers || $existsInUsers;
 
         return $this->successResponse(
             ['available' => !$exists],
@@ -232,5 +247,62 @@ class SupplierController extends Controller
             ProcurementResource::collection($procurements),
             "Procurements for {$supplier->name} retrieved successfully"
         );
+    }
+
+    /**
+     * Fire-and-forget: send store notification emails.
+     */
+    public function sendStoreEmail(string $id): JsonResponse
+    {
+        $supplier = Supplier::find($id);
+        if (!$supplier) return response()->json(['success' => true]);
+
+        try {
+            $this->emailService->sendAdminAlert(
+                "New Supplier Added \u2014 {$supplier->name}",
+                'New Supplier Added',
+                "A new supplier \"{$supplier->name}\" ({$supplier->email}) has been added to the system."
+            );
+
+            $this->emailService->sendAlertTo(
+                $supplier->email,
+                'Welcome \u2014 You Have Been Added as a Supplier',
+                'Welcome to Our System',
+                "Hi {$supplier->name},\n\nYou have been added as a supplier in our system.\n\nContact: {$supplier->contact}\nEmail: {$supplier->email}\nPhone: {$supplier->phone}\n\nIf you have any questions, please don't hesitate to contact us."
+            );
+        } catch (\Throwable $e) { /* silent */ }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Fire-and-forget: send update notification emails.
+     */
+    public function sendUpdateEmail(string $id, Request $request): JsonResponse
+    {
+        $supplier = Supplier::find($id);
+        if (!$supplier) return response()->json(['success' => true]);
+
+        $changes = $request->input('changes', []);
+        if (empty($changes)) return response()->json(['success' => true]);
+
+        $changesSummary = "Changes made:\n" . implode("\n", $changes);
+
+        try {
+            $this->emailService->sendAdminAlert(
+                "Supplier Updated \u2014 {$supplier->name}",
+                'Supplier Information Updated',
+                "The supplier \"{$supplier->name}\" ({$supplier->email}) has been updated in the system.\n\n{$changesSummary}"
+            );
+
+            $this->emailService->sendAlertTo(
+                $supplier->email,
+                'Your Information Has Been Updated',
+                'Your Supplier Information Was Updated',
+                "Hi {$supplier->name},\n\nYour information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
+            );
+        } catch (\Throwable $e) { /* silent */ }
+
+        return response()->json(['success' => true]);
     }
 }

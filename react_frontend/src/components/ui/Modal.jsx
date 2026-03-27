@@ -35,6 +35,8 @@ const Modal = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  const overlayRef = useRef(null);
+
   // Prevent body scroll when modal is open - preserve scroll position
   useEffect(() => {
     if (isOpen) {
@@ -49,6 +51,10 @@ const Modal = ({
     }
     return () => {
       resetBodyStyles();
+      // Safety: if this portal's overlay div is still in the DOM, remove it directly
+      if (overlayRef.current && overlayRef.current.parentNode) {
+        overlayRef.current.parentNode.removeChild(overlayRef.current);
+      }
     };
   }, [isOpen]);
 
@@ -71,6 +77,7 @@ const Modal = ({
 
   return createPortal(
     <div 
+      ref={overlayRef}
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
       onClick={handleOverlayClick}
     >

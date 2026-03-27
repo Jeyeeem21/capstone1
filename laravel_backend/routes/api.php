@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\WebsiteContentController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\DriverController;
+use App\Http\Controllers\DriverPortalController;
 use App\Http\Controllers\DeliveryAssignmentController;
 use App\Http\Controllers\VarietyController;
 use App\Http\Controllers\ProcurementController;
@@ -70,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth - authenticated user actions
     Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post('/login-email', [AuthController::class, 'sendLoginEmail']);
         Route::get('/me', [AuthController::class, 'me']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
         Route::put('/password', [AuthController::class, 'updatePassword']);
@@ -117,6 +119,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/void', [SaleController::class, 'void']);
         Route::put('/{id}/status', [SaleController::class, 'updateStatus']);
         Route::post('/{id}/notify', [SaleController::class, 'sendOrderEmail']);
+        Route::post('/{id}/status-email', [SaleController::class, 'sendStatusEmail']);
+        Route::post('/{id}/payment-email', [SaleController::class, 'sendPaymentEmail']);
         Route::post('/{id}/return', [SaleController::class, 'processReturn']);
         Route::post('/{id}/return/accept', [SaleController::class, 'acceptReturn']);
         Route::post('/{id}/return/reject', [SaleController::class, 'rejectReturn']);
@@ -195,6 +199,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/send-verification', [CustomerController::class, 'sendVerificationCode']);
         Route::post('/{id}/verify-code', [CustomerController::class, 'verifyCode']);
         Route::post('/{id}/create-account', [CustomerController::class, 'createAccount']);
+        Route::post('/{id}/store-email', [CustomerController::class, 'sendStoreEmail']);
+        Route::post('/{id}/update-email', [CustomerController::class, 'sendUpdateEmail']);
     });
 
     // Supplier Routes
@@ -206,6 +212,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [SupplierController::class, 'update']);
         Route::delete('/{id}', [SupplierController::class, 'destroy']);
         Route::get('/{id}/procurements', [SupplierController::class, 'procurements']);
+        Route::post('/{id}/store-email', [SupplierController::class, 'sendStoreEmail']);
+        Route::post('/{id}/update-email', [SupplierController::class, 'sendUpdateEmail']);
     });
 
     // Variety Routes
@@ -268,6 +276,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{processing}', [ProcessingController::class, 'destroy']);
     });
 
+    // Driver Portal Routes (for logged-in driver users)
+    Route::prefix('driver-portal')->group(function () {
+        Route::get('/dashboard', [DriverPortalController::class, 'dashboard']);
+        Route::get('/my-deliveries', [DriverPortalController::class, 'myDeliveries']);
+        Route::post('/orders/{id}/status', [DriverPortalController::class, 'updateOrderStatus']);
+        Route::post('/orders/{id}/pay', [DriverPortalController::class, 'markOrderPaid']);
+    });
+
     // Driver Routes
     Route::prefix('drivers')->group(function () {
         Route::get('/', [DriverController::class, 'index']);
@@ -300,5 +316,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [UserController::class, 'show']);
         Route::put('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
+        Route::post('/{id}/welcome-email', [UserController::class, 'sendWelcomeEmailEndpoint']);
+        Route::post('/{id}/update-email', [UserController::class, 'sendUpdateEmail']);
     });
 });

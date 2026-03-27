@@ -163,7 +163,7 @@ const Home = () => {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-full text-green-300 text-sm font-medium mb-8">
             <Leaf size={16} />
-            <span>{(content.heroTag || '').replace(/\d{4}/, settings.business_start_year || '2010')}</span>
+            <span>{content.heroTag || ''}</span>
           </div>
           
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
@@ -344,10 +344,10 @@ const Home = () => {
                 About Us
               </span>
               <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 dark:text-gray-100 mb-6">
-                {content.aboutTitle}
+                {content.aboutTitle || ''}
               </h2>
               <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-                {content.aboutDescription}
+                {content.aboutDescription || ''}
               </p>
               <ul className="space-y-4 mb-8">
                 {(content.aboutPoints || defaultContent.aboutPoints).map((item) => (

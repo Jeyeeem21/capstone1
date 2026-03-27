@@ -1,0 +1,280 @@
+================================================================================
+  DEPLOYMENT STEPS - KJP RICEMILL INVENTORY & SALES SYSTEM (CAPSTONE)
+  GitHub Repo: https://github.com/Jeyeeem21/capstone1
+  Structure: laravel_backend/ + react_frontend/  (NO Python ML needed)
+================================================================================
+
+
+════════════════════════════════════════
+  STEP 1: PUSH LATEST CODE TO GITHUB
+════════════════════════════════════════
+
+You have uncommitted changes. Push them first.
+
+Open PowerShell and run:
+
+  cd "c:\laragon\www\Jeyeeem's files\Capstone\capstone1"
+  git add .
+  git commit -m "Final polish - ready for deployment"
+  git push origin main
+
+✅ Code is now on GitHub.
+
+
+════════════════════════════════════════
+  STEP 2: HOSTINGER - CREATE DATABASE
+════════════════════════════════════════
+
+1. Go to hpanel.hostinger.com → your hosting account
+2. Left sidebar → Databases → Management
+3. Click "Create a new MySQL database"
+4. Fill in:
+     Database name: kjp_ricemill
+     Username:      kjp_user
+     Password:      click Generate → copy it
+5. Click Create
+
+⚠️ SAVE THESE — needed in Step 5:
+     Full DB name:   u_________kjp_ricemill   (copy exact name shown)
+     Full username:  u_________kjp_user        (copy exact name shown)
+     Password:       ________________
+     Host:           localhost
+
+
+════════════════════════════════════════
+  STEP 3: HOSTINGER - CREATE SUBDOMAIN
+════════════════════════════════════════
+
+1. Left sidebar → Domains → Subdomains
+2. Subdomain field: api
+3. Make sure your domain is selected (e.g. yourdomain.com)
+4. Click Create
+5. ✅ This creates: api.yourdomain.com  ← your Laravel API address
+
+
+════════════════════════════════════════
+  STEP 4: HOSTINGER - ENABLE SSH
+════════════════════════════════════════
+
+1. Left sidebar → Advanced → SSH Access
+2. Toggle SSH ON
+3. ⚠️ SAVE THESE:
+     SSH host:      ________________
+     SSH port:      65002
+     SSH username:  ________________
+     SSH password:  your hPanel login password
+
+
+════════════════════════════════════════
+  STEP 5: SSH INTO SERVER - LARAVEL SETUP
+════════════════════════════════════════
+
+Open PowerShell on your PC:
+
+  ssh YOUR_SSH_USERNAME@YOUR_SSH_HOST -p 65002
+
+Once connected, run these commands ONE BY ONE:
+
+  cd ~
+  git clone https://github.com/Jeyeeem21/capstone1.git app
+
+  # Link api subdomain to Laravel public folder
+  rm -rf ~/public_html/api.yourdomain.com
+  ln -s ~/app/laravel_backend/public ~/public_html/api.yourdomain.com
+
+  # Install PHP dependencies
+  cd ~/app/laravel_backend
+  composer install --optimize-autoloader --no-dev
+
+  # Create .env file
+  cp .env.example .env
+  nano .env
+
+  --- INSIDE NANO — fill in these values ---
+
+  APP_NAME="KJP Ricemill"
+  APP_ENV=production
+  APP_KEY=
+  APP_DEBUG=false
+  APP_URL=https://api.yourdomain.com
+
+  DB_CONNECTION=mysql
+  DB_HOST=localhost
+  DB_PORT=3306
+  DB_DATABASE=u_________kjp_ricemill
+  DB_USERNAME=u_________kjp_user
+  DB_PASSWORD=your_generated_password
+
+  SESSION_DRIVER=database
+  SESSION_LIFETIME=120
+  SESSION_PATH=/
+  SESSION_DOMAIN=.yourdomain.com
+
+  CACHE_STORE=database
+  QUEUE_CONNECTION=database
+  FILESYSTEM_DISK=local
+
+  SANCTUM_STATEFUL_DOMAINS=yourdomain.com,www.yourdomain.com,api.yourdomain.com
+  FRONTEND_URL=https://yourdomain.com
+
+  MAIL_MAILER=smtp
+  MAIL_HOST=smtp.gmail.com
+  MAIL_PORT=587
+  MAIL_USERNAME=your-gmail@gmail.com
+  MAIL_PASSWORD=xxxx xxxx xxxx xxxx
+  MAIL_ENCRYPTION=tls
+  MAIL_FROM_ADDRESS=your-gmail@gmail.com
+  MAIL_FROM_NAME="KJP Ricemill"
+
+  --- Save: Ctrl+X → Y → Enter ---
+
+  # Run Laravel setup
+  php artisan key:generate
+  php artisan migrate --force
+  php artisan db:seed --force
+  php artisan config:cache
+  php artisan route:cache
+  php artisan view:cache
+  chmod -R 775 storage bootstrap/cache
+  php artisan storage:link
+
+  exit
+
+✅ Backend is live at https://api.yourdomain.com
+
+
+════════════════════════════════════════
+  STEP 6: BUILD & UPLOAD REACT FRONTEND
+════════════════════════════════════════
+
+On your LOCAL PC:
+
+--- 6A: Update API URL ---
+
+Open this file:
+  react_frontend/src/api/config.js
+
+Change line 12 from:
+  export const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+To:
+  export const API_BASE_URL = 'https://api.yourdomain.com/api';
+
+--- 6B: Build ---
+
+Open PowerShell:
+
+  cd "c:\laragon\www\Jeyeeem's files\Capstone\capstone1\react_frontend"
+  npm install
+  npm run build
+
+This creates a dist/ folder.
+
+--- 6C: Upload to Hostinger ---
+
+1. hPanel → Files → File Manager
+2. Go to public_html/
+3. Delete the default index.html if any
+4. Upload EVERYTHING INSIDE the dist/ folder (not the dist folder itself)
+   (assets/, index.html, etc.)
+
+--- 6D: Create .htaccess in public_html/ ---
+
+In File Manager, create new file .htaccess with content:
+
+  <IfModule mod_rewrite.c>
+      RewriteEngine On
+      RewriteBase /
+      RewriteCond %{REQUEST_FILENAME} !-f
+      RewriteCond %{REQUEST_FILENAME} !-d
+      RewriteRule ^ index.html [QSA,L]
+  </IfModule>
+
+✅ Frontend is live at https://yourdomain.com
+
+
+════════════════════════════════════════
+  STEP 7: SSL CERTIFICATE
+════════════════════════════════════════
+
+1. hPanel → Security → SSL
+2. Install SSL for yourdomain.com → Force HTTPS ON
+3. Install SSL for api.yourdomain.com → Force HTTPS ON
+
+
+════════════════════════════════════════
+  STEP 8: SET UP AUTO-DEPLOY (OPTIONAL)
+════════════════════════════════════════
+
+The .github/workflows/deploy.yml file is already created in the repo.
+You just need to add GitHub Secrets.
+
+--- 8A: Get your SSH private key ---
+
+  Get-Content "$HOME\.ssh\hostinger_deploy"
+
+--- 8B: Add secrets to GitHub ---
+
+Go to: https://github.com/Jeyeeem21/capstone1
+  → Settings → Secrets and variables → Actions
+  → New repository secret
+
+Add these 4 secrets:
+
+  SSH_HOST         = your SSH host from Step 4
+  SSH_PORT         = 65002
+  SSH_USERNAME     = your SSH username from Step 4
+  SSH_PRIVATE_KEY  = full private key (including -----BEGIN ... END----- lines)
+
+--- 8C: Push the workflow ---
+
+  cd "c:\laragon\www\Jeyeeem's files\Capstone\capstone1"
+  git add .github
+  git commit -m "Add auto-deploy workflow"
+  git push
+
+✅ Now every git push → auto-deploys backend!
+
+
+════════════════════════════════════════
+  REVERTING API URL AFTER DEPLOY
+════════════════════════════════════════
+
+⚠️ IMPORTANT: After building the frontend, revert config.js
+   back to localhost so local development still works:
+
+   Change back to:
+   export const API_BASE_URL = 'http://127.0.0.1:8000/api';
+
+   Do NOT commit the production URL to git.
+
+
+════════════════════════════════════════
+  FUTURE UPDATES WORKFLOW
+════════════════════════════════════════
+
+  BACKEND UPDATE (automatic):
+    git add . && git commit -m "Update" && git push
+    GitHub Actions auto-deploys backend ✅
+
+  FRONTEND UPDATE (manual):
+    1. Edit react_frontend/src/api/config.js → change to production URL
+    2. npm run build (in react_frontend/)
+    3. Upload dist/ contents to public_html/ on Hostinger
+    4. Revert config.js back to localhost URL
+
+
+================================================================================
+  PROGRESS CHECKLIST
+================================================================================
+
+  Step 1  - Push latest code to GitHub           [ ]
+  Step 2  - Create MySQL Database                 [ ]
+  Step 3  - Create api.yourdomain.com subdomain  [ ]
+  Step 4  - Enable SSH                            [ ]
+  Step 5  - SSH setup (clone, .env, migrate)      [ ]
+  Step 6  - Build & upload React frontend         [ ]
+  Step 7  - SSL Certificate                       [ ]
+  Step 8  - Auto-deploy GitHub Actions            [ ]
+
+================================================================================

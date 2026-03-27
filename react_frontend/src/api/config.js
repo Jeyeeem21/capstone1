@@ -110,6 +110,14 @@ export const ENDPOINTS = {
     BY_ID: (id) => `/deliveries/${id}`,
     UPDATE_STATUS: (id) => `/deliveries/${id}/status`,
   },
+
+  // Driver Portal (for logged-in driver)
+  DRIVER_PORTAL: {
+    DASHBOARD: '/driver-portal/dashboard',
+    MY_DELIVERIES: '/driver-portal/my-deliveries',
+    UPDATE_ORDER_STATUS: (id) => `/driver-portal/orders/${id}/status`,
+    MARK_ORDER_PAID: (id) => `/driver-portal/orders/${id}/pay`,
+  },
 };
 
 // ============================================
@@ -127,5 +135,5 @@ export const REQUEST_CONFIG = {
 export const CACHE_CONFIG = {
   ENABLED: true,
   PREFIX: 'kjp-',
-  TTL: 10 * 60 * 1000, // 10 minutes - longer cache for faster loads
+  TTL: 2 * 60 * 1000, // 2 minutes - balanced between freshness and performance
 };

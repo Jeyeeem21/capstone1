@@ -2128,7 +2128,9 @@ const Procurement = () => {
                     </span>
                   </div>
                 )}
-                {submitted && !formData.sacks && <p className="text-xs text-red-500 mt-1">Sacks is required</p>}
+                {submitted && !formData.sacks && !sacksInput && <p className="text-xs text-red-500 mt-1">Sacks is required</p>}
+                {submitted && sacksInput && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">You have an unadded value. Click + or press Enter to add it first.</p>}
+                {!submitted && sacksInput && parseInt(sacksInput) > 0 && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Click + or press Enter to add this value.</p>}
                 {errors.sacks?.[0] && <p className="text-xs text-red-500 mt-1">{errors.sacks[0]}</p>}
               </div>
 
@@ -2183,7 +2185,9 @@ const Procurement = () => {
                     </span>
                   </div>
                 )}
-                {submitted && !formData.quantity_kg && <p className="text-xs text-red-500 mt-1">Quantity is required</p>}
+                {submitted && !formData.quantity_kg && !kgInput && <p className="text-xs text-red-500 mt-1">Quantity is required</p>}
+                {submitted && kgInput && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">You have an unadded value. Click + or press Enter to add it first.</p>}
+                {!submitted && kgInput && parseFloat(kgInput) > 0 && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Click + or press Enter to add this value.</p>}
                 {errors.quantity_kg?.[0] && <p className="text-xs text-red-500 mt-1">{errors.quantity_kg[0]}</p>}
               </div>
             </div>

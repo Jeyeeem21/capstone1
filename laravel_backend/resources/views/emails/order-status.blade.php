@@ -31,6 +31,18 @@
             @endif
         </td>
     </tr>
+    @if($sale->payment_method)
+    <tr>
+        <th>Payment Method</th>
+        <td>{{ strtoupper($sale->payment_method) }}</td>
+    </tr>
+    @endif
+    @if($sale->reference_number)
+    <tr>
+        <th>Reference Number</th>
+        <td>{{ $sale->reference_number }}</td>
+    </tr>
+    @endif
     @if($sale->driver_name)
     <tr>
         <th>Driver</th>
@@ -44,4 +56,13 @@
 </table>
 
 <p>{{ $body }}</p>
+
+@if(!empty($sale->payment_proof) && is_array($sale->payment_proof))
+<h3 style="margin-top: 20px;">Payment Proof</h3>
+<div>
+    @foreach($sale->payment_proof as $proof)
+        <img src="{{ url('storage/' . $proof) }}" alt="Payment Proof" style="max-width: 300px; max-height: 200px; border-radius: 8px; margin: 5px 0; border: 1px solid #ddd;" />
+    @endforeach
+</div>
+@endif
 @endsection

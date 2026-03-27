@@ -82,6 +82,16 @@ const Dashboard = () => {
     fetchData(period, chartParams);
   }, [period, chartParams, fetchData]);
 
+  // Realtime polling — refresh every 5s when tab is visible
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchData(period, chartParams);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [period, chartParams, fetchData]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {

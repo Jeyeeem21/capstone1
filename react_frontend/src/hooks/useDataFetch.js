@@ -15,8 +15,9 @@ import { apiClient } from '../api';
 // In-memory cache for instant access (faster than localStorage)
 const memoryCache = new Map();
 const cacheTimestamps = new Map();
-const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for memory cache
+const MEMORY_CACHE_TTL = 2 * 60 * 1000; // 2 minutes for memory cache
 const STALE_TTL = 10 * 1000; // 10 seconds before background refresh
+const DEFAULT_POLL_INTERVAL = 5 * 1000; // 5 seconds — near-realtime admin ↔ super admin sync
 
 // ── Visibility-based refetch (real-time across tabs/browsers) ──
 // When user switches back to this tab, all active hooks refetch if stale.
@@ -116,6 +117,7 @@ export const useDataFetch = (endpoint, options = {}) => {
     onError = null,
     initialData = [],
     transformData = (data) => data,
+    pollInterval = null, // ms — if set, silently refetches on this interval
   } = options;
 
   const [data, setData] = useState(() => {
@@ -306,6 +308,24 @@ export const useDataFetch = (endpoint, options = {}) => {
       activeHooks.delete(refetchIfStale);
     };
   }, [enabled, cacheKey, fetchData]);
+
+  // ── Polling interval ──
+  // Silently refetch in the background at a regular interval to keep data
+  // fresh across different devices/sessions (admin ↔ super admin).
+  // Only polls when the tab is visible to avoid wasted requests.
+  const effectivePollInterval = pollInterval ?? DEFAULT_POLL_INTERVAL;
+  useEffect(() => {
+    if (!enabled || !effectivePollInterval) return;
+
+    const id = setInterval(() => {
+      // Only poll when the tab is visible
+      if (document.visibilityState !== 'visible') return;
+      fetchInProgress.current = false;
+      fetchData(false, true, true); // silent, background, force network
+    }, effectivePollInterval);
+
+    return () => clearInterval(id);
+  }, [enabled, effectivePollInterval, fetchData]);
 
   // Manual refetch function - forces fresh data from server
   const refetch = useCallback(async () => {

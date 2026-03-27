@@ -3,7 +3,7 @@ import { UserCog, Shield, Users, CheckCircle, XCircle, Briefcase, Archive, Truck
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { useAuth } from '../../../context/AuthContext';
-import { usersApi } from '../../../api';
+import { usersApi, apiClient } from '../../../api';
 
 const StaffManagement = () => {
   const toast = useToast();
@@ -36,23 +36,33 @@ const StaffManagement = () => {
   ];
 
   // Fetch staff members
-  const fetchStaff = useCallback(async () => {
+  const fetchStaff = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await usersApi.getAll({ role: 'staff' });
       const data = response?.data?.data || response?.data || [];
       setStaff(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to fetch staff:', error);
-      toast.error('Error', 'Failed to load staff members.');
+      if (!silent) toast.error('Error', 'Failed to load staff members.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchStaff();
   }, [fetchStaff]);
+
+  // Realtime polling — refresh every 5s when tab is visible and no modal open
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && !isAddModalOpen && !isEditModalOpen && !isDeleteModalOpen) {
+        fetchStaff(true);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchStaff, isAddModalOpen, isEditModalOpen, isDeleteModalOpen]);
 
   const handleAdd = () => {
     setFormData({
@@ -134,7 +144,7 @@ const StaffManagement = () => {
     }
     try {
       setSubmitting(true);
-      await usersApi.create({
+      const response = await usersApi.create({
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -146,6 +156,8 @@ const StaffManagement = () => {
         date_hired: formData.date_hired || null,
       });
       toast.success('Staff Added', `${formData.name} has been added to the team.`);
+      // Fire-and-forget email
+      if (response?.data?.id) apiClient.post(`/users/${response.data.id}/welcome-email`).catch(() => {});
       setIsAddModalOpen(false);
       fetchStaff();
     } catch (error) {
@@ -172,8 +184,10 @@ const StaffManagement = () => {
       if (formData.password) {
         payload.password = formData.password;
       }
-      await usersApi.update(selectedItem.id, payload);
+      const response = await usersApi.update(selectedItem.id, payload);
       toast.success('Staff Updated', `${formData.name}'s information has been updated.`);
+      // Fire-and-forget email
+      apiClient.post(`/users/${selectedItem.id}/update-email`, { changes: response._changes || [] }).catch(() => {});
       setIsEditModalOpen(false);
       fetchStaff();
     } catch (error) {

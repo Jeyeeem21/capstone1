@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { MainLayout, StaffLayout, PublicLayout, CustomerLayout, DriverLayout } from './layouts';
 import { ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -7,47 +7,59 @@ import { BusinessSettingsProvider, useBusinessSettings } from './context/Busines
 import { ProtectedRoute, SuperAdminRoute } from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './pages/NotFound';
-import {
-  // Admin pages
-  Dashboard,
-  Procurement,
-  DryingProcess,
-  Processing,
-  Products,
-  Varieties,
-  Inventory,
-  Sales,
-  AdminOrders,
-  Partners,
-  Supplier,
-  Customer,
-  StaffManagement,
-  Settings,
-  // Shared pages
-  PointOfSale,
-  // Staff pages
-  StaffDashboard,
-  StaffProfile,
-  // Customer pages
-  CustomerDashboard,
-  Product,
-  Orders,
-  Cart,
-  Profile,
-  CustomerSettings,
-  // Driver pages
-  DriverDashboard,
-  Deliveries,
-  DriverProfile,
-  DriverSettings,
-} from './pages';
+
+// Lazy-loaded page components — each role's pages are code-split into separate chunks
+// so a driver only downloads driver pages, a secretary only downloads staff pages, etc.
+
+// Admin pages
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'));
+const Procurement = lazy(() => import('./pages/admin/Procurement'));
+const DryingProcess = lazy(() => import('./pages/admin/DryingProcess'));
+const Processing = lazy(() => import('./pages/admin/Processing'));
+const Products = lazy(() => import('./pages/admin/Products'));
+const Varieties = lazy(() => import('./pages/admin/Products').then(m => ({ default: m.Varieties })));
+const Inventory = lazy(() => import('./pages/admin/Products').then(m => ({ default: m.Inventory })));
+const Sales = lazy(() => import('./pages/admin/Sales'));
+const AdminOrders = lazy(() => import('./pages/admin/Orders'));
+const Partners = lazy(() => import('./pages/admin/Partners'));
+const Supplier = lazy(() => import('./pages/admin/Partners').then(m => ({ default: m.Supplier })));
+const Customer = lazy(() => import('./pages/admin/Partners').then(m => ({ default: m.Customer })));
+const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
+const Settings = lazy(() => import('./pages/admin/Settings'));
+
+// Shared pages
+const PointOfSale = lazy(() => import('./pages/shared/PointOfSale'));
+
+// Staff pages
+const StaffDashboard = lazy(() => import('./pages/staff/Dashboard'));
+const StaffProfile = lazy(() => import('./pages/staff/Profile'));
+
+// Customer pages
+const CustomerDashboard = lazy(() => import('./pages/customer/Dashboard'));
+const Product = lazy(() => import('./pages/customer/Product'));
+const Orders = lazy(() => import('./pages/customer/Orders'));
+const Cart = lazy(() => import('./pages/customer/Cart'));
+const Profile = lazy(() => import('./pages/customer/Profile'));
+const CustomerSettings = lazy(() => import('./pages/customer/Settings'));
+
+// Driver pages
+const DriverDashboard = lazy(() => import('./pages/driver/Dashboard'));
+const Deliveries = lazy(() => import('./pages/driver/Deliveries'));
+const DriverProfile = lazy(() => import('./pages/driver/Profile'));
+const DriverSettings = lazy(() => import('./pages/driver/Settings'));
+
 // Public pages
-import { 
-  Home, 
-  About, 
-  Products as PublicProducts, 
-  Contact 
-} from './pages/public';
+const Home = lazy(() => import('./pages/public/Home'));
+const About = lazy(() => import('./pages/public/About'));
+const PublicProducts = lazy(() => import('./pages/public/Products'));
+const Contact = lazy(() => import('./pages/public/Contact'));
+
+// Suspense fallback — minimal loading indicator
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+  </div>
+);
 
 // Role-based redirect component
 const RoleRedirect = () => {
@@ -87,16 +99,30 @@ const PosRedirect = () => {
 function AppRoutes() {
   const location = useLocation();
 
-  // Safety net: clear body scroll lock on every route change.
-  // This catches edge cases where body styles survive a route transition (e.g. login modal).
+  // Safety net: clear body scroll lock AND remove orphaned modal backdrop portals
+  // on every route change. This catches edge cases where the LoginModal's createPortal
+  // overlay (bg-black/60) survives a route transition (e.g. login → admin dashboard).
   useEffect(() => {
+    // Clear body scroll lock styles
     document.body.style.overflow = '';
     document.body.style.position = '';
     document.body.style.top = '';
     document.body.style.width = '';
+
+    // Remove any orphaned modal backdrop portals left in document.body.
+    // Modal.jsx renders a portal div with z-[9999] and bg-black/60 directly into body.
+    // If React fails to clean it up during route transitions, it stays as a black overlay.
+    document.body.querySelectorAll(':scope > div.fixed.inset-0').forEach(el => {
+      // Only remove overlay-type divs (high z-index, backdrop overlays)
+      const cls = el.className || '';
+      if (cls.includes('bg-black') || cls.includes('backdrop')) {
+        el.remove();
+      }
+    });
   }, [location.pathname]);
 
   return (
+    <Suspense fallback={<PageLoader />}>
     <Routes>
       {/* Public Routes */}
       <Route element={<PublicLayout />}>
@@ -216,6 +242,7 @@ function AppRoutes() {
       {/* Catch-all: 404 page */}
       <Route path="*" element={<NotFound />} />
     </Routes>
+    </Suspense>
   );
 }
 

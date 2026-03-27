@@ -116,8 +116,12 @@ class ProcurementController extends Controller
             'sacks' => $procurement->sacks,
         ]);
 
-        // Email supplier about the purchase
-        $this->emailService->sendProcurementToSupplier($procurement);
+        // Email supplier + admins after response to avoid blocking
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $procurement) {
+            $emailService->sendProcurementToSupplier($procurement);
+            $emailService->sendProcurementToAdmin($procurement);
+        })->afterResponse();
 
         return $this->successResponse(
             new ProcurementResource($procurement),

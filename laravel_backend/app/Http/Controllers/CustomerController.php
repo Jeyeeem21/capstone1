@@ -65,7 +65,12 @@ class CustomerController extends Controller
                 'string',
                 'regex:/^(\+63\d{10}|09\d{9})$/'
             ],
-            'email' => 'required|email|unique:customers,email',
+            'email' => [
+                'required',
+                'email',
+                'unique:customers,email',
+                'unique:users,email',
+            ],
             'address' => 'required|string',
             'status' => 'required|in:Active,Inactive',
         ], [
@@ -80,15 +85,6 @@ class CustomerController extends Controller
             'customer_id' => $customer->id,
             'name' => $customer->name,
         ]);
-
-        $emailService = $this->emailService;
-        dispatch(function () use ($emailService, $customer) {
-            $emailService->sendAdminAlert(
-                "New Customer Added — {$customer->name}",
-                'New Customer Added',
-                "A new customer \"{$customer->name}\" ({$customer->email}) has been added to the system."
-            );
-        })->afterResponse();
 
         return $this->successResponse(
             new CustomerResource($customer),
@@ -139,7 +135,19 @@ class CustomerController extends Controller
             'email' => [
                 'required',
                 'email',
-                Rule::unique('customers', 'email')->ignore($customer->id)
+                Rule::unique('customers', 'email')->ignore($customer->id),
+                function ($attribute, $value, $fail) use ($customer) {
+                    // Check users table but allow the linked customer account
+                    $existsInUsers = User::where('email', $value)
+                        ->where(function ($q) use ($customer) {
+                            $q->where('email', '!=', $customer->email)
+                              ->orWhere('role', '!=', 'customer');
+                        })
+                        ->exists();
+                    if ($existsInUsers) {
+                        $fail('This email is already registered.');
+                    }
+                },
             ],
             'address' => 'required|string',
             'status' => 'required|in:Active,Inactive',
@@ -149,26 +157,47 @@ class CustomerController extends Controller
             'phone.regex' => 'Phone must be in format: +63 followed by 10 digits (e.g., +63 912 345 6789) or 09 followed by 9 digits (e.g., 09171234567).',
         ]);
 
+        // Track what changed before updating
+        $oldEmail = $customer->email;
+        $changes = [];
+        $fieldLabels = [
+            'name' => 'Business Name', 'contact' => 'Contact Person',
+            'phone' => 'Phone', 'email' => 'Email',
+            'address' => 'Address', 'status' => 'Status',
+        ];
+        foreach ($validated as $field => $newValue) {
+            $oldValue = $customer->$field;
+            if ((string) $oldValue !== (string) $newValue) {
+                $label = $fieldLabels[$field] ?? ucfirst($field);
+                $changes[] = "{$label}: \"{$oldValue}\" → \"{$newValue}\"";
+            }
+        }
+
         $customer = $this->customerService->updateCustomer($customer, $validated);
+
+        // Sync linked User account if it exists
+        $linkedUser = User::where('email', $oldEmail)->where('role', 'customer')->first();
+        if ($linkedUser) {
+            $userUpdates = ['email' => $customer->email, 'name' => $customer->name, 'phone' => $customer->phone];
+            if ($customer->contact) {
+                $parts = explode(' ', $customer->contact, 2);
+                $userUpdates['first_name'] = $parts[0];
+                $userUpdates['last_name'] = $parts[1] ?? '';
+            }
+            $linkedUser->update($userUpdates);
+        }
 
         $this->logAudit('UPDATE', 'Customer', "Updated customer: {$customer->name}", [
             'customer_id' => $customer->id,
-            'changes' => $validated,
+            'changes' => $changes,
         ]);
 
-        $emailService = $this->emailService;
-        dispatch(function () use ($emailService, $customer) {
-            $emailService->sendAdminAlert(
-                "Customer Updated — {$customer->name}",
-                'Customer Information Updated',
-                "The customer \"{$customer->name}\" ({$customer->email}) has been updated in the system."
-            );
-        })->afterResponse();
-
-        return $this->successResponse(
-            new CustomerResource($customer),
-            'Customer updated successfully'
-        );
+        return response()->json([
+            'success' => true,
+            'message' => 'Customer updated successfully',
+            'data' => new CustomerResource($customer),
+            '_changes' => $changes,
+        ]);
     }
 
     /**
@@ -208,11 +237,27 @@ class CustomerController extends Controller
         $email = $request->email;
         $customerId = $request->customer_id;
 
-        $exists = Customer::where('email', $email)
+        // Check customers table
+        $existsInCustomers = Customer::where('email', $email)
             ->when($customerId, function ($query) use ($customerId) {
                 return $query->where('id', '!=', $customerId);
             })
             ->exists();
+
+        // Also check users table (exclude the linked user account for this customer)
+        $userQuery = User::where('email', $email);
+        if ($customerId) {
+            $customer = Customer::find($customerId);
+            if ($customer) {
+                $userQuery->where(function ($q) use ($customer) {
+                    $q->where('email', '!=', $customer->email)
+                      ->orWhere('role', '!=', 'customer');
+                });
+            }
+        }
+        $existsInUsers = $userQuery->exists();
+
+        $exists = $existsInCustomers || $existsInUsers;
 
         return $this->successResponse(
             ['available' => !$exists],
@@ -360,8 +405,11 @@ class CustomerController extends Controller
             'email' => $customer->email,
         ]);
 
-        // Send welcome email to the new customer
-        $this->emailService->sendWelcomeEmail($user);
+        // Send welcome email after response to avoid blocking
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $user) {
+            $emailService->sendWelcomeEmail($user);
+        })->afterResponse();
 
         return $this->successResponse(
             [
@@ -371,5 +419,62 @@ class CustomerController extends Controller
             ],
             'Customer account created successfully'
         );
+    }
+
+    /**
+     * Fire-and-forget: send store notification emails.
+     */
+    public function sendStoreEmail(string $id): JsonResponse
+    {
+        $customer = Customer::find($id);
+        if (!$customer) return response()->json(['success' => true]);
+
+        try {
+            $this->emailService->sendAdminAlert(
+                "New Customer Added \u2014 {$customer->name}",
+                'New Customer Added',
+                "A new customer \"{$customer->name}\" ({$customer->email}) has been added to the system."
+            );
+
+            $this->emailService->sendAlertTo(
+                $customer->email,
+                'Welcome \u2014 You Have Been Added as a Customer',
+                'Welcome to Our System',
+                "Hi {$customer->name},\n\nYou have been added as a customer in our system.\n\nContact: {$customer->contact}\nEmail: {$customer->email}\nPhone: {$customer->phone}\n\nIf you have any questions, please don't hesitate to contact us."
+            );
+        } catch (\Throwable $e) { /* silent */ }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Fire-and-forget: send update notification emails.
+     */
+    public function sendUpdateEmail(string $id, Request $request): JsonResponse
+    {
+        $customer = Customer::find($id);
+        if (!$customer) return response()->json(['success' => true]);
+
+        $changes = $request->input('changes', []);
+        if (empty($changes)) return response()->json(['success' => true]);
+
+        $changesSummary = "Changes made:\n" . implode("\n", $changes);
+
+        try {
+            $this->emailService->sendAdminAlert(
+                "Customer Updated \u2014 {$customer->name}",
+                'Customer Information Updated',
+                "The customer \"{$customer->name}\" ({$customer->email}) has been updated in the system.\n\n{$changesSummary}"
+            );
+
+            $this->emailService->sendAlertTo(
+                $customer->email,
+                'Your Information Has Been Updated',
+                'Your Account Information Was Updated',
+                "Hi {$customer->name},\n\nYour information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
+            );
+        } catch (\Throwable $e) { /* silent */ }
+
+        return response()->json(['success' => true]);
     }
 }

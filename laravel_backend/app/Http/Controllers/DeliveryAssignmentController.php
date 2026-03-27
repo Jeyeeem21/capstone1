@@ -3,7 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\DeliveryAssignment;
+use App\Models\Driver;
+use App\Models\User;
 use App\Services\DeliveryAssignmentService;
+use App\Services\NotificationService;
+use App\Services\EmailService;
 use App\Http\Resources\DeliveryAssignmentResource;
 use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
@@ -16,10 +20,17 @@ class DeliveryAssignmentController extends Controller
     use ApiResponse, AuditLogger, HasCaching;
 
     protected DeliveryAssignmentService $deliveryService;
+    protected NotificationService $notificationService;
+    protected EmailService $emailService;
 
-    public function __construct(DeliveryAssignmentService $deliveryService)
-    {
+    public function __construct(
+        DeliveryAssignmentService $deliveryService,
+        NotificationService $notificationService,
+        EmailService $emailService
+    ) {
         $this->deliveryService = $deliveryService;
+        $this->notificationService = $notificationService;
+        $this->emailService = $emailService;
     }
 
     /**
@@ -80,6 +91,42 @@ class DeliveryAssignmentController extends Controller
             'delivery_date' => $delivery->delivery_date,
             'priority' => $delivery->priority,
         ]);
+
+        // Notify the driver user via in-app notification + email
+        $driverRecord = Driver::find($delivery->driver_id);
+        if ($driverRecord) {
+            $driverUser = User::where('role', 'staff')
+                ->where('position', 'Driver')
+                ->where('status', 'active')
+                ->where(function ($q) use ($driverRecord) {
+                    $q->where('email', $driverRecord->email)
+                      ->orWhere('truck_plate_number', $driverRecord->plate_number)
+                      ->orWhere('name', $driverRecord->name);
+                })
+                ->first();
+
+            if ($driverUser) {
+                $this->notificationService->notifyDriver(
+                    $driverUser->id,
+                    'delivery_assigned',
+                    'New Delivery Assigned',
+                    "You have a new delivery assignment: {$delivery->delivery_number} to {$delivery->destination}.",
+                    ['delivery_id' => $delivery->id, 'delivery_number' => $delivery->delivery_number]
+                );
+
+                // Send email in background
+                $emailService = $this->emailService;
+                $capturedDriverUser = $driverUser;
+                $capturedDelivery = $delivery;
+                dispatch(function () use ($emailService, $capturedDriverUser, $capturedDelivery) {
+                    try {
+                        $emailService->sendDeliveryAssignmentNotification($capturedDriverUser, $capturedDelivery);
+                    } catch (\Throwable $e) {
+                        // Silent — don't block
+                    }
+                })->afterResponse();
+            }
+        }
 
         return $this->successResponse(
             new DeliveryAssignmentResource($delivery),

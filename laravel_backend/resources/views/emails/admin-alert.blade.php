@@ -4,5 +4,5 @@
 
 @section('content')
 <h2>{{ $heading }}</h2>
-<p>{{ $body }}</p>
+{!! nl2br(e($body)) !!}
 @endsection

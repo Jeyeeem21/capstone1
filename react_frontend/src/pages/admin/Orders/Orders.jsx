@@ -53,7 +53,7 @@ const AdminOrders = () => {
     if (tabFromUrl && validTabs.includes(tabFromUrl)) return tabFromUrl;
     // Support legacy tab values from URL
     if (['Delivered', 'Completed'].includes(tabFromUrl)) return 'Delivered & Completed';
-    if (['Return Requested', 'Picking Up', 'Returned', 'Cancelled', 'Voided'].includes(tabFromUrl)) return 'Returns & Cancelled';
+    if (['Return Requested', 'Picking Up', 'Picked Up', 'Returned', 'Cancelled', 'Voided'].includes(tabFromUrl)) return 'Returns & Cancelled';
     return 'All';
   });
   const [statusSubFilter, setStatusSubFilter] = useState('');
@@ -137,6 +137,7 @@ const AdminOrders = () => {
       'completed': 'Completed',
       'return_requested': 'Return Requested',
       'picking_up': 'Picking Up',
+      'picked_up': 'Picked Up',
       'returned': 'Returned',
       'cancelled': 'Cancelled',
       'voided': 'Voided',
@@ -153,6 +154,7 @@ const AdminOrders = () => {
       'Completed': 'completed',
       'Return Requested': 'return_requested',
       'Picking Up': 'picking_up',
+      'Picked Up': 'picked_up',
       'Returned': 'returned',
       'Cancelled': 'cancelled',
       'Voided': 'voided',
@@ -166,7 +168,7 @@ const AdminOrders = () => {
     { value: 'Processing', label: 'Processing', icon: Package, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', activeBg: 'bg-blue-500', activeText: 'text-white' },
     { value: 'Shipped', label: 'Shipped', icon: Truck, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-900/40', activeBg: 'bg-indigo-500', activeText: 'text-white' },
     { value: 'Delivered & Completed', label: 'Delivered & Completed', icon: CheckCircle, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', activeBg: 'bg-green-500', activeText: 'text-white', statuses: ['Delivered', 'Completed'] },
-    { value: 'Returns & Cancelled', label: 'Returns & Cancelled', icon: RotateCcw, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white', statuses: ['Return Requested', 'Picking Up', 'Returned', 'Cancelled', 'Voided'] },
+    { value: 'Returns & Cancelled', label: 'Returns & Cancelled', icon: RotateCcw, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white', statuses: ['Return Requested', 'Picking Up', 'Picked Up', 'Returned', 'Cancelled', 'Voided'] },
   ];
 
   // Helper to get statuses for a tab
@@ -175,7 +177,7 @@ const AdminOrders = () => {
     return tab?.statuses || [tabValue];
   };
 
-  const ORDER_STATUS_SORT = { 'Pending': 0, 'Processing': 1, 'Picking Up': 2, 'Shipped': 3, 'Delivered': 4, 'Completed': 5, 'Return Requested': 6, 'Returned': 7, 'Cancelled': 8, 'Voided': 9 };
+  const ORDER_STATUS_SORT = { 'Pending': 0, 'Processing': 1, 'Picking Up': 2, 'Picked Up': 3, 'Shipped': 4, 'Delivered': 5, 'Completed': 6, 'Return Requested': 7, 'Returned': 8, 'Cancelled': 9, 'Voided': 10 };
 
   const filteredOrdersByTab = useMemo(() => {
     if (activeStatusTab === 'All') {
@@ -277,6 +279,8 @@ const AdminOrders = () => {
         const labels = { processing: 'Processing', shipped: 'Shipped', delivered: 'Delivered', completed: 'Completed' };
         suppressNotifToasts();
         toast.success('Status Updated', `Order ${order.order_id} moved to ${labels[nextStatus]}.`);
+        // Fire-and-forget email
+        apiClient.post(`/sales/${order.id}/status-email`).catch(() => {});
       } else {
         throw response;
       }
@@ -309,6 +313,8 @@ const AdminOrders = () => {
       refetch();
       suppressNotifToasts();
       toast.success('Order Shipped', `Order ${shipOrder.order_id} has been shipped with ${selectedDriver?.name || 'a driver'} assigned.`);
+      // Fire-and-forget email
+      apiClient.post(`/sales/${shipOrder.id}/status-email`).catch(() => {});
       setIsShipModalOpen(false);
     } catch (error) {
       toast.error('Ship Failed', error.message || 'Failed to ship order');
@@ -347,6 +353,8 @@ const AdminOrders = () => {
       refetch();
       suppressNotifToasts();
       toast.success('Order Delivered', `Order ${deliverOrder.order_id} has been marked as delivered.`);
+      // Fire-and-forget email
+      apiClient.post(`/sales/${deliverOrder.id}/status-email`).catch(() => {});
 
       // If COD and not paid, auto-open payment modal
       const wasCod = deliverOrder.raw_payment_method === 'cod';
@@ -408,6 +416,8 @@ const AdminOrders = () => {
         optimisticUpdate(prev => prev.map(o => o.id === cancelledId ? { ...o, status: 'cancelled' } : o));
         suppressNotifToasts();
         toast.success('Order Cancelled', `Order ${selectedOrder.order_id} has been cancelled.`);
+        // Fire-and-forget email
+        apiClient.post(`/sales/${selectedOrder.id}/status-email`).catch(() => {});
         setIsCancelModalOpen(false);
         // Refetch in background to confirm
         invalidateCache('/sales');
@@ -439,6 +449,8 @@ const AdminOrders = () => {
         optimisticUpdate(prev => prev.map(o => o.id === returnedId ? { ...o, status: 'return_requested' } : o));
         suppressNotifToasts();
         toast.success('Return Requested', `Return request submitted for order ${selectedOrder.order_id}. Awaiting review.`);
+        // Fire-and-forget email
+        apiClient.post(`/sales/${selectedOrder.id}/status-email`).catch(() => {});
         setIsReturnModalOpen(false);
         // Refetch in background to confirm
         invalidateCache('/sales');
@@ -499,6 +511,8 @@ const AdminOrders = () => {
         refetch();
         suppressNotifToasts();
         toast.success('Return Accepted', `Pickup assigned for order ${acceptReturnOrder.order_id}. Driver is on the way.`);
+        // Fire-and-forget email
+        apiClient.post(`/sales/${acceptReturnOrder.id}/status-email`).catch(() => {});
         setIsAcceptReturnModalOpen(false);
       } else {
         throw response;
@@ -549,6 +563,8 @@ const AdminOrders = () => {
         refetch();
         suppressNotifToasts();
         toast.success('Order Returned', `Order ${markReturnOrder.order_id} has been returned. Use "Restock Items" to restore stock.`);
+        // Fire-and-forget email
+        apiClient.post(`/sales/${markReturnOrder.id}/status-email`).catch(() => {});
         setIsMarkReturnModalOpen(false);
         setMarkReturnOrder(null);
       } else {
@@ -676,6 +692,8 @@ const AdminOrders = () => {
         refetch();
         suppressNotifToasts();
         toast.success('Payment Recorded', `Order ${payOrder.order_id} has been marked as paid.`);
+        // Fire-and-forget email
+        apiClient.post(`/sales/${payOrder.id}/payment-email`).catch(() => {});
         setIsPayModalOpen(false);
         setPayOrder(null);
         stopPayCamera();
@@ -885,6 +903,7 @@ const AdminOrders = () => {
     { name: 'Shipped', value: chartFilteredOrders.filter(o => o.status === 'Shipped').length, color: '#a855f7' },
     { name: 'Return Requested', value: chartFilteredOrders.filter(o => o.status === 'Return Requested').length, color: '#f97316' },
     { name: 'Picking Up', value: chartFilteredOrders.filter(o => o.status === 'Picking Up').length, color: '#f59e0b' },
+    { name: 'Picked Up', value: chartFilteredOrders.filter(o => o.status === 'Picked Up').length, color: '#d97706' },
     { name: 'Returned', value: chartFilteredOrders.filter(o => o.status === 'Returned').length, color: '#fb923c' },
     { name: 'Cancelled', value: chartFilteredOrders.filter(o => o.status === 'Cancelled').length, color: '#ef4444' },
   ], [chartFilteredOrders]);
@@ -968,7 +987,7 @@ const AdminOrders = () => {
       const hasAnyAction = nextAction || canVoid ||
         row.raw_status === 'pending' || row.raw_status === 'processing' ||
         row.raw_status === 'delivered' || row.raw_status === 'return_requested' ||
-        row.raw_status === 'picking_up' || row.raw_status === 'returned' ||
+        row.raw_status === 'picking_up' || row.raw_status === 'picked_up' || row.raw_status === 'returned' ||
         row.payment_status === 'not_paid';
 
       if (!hasAnyAction) return null;
@@ -1023,7 +1042,7 @@ const AdminOrders = () => {
               </button>
             </>
           )}
-          {row.raw_status === 'picking_up' && (
+          {row.raw_status === 'picked_up' && (
             <button
               onClick={() => handleMarkReturned(row)}
               disabled={saving}
@@ -1233,6 +1252,7 @@ const AdminOrders = () => {
                     <option value="">All (Returns & Cancelled)</option>
                     <option value="Return Requested">Return Requested</option>
                     <option value="Picking Up">Picking Up</option>
+                    <option value="Picked Up">Picked Up</option>
                     <option value="Returned">Returned</option>
                     <option value="Cancelled">Cancelled</option>
                     <option value="Voided">Voided</option>
@@ -1897,7 +1917,7 @@ const AdminOrders = () => {
             {/* Info Note */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
               <p className="text-xs text-blue-800">
-                <span className="font-semibold">Note:</span> Accepting will set the order to "Picking Up". After the driver completes the pickup, mark it as "Returned" and then use "Restock Items" to selectively restore stock for items in good condition.
+                <span className="font-semibold">Note:</span> Accepting will set the order to "Picking Up". After the driver picks up the return, the status will change to "Picked Up". You can then verify and mark it as "Returned", and use "Restock Items" to selectively restore stock for items in good condition.
               </p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Shield, Users, CheckCircle, XCircle, UserPlus, Trash2, Edit3, Save, Loader2, ShieldCheck, Truck, ClipboardList, Ban, UserCheck } from 'lucide-react';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
-import { usersApi } from '../../../api';
+import { usersApi, apiClient } from '../../../api';
 
 const ROLE_COLORS = {
   super_admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
@@ -47,23 +47,33 @@ const AdminAccounts = () => {
     { value: 'inactive', label: 'Inactive' },
   ];
 
-  const fetchAccounts = useCallback(async () => {
+  const fetchAccounts = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await usersApi.getAll({});
       const data = response?.data?.data || response?.data || [];
       setAccounts(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to fetch accounts:', error);
-      toast.error('Error', 'Failed to load accounts.');
+      if (!silent) toast.error('Error', 'Failed to load accounts.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  // Realtime polling — refresh every 5s when tab is visible and no modal open
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && !isAddModalOpen && !isEditModalOpen && !isDeleteModalOpen && !isBlockModalOpen) {
+        fetchAccounts(true);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchAccounts, isAddModalOpen, isEditModalOpen, isDeleteModalOpen, isBlockModalOpen]);
 
   const filteredAccounts = useMemo(() => {
     if (activeTab === 'all') return accounts;
@@ -115,7 +125,7 @@ const AdminAccounts = () => {
   const handleAddSubmit = async () => {
     try {
       setSubmitting(true);
-      await usersApi.create({
+      const response = await usersApi.create({
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -124,6 +134,8 @@ const AdminAccounts = () => {
         status: formData.status,
       });
       toast.success('Admin Added', `${formData.name} has been added as an admin.`);
+      // Fire-and-forget email
+      if (response?.data?.id) apiClient.post(`/users/${response.data.id}/welcome-email`).catch(() => {});
       setIsAddModalOpen(false);
       fetchAccounts();
     } catch (error) {
@@ -147,8 +159,10 @@ const AdminAccounts = () => {
       if (formData.password) {
         payload.password = formData.password;
       }
-      await usersApi.update(selectedItem.id, payload);
+      const response = await usersApi.update(selectedItem.id, payload);
       toast.success('Account Updated', `${formData.name}'s information has been updated.`);
+      // Fire-and-forget email
+      apiClient.post(`/users/${selectedItem.id}/update-email`, { changes: response._changes || [] }).catch(() => {});
       setIsEditModalOpen(false);
       fetchAccounts();
     } catch (error) {
@@ -183,6 +197,8 @@ const AdminAccounts = () => {
       setSubmitting(true);
       await usersApi.update(selectedItem.id, { status: newStatus });
       toast.success('Status Updated', `${selectedItem.name} has been ${action}.`);
+      // Fire-and-forget email
+      apiClient.post(`/users/${selectedItem.id}/update-email`, { changes: [`Status changed to ${newStatus}`] }).catch(() => {});
       setIsBlockModalOpen(false);
       fetchAccounts();
     } catch (error) {

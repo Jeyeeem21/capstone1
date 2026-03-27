@@ -780,6 +780,12 @@ const PointOfSale = () => {
       }
       
       if (response.success && response.data) {
+        // Fire-and-forget: send order emails to admin + customer
+        const saleId = response.sale_id || response.data?.id;
+        if (saleId) {
+          apiClient.post(`/sales/${saleId}/notify`).catch(() => {});
+        }
+
         const customerName = newCustomerName || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.label : null);
         const customerEmail = newCustomerEmail || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.email : null);
         const saleData = {
@@ -949,7 +955,7 @@ const PointOfSale = () => {
                 Current Order
                 {cart.length > 0 && (
                   <span className="ml-auto bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
-                    {totalItems} items
+                    {cart.length} {cart.length === 1 ? 'item' : 'items'}
                   </span>
                 )}
               </h3>
@@ -1135,7 +1141,7 @@ const PointOfSale = () => {
                         Current Order
                       </h3>
                       <span className="text-xs font-semibold bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 px-2 py-0.5 rounded-full border border-primary-200 dark:border-primary-700">
-                        {totalItems} items
+                        {cart.length} {cart.length === 1 ? 'item' : 'items'}
                       </span>
                     </div>
 
@@ -1590,7 +1596,7 @@ const PointOfSale = () => {
                     <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Cash Tendered</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">?</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">₱</span>
                         <input
                           type="number"
                           value={cashTendered}
@@ -1772,7 +1778,7 @@ const PointOfSale = () => {
                   onClick={() => { setShowPaymentModal(false); setShowCustomerModal(true); }}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
                 >
-                  ? Back
+                  ← Back
                 </button>
                 <button
                   onClick={confirmPayment}
@@ -1863,7 +1869,7 @@ const PointOfSale = () => {
                                   <span className="text-gray-700 dark:text-gray-200 font-medium">{item.product_name || item.name}</span>
                                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                                     <span>×{item.quantity}</span>
-                                    <span className="font-semibold text-primary-600 dark:text-primary-400">?{(item.unit_price || item.price || 0).toLocaleString()}</span>
+                                    <span className="font-semibold text-primary-600 dark:text-primary-400">₱{(item.unit_price || item.price || 0).toLocaleString()}</span>
                                   </div>
                                 </div>
                               ))}
@@ -2020,7 +2026,7 @@ const PointOfSale = () => {
                   {lastSale.items.map(item => (
                     <div key={item.id} className="flex justify-between text-xs py-0.5">
                       <span className="text-gray-600 dark:text-gray-300">{item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''} ×{item.quantity}</span>
-                      <span className="font-medium text-gray-700 dark:text-gray-200">?{(item.price * item.quantity).toLocaleString()}</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-200">₱{(item.price * item.quantity).toLocaleString()}</span>
                     </div>
                   ))}
                 </div>

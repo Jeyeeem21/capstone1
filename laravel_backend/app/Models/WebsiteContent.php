@@ -83,7 +83,7 @@ class WebsiteContent extends Model
         return [
             'heroTitle' => $raw['hero']['title'] ?? 'Our Story of',
             'heroTitleHighlight' => $raw['hero']['titleHighlight'] ?? 'Excellence & Quality',
-            'heroSubtitle' => $raw['hero']['subtitle'] ?? 'For over 15 years, KJP Ricemill has been committed to delivering the finest quality rice products.',
+            'heroSubtitle' => $raw['hero']['subtitle'] ?? 'KJP Ricemill has been committed to delivering the finest quality rice products to Filipino households and businesses.',
             'heroImage' => $raw['hero']['image'] ?? null,
             'missionTitle' => $raw['mission']['title'] ?? 'Our Mission',
             'missionDescription' => $raw['mission']['description'] ?? 'To provide Filipino families and businesses with the highest quality rice products.',
@@ -378,7 +378,7 @@ class WebsiteContent extends Model
         $aboutDefaults = [
             'heroTitle' => 'Our Story of',
             'heroTitleHighlight' => 'Excellence & Quality',
-            'heroSubtitle' => 'For over 15 years, KJP Ricemill has been committed to delivering the finest quality rice products to Filipino households and businesses.',
+            'heroSubtitle' => "For over {$yearsInBusiness} years, KJP Ricemill has been committed to delivering the finest quality rice products to Filipino households and businesses.",
             'missionTitle' => 'Our Mission',
             'missionDescription' => 'To provide Filipino families and businesses with the highest quality rice products at fair prices, while supporting local farmers and sustainable agricultural practices.',
             'missionPoints' => [

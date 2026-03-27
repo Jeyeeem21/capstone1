@@ -11,22 +11,32 @@ const PredictiveAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchPredictions = async (selectedPeriod) => {
+  const fetchPredictions = async (selectedPeriod, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await salesApi.getPredictions(selectedPeriod);
       if (response.success) {
         setData(response.data);
       }
     } catch (error) {
-      toast.error('Prediction Error', 'Failed to load predictive analysis data.');
+      if (!silent) toast.error('Prediction Error', 'Failed to load predictive analysis data.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPredictions(period);
+  }, [period]);
+
+  // Realtime polling — refresh every 5s when tab is visible
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchPredictions(period, true);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
   }, [period]);
 
   const handleRefresh = async () => {

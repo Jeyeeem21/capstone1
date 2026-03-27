@@ -22,7 +22,7 @@ class ProductService
     public function getAllProducts()
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            $activeStatuses = ['pending', 'processing', 'shipped', 'picking_up', 'return_requested'];
+            $activeStatuses = ['pending', 'processing', 'shipped', 'picking_up', 'picked_up', 'return_requested'];
             return Product::with('variety')
                 ->withExists(['saleItems as has_pending_orders' => function ($query) use ($activeStatuses) {
                     $query->whereHas('sale', fn($q) => $q->whereIn('status', $activeStatuses));
@@ -147,7 +147,7 @@ class ProductService
             $product = Product::findOrFail($id);
 
             // Block archive if product has active/pending orders
-            $activeStatuses = ['pending', 'processing', 'shipped', 'picking_up', 'return_requested'];
+            $activeStatuses = ['pending', 'processing', 'shipped', 'picking_up', 'picked_up', 'return_requested'];
             $hasPendingOrders = \App\Models\SaleItem::where('product_id', $product->product_id)
                 ->whereHas('sale', fn($q) => $q->whereIn('status', $activeStatuses))
                 ->exists();
