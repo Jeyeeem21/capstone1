@@ -1,14 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { businessSettingsApi } from '../api';
-import { API_BASE_URL } from '../api/config';
+import { resolveStorageUrl, DEFAULT_LOGO } from '../api/config';
 
 // Helper to get full logo URL
 const getFullLogoUrl = (logoPath) => {
-  if (!logoPath || logoPath === '/logo.svg') return '/storage/logos/KJPLogo.png';
+  if (!logoPath || logoPath === '/logo.svg') return DEFAULT_LOGO;
+  if (logoPath.startsWith('blob:')) return DEFAULT_LOGO;
   if (logoPath.startsWith('http')) return logoPath;
-  if (logoPath.startsWith('blob:')) return '/storage/logos/KJPLogo.png';
-  const backendUrl = API_BASE_URL.replace('/api', '');
-  return `${backendUrl}${logoPath}`;
+  return resolveStorageUrl(logoPath);
 };
 
 const BusinessSettingsContext = createContext(null);
@@ -21,7 +20,7 @@ const defaultSettings = {
   business_name: 'KJP Ricemill',
   business_tagline: 'Inventory & Sales',
   business_start_year: '2010',
-  business_logo: '/storage/logos/KJPLogo.png',
+  business_logo: DEFAULT_LOGO,
   business_email: 'info@kjpricemill.com',
   business_phone: '+63 917-123-4567',
   business_address: 'Calapan City, Oriental Mindoro, Philippines',
@@ -53,7 +52,7 @@ const getInitialSettings = () => {
         const parsed = JSON.parse(cached);
         // Don't use blob URLs from cache - they're invalid after page refresh
         if (parsed.business_logo && parsed.business_logo.startsWith('blob:')) {
-          parsed.business_logo = '/storage/logos/KJPLogo.png';
+          parsed.business_logo = DEFAULT_LOGO;
         }
         return parsed;
       } catch (e) {
@@ -131,7 +130,7 @@ export const BusinessSettingsProvider = ({ children }) => {
         try {
           const parsed = JSON.parse(e.newValue);
           if (parsed.business_logo && parsed.business_logo.startsWith('blob:')) {
-            parsed.business_logo = '/storage/logos/KJPLogo.png';
+            parsed.business_logo = DEFAULT_LOGO;
           }
           setSettings(parsed);
         } catch {}

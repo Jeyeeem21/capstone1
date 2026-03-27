@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 
-// API base URL - try both localhost and 127.0.0.1
-const API_BASE_URL = 'http://127.0.0.1:8000/api';
+import { API_BASE_URL } from '../api/config';
 
 // Track if API is available (shared across all components)
 let apiAvailable = null; // null = unknown, true = available, false = unavailable

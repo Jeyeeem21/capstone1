@@ -51,10 +51,6 @@ const Modal = ({
     }
     return () => {
       resetBodyStyles();
-      // Safety: if this portal's overlay div is still in the DOM, remove it directly
-      if (overlayRef.current && overlayRef.current.parentNode) {
-        overlayRef.current.parentNode.removeChild(overlayRef.current);
-      }
     };
   }, [isOpen]);
 

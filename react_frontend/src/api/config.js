@@ -1,18 +1,28 @@
 /**
  * API Configuration
  * 
- * This file contains all API-related configuration.
- * When deploying, only change the BASE_URL here!
+ * Auto-detects environment — no manual switching needed.
  */
 
-// ============================================
-// 🔧 DEPLOYMENT: Change this URL when deploying
-// ============================================
-// Development
-export const API_BASE_URL = 'http://127.0.0.1:8000/api';
+const hostname = window.location.hostname;
+const isProduction = hostname === 'kjpricemill.com' || hostname === 'www.kjpricemill.com';
 
-// Production (uncomment and update when deploying)
-// export const API_BASE_URL = 'https://your-production-domain.com/api';
+export const API_BASE_URL = isProduction
+  ? 'https://api.kjpricemill.com/api'
+  : 'http://127.0.0.1:8000/api';
+
+// Backend base URL (without /api) for resolving storage paths
+export const BACKEND_URL = API_BASE_URL.replace('/api', '');
+
+// Resolve a /storage/ path to the full backend URL
+export const resolveStorageUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:')) return path;
+  return `${BACKEND_URL}${path}`;
+};
+
+// Default logo with correct backend URL
+export const DEFAULT_LOGO = `${BACKEND_URL}/storage/logos/KJPLogo.png`;
 
 // ============================================
 // OpenRouteService API (Free - address autocomplete & distance)

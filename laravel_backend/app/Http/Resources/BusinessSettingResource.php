@@ -38,7 +38,7 @@ class BusinessSettingResource extends JsonResource
             'business_name' => $settings['business_name'] ?? 'KJP Ricemill',
             'business_tagline' => $settings['business_tagline'] ?? 'Inventory & Sales',
             'business_start_year' => $settings['business_start_year'] ?? '2010',
-            'business_logo' => $settings['business_logo'] ?? '/storage/logos/KJPLogo.png',
+            'business_logo' => $this->resolveUrl($settings['business_logo'] ?? '/storage/logos/KJPLogo.png'),
             'business_email' => $settings['business_email'] ?? '',
             'business_phone' => $settings['business_phone'] ?? '',
             'business_address' => $settings['business_address'] ?? '',
@@ -71,5 +71,15 @@ class BusinessSettingResource extends JsonResource
     public static function make($resource)
     {
         return new static($resource);
+    }
+
+    /**
+     * Resolve a storage path to a full URL
+     */
+    private function resolveUrl(?string $path): ?string
+    {
+        if (!$path) return null;
+        if (str_starts_with($path, 'http')) return $path;
+        return url($path);
     }
 }

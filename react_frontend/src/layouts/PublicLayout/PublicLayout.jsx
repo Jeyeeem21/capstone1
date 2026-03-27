@@ -3,6 +3,7 @@ import { Outlet, NavLink, Link, useLocation, useSearchParams } from 'react-route
 import { Menu, X, Phone, Mail, MapPin, Clock, Facebook, Instagram, Twitter, Linkedin, ChevronUp } from 'lucide-react';
 import { Button, LoginModal } from '../../components/ui';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { DEFAULT_LOGO } from '../../api/config';
 
 // Public Header/Navbar
 const PublicHeader = () => {
@@ -56,10 +57,10 @@ const PublicHeader = () => {
           <Link to="/" className="flex items-center gap-3 group">
             <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25 group-hover:scale-105 transition-transform overflow-hidden">
               <img 
-                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
+                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : DEFAULT_LOGO} 
                 alt={settings.business_name || 'Logo'} 
                 className="w-10 h-10 object-contain"
-                onError={(e) => { e.target.onerror = null; e.target.src = '/storage/logos/KJPLogo.png'; }}
+                onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_LOGO; }}
               />
             </div>
             <div>
@@ -213,7 +214,7 @@ const PublicFooter = () => {
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg overflow-hidden">
                 <img 
-                  src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                  src={settings.business_logo || DEFAULT_LOGO} 
                   alt={settings.business_name || 'Logo'} 
                   className="w-10 h-10 object-contain"
                   onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}

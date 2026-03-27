@@ -69,7 +69,7 @@ class SaleResource extends JsonResource
             'payment_status' => $this->payment_status ?? 'paid',
             'reference_number' => $this->reference_number,
             'payment_proof' => $this->payment_proof
-                ? collect($this->payment_proof)->map(fn($path) => '/storage/' . $path)->values()->toArray()
+                ? collect($this->payment_proof)->map(fn($path) => url('/storage/' . $path))->values()->toArray()
                 : [],
             'paid_at' => $this->paid_at?->toISOString(),
             'paid_at_formatted' => $this->paid_at?->format('M d, Y h:i A'),
@@ -88,12 +88,12 @@ class SaleResource extends JsonResource
             'driver_name' => $this->driver_name,
             'driver_plate_number' => $this->driver_plate_number,
             'delivery_proof' => $this->delivery_proof
-                ? collect($this->delivery_proof)->map(fn($path) => '/storage/' . $path)->values()->toArray()
+                ? collect($this->delivery_proof)->map(fn($path) => url('/storage/' . $path))->values()->toArray()
                 : [],
             'return_reason' => $this->return_reason,
             'return_notes' => $this->return_notes,
             'return_proof' => $this->return_proof
-                ? collect($this->return_proof)->map(fn($path) => '/storage/' . $path)->values()->toArray()
+                ? collect($this->return_proof)->map(fn($path) => url('/storage/' . $path))->values()->toArray()
                 : [],
             'return_pickup_driver' => $this->return_pickup_driver,
             'return_pickup_plate' => $this->return_pickup_plate,
