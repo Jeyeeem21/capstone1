@@ -50,10 +50,8 @@ const getInitialSettings = () => {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        // Don't use blob URLs from cache - they're invalid after page refresh
-        if (parsed.business_logo && parsed.business_logo.startsWith('blob:')) {
-          parsed.business_logo = DEFAULT_LOGO;
-        }
+        // Always resolve logo through getFullLogoUrl to fix stale relative paths from old cache
+        parsed.business_logo = getFullLogoUrl(parsed.business_logo);
         return parsed;
       } catch (e) {
         console.error('Failed to parse cached business settings:', e);

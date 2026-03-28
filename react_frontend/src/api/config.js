@@ -21,8 +21,8 @@ export const resolveStorageUrl = (path) => {
   return `${BACKEND_URL}${path}`;
 };
 
-// Default logo with correct backend URL
-export const DEFAULT_LOGO = `${BACKEND_URL}/storage/logos/KJPLogo.png`;
+// Default logo — bundled in frontend public folder, always accessible
+export const DEFAULT_LOGO = '/KJPLogo.png';
 
 // ============================================
 // OpenRouteService API (Free - address autocomplete & distance)
