@@ -375,8 +375,13 @@ class WebsiteContentController extends Controller
                     ->where('key', 'image')
                     ->first();
                     
-                if ($oldImage && $oldImage->value && Storage::disk('public')->exists(str_replace('/storage/', '', $oldImage->value))) {
-                    Storage::disk('public')->delete(str_replace('/storage/', '', $oldImage->value));
+                if ($oldImage && $oldImage->value) {
+                    // Handle both old relative paths (/storage/...) and absolute URLs
+                    $storagePath = preg_replace('#^https?://[^/]+/storage/#', '', $oldImage->value);
+                    $storagePath = ltrim(str_replace('/storage/', '', $storagePath), '/');
+                    if (Storage::disk('public')->exists($storagePath)) {
+                        Storage::disk('public')->delete($storagePath);
+                    }
                 }
 
                 // Store new image
