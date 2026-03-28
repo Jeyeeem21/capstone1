@@ -12,7 +12,7 @@ export const API_BASE_URL = isProduction
   : 'http://127.0.0.1:8000/api';
 
 // Backend base URL (without /api) for resolving storage paths
-export const BACKEND_URL = API_BASE_URL.replace('/api', '');
+export const BACKEND_URL = API_BASE_URL.replace(/\/api$/, '');
 
 // Resolve a /storage/ path to the full backend URL
 export const resolveStorageUrl = (path) => {

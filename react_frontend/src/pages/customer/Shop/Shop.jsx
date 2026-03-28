@@ -8,6 +8,7 @@ import {
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
+import { DEFAULT_LOGO } from '../../../api/config';
 import { apiClient } from '../../../api';
 import { useDataFetch } from '../../../hooks/useDataFetch';
 import { Skeleton, useToast } from '../../../components/ui';
@@ -348,7 +349,7 @@ const Shop = () => {
             : 'opacity-60 cursor-not-allowed'
         }`}>
         <div className="relative">
-          <img src={product.image || bizSettings?.business_logo || '/storage/logos/KJPLogo.png'} alt={product.name} className="w-full h-32 object-cover" />
+          <img src={product.image || bizSettings?.business_logo || DEFAULT_LOGO} alt={product.name} className="w-full h-32 object-cover" />
           <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 text-[9px] font-medium rounded-full text-white"
             style={{ backgroundColor: product.varietyColor }}>{product.variety}</span>
         </div>
@@ -370,7 +371,7 @@ const Shop = () => {
         className={`bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-sm p-3 flex gap-3 transition-all ${
           product.inStock ? 'cursor-pointer hover:shadow-lg hover:scale-[1.01]' : 'opacity-60 cursor-not-allowed'
         }`}>
-        <img src={product.image || bizSettings?.business_logo || '/storage/logos/KJPLogo.png'} alt={product.name} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+        <img src={product.image || bizSettings?.business_logo || DEFAULT_LOGO} alt={product.name} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
