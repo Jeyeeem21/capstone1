@@ -9,6 +9,14 @@ import { ENDPOINTS } from './config';
 
 export const usersApi = {
   /**
+   * Check if email is available (includes soft-deleted users)
+   * @param {string} email - Email to check
+   */
+  checkEmail: async (email) => {
+    return apiClient.post(`${ENDPOINTS.USERS.BASE}/check-email`, { email });
+  },
+
+  /**
    * Get all users
    * @param {Object} options - Filter options
    * @param {string} options.search - Search query

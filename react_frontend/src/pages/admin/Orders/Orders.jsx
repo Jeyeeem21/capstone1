@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
-import { apiClient, API_BASE_URL } from '../../../api';
+import { apiClient } from '../../../api';
+import { resolveStorageUrl } from '../../../api/config';
 import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
 import { useAuth } from '../../../context/AuthContext';
 import { suppressNotifToasts } from '../../../utils/notifToastGuard';
@@ -36,6 +37,7 @@ const AdminOrders = () => {
   const [previewProofImage, setPreviewProofImage] = useState(null);
   const [isMarkReturnModalOpen, setIsMarkReturnModalOpen] = useState(false);
   const [markReturnOrder, setMarkReturnOrder] = useState(null);
+  const [rejectReturnOrder, setRejectReturnOrder] = useState(null);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [payOrder, setPayOrder] = useState(null);
   const [payMethod, setPayMethod] = useState('cash');
@@ -1033,7 +1035,7 @@ const AdminOrders = () => {
                 <CheckCircle size={15} />
               </button>
               <button
-                onClick={() => handleRejectReturn(row)}
+                onClick={() => setRejectReturnOrder(row)}
                 disabled={saving}
                 className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:text-red-400 transition-colors disabled:opacity-50"
                 title="Reject Return"
@@ -1378,10 +1380,10 @@ const AdminOrders = () => {
                     {selectedOrder.payment_proof.map((url, idx) => (
                       <img
                         key={idx}
-                        src={`${API_BASE_URL.replace('/api', '')}${url}`}
+                        src={resolveStorageUrl(url)}
                         alt={`Payment proof ${idx + 1}`}
                         className="w-[60px] h-[60px] object-cover rounded-lg border border-button-200 dark:border-button-700 cursor-pointer hover:opacity-80"
-                        onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
+                        onClick={() => setPreviewProofImage(resolveStorageUrl(url))}
                       />
                     ))}
                   </div>
@@ -1430,10 +1432,10 @@ const AdminOrders = () => {
                     {selectedOrder.delivery_proof.map((url, idx) => (
                       <img
                         key={idx}
-                        src={`${API_BASE_URL.replace('/api', '')}${url}`}
+                        src={resolveStorageUrl(url)}
                         alt={`Delivery proof ${idx + 1}`}
                         className="w-[80px] h-[80px] object-cover rounded-lg border border-green-200 dark:border-green-700 cursor-pointer hover:opacity-80"
-                        onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
+                        onClick={() => setPreviewProofImage(resolveStorageUrl(url))}
                       />
                     ))}
                   </div>
@@ -1494,10 +1496,10 @@ const AdminOrders = () => {
                         {selectedOrder.return_proof.map((url, idx) => (
                           <img
                             key={idx}
-                            src={`${API_BASE_URL.replace('/api', '')}${url}`}
+                            src={resolveStorageUrl(url)}
                             alt={`Return proof ${idx + 1}`}
                             className="w-[60px] h-[60px] object-cover rounded-lg border border-orange-200 dark:border-orange-700 cursor-pointer hover:opacity-80"
-                            onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
+                            onClick={() => setPreviewProofImage(resolveStorageUrl(url))}
                           />
                         ))}
                       </div>
@@ -1543,7 +1545,10 @@ const AdminOrders = () => {
                           <td className="px-2.5 py-1.5">
                             <div className="flex items-center gap-1.5">
                               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.variety_color || '#6B7280' }} />
-                              <span className="text-gray-800 dark:text-gray-100 text-xs font-medium">{item.product_name || item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</span>
+                              <div>
+                                <span className="text-gray-800 dark:text-gray-100 text-xs font-medium">{item.product_name || item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}</span>
+                                {item.variety_name && <p className="text-[10px] text-gray-500 dark:text-gray-400">{item.variety_name}</p>}
+                              </div>
                             </div>
                           </td>
                           <td className="px-2 py-1.5 text-center text-gray-600 dark:text-gray-300 text-xs">{item.quantity}</td>
@@ -1588,6 +1593,19 @@ const AdminOrders = () => {
         confirmText={saving ? 'Cancelling...' : 'Cancel Order'}
         variant="danger"
         icon={Ban}
+      />
+
+      {/* Reject Return Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!rejectReturnOrder}
+        onClose={() => setRejectReturnOrder(null)}
+        onConfirm={() => { handleRejectReturn(rejectReturnOrder); setRejectReturnOrder(null); }}
+        title="Reject Return"
+        message={`Are you sure you want to reject the return request for "${rejectReturnOrder?.order_id}"? The order will be reverted to delivered status.`}
+        confirmText={saving ? 'Rejecting...' : 'Reject Return'}
+        variant="danger"
+        icon={XCircle}
+        isLoading={saving}
       />
 
       {/* Return Request Modal */}
@@ -1783,10 +1801,10 @@ const AdminOrders = () => {
                     {acceptReturnOrder.return_proof.map((url, idx) => (
                       <img
                         key={idx}
-                        src={`${API_BASE_URL.replace('/api', '')}${url}`}
+                        src={resolveStorageUrl(url)}
                         alt={`Return proof ${idx + 1}`}
                         className="w-[100px] h-[100px] object-cover rounded-lg border border-orange-200 dark:border-orange-700 cursor-pointer hover:opacity-80"
-                        onClick={() => setPreviewProofImage(`${API_BASE_URL.replace('/api', '')}${url}`)}
+                        onClick={() => setPreviewProofImage(resolveStorageUrl(url))}
                       />
                     ))}
                   </div>

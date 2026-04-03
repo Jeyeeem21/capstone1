@@ -3,7 +3,7 @@ import {
   LayoutDashboard, DollarSign, ShoppingCart, Users, Package,
   TrendingUp, AlertTriangle, RefreshCw, Activity,
   Truck, Settings2, Droplets, ArrowRight, Clock,
-  ShoppingBag, Layers
+  ShoppingBag, Layers, X
 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import {
@@ -304,7 +304,16 @@ const Dashboard = () => {
           <div className="lg:col-span-2">
             <LineChart
               title="Revenue Trends"
-              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Sales revenue from completed orders"}
+              subtitle={(() => {
+                const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                let scope = '';
+                if (period === 'daily' || period === 'weekly') { const [y,m] = chartMonth.split('-').map(Number); scope = `${months[m-1]} ${y}`; }
+                else if (period === 'monthly' || period === 'bi-annually') scope = String(chartYear);
+                else if (period === 'annually') scope = `${chartYearFrom}–${chartYearTo}`;
+                const mode = period.charAt(0).toUpperCase() + period.slice(1);
+                if (activeChartPoint) return `${activeChartPoint} · ${scope}`;
+                return `${mode} · ${scope}`;
+              })()}
               data={revenueChart}
               lines={[
                 { dataKey: 'revenue', name: 'Revenue (₱)' },
@@ -314,6 +323,16 @@ const Dashboard = () => {
               yAxisUnit="₱"
               headerRight={
                 <div className="flex items-center gap-2 flex-wrap">
+                  {(activeChartPoint || period !== 'monthly' || chartYear !== new Date().getFullYear()) && (
+                    <button
+                      onClick={() => { setActiveChartPoint(null); setPeriod('monthly'); const d = new Date(); setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setChartYear(d.getFullYear()); setChartYearFrom(d.getFullYear() - 4); setChartYearTo(d.getFullYear()); }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      title="Clear chart filter"
+                    >
+                      <X size={14} />
+                      Clear Filter
+                    </button>
+                  )}
                   <select
                     value={period}
                     onChange={(e) => { setPeriod(e.target.value); setActiveChartPoint(null); }}
@@ -356,7 +375,7 @@ const Dashboard = () => {
                   )}
                 </div>
               }
-              onDotClick={setActiveChartPoint}
+              onDotClick={(point) => setActiveChartPoint(point)}
               activePoint={activeChartPoint}
               summaryStats={[
                 { label: 'This Month', value: fmt(overview.current_month_revenue), color: 'text-primary-600 dark:text-primary-400' },

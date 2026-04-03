@@ -47,8 +47,10 @@ export const AuthProvider = ({ children }) => {
     if (response.success && response.user) {
       setUser(response.user);
 
-      // Fire-and-forget: send login notification email without blocking
-      apiClient.post('/auth/login-email').catch(() => {});
+      // Fire-and-forget: send login notification email AFTER dashboard data loads
+      setTimeout(() => {
+        apiClient.post('/auth/login-email').catch(() => {});
+      }, 5000);
 
       return response;
     }

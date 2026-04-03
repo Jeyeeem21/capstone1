@@ -39,8 +39,8 @@ class DashboardService
                 'top_products' => $this->getTopProducts(),
                 'recent_sales' => $this->getRecentSales(),
                 'low_stock' => $this->getLowStockProducts(),
-                'payment_breakdown' => $this->getPaymentBreakdown(),
-                'status_breakdown' => $this->getOrderStatusBreakdown(),
+                'payment_breakdown' => $this->getPaymentBreakdown($period, $chartParams),
+                'status_breakdown' => $this->getOrderStatusBreakdown($period, $chartParams),
                 'pipeline' => $this->getPipelineSummary(),
                 'period' => $period,
                 'generated_at' => now()->toISOString(),
@@ -347,6 +347,50 @@ class DashboardService
     }
 
     /**
+     * Helper: scope a query builder by period + chartParams on created_at
+     */
+    private function scopeQueryByPeriod($query, string $period, array $chartParams)
+    {
+        $now = Carbon::now();
+
+        if ($period === 'daily' || $period === 'weekly') {
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            if ($period === 'daily') {
+                $start = Carbon::create($targetYear, $targetMonth, 1)->startOfDay();
+                $end = $start->copy()->endOfMonth()->endOfDay();
+                $query->whereBetween('created_at', [$start, $end]);
+            } else {
+                // weekly — scope to the full week range of that month
+                $weeks = $this->getWeeksInMonth($targetYear, $targetMonth);
+                if (!empty($weeks)) {
+                    $query->whereBetween('created_at', [$weeks[0]['start'], end($weeks)['end']]);
+                }
+            }
+        } elseif ($period === 'monthly' || $period === 'bi-annually') {
+            $year = $chartParams['year'] ?? $now->year;
+            $start = Carbon::create($year, 1, 1)->startOfDay();
+            $end = Carbon::create($year, 12, 31)->endOfDay();
+            $query->whereBetween('created_at', [$start, $end]);
+        } elseif ($period === 'annually') {
+            $yearFrom = $chartParams['year_from'] ?? ($now->year - 4);
+            $yearTo = $chartParams['year_to'] ?? $now->year;
+            $start = Carbon::create($yearFrom, 1, 1)->startOfDay();
+            $end = Carbon::create($yearTo, 12, 31)->endOfDay();
+            $query->whereBetween('created_at', [$start, $end]);
+        }
+
+        return $query;
+    }
+
+    /**
      * Helper: get week ranges in a month (matches frontend getWeeksInMonth)
      */
     private function getWeeksInMonth(int $year, int $month): array
@@ -508,13 +552,15 @@ class DashboardService
     /**
      * Payment method breakdown
      */
-    private function getPaymentBreakdown(): array
+    private function getPaymentBreakdown(string $period = 'monthly', array $chartParams = []): array
     {
         $completedStatuses = ['delivered', 'completed'];
 
-        return Sale::selectRaw("payment_method, COUNT(*) as count, SUM(total) as total_amount")
-            ->whereIn('status', $completedStatuses)
-            ->groupBy('payment_method')
+        $query = Sale::selectRaw("payment_method, COUNT(*) as count, SUM(total) as total_amount")
+            ->whereIn('status', $completedStatuses);
+        $this->scopeQueryByPeriod($query, $period, $chartParams);
+
+        return $query->groupBy('payment_method')
             ->get()
             ->map(function ($row) {
                 $label = match ($row->payment_method) {
@@ -544,7 +590,7 @@ class DashboardService
     /**
      * Order status breakdown
      */
-    private function getOrderStatusBreakdown(): array
+    private function getOrderStatusBreakdown(string $period = 'monthly', array $chartParams = []): array
     {
         $statuses = [
             'pending' => ['label' => 'Pending', 'color' => '#f59e0b'],
@@ -557,8 +603,10 @@ class DashboardService
             'voided' => ['label' => 'Voided', 'color' => '#6b7280'],
         ];
 
-        $counts = Sale::selectRaw("status, COUNT(*) as count")
-            ->groupBy('status')
+        $query = Sale::selectRaw("status, COUNT(*) as count");
+        $this->scopeQueryByPeriod($query, $period, $chartParams);
+
+        $counts = $query->groupBy('status')
             ->pluck('count', 'status')
             ->toArray();
 

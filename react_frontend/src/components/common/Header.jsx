@@ -1,14 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Menu, User, LogOut, Settings, ChevronDown } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import { ConfirmModal } from '../ui';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { DEFAULT_LOGO } from '../../api/config';
 import { useAuth } from '../../context/AuthContext';
 
 const Header = ({ onMenuClick }) => {
   const { settings } = useBusinessSettings();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  const handleLogout = async () => {
+    setIsLogoutModalOpen(false);
+    await logout();
+    navigate('/?login=true');
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -22,6 +33,7 @@ const Header = ({ onMenuClick }) => {
   }, []);
 
   return (
+    <>
     <header 
       className="sticky top-0 border-b-2 border-primary-300 dark:border-primary-700 px-4 py-3 flex items-center justify-between shadow-sm lg:hidden z-50"
       style={{ backgroundColor: 'var(--color-bg-sidebar)' }}
@@ -39,7 +51,7 @@ const Header = ({ onMenuClick }) => {
         
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center shadow-md overflow-hidden">
-            <img src={settings.business_logo || '/storage/logos/KJPLogo.png'} alt={settings.business_name || 'Logo'} className="w-7 h-7 object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+            <img src={settings.business_logo || DEFAULT_LOGO} alt={settings.business_name || 'Logo'} className="w-7 h-7 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_LOGO; }} />
             <span style={{display:'none'}} className="text-white font-bold text-sm items-center justify-center">{(settings.business_name || 'K').substring(0, 1)}</span>
           </div>
           <div>
@@ -88,7 +100,10 @@ const Header = ({ onMenuClick }) => {
                 <Settings size={18} className="text-gray-500 dark:text-gray-400" />
                 Account Settings
               </button>
-              <button className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-button-500 hover:bg-button-600 text-white text-sm font-medium rounded-lg transition-colors mt-1">
+              <button
+                onClick={() => { setIsAccountOpen(false); setIsLogoutModalOpen(true); }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-button-500 hover:bg-button-600 text-white text-sm font-medium rounded-lg transition-colors mt-1"
+              >
                 <LogOut size={16} />
                 Logout
               </button>
@@ -98,6 +113,19 @@ const Header = ({ onMenuClick }) => {
       </div>
       </div>
     </header>
+
+    <ConfirmModal
+      isOpen={isLogoutModalOpen}
+      onClose={() => setIsLogoutModalOpen(false)}
+      onConfirm={handleLogout}
+      title="Confirm Logout"
+      message="Are you sure you want to logout? You will need to login again to access the system."
+      confirmText="Logout"
+      cancelText="Cancel"
+      variant="danger"
+      icon={LogOut}
+    />
+    </>
   );
 };
 

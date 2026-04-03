@@ -14,6 +14,8 @@ export { default as Tabs } from './Tabs';
 export { default as DateFilter } from './DateFilter';
 export { Modal, ConfirmModal, FormModal } from './Modal';
 export { default as LoginModal } from './LoginModal';
+export { default as ForgotPasswordModal } from './ForgotPasswordModal';
+export { default as RegisterModal } from './RegisterModal';
 export { ToastProvider, useToast } from './Toast';
 export { FormInput, FormSelect, FormTextarea } from './FormElements';
 export { default as Skeleton, SkeletonCard, SkeletonTable, SkeletonForm, SkeletonStats, SkeletonList, SkeletonSettings, SkeletonDashboard } from './Skeleton';

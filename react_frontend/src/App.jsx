@@ -54,12 +54,11 @@ const About = lazy(() => import('./pages/public/About'));
 const PublicProducts = lazy(() => import('./pages/public/Products'));
 const Contact = lazy(() => import('./pages/public/Contact'));
 
-// Suspense fallback — minimal loading indicator
-const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-  </div>
-);
+// Auth pages
+const StaffVerification = lazy(() => import('./pages/auth/StaffVerification'));
+
+// Suspense fallback — nothing (ProtectedRoute spinner already covers the wait)
+const PageLoader = () => <div className="min-h-[60vh]" />;
 
 // Role-based redirect component
 const RoleRedirect = () => {
@@ -131,6 +130,9 @@ function AppRoutes() {
         <Route path="/products" element={<ErrorBoundary><PublicProducts /></ErrorBoundary>} />
         <Route path="/contact" element={<ErrorBoundary><Contact /></ErrorBoundary>} />
       </Route>
+      
+      {/* Auth Routes (public access) */}
+      <Route path="/staff/verify" element={<ErrorBoundary><StaffVerification /></ErrorBoundary>} />
       
       {/* Standalone POS redirect */}
       <Route path="/pos" element={<PosRedirect />} />

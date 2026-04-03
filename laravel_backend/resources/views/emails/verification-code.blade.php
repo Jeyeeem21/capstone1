@@ -4,7 +4,7 @@
 
 @section('content')
 <h2>Email Verification Code</h2>
-<p>Hello,</p>
+<p>Hello{{ $name ? ' ' . $name : '' }},</p>
 <p>Your {{ \App\Models\BusinessSetting::getValue('business_name', config('app.name')) }} email verification code is:</p>
 
 <div style="text-align: center; margin: 24px 0;">
@@ -13,6 +13,10 @@
     </div>
 </div>
 
-<p>This code will expire in <strong>10 minutes</strong>.</p>
+<p>This code will expire in <strong>15 minutes</strong>.</p>
+@if($name)
+<p>Please enter this code to verify your email address and activate your account. You will not be able to log in until your email is verified.</p>
+@else
 <p>If you did not request this verification, please ignore this email.</p>
+@endif
 @endsection

@@ -4,8 +4,18 @@ import { LogIn, User, Lock, Eye, EyeOff, Loader2, Check, AlertCircle } from 'luc
 import { Modal } from './Modal';
 import Button from './Button';
 import { useAuth } from '../../context/AuthContext';
+import { apiClient } from '../../api';
 
-const LoginModal = ({ isOpen, onClose }) => {
+// Chunk preloaders — start downloading page JS before navigation
+const chunkPreloaders = {
+  admin: () => import('../../pages/admin/Dashboard'),
+  super_admin: () => import('../../pages/admin/Dashboard'),
+  customer: () => import('../../pages/customer/Dashboard'),
+  driver: () => import('../../pages/driver/Deliveries'),
+  secretary: () => import('../../pages/shared/PointOfSale'),
+};
+
+const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onSwitchToForgotPassword = () => {} }) => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -78,10 +88,25 @@ const LoginModal = ({ isOpen, onClose }) => {
     setError('');
 
     try {
+      // Start preloading ALL common chunks in parallel with the login API call
+      // so the JS bundle is already downloading while we wait for auth
+      Object.values(chunkPreloaders).forEach(loader => loader().catch(() => {}));
+
       const response = await login(formData.email, formData.password);
-      // Close modal first and wait for React to flush the update
-      // so the Modal portal and body scroll lock are fully cleaned up
-      // before the route transition unmounts PublicLayout.
+
+      // Prefetch key API data into cache in background (don't await)
+      const role = response?.user?.role;
+      const position = response?.user?.position;
+      if (role === 'admin' || role === 'super_admin') {
+        apiClient.get('/dashboard/stats?period=monthly').catch(() => {});
+        apiClient.get('/dashboard/recent-activity?limit=15').catch(() => {});
+      } else if (role === 'customer') {
+        apiClient.get('/customer/dashboard').catch(() => {});
+      } else if (role === 'staff' && position === 'Driver') {
+        apiClient.get('/driver/my-deliveries').catch(() => {});
+      }
+
+      // Close modal and clean up
       onClose();
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -113,6 +138,22 @@ const LoginModal = ({ isOpen, onClose }) => {
         navigate('/admin/dashboard');
       }
     } catch (err) {
+      // Check if this is an email verification error
+      if (err.response?.data?.requires_verification) {
+        // Close modal and redirect to verification page
+        onClose();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Clear body scroll lock
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        
+        navigate(`/staff/verify?email=${encodeURIComponent(formData.email)}`);
+        return;
+      }
+      
       setError(err.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -247,7 +288,16 @@ const LoginModal = ({ isOpen, onClose }) => {
             <input type="checkbox" className="w-4 h-4 text-button-600 dark:text-button-400 border-primary-300 dark:border-primary-700 rounded focus:ring-button-500" />
             <span className="text-gray-600 dark:text-gray-300">Remember me</span>
           </label>
-          <button type="button" className="text-button-600 hover:text-button-700 dark:text-button-300 font-medium">
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              setSubmitted(false);
+              setTouched({ email: false, password: false });
+              onSwitchToForgotPassword(formData.email?.trim() || '');
+            }}
+            className="text-button-600 hover:text-button-700 dark:text-button-300 font-medium"
+          >
             Forgot Password?
           </button>
         </div>
@@ -270,6 +320,18 @@ const LoginModal = ({ isOpen, onClose }) => {
             </>
           )}
         </Button>
+
+        {/* Register Link */}
+        <p className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          Don't have an account?{' '}
+          <button
+            type="button"
+            onClick={onSwitchToRegister}
+            className="font-semibold text-button-600 dark:text-button-400 hover:underline"
+          >
+            Register here
+          </button>
+        </p>
       </form>
     </Modal>
   );

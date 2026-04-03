@@ -255,6 +255,43 @@ class WebsiteContent extends Model
     }
 
     /**
+     * Get structured content for Legal page (Terms & Privacy)
+     */
+    public static function getLegalContent(): array
+    {
+        $raw = self::getPageContent('legal');
+
+        return [
+            'termsLastUpdated' => $raw['terms']['lastUpdated'] ?? now()->format('F j, Y'),
+            'termsIntro' => $raw['terms']['intro'] ?? '',
+            'termsSections' => self::extractArrayItemsWithMeta($raw, 'termsSections'),
+            'privacyLastUpdated' => $raw['privacy']['lastUpdated'] ?? now()->format('F j, Y'),
+            'privacyIntro' => $raw['privacy']['intro'] ?? '',
+            'privacySections' => self::extractArrayItemsWithMeta($raw, 'privacySections'),
+        ];
+    }
+
+    /**
+     * Save Legal page content (Terms & Privacy)
+     */
+    public static function saveLegalContent(array $data): void
+    {
+        // Save terms metadata
+        self::upsertContent('legal', 'terms', 'lastUpdated', $data['termsLastUpdated'] ?? now()->format('F j, Y'));
+        self::upsertContent('legal', 'terms', 'intro', $data['termsIntro'] ?? '');
+
+        // Save terms sections
+        self::saveArraySection('legal', 'termsSections', $data['termsSections'] ?? []);
+
+        // Save privacy metadata
+        self::upsertContent('legal', 'privacy', 'lastUpdated', $data['privacyLastUpdated'] ?? now()->format('F j, Y'));
+        self::upsertContent('legal', 'privacy', 'intro', $data['privacyIntro'] ?? '');
+
+        // Save privacy sections
+        self::saveArraySection('legal', 'privacySections', $data['privacySections'] ?? []);
+    }
+
+    /**
      * Get structured content for Products page
      */
     public static function getProductsContent(): array
@@ -451,5 +488,36 @@ class WebsiteContent extends Model
 
         self::saveProductsContent($productsDefaults);
         self::saveContactContent($contactDefaults);
+
+        // Default Legal content (Terms & Conditions + Privacy Policy)
+        $legalDefaults = [
+            'termsLastUpdated' => 'January 1, 2026',
+            'termsIntro' => 'By using KJP Ricemill services, you agree to the following terms and conditions. Please read them carefully.',
+            'termsSections' => [
+                ['title' => 'Account Registration', 'content' => 'By creating an account, you agree to provide accurate and complete information. You are responsible for maintaining the confidentiality of your account credentials. You must notify us immediately of any unauthorized access to your account.'],
+                ['title' => 'Use of Services', 'content' => 'Our system is designed to facilitate rice product purchasing, order management, and delivery services. You agree to use our services only for lawful purposes and in accordance with these terms. Misuse of the system may result in account suspension or termination.'],
+                ['title' => 'Orders and Payments', 'content' => 'All orders placed through the system are subject to availability and confirmation. Prices are subject to change without prior notice. Payment must be made in full according to the selected payment method. Unpaid orders may be cancelled after the agreed payment period.'],
+                ['title' => 'Delivery', 'content' => 'Delivery schedules are estimated and may vary depending on location and availability. KJP Ricemill will make reasonable efforts to deliver on time. The customer is responsible for providing accurate delivery addresses and being available to receive deliveries.'],
+                ['title' => 'Product Quality', 'content' => 'KJP Ricemill is committed to delivering premium quality rice products. If you receive a product that does not meet our quality standards, please contact us within 24 hours of delivery for resolution.'],
+                ['title' => 'Cancellations and Returns', 'content' => 'Orders may be cancelled before processing. Once an order has been processed or dispatched, cancellation is subject to approval. Returns are accepted only for defective or incorrect items within the specified return period.'],
+                ['title' => 'Limitation of Liability', 'content' => 'KJP Ricemill shall not be liable for any indirect, incidental, or consequential damages arising from the use of our services. Our total liability shall not exceed the amount paid for the specific order in question.'],
+                ['title' => 'Modifications', 'content' => 'We reserve the right to modify these terms at any time. Continued use of the system after changes constitutes acceptance of the updated terms. Users will be notified of significant changes via email or system notification.'],
+                ['title' => 'Contact Information', 'content' => 'For questions or concerns regarding these terms, please contact us through our website contact page or email us directly. Our team is committed to addressing your inquiries promptly.'],
+            ],
+            'privacyLastUpdated' => 'January 1, 2026',
+            'privacyIntro' => 'KJP Ricemill is committed to protecting your privacy. This policy explains how we collect, use, and safeguard your personal information in compliance with the Data Privacy Act of 2012 (Republic Act No. 10173).',
+            'privacySections' => [
+                ['title' => 'Information We Collect', 'content' => 'We collect personal information that you provide when creating an account or placing orders, including your name, email address, phone number, and delivery address. We may also collect order history and payment information to process your transactions.'],
+                ['title' => 'How We Use Your Information', 'content' => 'Your personal information is used to process orders, arrange deliveries, send order updates and notifications, improve our services, and communicate important changes. We may also use aggregated, non-identifiable data for analytics purposes.'],
+                ['title' => 'Data Protection and Security', 'content' => 'We implement appropriate technical and organizational security measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction. Your account is protected by password authentication and we use secure connections for data transmission.'],
+                ['title' => 'Data Sharing', 'content' => 'Your personal information will not be sold, traded, or shared with unauthorized third parties. We may share necessary information with delivery personnel to fulfill orders and with payment processors to complete transactions.'],
+                ['title' => 'Data Retention', 'content' => 'We retain your personal information for as long as your account is active or as needed to provide services. You may request deletion of your data by contacting our team, subject to any legal obligations that require us to retain certain information.'],
+                ['title' => 'Your Rights', 'content' => 'Under the Data Privacy Act of 2012, you have the right to access, correct, and request deletion of your personal data. You may also object to or restrict certain processing activities. To exercise these rights, please contact our team.'],
+                ['title' => 'Cookies and Tracking', 'content' => 'Our system may use cookies and similar technologies to enhance your experience, remember your preferences, and maintain your session. You can manage cookie settings through your browser preferences.'],
+                ['title' => 'Changes to This Policy', 'content' => 'We may update this privacy policy from time to time. Any changes will be posted on our platform and, where appropriate, notified to you via email. Continued use of our services after changes constitutes acceptance of the updated policy.'],
+            ],
+        ];
+
+        self::saveLegalContent($legalDefaults);
     }
 }

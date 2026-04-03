@@ -308,9 +308,9 @@ class EmailService
     /**
      * Send verification code email.
      */
-    public function sendVerificationCode(string $email, string $code): void
+    public function sendVerificationCode(string $email, string $code, ?string $name = null): void
     {
-        $this->sendSafely($email, new VerificationCode($code));
+        $this->sendSafely($email, new VerificationCode($code, $name));
     }
 
     /**
@@ -370,5 +370,49 @@ class EmailService
         foreach ($adminUsers as $admin) {
             $this->sendSafely($admin->email, clone $mailable);
         }
+    }
+
+    /**
+     * Send email change verification code to new email address.
+     */
+    public function sendEmailChangeVerification(string $newEmail, string $code, string $userName): void
+    {
+        $this->sendSafely($newEmail, new \App\Mail\EmailChangeVerification($code, $newEmail, $userName));
+    }
+
+    /**
+     * Send email change notification to old email address.
+     */
+    public function sendEmailChangeNotification(string $oldEmail, string $newEmail, string $userName, string $ipAddress): void
+    {
+        $this->sendSafely($oldEmail, new \App\Mail\EmailChangeNotification($oldEmail, $newEmail, $userName, $ipAddress));
+    }
+
+    /**
+     * Send profile update notification.
+     */
+    public function sendProfileUpdateNotification(User $user, array $changes, string $ipAddress): void
+    {
+        if (!$user->email) return;
+
+        $this->sendSafely($user->email, new \App\Mail\ProfileUpdateNotification($user->name, $changes, $ipAddress));
+    }
+
+    /**
+     * Send security update notification (password change, etc.).
+     */
+    public function sendSecurityUpdateNotification(User $user, string $updateType, string $ipAddress): void
+    {
+        if (!$user->email) return;
+
+        $this->sendSafely($user->email, new \App\Mail\SecurityUpdateNotification($user->name, $updateType, $ipAddress));
+    }
+
+    /**
+     * Send password reset code email.
+     */
+    public function sendPasswordResetCode(string $email, string $code, string $name): void
+    {
+        $this->sendSafely($email, new \App\Mail\PasswordResetCode($code, $name));
     }
 }

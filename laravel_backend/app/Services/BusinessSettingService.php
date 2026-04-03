@@ -69,12 +69,11 @@ class BusinessSettingService
     public function updateSettings(array $data): array
     {
         foreach ($data as $key => $value) {
-            if ($value !== null) {
-                BusinessSetting::updateOrCreate(
-                    ['key' => $key],
-                    ['value' => (string) $value, 'type' => 'string']
-                );
-            }
+            // Allow null values to clear settings (e.g., clearing SMTP password)
+            BusinessSetting::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value !== null ? (string) $value : '', 'type' => 'string']
+            );
         }
 
         // Clear cache and return fresh data

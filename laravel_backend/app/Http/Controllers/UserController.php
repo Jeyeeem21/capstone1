@@ -90,7 +90,16 @@ class UserController extends Controller
             'name'       => 'required|string|max:255',
             'first_name' => 'nullable|string|max:255',
             'last_name'  => 'nullable|string|max:255',
-            'email'      => 'required|email|unique:users,email',
+            'email'      => [
+                'required',
+                'email',
+                function ($attribute, $value, $fail) {
+                    // Check if email exists including soft-deleted AND archived users
+                    if (User::withTrashed()->withArchived()->where('email', $value)->exists()) {
+                        $fail('The email has already been taken.');
+                    }
+                },
+            ],
             'password'   => 'required|string|min:8',
             'role'       => ['required', Rule::in([User::ROLE_ADMIN, User::ROLE_STAFF])],
             'position'   => 'nullable|string|max:50',
@@ -105,16 +114,30 @@ class UserController extends Controller
             return $this->errorResponse('Only Super Admin can create admin accounts', 403);
         }
 
-        // Require email verification before account creation
-        $verifiedKey = "user_email_verified_" . md5($validated['email']);
-        if (!Cache::get($verifiedKey)) {
-            return $this->errorResponse('Email must be verified before creating an account.', 422);
-        }
-        Cache::forget($verifiedKey);
-
         $validated['status'] = $validated['status'] ?? 'active';
 
+        // Check if email was pre-verified via verification code flow
+        $emailVerifiedKey = "user_email_verified_" . md5(strtolower(trim($validated['email'])));
+        $isPreVerified = Cache::get($emailVerifiedKey);
+
+        if ($isPreVerified) {
+            $validated['email_verified_at'] = now();
+            Cache::forget($emailVerifiedKey);
+        }
+        
         $user = User::create($validated);
+
+        // If not pre-verified, generate verification code and cache it (fast, no network)
+        if (!$isPreVerified) {
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $cacheKey = "user_login_verify_" . md5(strtolower(trim($user->email)));
+            Cache::put($cacheKey, [
+                'code' => $code,
+                'email' => strtolower(trim($user->email)),
+                'user_id' => $user->id,
+                'attempts' => 0,
+            ], now()->addMinutes(15));
+        }
 
         $this->logAudit('CREATE', 'Users', "Created {$user->role} account: {$user->name}", [
             'user_id'  => $user->id,
@@ -126,14 +149,40 @@ class UserController extends Controller
 
         return $this->successResponse(
             $this->formatUser($user),
-            'User created successfully',
+            'User created successfully. Email verification sent to ' . $user->email,
             201
         );
     }
 
     /**
-     * Send email verification code before user creation.
+     * Send email verification to a newly created user.
      */
+    private function sendEmailVerificationToUser(User $user): void
+    {
+        // Generate 6-digit code
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        // Store in cache for 15 minutes
+        $cacheKey = "user_login_verify_" . md5(strtolower(trim($user->email)));
+        Cache::put($cacheKey, [
+            'code' => $code,
+            'email' => strtolower(trim($user->email)),
+            'user_id' => $user->id,
+            'attempts' => 0,
+        ], now()->addMinutes(15));
+
+        // Send verification email after response
+        $emailService = $this->emailService;
+        $email = $user->email;
+        $name = $user->name;
+        dispatch(function () use ($emailService, $email, $code, $name) {
+            try {
+                $emailService->sendVerificationCode($email, $code, $name);
+            } catch (\Throwable $e) {
+                \Log::warning("Failed to send staff verification code to {$email}: " . $e->getMessage());
+            }
+        })->afterResponse();
+    }
     public function sendVerificationCode(Request $request): JsonResponse
     {
         $request->validate([
@@ -158,11 +207,15 @@ class UserController extends Controller
             'attempts' => 0,
         ], now()->addMinutes(10));
 
-        try {
-            $this->emailService->sendVerificationCode($email, $code);
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to send verification email. Error: ' . $e->getMessage(), 500);
-        }
+        // Send verification email after response
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $email, $code) {
+            try {
+                $emailService->sendVerificationCode($email, $code);
+            } catch (\Exception $e) {
+                \Log::warning("Failed to send staff verification code to {$email}: " . $e->getMessage());
+            }
+        })->afterResponse();
 
         return $this->successResponse(
             ['sent' => true],
@@ -171,8 +224,86 @@ class UserController extends Controller
     }
 
     /**
-     * Verify the code entered for user creation.
+     * Verify email for newly created staff (post-creation verification).
      */
+    public function verifyStaffEmail(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        $cacheKey = "user_login_verify_" . md5($request->email);
+        $cached = Cache::get($cacheKey);
+
+        if (!$cached) {
+            return $this->errorResponse('Verification code has expired. Please contact an administrator to resend.', 422);
+        }
+
+        if ($cached['attempts'] >= 5) {
+            Cache::forget($cacheKey);
+            return $this->errorResponse('Too many failed attempts. Please contact an administrator to resend a new code.', 429);
+        }
+
+        if ($cached['code'] !== $request->code) {
+            $cached['attempts']++;
+            Cache::put($cacheKey, $cached, now()->addHours(24));
+            $remaining = 5 - $cached['attempts'];
+            return $this->errorResponse("Invalid verification code. {$remaining} attempts remaining.", 422);
+        }
+
+        // Code is valid — mark email as verified
+        $user = User::find($cached['user_id']);
+        if (!$user) {
+            return $this->errorResponse('User not found.', 404);
+        }
+
+        $user->email_verified_at = now();
+        $user->save();
+
+        // Clear the verification cache
+        Cache::forget($cacheKey);
+
+        $this->logAudit('VERIFY', 'Users', "Email verified for user: {$user->name}", [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
+
+        return $this->successResponse(
+            ['verified' => true, 'email' => $request->email],
+            'Email verified successfully. You can now log in to your account.'
+        );
+    }
+
+    /**
+     * Resend email verification code for staff.
+     */
+    public function resendStaffVerification(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return $this->errorResponse('User not found.', 404);
+        }
+
+        if ($user->email_verified_at) {
+            return $this->errorResponse('Email is already verified.', 422);
+        }
+
+        try {
+            $this->sendEmailVerificationToUser($user);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to send verification email. Error: ' . $e->getMessage(), 500);
+        }
+
+        return $this->successResponse(
+            ['sent' => true],
+            'Verification code sent to ' . $user->email
+        );
+    }
     public function verifyEmailCode(Request $request): JsonResponse
     {
         $request->validate([
@@ -268,19 +399,57 @@ class UserController extends Controller
             }
         }
 
+        // Detect if email or password changed — require re-verification
+        $emailChanged = isset($validated['email']) && strtolower(trim($validated['email'])) !== strtolower(trim($user->email));
+        $passwordChanged = isset($validated['password']);
+        $needsReverification = $emailChanged || $passwordChanged;
+
         $user->update($validated);
+
+        // Reset email verification and send new code if email or password changed
+        if ($needsReverification) {
+            $user->email_verified_at = null;
+            $user->save();
+
+            // Generate code in cache (fast) but send email non-blocking
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $cacheKey = "user_login_verify_" . md5(strtolower(trim($user->email)));
+            Cache::put($cacheKey, [
+                'code' => $code,
+                'email' => strtolower(trim($user->email)),
+                'user_id' => $user->id,
+                'attempts' => 0,
+            ], now()->addMinutes(15));
+
+            $emailService = $this->emailService;
+            $userEmail = $user->email;
+            $userName = $user->name;
+            dispatch(function () use ($emailService, $userEmail, $code, $userName) {
+                try {
+                    $emailService->sendVerificationCode($userEmail, $code, $userName);
+                } catch (\Exception $e) {
+                    \Log::error('Failed to send re-verification email: ' . $e->getMessage());
+                }
+            })->afterResponse();
+        }
 
         $this->logAudit('UPDATE', 'Users', "Updated user: {$user->name}", [
             'user_id'    => $user->id,
             'old_values' => $oldValues,
             'new_values' => $user->only(['name', 'email', 'role', 'position', 'phone', 'status']),
+            'password_changed' => $passwordChanged,
+            'email_changed' => $emailChanged,
+            'requires_reverification' => $needsReverification,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'User updated successfully',
+            'message' => $needsReverification
+                ? 'User updated successfully. Email verification has been reset — a new verification code has been sent.'
+                : 'User updated successfully',
             'data' => $this->formatUser($user),
             '_changes' => $changes,
+            '_requires_reverification' => $needsReverification,
         ]);
     }
 
@@ -316,6 +485,7 @@ class UserController extends Controller
             'name'    => $user->name,
             'email'   => $user->email,
             'role'    => $user->role,
+            'status_changed' => 'active → inactive',
         ]);
 
         // Revoke all tokens before archiving
@@ -324,6 +494,110 @@ class UserController extends Controller
         $user->archive(); // Archive — record moves to Archives page
 
         return $this->successResponse(null, 'User archived successfully');
+    }
+
+    /**
+     * Check if email is already taken (including soft-deleted and archived users).
+     */
+    public function checkEmail(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $email = strtolower(trim($request->email));
+
+        // Check if email exists in users table (including soft-deleted AND archived)
+        $taken = User::withTrashed()->withArchived()->where('email', $email)->exists();
+
+        return $this->successResponse([
+            'taken' => $taken,
+            'available' => !$taken,
+        ], $taken ? 'This email is already registered.' : 'Email is available.');
+    }
+
+    /**
+     * Verify staff email (admin-initiated during creation).
+     */
+    public function verifyStaffEmailByAdmin(string $id, Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        $user = User::withArchived()->find($id);
+        if (!$user) {
+            return $this->errorResponse('User not found.', 404);
+        }
+
+        $email = strtolower(trim($request->email));
+        $cacheKey = "user_login_verify_" . md5($email);
+        $cached = Cache::get($cacheKey);
+
+        if (!$cached) {
+            return $this->errorResponse('Verification code has expired. Please resend a new code.', 422);
+        }
+
+        if ($cached['attempts'] >= 5) {
+            Cache::forget($cacheKey);
+            return $this->errorResponse('Too many failed attempts. Please resend a new code.', 429);
+        }
+
+        if ($cached['code'] !== $request->code) {
+            $cached['attempts']++;
+            Cache::put($cacheKey, $cached, now()->addMinutes(15));
+            $remaining = 5 - $cached['attempts'];
+            return $this->errorResponse("Invalid verification code. {$remaining} attempts remaining.", 422);
+        }
+
+        // Code is valid — mark email as verified
+        $user->email_verified_at = now();
+        $user->save();
+
+        // Clear the verification cache
+        Cache::forget($cacheKey);
+
+        $this->logAudit('VERIFY', 'Users', "Email verified for user: {$user->name}", [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
+
+        return $this->successResponse(
+            ['verified' => true, 'email' => $request->email],
+            'Email verified successfully.'
+        );
+    }
+
+    /**
+     * Resend email verification code for staff (admin-initiated).
+     */
+    public function resendStaffVerificationByAdmin(string $id): JsonResponse
+    {
+        $user = User::withArchived()->find($id);
+        if (!$user) {
+            return $this->errorResponse('User not found.', 404);
+        }
+
+        if ($user->email_verified_at) {
+            return $this->errorResponse('Email is already verified.', 422);
+        }
+
+        try {
+            $this->sendEmailVerificationToUser($user);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to send verification email. Error: ' . $e->getMessage(), 500);
+        }
+
+        $this->logAudit('RESEND_VERIFICATION', 'Users', "Resent email verification for user: {$user->name}", [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
+
+        return $this->successResponse(
+            ['sent' => true],
+            'Verification code sent to ' . $user->email
+        );
     }
 
     /**
@@ -415,6 +689,7 @@ class UserController extends Controller
             'first_name' => $user->first_name,
             'last_name'  => $user->last_name,
             'email'      => $user->email,
+            'email_verified_at' => $user->email_verified_at,
             'role'       => $user->role,
             'position'   => $user->position,
             'truck_plate_number' => $user->truck_plate_number,

@@ -274,7 +274,7 @@ const apiClient = {
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        throw new Error(data.error || data.message || 'Something went wrong. Please try again.');
       }
       
       // Cache the response (to both memory and localStorage)
@@ -331,7 +331,7 @@ const apiClient = {
       
       if (!response.ok) {
         // Preserve validation errors for proper error handling
-        const error = new Error(data.message || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || data.message || 'Something went wrong. Please try again.');
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
@@ -366,7 +366,7 @@ const apiClient = {
       
       if (!response.ok) {
         // Preserve validation errors for proper error handling
-        const error = new Error(data.message || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || data.message || 'Something went wrong. Please try again.');
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
@@ -401,7 +401,7 @@ const apiClient = {
       
       if (!response.ok) {
         // Preserve validation errors for proper error handling
-        const error = new Error(data.message || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || data.message || 'Something went wrong. Please try again.');
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
@@ -435,7 +435,7 @@ const apiClient = {
       
       if (!response.ok) {
         // Preserve validation errors for proper error handling
-        const error = new Error(data.message || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || data.message || 'Something went wrong. Please try again.');
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
@@ -470,7 +470,7 @@ const apiClient = {
       
       if (!response.ok) {
         // Preserve validation errors for proper error handling
-        const error = new Error(data.message || `HTTP error! status: ${response.status}`);
+        const error = new Error(data.error || data.message || 'Something went wrong. Please try again.');
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }

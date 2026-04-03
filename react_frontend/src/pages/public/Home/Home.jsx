@@ -18,7 +18,7 @@ import {
 import { Button } from '../../../components/ui';
 import { productsApi, websiteContentApi } from '../../../api';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
-import { API_BASE_URL } from '../../../api/config';
+import { resolveStorageUrl } from '../../../api/config';
 
 // Icon mapping for features
 const iconMap = {
@@ -137,8 +137,8 @@ const Home = () => {
   const stats = content.stats || defaultContent.stats;
 
   // Default hero image if none set
-  const rawHeroImage = content.heroImage || 'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=1920&h=1080&fit=crop';
-  const heroImage = rawHeroImage.startsWith('/storage') ? `${API_BASE_URL.replace('/api', '')}${rawHeroImage}` : rawHeroImage;
+  const rawHeroImage = content.heroImage || null;
+  const heroImage = rawHeroImage ? (rawHeroImage.startsWith('/storage') ? resolveStorageUrl(rawHeroImage) : rawHeroImage) : null;
 
   return (
     <div className="overflow-hidden">
@@ -317,7 +317,7 @@ const Home = () => {
             <div className="relative">
               <div className="relative z-10">
                 <img 
-                  src="https://images.unsplash.com/photo-1595855759920-86582396756a?w=600&h=500&fit=crop"
+                  src={heroImage || '/KJPLogo.png'}
                   alt="Rice Mill"
                   className="rounded-2xl shadow-2xl"
                 />

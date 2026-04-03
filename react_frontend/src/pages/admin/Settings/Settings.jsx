@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle } from 'lucide-react';
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle, Scale, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { Card, CardContent, Button, Tabs, FormInput, FormSelect, FormTextarea, useToast, SkeletonSettings } from '../../../components/ui';
 import AuditTrail from '../AuditTrail/AuditTrail';
@@ -9,26 +9,121 @@ import AdminAccounts from './AdminAccounts';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
-import { websiteContentApi, businessSettingsApi } from '../../../api';
-import { API_BASE_URL } from '../../../api/config';
+import { websiteContentApi, businessSettingsApi, authApi } from '../../../api';
+import { API_BASE_URL, resolveStorageUrl, DEFAULT_LOGO } from '../../../api/config';
 
 // Helper to get full logo URL
 const getFullLogoUrl = (logoPath) => {
-  if (!logoPath || logoPath === '/logo.svg') return '/storage/logos/KJPLogo.png';
-  if (logoPath.startsWith('http')) return logoPath;
-  if (logoPath.startsWith('blob:')) return logoPath;
-  // Convert Laravel storage path to full URL
-  const backendUrl = API_BASE_URL.replace('/api', '');
-  return `${backendUrl}${logoPath}`;
+  if (!logoPath || logoPath === '/logo.svg') return DEFAULT_LOGO;
+  if (logoPath.startsWith('blob:')) return DEFAULT_LOGO;
+  if (logoPath.startsWith('http')) {
+    // Guard against malformed URLs from stale cache (e.g. https://.kjpricemill.com)
+    if (/https?:\/\/\./.test(logoPath)) return DEFAULT_LOGO;
+    return logoPath;
+  }
+  return resolveStorageUrl(logoPath);
 };
 
 // Helper to get full image URL (for hero images, etc.)
 const getFullImageUrl = (imagePath) => {
   if (!imagePath) return null;
   if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
-  const backendUrl = API_BASE_URL.replace('/api', '');
-  return `${backendUrl}${imagePath}`;
+  return resolveStorageUrl(imagePath);
 };
+
+// Profile Section Component - Defined outside to prevent re-creation
+const ProfileSectionComponent = ({ profileInfo, handleProfileChange, handleSaveProfile, isCheckingEmail, emailError }) => (
+  <div className="space-y-6">
+    {/* Profile Avatar */}
+    <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-700">
+      <div className="w-20 h-20 bg-gradient-to-br from-secondary-400 to-secondary-500 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+        {profileInfo.firstName?.charAt(0) || ''}{profileInfo.lastName?.charAt(0) || ''}
+      </div>
+      <div>
+        <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Profile Picture</h4>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Upload a photo (PNG, JPG - Max 10MB)</p>
+        <Button variant="outline" size="sm">
+          <Camera size={16} className="mr-1.5" />
+          Upload Photo
+        </Button>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormInput label="First Name" name="firstName" value={profileInfo.firstName || ''} onChange={handleProfileChange} required placeholder="Enter first name" />
+      <FormInput label="Last Name" name="lastName" value={profileInfo.lastName || ''} onChange={handleProfileChange} required placeholder="Enter last name" />
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="relative">
+        <FormInput 
+          label="Email Address" 
+          name="email" 
+          type="email" 
+          value={profileInfo.email || ''} 
+          onChange={handleProfileChange} 
+          required 
+          placeholder="your@email.com"
+          error={emailError}
+        />
+        {isCheckingEmail && (
+          <div className="absolute right-3 top-9 flex items-center gap-2">
+            <Loader2 size={16} className="animate-spin text-primary-500" />
+            <span className="text-xs text-gray-500">Checking...</span>
+          </div>
+        )}
+      </div>
+      <FormInput label="Phone Number" name="phone" value={profileInfo.phone || ''} onChange={handleProfileChange} placeholder="+63 XXX XXX XXXX" />
+    </div>
+    <FormInput label="Role" name="role" value={profileInfo.role || ''} disabled hint="Contact administrator to change your role" />
+    
+    <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
+      <Button onClick={handleSaveProfile} disabled={!!emailError || isCheckingEmail}>
+        <Save size={16} className="mr-1.5" />
+        Update Profile
+      </Button>
+    </div>
+  </div>
+);
+
+// Security Section Component - Defined outside to prevent re-creation
+const SecuritySectionComponent = ({ securityInfo, showPassword, setShowPassword, handleSecurityChange, handleSaveSecurity }) => (
+  <div className="space-y-6">
+    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
+      <div className="flex items-start gap-3">
+        <Shield size={20} className="text-blue-600 dark:text-blue-400 mt-0.5" />
+        <div>
+          <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-1">Password Requirements</h4>
+          <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+            <li>• At least 8 characters long</li>
+            <li>• Contains uppercase and lowercase letters</li>
+            <li>• Contains at least one number</li>
+            <li>• Contains at least one special character</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div className="relative">
+      <FormInput label="Current Password" name="currentPassword" type={showPassword ? 'text' : 'password'} value={securityInfo.currentPassword || ''} onChange={handleSecurityChange} required placeholder="Enter current password" />
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormInput label="New Password" name="newPassword" type={showPassword ? 'text' : 'password'} value={securityInfo.newPassword || ''} onChange={handleSecurityChange} required placeholder="Enter new password" />
+      <FormInput label="Confirm New Password" name="confirmPassword" type={showPassword ? 'text' : 'password'} value={securityInfo.confirmPassword || ''} onChange={handleSecurityChange} required placeholder="Confirm new password" />
+    </div>
+    
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" checked={showPassword} onChange={() => setShowPassword(!showPassword)} className="w-4 h-4 rounded border-primary-300 dark:border-primary-700 text-primary-500 focus:ring-primary-500" />
+      <span className="text-sm text-gray-600 dark:text-gray-300">Show passwords</span>
+    </label>
+
+    <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
+      <Button onClick={handleSaveSecurity}>
+        <Lock size={16} className="mr-1.5" />
+        Change Password
+      </Button>
+    </div>
+  </div>
+);
 
 // Color picker component (extracted to module level to prevent remount on re-render)
 // Uses uncontrolled color input with native 'change' event to prevent Chrome from closing the picker dialog
@@ -95,6 +190,7 @@ const AppearanceColorPicker = ({ label, description, icon: Icon, value, onChange
           {presets.slice(0, compact ? 4 : presets.length).map((preset, i) => (
             <button
               key={i}
+              type="button"
               onClick={() => onChange(preset)}
               className={`rounded-lg border-2 border-primary-200 dark:border-primary-700 hover:border-primary-400 hover:scale-110 transition-all shadow-sm ${compact ? 'w-6 h-6' : 'w-8 h-8'}`}
               style={{ backgroundColor: preset }}
@@ -145,7 +241,7 @@ const Settings = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { theme, updateTheme, saveTheme, resetTheme, defaultTheme, saving } = useTheme();
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, refreshUser } = useAuth();
   const { settings: contextSettings, updateSettings: updateContextSettings, refreshSettings } = useBusinessSettings();
   const [activeSection, setActiveSection] = useState(() => {
     const tabFromUrl = searchParams.get('tab');
@@ -153,12 +249,23 @@ const Settings = () => {
     if (tabFromUrl && validTabs.includes(tabFromUrl)) return tabFromUrl;
     return isSuperAdmin() ? 'general' : 'profile';
   });
+  const [activeInfoTab, setActiveInfoTab] = useState(() => searchParams.get('info') || 'home');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Sync active section to URL
+  // Sync active section to URL (preserve existing params like 'info')
   useEffect(() => {
-    setSearchParams({ tab: activeSection }, { replace: true });
-  }, [activeSection]);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', activeSection);
+      if (activeSection === 'information') {
+        next.set('info', activeInfoTab);
+      } else {
+        next.delete('info');
+      }
+      return next;
+    }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, activeInfoTab]);
   
   // Form states - initialize from context
   const [businessInfo, setBusinessInfo] = useState({
@@ -192,15 +299,15 @@ const Settings = () => {
   const [businessLoading, setBusinessLoading] = useState(true);
   const [businessSaving, setBusinessSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
-  const [logoPreview, setLogoPreview] = useState('/storage/logos/KJPLogo.png');
+  const [logoPreview, setLogoPreview] = useState(DEFAULT_LOGO);
   const logoInputRef = useRef(null);
   
   const [profileInfo, setProfileInfo] = useState({
-    firstName: user?.name?.split(' ')[0] || '',
-    lastName: user?.name?.split(' ').slice(1).join(' ') || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    role: user?.role === 'super_admin' ? 'Super Admin' : 'Administrator',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: '',
   });
   
   const [securityInfo, setSecurityInfo] = useState({
@@ -208,6 +315,65 @@ const Settings = () => {
     newPassword: '',
     confirmPassword: '',
   });
+
+  // Password verification modal state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForEmailChange, setPasswordForEmailChange] = useState('');
+  const [pendingProfileData, setPendingProfileData] = useState(null);
+
+  // Email verification modal state
+  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
+  const [emailVerificationCode, setEmailVerificationCode] = useState('');
+  const [verificationError, setVerificationError] = useState('');
+  const [verificationAttempts, setVerificationAttempts] = useState(0);
+
+  // Email availability checking state
+  const [isCheckingProfileEmail, setIsCheckingProfileEmail] = useState(false);
+  const [profileEmailError, setProfileEmailError] = useState('');
+  const [isCheckingBusinessEmail, setIsCheckingBusinessEmail] = useState(false);
+  const [businessEmailError, setBusinessEmailError] = useState('');
+  const emailCheckTimeout = useRef(null);
+
+  // SMTP configuration warning state
+  const [smtpNotConfigured, setSmtpNotConfigured] = useState(false);
+  const [smtpWarningMessage, setSmtpWarningMessage] = useState('');
+
+  // Check SMTP configuration whenever settings change
+  useEffect(() => {
+    const isConfigured = contextSettings?.smtp_configured === true;
+    console.log('SMTP Check:', { contextSettings, isConfigured, smtp_configured: contextSettings?.smtp_configured });
+    if (!isConfigured) {
+      setSmtpNotConfigured(true);
+      setSmtpWarningMessage('SMTP is not configured. Email verification and notifications will not work until you configure your Gmail App Password.');
+    } else {
+      setSmtpNotConfigured(false);
+      setSmtpWarningMessage('');
+    }
+  }, [contextSettings]);
+
+  // New SMTP password modal state (after email change)
+  const [showNewSmtpModal, setShowNewSmtpModal] = useState(false);
+  const [newSmtpPassword, setNewSmtpPassword] = useState('');
+  const [newEmailAddress, setNewEmailAddress] = useState('');
+  const [previousEmailAddress, setPreviousEmailAddress] = useState(''); // old email before change (for revert)
+
+  // New account password modal state (after SMTP modal)
+  const [showNewAccountPasswordModal, setShowNewAccountPasswordModal] = useState(false);
+  const [newAccountPassword, setNewAccountPassword] = useState('');
+  const [newAccountPasswordConfirm, setNewAccountPasswordConfirm] = useState('');
+
+  // Load user profile data when user changes - only run once on mount
+  useEffect(() => {
+    if (user && !profileInfo.email) {
+      setProfileInfo({
+        firstName: user.first_name || user.name?.split(' ')[0] || '',
+        lastName: user.last_name || user.name?.split(' ').slice(1).join(' ') || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        role: user.role === 'super_admin' ? 'Super Admin' : user.role === 'admin' ? 'Administrator' : 'Staff',
+      });
+    }
+  }, [user]);
   
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -252,10 +418,33 @@ const Settings = () => {
           google_maps_embed: cachedData.google_maps_embed ?? '',
           smtp_password: cachedData.smtp_password ?? '',
         });
-        if (cachedData.business_logo && cachedData.business_logo !== '/logo.svg' && cachedData.business_logo !== '/storage/logos/KJPLogo.png' && !cachedData.business_logo.startsWith('blob:')) {
+        if (cachedData.business_logo && cachedData.business_logo !== '/logo.svg' && !cachedData.business_logo.startsWith('blob:')) {
           setLogoPreview(getFullLogoUrl(cachedData.business_logo));
         }
         setBusinessLoading(false);
+        // Clear any stale email errors
+        setBusinessEmailError('');
+        
+        // Check if we should show the new SMTP modal (only for super admin on general tab)
+        if (isSuperAdmin() && activeSection === 'general') {
+          // Check if there's a pending SMTP configuration from email change
+          const pendingSmtp = localStorage.getItem('kjp-pending-smtp-config');
+          if (pendingSmtp) {
+            try {
+              const { email, old_email, timestamp } = JSON.parse(pendingSmtp);
+              // Show modal if it's within 1 hour
+              if (Date.now() - timestamp < 3600000) {
+                setNewEmailAddress(email);
+                setPreviousEmailAddress(old_email || '');
+                setShowNewSmtpModal(true);
+              } else {
+                localStorage.removeItem('kjp-pending-smtp-config');
+              }
+            } catch (e) {
+              localStorage.removeItem('kjp-pending-smtp-config');
+            }
+          }
+        }
       } catch (e) {
         console.error('Failed to parse cached settings:', e);
       }
@@ -296,9 +485,12 @@ const Settings = () => {
             google_maps_embed: data.google_maps_embed ?? '',
             smtp_password: data.smtp_password ?? '',
           });
-          if (data.business_logo && data.business_logo !== '/logo.svg' && data.business_logo !== '/storage/logos/KJPLogo.png' && !data.business_logo.startsWith('blob:')) {
+          if (data.business_logo && data.business_logo !== '/logo.svg' && !data.business_logo.startsWith('blob:')) {
             setLogoPreview(getFullLogoUrl(data.business_logo));
           }
+          // Clear any stale email errors when fresh data loads
+          setBusinessEmailError('');
+          
         }
       } catch (error) {
         console.error('Failed to load business settings:', error);
@@ -319,13 +511,118 @@ const Settings = () => {
   const handleBusinessChange = (e) => {
     const { name, value } = e.target;
     setBusinessInfo(prev => ({ ...prev, [name]: value }));
+    
     // Clear validation error when user types
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
     }
+
+    // Real-time email checking for business email
+    if (name === 'business_email') {
+      setBusinessEmailError('');
+      
+      // Clear previous timeout
+      if (emailCheckTimeout.current) {
+        clearTimeout(emailCheckTimeout.current);
+      }
+
+      // Validate email format first
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!value || !emailRegex.test(value)) {
+        if (value) {
+          setBusinessEmailError('Please enter a valid email address.');
+        }
+        return;
+      }
+
+      // Get the original business email from context (the one loaded from database)
+      const originalBusinessEmail = contextSettings?.business_email || '';
+      
+      console.log('Email check:', {
+        typedEmail: value.toLowerCase().trim(),
+        originalEmail: originalBusinessEmail.toLowerCase().trim(),
+        areEqual: value.toLowerCase().trim() === originalBusinessEmail.toLowerCase().trim()
+      });
+      
+      // Skip check if email hasn't changed from the original database value
+      if (originalBusinessEmail && value.toLowerCase().trim() === originalBusinessEmail.toLowerCase().trim()) {
+        console.log('Skipping check - email unchanged');
+        return;
+      }
+
+      // Debounce: wait 500ms after user stops typing
+      emailCheckTimeout.current = setTimeout(async () => {
+        try {
+          console.log('Checking email availability:', value);
+          setIsCheckingBusinessEmail(true);
+          const response = await businessSettingsApi.checkBusinessEmail(value);
+          console.log('Email check response:', response);
+
+          if (response.success && !response.data.available) {
+            setBusinessEmailError('This email is already registered.');
+          } else {
+            setBusinessEmailError('');
+          }
+        } catch (error) {
+          console.error('Error checking business email:', error);
+        } finally {
+          setIsCheckingBusinessEmail(false);
+        }
+      }, 500);
+    }
   };
-  const handleProfileChange = (e) => setProfileInfo({ ...profileInfo, [e.target.name]: e.target.value });
-  const handleSecurityChange = (e) => setSecurityInfo({ ...securityInfo, [e.target.name]: e.target.value });
+
+  const handleProfileChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setProfileInfo(prev => ({ ...prev, [name]: value }));
+
+    // Real-time email checking for profile email
+    if (name === 'email') {
+      setProfileEmailError('');
+      
+      // Clear previous timeout
+      if (emailCheckTimeout.current) {
+        clearTimeout(emailCheckTimeout.current);
+      }
+
+      // Validate email format first
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!value || !emailRegex.test(value)) {
+        if (value) {
+          setProfileEmailError('Please enter a valid email address.');
+        }
+        return;
+      }
+
+      // Skip check if email hasn't changed from current user email
+      if (user?.email && value.toLowerCase() === user.email.toLowerCase()) {
+        return;
+      }
+
+      // Debounce: wait 500ms after user stops typing
+      emailCheckTimeout.current = setTimeout(async () => {
+        try {
+          setIsCheckingProfileEmail(true);
+          const response = await authApi.checkProfileEmail(value);
+
+          if (response.success && !response.available) {
+            setProfileEmailError('This email is already registered.');
+          } else {
+            setProfileEmailError('');
+          }
+        } catch (error) {
+          console.error('Error checking email:', error);
+        } finally {
+          setIsCheckingProfileEmail(false);
+        }
+      }, 500);
+    }
+  }, [user]);
+
+  const handleSecurityChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setSecurityInfo(prev => ({ ...prev, [name]: value }));
+  }, []);
 
   // Validation state
   const [validationErrors, setValidationErrors] = useState({});
@@ -408,14 +705,14 @@ const Settings = () => {
           console.error('Logo upload failed:', logoResult);
           toast.error('Upload Failed', 'Failed to upload logo. Please try again.');
           // Revert to previous logo
-          setLogoPreview(contextSettings.business_logo || '/storage/logos/KJPLogo.png');
+          setLogoPreview(contextSettings.business_logo || DEFAULT_LOGO);
           setLogoFile(null);
         }
       } catch (error) {
         console.error('Logo upload error:', error);
         toast.error('Upload Error', 'An error occurred while uploading the logo.');
         // Revert to previous logo
-        setLogoPreview(contextSettings.business_logo || '/storage/logos/KJPLogo.png');
+        setLogoPreview(contextSettings.business_logo || DEFAULT_LOGO);
         setLogoFile(null);
       } finally {
         setBusinessSaving(false);
@@ -424,9 +721,38 @@ const Settings = () => {
   };
 
   const handleSaveGeneral = async () => {
+    // Check if business email is being checked
+    if (isCheckingBusinessEmail) {
+      toast.error('Please Wait', 'Business email availability is being checked.');
+      return;
+    }
+
+    // Check for business email errors
+    if (businessEmailError) {
+      toast.error('Invalid Email', businessEmailError);
+      return;
+    }
+
     // Validate before saving
     if (!validateGeneralForm()) {
       toast.error('Validation Error', 'Please fix the errors before saving.');
+      return;
+    }
+
+    // Check if business email is changing
+    const currentBusinessEmail = contextSettings?.business_email || '';
+    const newBusinessEmail = businessInfo.business_email || '';
+    const emailChanging = currentBusinessEmail && newBusinessEmail && 
+                         currentBusinessEmail.toLowerCase() !== newBusinessEmail.toLowerCase();
+
+    if (emailChanging && isSuperAdmin()) {
+      // Show password verification modal for business email change
+      setPendingProfileData({
+        type: 'business_email',
+        data: businessInfo,
+        hoursSchedule: hoursSchedule, // Include current hours schedule
+      });
+      setShowPasswordModal(true);
       return;
     }
     
@@ -435,7 +761,7 @@ const Settings = () => {
       // Logo is already uploaded in handleLogoChange, just use current preview
       const currentLogoUrl = logoPreview && !logoPreview.startsWith('blob:') 
         ? logoPreview 
-        : (contextSettings.business_logo || '/storage/logos/KJPLogo.png');
+        : (contextSettings.business_logo || DEFAULT_LOGO);
       
       // Save other settings — default warehouse_address to business_address if empty
       const dataToSave = {
@@ -475,10 +801,17 @@ const Settings = () => {
       // Trigger a fresh fetch so all tabs/roles get server-formatted data
       refreshSettings();
       
+      // If SMTP password was saved, clear the warning
+      if (dataToSave.smtp_password && dataToSave.smtp_password !== '••••••••') {
+        setSmtpNotConfigured(false);
+        setSmtpWarningMessage('');
+      }
+      
       toast.success('Settings Saved', 'Business information has been updated.');
     } catch (error) {
       console.error('Failed to save business settings:', error);
-      toast.error('Error', 'Failed to save business settings.');
+      const errorMessage = error?.response?.data?.message || error.message || 'Failed to save business settings.';
+      toast.error('Error', errorMessage);
     } finally {
       setBusinessSaving(false);
     }
@@ -493,8 +826,600 @@ const Settings = () => {
     return `${hour12}:${minutes} ${ampm}`;
   };
 
-  const handleSaveProfile = () => toast.success('Profile Updated', 'Your profile has been updated.');
-  const handleSaveSecurity = () => toast.success('Password Changed', 'Your password has been updated successfully.');
+  const handleSaveProfile = useCallback(async () => {
+    try {
+      // Check if email is being checked
+      if (isCheckingProfileEmail) {
+        toast.error('Please Wait', 'Email availability is being checked.');
+        return;
+      }
+
+      // Check for email errors
+      if (profileEmailError) {
+        toast.error('Invalid Email', profileEmailError);
+        return;
+      }
+
+      // Validate email
+      if (!profileInfo.email || !validateEmail(profileInfo.email)) {
+        toast.error('Invalid Email', 'Please enter a valid email address.');
+        return;
+      }
+
+      // Validate required fields
+      if (!profileInfo.firstName?.trim() || !profileInfo.lastName?.trim()) {
+        toast.error('Required Fields', 'First name and last name are required.');
+        return;
+      }
+
+      const profileData = {
+        first_name: profileInfo.firstName.trim(),
+        last_name: profileInfo.lastName.trim(),
+        email: profileInfo.email.trim(),
+        phone: profileInfo.phone?.trim() || null,
+      };
+
+      // Check if email is changing
+      const emailChanging = user?.email && profileData.email.toLowerCase() !== user.email.toLowerCase();
+
+      if (emailChanging) {
+        // Show password verification modal
+        setPendingProfileData(profileData);
+        setShowPasswordModal(true);
+        return;
+      }
+
+      // No email change - proceed with normal update
+      const result = await authApi.updateProfile(profileData);
+
+      if (result.success) {
+        toast.success('Profile Updated', 'Your profile has been updated successfully.');
+        // Refresh user data in context
+        if (result.user) {
+          await refreshUser(); // Refresh user data without page reload
+        }
+      } else {
+        toast.error('Update Failed', result.message || 'Failed to update profile.');
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || error.message || 'Failed to update profile.';
+      const errors = error?.response?.data?.errors;
+      
+      if (errors) {
+        // Show first validation error
+        const firstError = Object.values(errors)[0];
+        toast.error('Validation Error', Array.isArray(firstError) ? firstError[0] : firstError);
+      } else {
+        toast.error('Update Failed', errorMessage);
+      }
+    }
+  }, [profileInfo, user, toast, refreshUser, isCheckingProfileEmail, profileEmailError]);
+
+  const handleSaveSecurity = useCallback(async () => {
+    try {
+      // Validate passwords
+      if (!securityInfo.currentPassword) {
+        toast.error('Required Field', 'Please enter your current password.');
+        return;
+      }
+
+      if (!securityInfo.newPassword) {
+        toast.error('Required Field', 'Please enter a new password.');
+        return;
+      }
+
+      if (securityInfo.newPassword.length < 8) {
+        toast.error('Invalid Password', 'New password must be at least 8 characters long.');
+        return;
+      }
+
+      if (securityInfo.newPassword !== securityInfo.confirmPassword) {
+        toast.error('Password Mismatch', 'New password and confirmation do not match.');
+        return;
+      }
+
+      const result = await authApi.updatePassword({
+        current_password: securityInfo.currentPassword,
+        new_password: securityInfo.newPassword,
+        new_password_confirmation: securityInfo.confirmPassword,
+      });
+
+      if (result.success) {
+        toast.success('Password Changed', 'Your password has been updated successfully.');
+        // Clear password fields
+        setSecurityInfo({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        });
+      } else {
+        toast.error('Update Failed', result.message || 'Failed to change password.');
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || error.message || 'Failed to change password.';
+      const errors = error?.response?.data?.errors;
+      
+      if (errors) {
+        // Show first validation error
+        const firstError = Object.values(errors)[0];
+        toast.error('Validation Error', Array.isArray(firstError) ? firstError[0] : firstError);
+      } else {
+        toast.error('Update Failed', errorMessage);
+      }
+    }
+  }, [securityInfo, toast]);
+
+  // Handle password verification for email change
+  const handlePasswordVerification = useCallback(async () => {
+    if (!passwordForEmailChange) {
+      toast.error('Required', 'Please enter your password.');
+      return;
+    }
+
+    try {
+      // Check if this is for business email or profile email
+      const isBusinessEmail = pendingProfileData?.type === 'business_email';
+
+      if (isBusinessEmail) {
+        // Business email change - send password and get verification code
+        const currentHoursSchedule = pendingProfileData.hoursSchedule || {};
+        
+        const dataToSave = {
+          ...pendingProfileData.data,
+          warehouse_address: pendingProfileData.data.warehouse_address || pendingProfileData.data.business_address,
+          business_hours_json: JSON.stringify(currentHoursSchedule),
+          current_password: passwordForEmailChange,
+        };
+
+        setBusinessSaving(true);
+        const updateResult = await businessSettingsApi.update(dataToSave);
+        setBusinessSaving(false);
+
+        if (updateResult.success && updateResult.requires_verification) {
+          // Password verified, now show email verification modal
+          setShowPasswordModal(false);
+          // DON'T clear passwordForEmailChange - we need it for account password modal later
+          setShowEmailVerificationModal(true);
+          toast.success('Verification Sent', updateResult.message || 'Please check your new email for the verification code.');
+        } else if (updateResult.success) {
+          // No verification needed (shouldn't happen but handle it)
+          setShowPasswordModal(false);
+          setPasswordForEmailChange('');
+          setPendingProfileData(null);
+          
+          // Update context and refresh
+          const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+          const shortNames = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+          const groups = [];
+          daysOfWeek.forEach(day => {
+            const d = currentHoursSchedule[day];
+            if (!d) return;
+            const sig = d.closed ? 'closed' : `${d.open}-${d.close}`;
+            if (groups.length > 0 && groups[groups.length - 1].sig === sig) {
+              groups[groups.length - 1].end = day;
+            } else {
+              groups.push({ start: day, end: day, sig, data: d });
+            }
+          });
+          const formattedHours = groups.map(g => {
+            const label = g.start === g.end ? shortNames[g.start] : `${shortNames[g.start]} - ${shortNames[g.end]}`;
+            const formatTime = (time) => {
+              if (!time) return '';
+              const [hours, minutes] = time.split(':');
+              const h = parseInt(hours);
+              const ampm = h >= 12 ? 'PM' : 'AM';
+              const hour12 = h % 12 || 12;
+              return `${hour12}:${minutes} ${ampm}`;
+            };
+            return g.sig === 'closed' ? `${label}: Closed` : `${label}: ${formatTime(g.data.open)} - ${formatTime(g.data.close)}`;
+          }).join('\n');
+          
+          updateContextSettings({
+            ...pendingProfileData.data,
+            business_logo: logoPreview && !logoPreview.startsWith('blob:') ? logoPreview : (contextSettings.business_logo || DEFAULT_LOGO),
+            business_hours: formattedHours,
+            business_hours_formatted: formattedHours,
+          });
+
+          refreshSettings();
+          await refreshUser();
+          
+          toast.success('Settings Saved', 'Business email has been updated successfully.');
+        }
+      } else {
+        // Profile email change
+        const profileData = {
+          ...pendingProfileData,
+          current_password: passwordForEmailChange,
+        };
+
+        const result = await authApi.updateProfile(profileData);
+
+        if (result.success && result.requires_verification) {
+          // Password verified, now show email verification modal
+          setShowPasswordModal(false);
+          // DON'T clear passwordForEmailChange - we need it for account password modal later
+          setShowEmailVerificationModal(true);
+          toast.success('Verification Sent', result.message || 'Please check your new email for the verification code.');
+        } else if (result.success) {
+          // No verification needed (shouldn't happen but handle it)
+          setShowPasswordModal(false);
+          setPasswordForEmailChange('');
+          setPendingProfileData(null);
+          toast.success('Profile Updated', 'Your profile has been updated successfully.');
+          await refreshUser();
+        } else {
+          toast.error('Verification Failed', result.message || 'Failed to verify password.');
+        }
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || error?.response?.data?.error || error.message || 'Failed to verify password.';
+      const errors = error?.response?.data?.errors;
+      const requiresSmtpSetup = error?.response?.data?.requires_smtp_setup;
+      
+      if (requiresSmtpSetup) {
+        // SMTP is not configured - show special warning
+        setShowPasswordModal(false);
+        setPasswordForEmailChange(''); // Clear here since flow is interrupted
+        setPendingProfileData(null);
+        setSmtpNotConfigured(true);
+        setSmtpWarningMessage(errorMessage);
+        toast.error('SMTP Not Configured', errorMessage, { duration: 8000 });
+        // Switch to general tab to show SMTP settings
+        setActiveSection('general');
+      } else if (errors && errors.current_password) {
+        toast.error('Incorrect Password', Array.isArray(errors.current_password) ? errors.current_password[0] : errors.current_password);
+      } else {
+        toast.error('Verification Failed', errorMessage);
+      }
+      
+      if (pendingProfileData?.type === 'business_email') {
+        setBusinessSaving(false);
+      }
+    }
+  }, [passwordForEmailChange, pendingProfileData, toast, refreshUser, logoPreview, contextSettings, updateContextSettings, refreshSettings]);
+
+  // Handle email verification code submission
+  const handleEmailVerification = useCallback(async () => {
+    if (!emailVerificationCode || emailVerificationCode.length !== 6) {
+      setVerificationError('Please enter the 6-digit code.');
+      return;
+    }
+
+    // Capture old emails from auth context / settings (NOT form state which already has the new values)
+    const oldProfileEmail = user?.email;
+    const oldBusinessEmail = contextSettings?.business_email || user?.email;
+
+    try {
+      const isBusinessEmail = pendingProfileData?.type === 'business_email';
+      let result;
+
+      if (isBusinessEmail) {
+        // Business email verification
+        result = await businessSettingsApi.verifyBusinessEmailChange(emailVerificationCode);
+      } else {
+        // Profile email verification
+        result = await authApi.verifyEmailChange(emailVerificationCode);
+      }
+
+      if (result.success) {
+        setShowEmailVerificationModal(false);
+        setEmailVerificationCode('');
+        setVerificationError('');
+        setVerificationAttempts(0);
+        setPendingProfileData(null);
+        
+        if (isBusinessEmail) {
+          // Business email changed - SMTP needs reconfiguration
+          toast.success('Email Changed', result.message || 'Business email has been updated successfully.');
+          
+          // Force clear localStorage cache FIRST
+          localStorage.removeItem('kjp-business-settings');
+          
+          // Refresh settings context to fetch fresh data from API
+          await refreshSettings();
+          
+          // Get the fresh settings after refresh
+          let newEmail = '';
+          try {
+            const freshSettings = await businessSettingsApi.getFresh();
+            console.log('Fresh settings from API:', freshSettings);
+            if (freshSettings?.success && freshSettings?.data) {
+              newEmail = freshSettings.data.business_email;
+              console.log('SMTP configured from API:', freshSettings.data.smtp_configured);
+              console.log('SMTP password from API:', freshSettings.data.smtp_password);
+              
+              // Update business info state
+              setBusinessInfo(prev => ({
+                ...prev,
+                business_email: newEmail, // Update with new email
+              }));
+              
+              // Also update profile info to sync (for super admin)
+              setProfileInfo(prev => ({
+                ...prev,
+                email: newEmail,
+              }));
+              
+              setNewEmailAddress(newEmail);
+            }
+          } catch (e) {
+            console.error('Failed to refresh settings:', e);
+          }
+          await refreshUser();
+          
+          // SMTP needs reconfiguration for the new email
+          setSmtpNotConfigured(true);
+          setSmtpWarningMessage('You changed the business email. Please configure a new Gmail App Password for the new email address.');
+          
+          // Store pending SMTP config in localStorage so modal persists after refresh
+          const pendingEmail = newEmail || result.user?.email || '';
+          setPreviousEmailAddress(oldBusinessEmail);
+          localStorage.setItem('kjp-pending-smtp-config', JSON.stringify({
+            email: pendingEmail,
+            old_email: oldBusinessEmail,
+            timestamp: Date.now()
+          }));
+          
+          // Show modal to configure new SMTP password
+          setShowNewSmtpModal(true);
+        } else {
+          // Profile email changed
+          toast.success('Email Changed', result.message || 'Your email address has been updated successfully.');
+          
+          // Update profile info with new email
+          if (result.user) {
+            setProfileInfo(prev => ({
+              ...prev,
+              email: result.user.email,
+            }));
+            await refreshUser();
+            
+            // If super admin, SMTP needs reconfiguration for new email
+            if (result.user.role === 'super_admin') {
+              // Refresh settings to get current state
+              await refreshSettings();
+              
+              // Force clear localStorage cache to ensure fresh data
+              localStorage.removeItem('kjp-business-settings');
+              
+              // Force reload business settings to get fresh data
+              try {
+                const freshSettings = await businessSettingsApi.getFresh();
+                if (freshSettings?.success && freshSettings?.data) {
+                  // Update business info state with new email
+                  setBusinessInfo(prev => ({
+                    ...prev,
+                    business_email: result.user.email, // Update with new email (synced from profile)
+                  }));
+                  setNewEmailAddress(result.user.email);
+                  
+                  // Update context with fresh settings
+                  updateContextSettings(freshSettings.data);
+                }
+              } catch (e) {
+                console.error('Failed to refresh settings:', e);
+              }
+              
+              setSmtpNotConfigured(true);
+              setSmtpWarningMessage('You changed your email. Please configure a new Gmail App Password for the new email address.');
+              
+              // Store pending SMTP config in localStorage so modal persists after refresh
+              setPreviousEmailAddress(oldProfileEmail);
+              localStorage.setItem('kjp-pending-smtp-config', JSON.stringify({
+                email: result.user.email,
+                old_email: oldProfileEmail,
+                timestamp: Date.now()
+              }));
+              
+              // Show modal to configure new SMTP password
+              setShowNewSmtpModal(true);
+            }
+          }
+        }
+      } else {
+        setVerificationError(result.error || 'Invalid verification code.');
+        setVerificationAttempts(prev => prev + 1);
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || error?.response?.data?.message || error.message || 'Failed to verify code.';
+      setVerificationError(errorMessage);
+      setVerificationAttempts(prev => prev + 1);
+    }
+  }, [emailVerificationCode, pendingProfileData, user, contextSettings, toast, refreshUser, updateContextSettings, refreshSettings]);
+
+  // Cancel password verification
+  const handleCancelPasswordVerification = useCallback(() => {
+    setShowPasswordModal(false);
+    setPasswordForEmailChange('');
+    setPendingProfileData(null);
+  }, []);
+
+  // Cancel email verification
+  const handleCancelEmailVerification = useCallback(() => {
+    setShowEmailVerificationModal(false);
+    setEmailVerificationCode('');
+    setVerificationError('');
+    setVerificationAttempts(0);
+    setPendingProfileData(null);
+    setPasswordForEmailChange('');
+  }, []);
+
+  // Handle new SMTP password submission
+  const handleSaveNewSmtpPassword = useCallback(async () => {
+    if (!newSmtpPassword || newSmtpPassword.length < 16) {
+      toast.error('Invalid Password', 'Gmail App Password must be 16 characters long.');
+      return;
+    }
+
+    try {
+      setBusinessSaving(true);
+      
+      // Save the new SMTP password
+      const result = await businessSettingsApi.update({
+        smtp_password: newSmtpPassword,
+      });
+
+      if (result.success) {
+        toast.success('SMTP Configured', 'Gmail App Password has been configured successfully.');
+        
+        // Update local state
+        setBusinessInfo(prev => ({
+          ...prev,
+          smtp_password: '••••••••', // Show masked
+        }));
+        
+        // DON'T clear the warning yet - keep it until user also updates account password
+        // The warning will stay in sidebar/bottom nav
+        
+        // Clear pending SMTP config
+        localStorage.removeItem('kjp-pending-smtp-config');
+        
+        // Close SMTP modal
+        setShowNewSmtpModal(false);
+        setNewSmtpPassword('');
+        
+        // Refresh settings
+        await refreshSettings();
+        
+        // Show account password modal
+        setShowNewAccountPasswordModal(true);
+      } else {
+        toast.error('Error', result.message || 'Failed to save SMTP password.');
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || error.message || 'Failed to save SMTP password.';
+      toast.error('Error', errorMessage);
+    } finally {
+      setBusinessSaving(false);
+    }
+  }, [newSmtpPassword, toast, refreshSettings]);
+
+  // Cancel email change — reverts email back to the old address
+  const handleCancelEmailChange = useCallback(async () => {
+    if (!previousEmailAddress) {
+      toast.error('Cannot Revert', 'Previous email address is unknown. Please contact support.');
+      return;
+    }
+
+    try {
+      setBusinessSaving(true);
+      const result = await authApi.revertEmailChange(previousEmailAddress);
+
+      if (result.success) {
+        localStorage.removeItem('kjp-pending-smtp-config');
+        setShowNewSmtpModal(false);
+        setNewSmtpPassword('');
+        setNewEmailAddress('');
+        setPreviousEmailAddress('');
+        setPasswordForEmailChange('');
+
+        // Restore profile and business info to old email
+        setProfileInfo(prev => ({ ...prev, email: result.user?.email || previousEmailAddress }));
+        setBusinessInfo(prev => ({ ...prev, business_email: result.user?.email || previousEmailAddress }));
+
+        // Refresh user + settings to sync backend state
+        await refreshUser();
+        localStorage.removeItem('kjp-business-settings');
+        await refreshSettings();
+
+        // SMTP warning will be resolved by the useEffect that checks contextSettings.smtp_configured
+
+        toast.info('Email Change Cancelled', result.message || 'Your email and SMTP configuration have been restored.');
+      } else {
+        toast.error('Revert Failed', result.error || 'Failed to cancel email change. Please try again.');
+      }
+    } catch (error) {
+      toast.error('Error', 'Failed to cancel email change. Please try again.');
+    } finally {
+      setBusinessSaving(false);
+    }
+  }, [previousEmailAddress, toast, refreshUser, refreshSettings]);
+
+  // Handle new account password submission
+  const handleSaveNewAccountPassword = useCallback(async () => {
+    if (!newAccountPassword || newAccountPassword.length < 8) {
+      toast.error('Invalid Password', 'Password must be at least 8 characters long.');
+      return;
+    }
+
+    if (newAccountPassword !== newAccountPasswordConfirm) {
+      toast.error('Password Mismatch', 'Passwords do not match.');
+      return;
+    }
+
+    try {
+      setBusinessSaving(true);
+      
+      // This is for the super admin to set a new password for their account
+      // Since they changed their email, they should update their password too
+      const result = await authApi.updatePassword({
+        current_password: passwordForEmailChange, // Use the password they entered earlier
+        new_password: newAccountPassword,
+        new_password_confirmation: newAccountPasswordConfirm,
+      });
+
+      if (result.success) {
+        // Clear the email_change_pending flag in database
+        await authApi.clearEmailChangePending();
+        
+        toast.success('Password Updated', 'Your account password has been updated successfully. Email change flow completed.');
+        
+        // Keep SMTP warning visible if SMTP is still not configured
+        // (Don't clear smtpNotConfigured - let the useEffect handle it based on actual SMTP status)
+        
+        // Clear pending SMTP config flag
+        localStorage.removeItem('kjp-pending-smtp-config');
+        
+        // Refresh user to get updated email_change_pending flag
+        await refreshUser();
+        
+        // Close modal
+        setShowNewAccountPasswordModal(false);
+        setNewAccountPassword('');
+        setNewAccountPasswordConfirm('');
+        setNewEmailAddress('');
+        setPasswordForEmailChange('');
+        
+        // Switch to general tab
+        setActiveSection('general');
+      } else {
+        toast.error('Error', result.message || 'Failed to update password.');
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || error.message || 'Failed to update password.';
+      toast.error('Error', errorMessage);
+    } finally {
+      setBusinessSaving(false);
+    }
+  }, [newAccountPassword, newAccountPasswordConfirm, passwordForEmailChange, toast, refreshUser]);
+
+  // Skip new account password
+  const handleSkipNewAccountPassword = useCallback(async () => {
+    // Clear the email_change_pending flag in database even if skipped
+    await authApi.clearEmailChangePending();
+    
+    // Keep SMTP warning visible since user skipped configuration
+    // The warning will remain until user actually configures SMTP
+    // (Don't clear smtpNotConfigured - let the useEffect handle it based on actual SMTP status)
+    
+    // Clear pending SMTP config flag
+    localStorage.removeItem('kjp-pending-smtp-config');
+    
+    // Refresh user to get updated email_change_pending flag
+    await refreshUser();
+    
+    setShowNewAccountPasswordModal(false);
+    setNewAccountPassword('');
+    setNewAccountPasswordConfirm('');
+    setNewEmailAddress('');
+    setPasswordForEmailChange('');
+    // Switch to general tab
+    setActiveSection('general');
+    
+    toast.info('Email Change Complete', 'You can update your password later from the Security tab. Remember to configure your Gmail App Password for email notifications.');
+  }, [toast, refreshUser]);
+
   const handleSaveNotifications = () => toast.success('Notifications Updated', 'Notification preferences saved.');
 
   // Per-day schedule
@@ -759,16 +1684,24 @@ const Settings = () => {
             placeholder="e.g. 2010"
             hint="Used for 'Since YYYY' labels and years of experience calculations"
           />
-          <FormInput 
-            label="Business Email" 
-            name="business_email" 
-            type="email" 
-            value={businessInfo.business_email} 
-            onChange={handleBusinessChange} 
-            required 
-            placeholder="info@business.com"
-            error={validationErrors.business_email}
-          />
+          <div className="relative">
+            <FormInput 
+              label="Business Email" 
+              name="business_email" 
+              type="email" 
+              value={businessInfo.business_email} 
+              onChange={handleBusinessChange} 
+              required 
+              placeholder="info@business.com"
+              error={validationErrors.business_email || businessEmailError}
+            />
+            {isCheckingBusinessEmail && (
+              <div className="absolute right-3 top-9 flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-primary-500" />
+                <span className="text-xs text-gray-500">Checking...</span>
+              </div>
+            )}
+          </div>
           <FormInput 
             label="Phone Number" 
             name="business_phone" 
@@ -973,6 +1906,20 @@ const Settings = () => {
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
             Enable email notifications by entering your Gmail <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 underline font-medium">App Password</a>. Emails will be sent from your <strong>Business Email</strong> ({businessInfo.business_email || 'not set'}).
           </p>
+          
+          {/* SMTP Warning Banner */}
+          {smtpNotConfigured && (
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border-2 border-red-500">
+              <div className="flex items-center gap-3">
+                <AlertTriangle size={24} className="text-red-600 dark:text-red-400 flex-shrink-0" />
+                <div>
+                  <h4 className="font-semibold text-red-800 dark:text-red-300">SMTP Configuration Required</h4>
+                  <p className="text-sm text-red-700 dark:text-red-400">{smtpWarningMessage}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="space-y-4">
             <div>
               <div className="max-w-md">
@@ -983,6 +1930,7 @@ const Settings = () => {
                   value={businessInfo.smtp_password}
                   onChange={handleBusinessChange}
                   placeholder="Enter your 16-character app password"
+                  error={smtpNotConfigured ? 'SMTP password is required for email verification' : ''}
                 />
               </div>
               <button
@@ -999,7 +1947,7 @@ const Settings = () => {
                     toast.error('Test Failed', err?.response?.data?.message || 'Could not send test email. Check your App Password.');
                   }
                 }}
-                disabled={!businessInfo.smtp_password || businessInfo.smtp_password === '••••••••'}
+                disabled={!businessInfo.smtp_password}
                 className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border border-violet-300 dark:border-violet-600 text-violet-700 dark:text-violet-300 bg-white dark:bg-violet-900/40 hover:bg-violet-100 dark:hover:bg-violet-800/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Mail size={15} />
@@ -1096,83 +2044,6 @@ const Settings = () => {
       </div>
     );
   };
-
-  // Profile Section
-  const ProfileSection = () => (
-    <div className="space-y-6">
-      {/* Profile Avatar */}
-      <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-dashed border-primary-200 dark:border-primary-700">
-        <div className="w-20 h-20 bg-gradient-to-br from-secondary-400 to-secondary-500 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-          {profileInfo.firstName.charAt(0)}{profileInfo.lastName.charAt(0)}
-        </div>
-        <div>
-          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1">Profile Picture</h4>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">Upload a photo (PNG, JPG - Max 10MB)</p>
-          <Button variant="outline" size="sm">
-            <Camera size={16} className="mr-1.5" />
-            Upload Photo
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormInput label="First Name" name="firstName" value={profileInfo.firstName} onChange={handleProfileChange} required placeholder="Enter first name" />
-        <FormInput label="Last Name" name="lastName" value={profileInfo.lastName} onChange={handleProfileChange} required placeholder="Enter last name" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormInput label="Email Address" name="email" type="email" value={profileInfo.email} onChange={handleProfileChange} required placeholder="your@email.com" />
-        <FormInput label="Phone Number" name="phone" value={profileInfo.phone} onChange={handleProfileChange} placeholder="+63 XXX XXX XXXX" />
-      </div>
-      <FormInput label="Role" name="role" value={profileInfo.role} onChange={handleProfileChange} disabled hint="Contact administrator to change your role" />
-      
-      <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
-        <Button onClick={handleSaveProfile}>
-          <Save size={16} className="mr-1.5" />
-          Update Profile
-        </Button>
-      </div>
-    </div>
-  );
-
-  // Security Section
-  const SecuritySection = () => (
-    <div className="space-y-6">
-      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
-        <div className="flex items-start gap-3">
-          <Shield size={20} className="text-blue-600 dark:text-blue-400 mt-0.5" />
-          <div>
-            <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-1">Password Requirements</h4>
-            <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
-              <li>• At least 8 characters long</li>
-              <li>• Contains uppercase and lowercase letters</li>
-              <li>• Contains at least one number</li>
-              <li>• Contains at least one special character</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative">
-        <FormInput label="Current Password" name="currentPassword" type={showPassword ? 'text' : 'password'} value={securityInfo.currentPassword} onChange={handleSecurityChange} required placeholder="Enter current password" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormInput label="New Password" name="newPassword" type={showPassword ? 'text' : 'password'} value={securityInfo.newPassword} onChange={handleSecurityChange} required placeholder="Enter new password" />
-        <FormInput label="Confirm New Password" name="confirmPassword" type={showPassword ? 'text' : 'password'} value={securityInfo.confirmPassword} onChange={handleSecurityChange} required placeholder="Confirm new password" />
-      </div>
-      
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" checked={showPassword} onChange={() => setShowPassword(!showPassword)} className="w-4 h-4 rounded border-primary-300 dark:border-primary-700 text-primary-500 focus:ring-primary-500" />
-        <span className="text-sm text-gray-600 dark:text-gray-300">Show passwords</span>
-      </label>
-
-      <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
-        <Button onClick={handleSaveSecurity}>
-          <Lock size={16} className="mr-1.5" />
-          Change Password
-        </Button>
-      </div>
-    </div>
-  );
 
   // Notifications Section
   const NotificationsSection = () => (
@@ -1457,13 +2328,11 @@ const Settings = () => {
 
   // Information Section - Website Content Management
   const InformationSection = () => {
-    const [activeInfoTab, setActiveInfoTab] = useState(() => {
-      return searchParams.get('info') || 'home';
-    });
     const [savingHome, setSavingHome] = useState(false);
     const [savingAbout, setSavingAbout] = useState(false);
     const [savingProducts, setSavingProducts] = useState(false);
     const [savingContact, setSavingContact] = useState(false);
+    const [savingLegal, setSavingLegal] = useState(false);
     const [uploadingHomeImage, setUploadingHomeImage] = useState(false);
     const [uploadingAboutImage, setUploadingAboutImage] = useState(false);
     const [uploadingProductsImage, setUploadingProductsImage] = useState(false);
@@ -1473,90 +2342,45 @@ const Settings = () => {
     const productsImageInputRef = useRef(null);
     const contactImageInputRef = useRef(null);
     
-    // Home page content state (populated from API)
-    const [homeContent, setHomeContent] = useState({
-      heroTitle: '',
-      heroTitleHighlight: '',
-      heroSubtitle: '',
-      heroTag: '',
-      heroImage: null,
-      aboutTitle: '',
-      aboutDescription: '',
-      aboutPoints: [],
-      features: [],
-      stats: [],
-    });
+    // Defaults per section
+    const defaultHome = { heroTitle: '', heroTitleHighlight: '', heroSubtitle: '', heroTag: '', heroImage: null, aboutTitle: '', aboutDescription: '', aboutPoints: [], features: [], stats: [] };
+    const defaultAbout = { heroTitle: '', heroTitleHighlight: '', heroSubtitle: '', heroImage: null, missionTitle: '', missionDescription: '', missionPoints: [], visionTitle: '', visionDescription: '', visionPoints: [], values: [], timeline: [], team: [] };
+    const defaultProducts = { heroTag: '', heroTitle: '', heroSubtitle: '', heroImage: null, badges: [], ctaTitle: '', ctaDescription: '', ctaButtonText: '' };
+    const defaultContact = { heroTag: '', heroTitle: '', heroSubtitle: '', heroImage: null, formTitle: '', faqs: [], socialTitle: '', socialDescription: '' };
+    const defaultLegal = { termsLastUpdated: '', termsIntro: '', termsSections: [], privacyLastUpdated: '', privacyIntro: '', privacySections: [] };
 
-    // About page content state (populated from API)
-    const [aboutContent, setAboutContent] = useState({
-      heroTitle: '',
-      heroTitleHighlight: '',
-      heroSubtitle: '',
-      heroImage: null,
-      missionTitle: '',
-      missionDescription: '',
-      missionPoints: [],
-      visionTitle: '',
-      visionDescription: '',
-      visionPoints: [],
-      values: [],
-      timeline: [],
-      team: [],
-    });
+    // Load from localStorage instantly so forms never start empty
+    const getInitialInfoContent = () => {
+      try {
+        const saved = localStorage.getItem('kjp-info-content');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return null;
+    };
+    const cached = getInitialInfoContent();
 
-    // Products page content state (populated from API)
-    const [productsContent, setProductsContent] = useState({
-      heroTag: 'Our Products',
-      heroTitle: 'Premium Rice Selection',
-      heroSubtitle: 'Discover our wide range of quality rice products, from premium jasmine to nutritious brown rice',
-      heroImage: null,
-      badges: [
-        { title: 'Fresh from Farm', icon: 'Leaf' },
-        { title: 'Quality Guaranteed', icon: 'Award' },
-        { title: 'Fast Delivery', icon: 'Truck' },
-      ],
-      ctaTitle: 'Need Bulk Orders or Custom Packaging?',
-      ctaDescription: 'Contact us for wholesale pricing, bulk orders, or custom packaging solutions for your business.',
-      ctaButtonText: 'Contact for Wholesale',
-    });
+    const [homeContent, setHomeContent] = useState({ ...defaultHome, ...(cached?.home || {}) });
+    const [aboutContent, setAboutContent] = useState({ ...defaultAbout, ...(cached?.about || {}) });
+    const [productsContent, setProductsContent] = useState({ ...defaultProducts, ...(cached?.products || {}) });
+    const [contactContent, setContactContent] = useState({ ...defaultContact, ...(cached?.contact || {}) });
+    const [legalContent, setLegalContent] = useState({ ...defaultLegal, ...(cached?.legal || {}) });
 
-    // Contact page content state (populated from API)
-    const [contactContent, setContactContent] = useState({
-      heroTag: 'Get In Touch',
-      heroTitle: 'Contact Us',
-      heroSubtitle: "Have questions or ready to place an order? We'd love to hear from you!",
-      heroImage: null,
-      formTitle: 'Send Us a Message',
-      faqs: [
-        { question: 'What is the minimum order for delivery?', answer: 'For deliveries within Rosario, we require a minimum of 2 sacks (50kg). For bulk orders outside Rosario, please contact us for arrangements.' },
-        { question: 'Do you offer wholesale pricing?', answer: 'Yes! We offer competitive wholesale prices for businesses, restaurants, and resellers. Contact us for our wholesale price list.' },
-        { question: 'What payment methods do you accept?', answer: 'We accept cash, bank transfer, GCash, Maya, and credit/debit cards for in-store purchases.' },
-      ],
-      socialTitle: 'Connect With Us',
-      socialDescription: 'Follow us on social media for updates and promotions',
-    });
-
-    // Fetch content from API on mount
+    // Fetch content from API in background (silent refresh, no flicker)
     useEffect(() => {
       const fetchContent = async () => {
         try {
           const result = await websiteContentApi.getAll();
           if (result.success && result.data) {
-            if (result.data.home) {
-              setHomeContent(prev => ({ ...prev, ...result.data.home }));
-            }
-            if (result.data.about) {
-              setAboutContent(prev => ({ ...prev, ...result.data.about }));
-            }
-            if (result.data.products) {
-              setProductsContent(prev => ({ ...prev, ...result.data.products }));
-            }
-            if (result.data.contact) {
-              setContactContent(prev => ({ ...prev, ...result.data.contact }));
-            }
+            if (result.data.home) setHomeContent(prev => ({ ...prev, ...result.data.home }));
+            if (result.data.about) setAboutContent(prev => ({ ...prev, ...result.data.about }));
+            if (result.data.products) setProductsContent(prev => ({ ...prev, ...result.data.products }));
+            if (result.data.contact) setContactContent(prev => ({ ...prev, ...result.data.contact }));
+            if (result.data.legal) setLegalContent(prev => ({ ...prev, ...result.data.legal }));
+            // Persist for instant load next time
+            localStorage.setItem('kjp-info-content', JSON.stringify(result.data));
           }
         } catch (error) {
-          console.log('Using default content - API not available');
+          console.log('Using cached content');
         }
       };
       fetchContent();
@@ -1569,6 +2393,7 @@ const Settings = () => {
         if (result.success) {
           // Clear localStorage to force refresh on public pages
           localStorage.removeItem('kjp-home-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Home Content Saved', 'Homepage content has been updated successfully.');
         } else {
           toast.error('Error', result.message || 'Failed to save home content');
@@ -1587,6 +2412,7 @@ const Settings = () => {
         if (result.success) {
           // Clear localStorage to force refresh on public pages
           localStorage.removeItem('kjp-about-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('About Content Saved', 'About page content has been updated successfully.');
         } else {
           toast.error('Error', result.message || 'Failed to save about content');
@@ -1609,6 +2435,7 @@ const Settings = () => {
           const imageUrl = result.data?.image_url || result.data?.data?.image_url;
           setHomeContent(prev => ({ ...prev, heroImage: imageUrl }));
           localStorage.removeItem('kjp-home-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Image Uploaded', 'Home hero image has been updated.');
         } else {
           toast.error('Error', result.data?.message || 'Failed to upload image');
@@ -1631,6 +2458,7 @@ const Settings = () => {
           const imageUrl = result.data?.image_url || result.data?.data?.image_url;
           setAboutContent(prev => ({ ...prev, heroImage: imageUrl }));
           localStorage.removeItem('kjp-about-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Image Uploaded', 'About hero image has been updated.');
         } else {
           toast.error('Error', result.data?.message || 'Failed to upload image');
@@ -1648,6 +2476,7 @@ const Settings = () => {
         const result = await websiteContentApi.saveProductsContent(productsContent);
         if (result.success) {
           localStorage.removeItem('kjp-products-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Products Content Saved', 'Products page content has been updated successfully.');
         } else {
           toast.error('Error', result.message || 'Failed to save products content');
@@ -1665,6 +2494,7 @@ const Settings = () => {
         const result = await websiteContentApi.saveContactContent(contactContent);
         if (result.success) {
           localStorage.removeItem('kjp-contact-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Contact Content Saved', 'Contact page content has been updated successfully.');
         } else {
           toast.error('Error', result.message || 'Failed to save contact content');
@@ -1687,6 +2517,7 @@ const Settings = () => {
           const imageUrl = result.data?.image_url || result.data?.data?.image_url;
           setProductsContent(prev => ({ ...prev, heroImage: imageUrl }));
           localStorage.removeItem('kjp-products-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Image Uploaded', 'Products hero image has been updated.');
         } else {
           toast.error('Error', result.data?.message || 'Failed to upload image');
@@ -1709,6 +2540,7 @@ const Settings = () => {
           const imageUrl = result.data?.image_url || result.data?.data?.image_url;
           setContactContent(prev => ({ ...prev, heroImage: imageUrl }));
           localStorage.removeItem('kjp-contact-content');
+          localStorage.removeItem('kjp-info-content');
           toast.success('Image Uploaded', 'Contact hero image has been updated.');
         } else {
           toast.error('Error', result.data?.message || 'Failed to upload image');
@@ -1768,13 +2600,31 @@ const Settings = () => {
       });
     };
 
+    const handleSaveLegal = async () => {
+      setSavingLegal(true);
+      try {
+        const result = await websiteContentApi.saveLegalContent(legalContent);
+        if (result.success) {
+          localStorage.removeItem('kjp-info-content');
+          toast.success('Legal Content Saved', 'Terms & Conditions and Privacy Policy have been updated successfully.');
+        } else {
+          toast.error('Error', result.message || 'Failed to save legal content');
+        }
+      } catch (error) {
+        toast.error('Error', 'Failed to connect to server');
+      } finally {
+        setSavingLegal(false);
+      }
+    };
+
     return (
       <div className="space-y-6">
         {/* Tab Navigation - Centered */}
-        <div className="flex justify-center">
+        <div className="flex justify-center overflow-x-auto">
           <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1.5 gap-1">
             <button
-              onClick={() => { setActiveInfoTab('home'); setSearchParams({ tab: 'information', info: 'home' }, { replace: true }); }}
+              type="button"
+              onClick={() => setActiveInfoTab('home')}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'home'
                   ? 'bg-button-500 text-white shadow-md'
@@ -1785,7 +2635,8 @@ const Settings = () => {
               Home Page
             </button>
             <button
-              onClick={() => { setActiveInfoTab('about'); setSearchParams({ tab: 'information', info: 'about' }, { replace: true }); }}
+              type="button"
+              onClick={() => setActiveInfoTab('about')}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'about'
                   ? 'bg-button-500 text-white shadow-md'
@@ -1796,7 +2647,8 @@ const Settings = () => {
               About Page
             </button>
             <button
-              onClick={() => { setActiveInfoTab('products'); setSearchParams({ tab: 'information', info: 'products' }, { replace: true }); }}
+              type="button"
+              onClick={() => setActiveInfoTab('products')}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'products'
                   ? 'bg-button-500 text-white shadow-md'
@@ -1807,7 +2659,8 @@ const Settings = () => {
               Products Page
             </button>
             <button
-              onClick={() => { setActiveInfoTab('contact'); setSearchParams({ tab: 'information', info: 'contact' }, { replace: true }); }}
+              type="button"
+              onClick={() => setActiveInfoTab('contact')}
               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeInfoTab === 'contact'
                   ? 'bg-button-500 text-white shadow-md'
@@ -1816,6 +2669,18 @@ const Settings = () => {
             >
               <MessageCircle size={16} />
               Contact Page
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveInfoTab('legal')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeInfoTab === 'legal'
+                  ? 'bg-button-500 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              <Scale size={16} />
+              Terms & Privacy
             </button>
           </div>
         </div>
@@ -1938,6 +2803,7 @@ const Settings = () => {
                 {homeContent.features.map((feature, index) => (
                   <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
+                      type="button"
                       onClick={() => handleRemoveFeature(index)}
                       className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
@@ -2161,6 +3027,7 @@ const Settings = () => {
                 {aboutContent.values.map((value, index) => (
                   <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
+                      type="button"
                       onClick={() => handleRemoveValue(index)}
                       className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
@@ -2205,6 +3072,7 @@ const Settings = () => {
                 {aboutContent.timeline.map((item, index) => (
                   <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
+                      type="button"
                       onClick={() => handleRemoveTimeline(index)}
                       className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
@@ -2390,6 +3258,7 @@ const Settings = () => {
                 {productsContent.badges.map((badge, index) => (
                   <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
+                      type="button"
                       onClick={() => setProductsContent({ ...productsContent, badges: productsContent.badges.filter((_, i) => i !== index) })}
                       className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
@@ -2539,6 +3408,7 @@ const Settings = () => {
                 {contactContent.faqs.map((faq, index) => (
                   <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
                     <button
+                      type="button"
                       onClick={() => setContactContent({ ...contactContent, faqs: contactContent.faqs.filter((_, i) => i !== index) })}
                       className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
                     >
@@ -2593,6 +3463,180 @@ const Settings = () => {
                   <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
                 ) : (
                   <><Save size={16} className="mr-1.5" /> Save Contact Content</>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Legal Content — Terms & Conditions and Privacy Policy */}
+        {activeInfoTab === 'legal' && (
+          <div className={`space-y-6 transition-opacity duration-200 ${savingLegal ? 'opacity-60 pointer-events-none' : ''}`}>
+            {/* Terms and Conditions */}
+            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Scale size={18} className="text-primary-600 dark:text-primary-400" />
+                Terms and Conditions
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <FormInput
+                  label="Last Updated Date"
+                  value={legalContent.termsLastUpdated}
+                  onChange={(e) => setLegalContent({ ...legalContent, termsLastUpdated: e.target.value })}
+                  placeholder="e.g. January 1, 2026"
+                />
+              </div>
+              <FormTextarea
+                label="Introduction Text"
+                value={legalContent.termsIntro}
+                onChange={(e) => setLegalContent({ ...legalContent, termsIntro: e.target.value })}
+                rows={2}
+                placeholder="Brief introduction shown before the terms sections..."
+              />
+            </div>
+
+            {/* Terms Sections */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <FileText size={18} className="text-primary-600 dark:text-primary-400" />
+                  Terms Sections ({legalContent.termsSections.length})
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => setLegalContent({ ...legalContent, termsSections: [...legalContent.termsSections, { title: 'New Section', content: 'Section content here...' }] })}>
+                  <Plus size={14} className="mr-1" /> Add Section
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {legalContent.termsSections.map((section, index) => (
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-6">{index + 1}.</span>
+                      <div className="flex-1">
+                        <FormInput
+                          label="Section Title"
+                          value={section.title}
+                          onChange={(e) => {
+                            const updated = [...legalContent.termsSections];
+                            updated[index] = { ...updated[index], title: e.target.value };
+                            setLegalContent({ ...legalContent, termsSections: updated });
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setLegalContent({ ...legalContent, termsSections: legalContent.termsSections.filter((_, i) => i !== index) })}
+                        className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <FormTextarea
+                      label="Content"
+                      value={section.content}
+                      onChange={(e) => {
+                        const updated = [...legalContent.termsSections];
+                        updated[index] = { ...updated[index], content: e.target.value };
+                        setLegalContent({ ...legalContent, termsSections: updated });
+                      }}
+                      rows={3}
+                    />
+                  </div>
+                ))}
+                {legalContent.termsSections.length === 0 && (
+                  <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-4">No terms sections yet. Click "Add Section" to create one.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1 border-t-2 border-primary-200 dark:border-primary-700" />
+              <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Privacy Policy</span>
+              <div className="flex-1 border-t-2 border-primary-200 dark:border-primary-700" />
+            </div>
+
+            {/* Privacy Policy */}
+            <div className="p-6 bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-700 dark:to-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <ShieldCheck size={18} className="text-primary-600 dark:text-primary-400" />
+                Privacy Policy
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <FormInput
+                  label="Last Updated Date"
+                  value={legalContent.privacyLastUpdated}
+                  onChange={(e) => setLegalContent({ ...legalContent, privacyLastUpdated: e.target.value })}
+                  placeholder="e.g. January 1, 2026"
+                />
+              </div>
+              <FormTextarea
+                label="Introduction Text"
+                value={legalContent.privacyIntro}
+                onChange={(e) => setLegalContent({ ...legalContent, privacyIntro: e.target.value })}
+                rows={2}
+                placeholder="Brief introduction shown before the privacy sections..."
+              />
+            </div>
+
+            {/* Privacy Sections */}
+            <div className="p-6 bg-gray-50 dark:bg-gray-700/50 rounded-xl border-2 border-primary-200 dark:border-primary-700">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <FileText size={18} className="text-primary-600 dark:text-primary-400" />
+                  Privacy Sections ({legalContent.privacySections.length})
+                </h4>
+                <Button size="sm" variant="outline" onClick={() => setLegalContent({ ...legalContent, privacySections: [...legalContent.privacySections, { title: 'New Section', content: 'Section content here...' }] })}>
+                  <Plus size={14} className="mr-1" /> Add Section
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {legalContent.privacySections.map((section, index) => (
+                  <div key={index} className="p-4 bg-white dark:bg-gray-700 rounded-lg border border-primary-200 dark:border-primary-700 relative">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-gray-400 dark:text-gray-500 w-6">{index + 1}.</span>
+                      <div className="flex-1">
+                        <FormInput
+                          label="Section Title"
+                          value={section.title}
+                          onChange={(e) => {
+                            const updated = [...legalContent.privacySections];
+                            updated[index] = { ...updated[index], title: e.target.value };
+                            setLegalContent({ ...legalContent, privacySections: updated });
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setLegalContent({ ...legalContent, privacySections: legalContent.privacySections.filter((_, i) => i !== index) })}
+                        className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-500"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <FormTextarea
+                      label="Content"
+                      value={section.content}
+                      onChange={(e) => {
+                        const updated = [...legalContent.privacySections];
+                        updated[index] = { ...updated[index], content: e.target.value };
+                        setLegalContent({ ...legalContent, privacySections: updated });
+                      }}
+                      rows={3}
+                    />
+                  </div>
+                ))}
+                {legalContent.privacySections.length === 0 && (
+                  <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-4">No privacy sections yet. Click "Add Section" to create one.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
+              <Button onClick={handleSaveLegal} disabled={savingLegal}>
+                {savingLegal ? (
+                  <><Loader2 size={16} className="mr-1.5 animate-spin" /> Saving...</>
+                ) : (
+                  <><Save size={16} className="mr-1.5" /> Save Terms & Privacy</>
                 )}
               </Button>
             </div>
@@ -2914,8 +3958,8 @@ const Settings = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'general': return renderGeneralSection();
-      case 'profile': return <ProfileSection />;
-      case 'security': return <SecuritySection />;
+      case 'profile': return <ProfileSectionComponent profileInfo={profileInfo} handleProfileChange={handleProfileChange} handleSaveProfile={handleSaveProfile} isCheckingEmail={isCheckingProfileEmail} emailError={profileEmailError} />;
+      case 'security': return <SecuritySectionComponent securityInfo={securityInfo} showPassword={showPassword} setShowPassword={setShowPassword} handleSecurityChange={handleSecurityChange} handleSaveSecurity={handleSaveSecurity} />;
       case 'appearance': return <AppearanceSection />;
       case 'information': return <InformationSection />;
       case 'data': return <DataSection />;
@@ -2939,6 +3983,7 @@ const Settings = () => {
             {settingsSections.map((section) => (
               <button
                 key={section.id}
+                type="button"
                 onClick={() => setActiveSection(section.id)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-200 ${
                   activeSection === section.id 
@@ -2973,6 +4018,285 @@ const Settings = () => {
           {renderContent()}
         </CardContent>
       </Card>
+      )}
+
+      {/* Password Verification Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                <Lock size={24} className="text-yellow-600 dark:text-yellow-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Verify Your Identity</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {pendingProfileData?.type === 'business_email' 
+                    ? 'Enter your current account password to proceed with email change' 
+                    : 'Enter your current account password to proceed with email change'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                <strong>Note:</strong> After changing your email, you'll need to configure a new Gmail App Password for the new email address in the SMTP settings.
+              </p>
+            </div>
+            
+            <div className="mb-6">
+              <FormInput
+                label="Current Account Password"
+                type="password"
+                value={passwordForEmailChange}
+                onChange={(e) => setPasswordForEmailChange(e.target.value)}
+                placeholder="Enter your current account password"
+                onKeyPress={(e) => e.key === 'Enter' && handlePasswordVerification()}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleCancelPasswordVerification} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handlePasswordVerification} className="flex-1" disabled={businessSaving}>
+                {businessSaving ? (
+                  <>
+                    <Loader2 size={16} className="mr-1.5 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <Lock size={16} className="mr-1.5" />
+                    Verify & Continue
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Verification Modal */}
+      {showEmailVerificationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Mail size={24} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Verify Your Email</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Enter the 6-digit code sent to your new email</p>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <FormInput
+                label="Verification Code"
+                type="text"
+                value={emailVerificationCode}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setEmailVerificationCode(value);
+                  setVerificationError('');
+                }}
+                placeholder="000000"
+                maxLength={6}
+                onKeyPress={(e) => e.key === 'Enter' && handleEmailVerification()}
+                autoFocus
+                className="text-center text-2xl tracking-widest font-mono"
+              />
+              {verificationError && (
+                <p className="text-sm text-red-500 mt-2">{verificationError}</p>
+              )}
+            </div>
+
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                The verification code expires in 15 minutes. You have {5 - verificationAttempts} attempt(s) remaining.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleCancelEmailVerification} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleEmailVerification} className="flex-1" disabled={emailVerificationCode.length !== 6}>
+                <CheckCircle size={16} className="mr-1.5" />
+                Verify
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New SMTP Password Modal (After Email Change) — MANDATORY, cannot be skipped */}
+      {showNewSmtpModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
+                <Mail size={24} className="text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Configure Gmail App Password</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Required to complete your email change
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg mb-4 border border-red-200 dark:border-red-800">
+              <p className="text-xs text-red-700 dark:text-red-300 font-semibold mb-1">⚠ Configuration Required</p>
+              <p className="text-xs text-red-600 dark:text-red-400">
+                You must configure the Gmail App Password for your new email to complete the email change. If you cancel, the email change will be <strong>reverted</strong>.
+              </p>
+            </div>
+            
+            <div className="p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg mb-4">
+              <p className="text-xs text-violet-700 dark:text-violet-300 mb-2">
+                <strong>New Email:</strong> {newEmailAddress}
+              </p>
+              <p className="text-xs text-violet-700 dark:text-violet-300">
+                <strong>How to get an App Password:</strong> Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline font-medium">Google App Passwords</a> → Select app "Mail" → Generate → Copy the 16-character password.
+              </p>
+            </div>
+            
+            <div className="mb-6">
+              <FormInput
+                label="Gmail App Password"
+                required
+                type="text"
+                value={newSmtpPassword}
+                onChange={(e) => {
+                  // Strip all spaces so pasting "xxxx xxxx xxxx xxxx" still gives 16 chars
+                  const value = e.target.value.replace(/\s/g, '').slice(0, 16);
+                  setNewSmtpPassword(value);
+                }}
+                placeholder="xxxx xxxx xxxx xxxx"
+                maxLength={32}
+                onKeyPress={(e) => e.key === 'Enter' && handleSaveNewSmtpPassword()}
+                autoFocus
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Paste the 16-character password exactly as generated — spaces are stripped automatically.
+                {newSmtpPassword.length > 0 && (
+                  <span className={`ml-2 font-semibold ${newSmtpPassword.length === 16 ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                    {newSmtpPassword.length}/16
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={handleCancelEmailChange}
+                className="flex-1 border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                disabled={businessSaving}
+              >
+                {businessSaving ? (
+                  <>
+                    <Loader2 size={16} className="mr-1.5 animate-spin" />
+                    Reverting...
+                  </>
+                ) : (
+                  'Cancel Email Change'
+                )}
+              </Button>
+              <Button onClick={handleSaveNewSmtpPassword} className="flex-1" disabled={businessSaving || newSmtpPassword.length !== 16}>
+                {businessSaving ? (
+                  <>
+                    <Loader2 size={16} className="mr-1.5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} className="mr-1.5" />
+                    Save & Configure
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Account Password Modal (After SMTP Configuration) */}
+      {showNewAccountPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Lock size={24} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Update Account Password</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Set a new password for your account with the new email
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                <strong>New Email:</strong> {newEmailAddress}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                Since you changed your email, it's recommended to update your account password for security.
+              </p>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <FormInput
+                label="Current Password"
+                type="password"
+                value={passwordForEmailChange}
+                readOnly
+                disabled
+                className="opacity-70 cursor-not-allowed"
+                hint="Auto-filled from the password you entered to authorize the email change."
+              />
+              <FormInput
+                label="New Account Password"
+                type="password"
+                value={newAccountPassword}
+                onChange={(e) => setNewAccountPassword(e.target.value)}
+                placeholder="Enter new password (min 8 characters)"
+                autoFocus
+              />
+              <FormInput
+                label="Confirm New Password"
+                type="password"
+                value={newAccountPasswordConfirm}
+                onChange={(e) => setNewAccountPasswordConfirm(e.target.value)}
+                placeholder="Confirm new password"
+                onKeyPress={(e) => e.key === 'Enter' && handleSaveNewAccountPassword()}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={handleSkipNewAccountPassword} className="flex-1">
+                Skip for Now
+              </Button>
+              <Button onClick={handleSaveNewAccountPassword} className="flex-1" disabled={businessSaving || !newAccountPassword || newAccountPassword.length < 8}>
+                {businessSaving ? (
+                  <>
+                    <Loader2 size={16} className="mr-1.5 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Lock size={16} className="mr-1.5" />
+                    Update Password
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

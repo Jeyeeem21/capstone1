@@ -7,13 +7,11 @@ import {
   ImageIcon, X, DollarSign, Banknote, Smartphone, Upload, Camera, Ban
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
-import { Skeleton, Pagination } from '../../../components/ui';
+import { Skeleton, Pagination, Modal, ConfirmModal } from '../../../components/ui';
 import { useDataFetch } from '../../../hooks/useDataFetch';
 import apiClient from '../../../api/apiClient';
-import { API_BASE_URL } from '../../../api/config';
+import { resolveStorageUrl } from '../../../api/config';
 import { suppressNotifToasts } from '../../../utils/notifToastGuard';
-
-const backendUrl = API_BASE_URL.replace('/api', '');
 
 const statusConfig = {
   'Pending':          { icon: Clock,        badgeClass: 'bg-yellow-50 dark:bg-yellow-500/15 text-yellow-600 dark:text-yellow-400', iconBgClass: 'bg-yellow-50 dark:bg-yellow-900/30', iconColorClass: 'text-yellow-600 dark:text-yellow-400', connectorClass: 'bg-yellow-300 dark:bg-yellow-700', label: 'Pending' },
@@ -60,6 +58,7 @@ const Orders = () => {
   const [returnProofPreviews, setReturnProofPreviews] = useState([]);
   const [returnSubmitted, setReturnSubmitted] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
+  const [cancelOrder, setCancelOrder] = useState(null);
   const [showPayModal, setShowPayModal] = useState(null);
   const [payMethod, setPayMethod] = useState('gcash');
   const [payReference, setPayReference] = useState('');
@@ -120,11 +119,11 @@ const Orders = () => {
         driverPlate: o.driver_plate_number,
         paidAt: o.paid_at_formatted,
         referenceNumber: o.reference_number,
-        paymentProof: (o.payment_proof || []).map(p => p.startsWith('http') ? p : `${backendUrl}${p}`),
-        returnProof: (o.return_proof || []).map(p => p.startsWith('http') ? p : `${backendUrl}${p}`),
+        paymentProof: (o.payment_proof || []).map(p => resolveStorageUrl(p)),
+        returnProof: (o.return_proof || []).map(p => resolveStorageUrl(p)),
         returnReason: o.return_reason,
         returnNotes: o.return_notes,
-        deliveryProof: (o.delivery_proof || []).map(p => p.startsWith('http') ? p : `${backendUrl}${p}`),
+        deliveryProof: (o.delivery_proof || []).map(p => resolveStorageUrl(p)),
         returnPickupDriver: o.return_pickup_driver,
         returnPickupPlate: o.return_pickup_plate,
         returnPickupDate: o.return_pickup_date_formatted,
@@ -168,7 +167,6 @@ const Orders = () => {
   };
 
   const handleCancelOrder = async (order) => {
-    if (!window.confirm(`Cancel order ${order.id}? This action cannot be undone.`)) return;
     setCancellingId(order.saleId);
     try {
       await apiClient.put(`/sales/${order.saleId}/status`, { status: 'cancelled' });
@@ -734,7 +732,7 @@ const Orders = () => {
                       {/* Cancel — only for Pending */}
                       {order.status === 'Pending' && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleCancelOrder(order); }}
+                          onClick={(e) => { e.stopPropagation(); setCancelOrder(order); }}
                           disabled={cancellingId === order.saleId}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 transition-all hover:bg-red-100 disabled:opacity-50"
                         >
@@ -808,278 +806,278 @@ const Orders = () => {
         </div>
       )}
 
+      {/* Cancel Order Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!cancelOrder}
+        onClose={() => setCancelOrder(null)}
+        onConfirm={() => { handleCancelOrder(cancelOrder); setCancelOrder(null); }}
+        title="Cancel Order"
+        message={`Are you sure you want to cancel order "${cancelOrder?.id}"? This action cannot be undone.`}
+        confirmText={cancellingId ? 'Cancelling...' : 'Cancel Order'}
+        variant="danger"
+        icon={Ban}
+        isLoading={!!cancellingId}
+      />
+
       {/* Return Request Modal */}
-      {isReturnModalOpen && returnOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { stopReturnCamera(); setIsReturnModalOpen(false); }} />
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl border-2 border-primary-400 dark:border-primary-700">
-            <div className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-orange-50 dark:bg-orange-900/20">
-                  <RotateCcw size={18} className="text-orange-600 dark:text-orange-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold" style={{ color: 'var(--color-text-primary)' }}>Request Return</h3>
-                  <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>Order {returnOrder.id}</p>
-                </div>
+      <Modal
+        isOpen={isReturnModalOpen && !!returnOrder}
+        onClose={() => { stopReturnCamera(); setIsReturnModalOpen(false); }}
+        title={`Request Return — ${returnOrder?.id || ''}`}
+        size="sm"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => { stopReturnCamera(); setIsReturnModalOpen(false); }}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReturnSubmit}
+              disabled={!returnReason || !returnProofFiles.length}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <RotateCcw size={14} /> Submit Return Request
+            </button>
+          </div>
+        }
+      >
+        {returnOrder && (
+          <div className="space-y-4">
+            {/* Items being returned */}
+            <div className="rounded-lg border border-primary-200 dark:border-primary-700 overflow-hidden">
+              <div className="bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Items to Return</p>
               </div>
-
-              {/* Items being returned */}
-              <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="bg-gray-50 dark:bg-gray-700/50 px-3 py-1.5">
-                  <p className="text-[9px] font-semibold" style={{ color: 'var(--color-text-secondary)' }}>ITEMS TO RETURN</p>
-                </div>
-                <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {returnOrder.items.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-3 py-2">
-                      <p className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>{item.name}</p>
-                      <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>×{item.quantity}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Reason */}
-              <div className="mb-3">
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--color-text-primary)' }}>Reason for Return *</label>
-                <select
-                  value={returnReason}
-                  onChange={(e) => setReturnReason(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all bg-white dark:bg-gray-700 dark:text-gray-100"
-                  style={{ color: 'var(--color-text-primary)' }}
-                >
-                  <option value="">Select a reason...</option>
-                  {returnReasons.map(reason => (
-                    <option key={reason} value={reason}>{reason}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Notes */}
-              <div className="mb-4">
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--color-text-primary)' }}>Additional Notes (Optional)</label>
-                <textarea
-                  value={returnNotes}
-                  onChange={(e) => setReturnNotes(e.target.value)}
-                  placeholder="Describe the issue..."
-                  rows={3}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all resize-none bg-white dark:bg-gray-700 dark:text-gray-100"
-                  style={{ color: 'var(--color-text-primary)' }}
-                />
-              </div>
-
-              {/* Proof Images */}
-              <div className="mb-4">
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: 'var(--color-text-primary)' }}>
-                  Proof Images <span className="text-red-500">*</span>
-                </label>
-                <p className="text-[10px] mb-2" style={{ color: 'var(--color-text-secondary)' }}>Upload photos showing the reason for return</p>
-
-                {returnShowCamera && (
-                  <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-orange-300 dark:border-orange-600">
-                    <video ref={returnVideoRef} autoPlay playsInline className="w-full h-40 object-cover bg-black" />
-                    <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
-                      <button onClick={captureReturnPhoto} className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-orange-600 flex items-center gap-1.5"><Camera size={12} /> Capture</button>
-                      <button onClick={stopReturnCamera} className="px-3 py-1.5 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={12} /> Cancel</button>
-                    </div>
+              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                {returnOrder.items.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between px-3 py-2">
+                    <span className="text-sm text-gray-800 dark:text-gray-100">{item.name}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">×{item.quantity}</span>
                   </div>
-                )}
-
-                {returnProofPreviews.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {returnProofPreviews.map((preview, idx) => (
-                      <div key={idx} className="relative inline-block">
-                        <img src={preview} alt={`Proof ${idx + 1}`} className="w-[72px] h-[72px] object-cover rounded-lg border-2 border-gray-200 dark:border-gray-700" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReturnProofFiles(prev => prev.filter((_, i) => i !== idx));
-                            setReturnProofPreviews(prev => prev.filter((_, i) => i !== idx));
-                          }}
-                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!returnShowCamera && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer transition-colors hover:border-orange-400"
-                      style={{ color: 'var(--color-text-secondary)' }}>
-                      <Upload size={14} /> Upload Image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files);
-                          if (files.length) {
-                            setReturnProofFiles(prev => [...prev, ...files]);
-                            setReturnProofPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
-                          }
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
-                    <button type="button" onClick={startReturnCamera}
-                      className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer transition-colors hover:border-orange-400"
-                      style={{ color: 'var(--color-text-secondary)' }}>
-                      <Camera size={14} /> Open Camera
-                    </button>
-                  </div>
-                )}
-                {returnSubmitted && returnProofFiles.length === 0 && (
-                  <p className="mt-1 text-[10px] text-red-500">Please upload at least one proof image</p>
-                )}
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { stopReturnCamera(); setIsReturnModalOpen(false); }}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium border-2 border-primary-300 dark:border-primary-700 transition-all hover:bg-gray-50 dark:hover:bg-gray-700"
-                  style={{ color: 'var(--color-text-primary)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleReturnSubmit}
-                  disabled={!returnReason || !returnProofFiles.length}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ backgroundColor: '#f97316' }}
-                >
-                  Submit Return Request
-                </button>
+                ))}
               </div>
             </div>
+
+            {/* Reason */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Return Reason <span className="text-red-500">*</span></label>
+              <select
+                value={returnReason}
+                onChange={(e) => setReturnReason(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-primary-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 dark:text-gray-100"
+              >
+                <option value="">Select a reason...</option>
+                {returnReasons.map(reason => (
+                  <option key={reason} value={reason}>{reason}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Additional Notes <span className="font-normal normal-case text-gray-400">(Optional)</span></label>
+              <textarea
+                value={returnNotes}
+                onChange={(e) => setReturnNotes(e.target.value)}
+                placeholder="Describe the issue..."
+                rows={3}
+                className="w-full px-3 py-2.5 text-sm border border-primary-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none bg-white dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+
+            {/* Proof Images */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
+                Proof Images <span className="text-red-500">*</span>
+              </label>
+              <p className="text-xs text-gray-400 mb-2">Upload photos showing the reason for return</p>
+
+              {returnShowCamera && (
+                <div className="relative mb-3 rounded-lg overflow-hidden border border-button-300 dark:border-button-600">
+                  <video ref={returnVideoRef} autoPlay playsInline className="w-full h-40 object-cover bg-black" />
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                    <button onClick={captureReturnPhoto} className="px-3 py-1.5 bg-orange-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-orange-600 flex items-center gap-1.5"><Camera size={12} /> Capture</button>
+                    <button onClick={stopReturnCamera} className="px-3 py-1.5 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={12} /> Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {returnProofPreviews.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {returnProofPreviews.map((preview, idx) => (
+                    <div key={idx} className="relative group">
+                      <img src={preview} alt={`Proof ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-button-200 dark:border-button-700" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReturnProofFiles(prev => prev.filter((_, i) => i !== idx));
+                          setReturnProofPreviews(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!returnShowCamera && (
+                <div className="flex gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold cursor-pointer">
+                    <ImageIcon size={14} /> Upload
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files);
+                        if (files.length) {
+                          setReturnProofFiles(prev => [...prev, ...files]);
+                          setReturnProofPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <button type="button" onClick={startReturnCamera}
+                    className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold">
+                    <Camera size={14} /> Camera
+                  </button>
+                </div>
+              )}
+              {returnSubmitted && returnProofFiles.length === 0 && (
+                <p className="mt-1.5 text-xs text-red-500">Please upload at least one proof image</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Pay Now Modal */}
-      {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { stopPayCamera(); setShowPayModal(null); }} />
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl max-h-[90vh] flex flex-col border-2 border-primary-400 dark:border-primary-700">
-            {/* Header */}
-            <div className="p-5 text-white shrink-0" style={{ background: 'linear-gradient(135deg, #3b82f6, #3b82f6cc)' }}>
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <CreditCard size={20} /> Pay Order
-              </h3>
-              <p className="text-sm text-white/80 mt-1">Order {showPayModal.id}</p>
-            </div>
-
-            <div className="p-5 overflow-y-auto flex-1">
-              {/* Total */}
-              <div className="rounded-lg p-3 mb-4 bg-primary-50 dark:bg-gray-700/50">
-                <div className="flex justify-between pt-1">
-                  <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>Total Due</span>
-                  <span className="text-xl font-bold" style={{ color: 'var(--color-button-500)' }}>₱{showPayModal.total.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Payment Method */}
-              <div className="mb-4">
-                <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Payment Method</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { value: 'gcash', label: 'GCash', icon: Smartphone, color: '#3b82f6' },
-                    { value: 'cash', label: 'Cash', icon: Banknote, color: '#22c55e' },
-                  ].map(m => (
-                    <button key={m.value} onClick={() => setPayMethod(m.value)}
-                      className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
-                      style={payMethod === m.value
-                        ? { backgroundColor: `${m.color}15`, border: `2px solid ${m.color}`, color: m.color }
-                        : { border: '1px solid', borderColor: 'var(--color-primary-300)', color: 'var(--color-text-secondary)' }
-                      }>
-                      <m.icon size={14} /> {m.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {payMethod === 'gcash' && (
-                <>
-                  <div className="mb-3">
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>GCash Reference Number <span className="text-red-500">*</span></label>
-                    <input type="text" value={payReference} onChange={(e) => { setPayReference(e.target.value); setPayRefError(''); }}
-                      placeholder="Enter 13-digit reference number"
-                      className={`w-full px-4 py-3 text-lg font-bold rounded-lg focus:outline-none focus:ring-2 tracking-wider border-2 bg-white dark:bg-gray-700 dark:text-gray-100 ${payRefError ? 'border-red-500 dark:border-red-500' : 'border-primary-300 dark:border-primary-700'}`}
-                      style={{ '--tw-ring-color': '#3b82f6' }}
-                      autoFocus />
-                    {payRefError && <p className="text-[11px] text-red-500 font-medium mt-1">{payRefError}</p>}
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Payment Proof <span className="text-red-500">*</span></label>
-
-                    {payShowCamera && (
-                      <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-primary-300 dark:border-primary-700">
-                        <video ref={payVideoRef} autoPlay playsInline className="w-full h-40 object-cover bg-black" />
-                        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
-                          <button onClick={capturePayPhoto} className="px-3 py-1.5 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-blue-600 flex items-center gap-1.5"><Camera size={12} /> Capture</button>
-                          <button onClick={stopPayCamera} className="px-3 py-1.5 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={12} /> Cancel</button>
-                        </div>
-                      </div>
-                    )}
-
-                    {payProofPreviews.length > 0 && (
-                      <div className="flex gap-2 flex-wrap mb-3">
-                        {payProofPreviews.map((src, i) => (
-                          <div key={i} className="relative group">
-                            <img src={src} alt={`proof-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
-                            <button onClick={() => { setPayProofFiles(prev => prev.filter((_, j) => j !== i)); setPayProofPreviews(prev => prev.filter((_, j) => j !== i)); }}
-                              className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {!payShowCamera && (
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <label className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-primary-300 dark:border-primary-700 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
-                          style={{ color: 'var(--color-text-secondary)' }}>
-                          <Upload size={14} /> Upload Image
-                          <input type="file" accept="image/*" multiple className="hidden" onChange={handlePayProofChange} />
-                        </label>
-                        <button type="button" onClick={startPayCamera}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-primary-300 dark:border-primary-700 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
-                          style={{ color: 'var(--color-text-secondary)' }}>
-                          <Camera size={14} /> Open Camera
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {payMethod === 'cash' && (
-                <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700 rounded-lg p-4 text-center mb-4">
-                  <Banknote size={32} className="mx-auto mb-2 text-green-500" />
-                  <p className="text-sm font-bold text-green-700 dark:text-green-300">Cash Payment</p>
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">Confirm that cash payment has been received.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
-              <button onClick={() => { stopPayCamera(); setShowPayModal(null); }}
-                className="flex-1 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all border-2 border-primary-300 dark:border-primary-700"
-                style={{ color: 'var(--color-text-secondary)' }}>
-                Cancel
-              </button>
-              <button onClick={handlePaySubmit}
-                disabled={paySubmitting || (payMethod === 'gcash' ? (!payReference.trim() || payProofFiles.length === 0) : false)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition-all"
-                style={{ backgroundColor: '#3b82f6' }}>
-                <CreditCard size={14} /> {paySubmitting ? 'Processing...' : 'Confirm Payment'}
-              </button>
-            </div>
+      <Modal
+        isOpen={!!showPayModal}
+        onClose={() => { stopPayCamera(); setShowPayModal(null); }}
+        title="Record Payment"
+        size="sm"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button onClick={() => { stopPayCamera(); setShowPayModal(null); }}
+              className="px-4 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+              Cancel
+            </button>
+            <button onClick={handlePaySubmit}
+              disabled={paySubmitting || (payMethod === 'gcash' ? (!payReference.trim() || payProofFiles.length === 0) : false)}
+              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+              <CheckCircle size={14} /> {paySubmitting ? 'Processing...' : 'Confirm Payment'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        {showPayModal && (
+          <div className="space-y-4">
+            {/* Order Summary */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-primary-200 dark:border-primary-700">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{showPayModal.id}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{showPayModal.items?.length || 0} item(s)</p>
+                </div>
+                <p className="text-lg font-bold text-button-600 dark:text-button-400">₱{showPayModal.total.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Payment Method Selection */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method <span className="text-red-500">*</span></label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'gcash', label: 'GCash', icon: CreditCard, color: 'blue' },
+                  { value: 'cash', label: 'Cash', icon: DollarSign, color: 'green' },
+                ].map(m => (
+                  <button
+                    key={m.value}
+                    onClick={() => setPayMethod(m.value)}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border-2 transition-all ${
+                      payMethod === m.value
+                        ? `border-${m.color}-500 bg-${m.color}-50 text-${m.color}-700`
+                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300'
+                    }`}
+                  >
+                    <m.icon size={16} /> {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {payMethod === 'gcash' && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
+                  <input type="text" value={payReference} onChange={(e) => { setPayReference(e.target.value); setPayRefError(''); }}
+                    placeholder="e.g. 1234 5678 9012"
+                    className={`w-full px-4 py-2.5 text-sm font-semibold border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${payRefError ? 'border-red-500' : 'border-primary-300 dark:border-primary-600'}`}
+                    autoFocus />
+                  {payRefError && <p className="text-xs text-red-500 font-medium mt-1">{payRefError}</p>}
+                </div>
+
+                {/* Payment Proof */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
+                    Payment Proof <span className="text-red-500">*</span>
+                  </label>
+
+                  {payShowCamera && (
+                    <div className="relative mb-3 rounded-lg overflow-hidden border border-button-300 dark:border-button-600">
+                      <video ref={payVideoRef} autoPlay playsInline className="w-full h-40 object-cover bg-black" />
+                      <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                        <button onClick={capturePayPhoto} className="px-3 py-1.5 bg-button-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-button-600 flex items-center gap-1.5"><Camera size={12} /> Capture</button>
+                        <button onClick={stopPayCamera} className="px-3 py-1.5 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={12} /> Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {payProofPreviews.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {payProofPreviews.map((src, i) => (
+                        <div key={i} className="relative group">
+                          <img src={src} alt={`Proof ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-button-200 dark:border-button-700" />
+                          <button onClick={() => { setPayProofFiles(prev => prev.filter((_, j) => j !== i)); setPayProofPreviews(prev => prev.filter((_, j) => j !== i)); }}
+                            className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!payShowCamera && (
+                    <div className="flex gap-2">
+                      <label className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold cursor-pointer">
+                        <ImageIcon size={14} /> Upload
+                        <input type="file" accept="image/*" multiple className="hidden" onChange={handlePayProofChange} />
+                      </label>
+                      <button type="button" onClick={startPayCamera}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold">
+                        <Camera size={14} /> Camera
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {payMethod === 'cash' && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 text-center">
+                <Banknote size={32} className="mx-auto mb-2 text-green-500" />
+                <p className="text-sm font-bold text-green-700 dark:text-green-300">Cash Payment</p>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">Confirm that cash payment has been received.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

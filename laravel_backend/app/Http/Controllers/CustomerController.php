@@ -68,8 +68,13 @@ class CustomerController extends Controller
             'email' => [
                 'required',
                 'email',
-                'unique:customers,email',
-                'unique:users,email',
+                function ($attribute, $value, $fail) {
+                    if (Customer::withTrashed()->withArchived()->where('email', $value)->exists()) {
+                        $fail('This email is already registered.');
+                    } elseif (User::withTrashed()->withArchived()->where('email', $value)->exists()) {
+                        $fail('This email is already registered.');
+                    }
+                },
             ],
             'address' => 'required|string',
             'status' => 'required|in:Active,Inactive',
@@ -135,10 +140,14 @@ class CustomerController extends Controller
             'email' => [
                 'required',
                 'email',
-                Rule::unique('customers', 'email')->ignore($customer->id),
                 function ($attribute, $value, $fail) use ($customer) {
-                    // Check users table but allow the linked customer account
-                    $existsInUsers = User::where('email', $value)
+                    // Check customers table including soft-deleted & archived, excluding self
+                    if (Customer::withTrashed()->withArchived()->where('email', $value)->where('id', '!=', $customer->id)->exists()) {
+                        $fail('This email is already registered.');
+                        return;
+                    }
+                    // Check users table (including soft-deleted & archived) but allow the linked customer account
+                    $existsInUsers = User::withTrashed()->withArchived()->where('email', $value)
                         ->where(function ($q) use ($customer) {
                             $q->where('email', '!=', $customer->email)
                               ->orWhere('role', '!=', 'customer');
@@ -216,6 +225,9 @@ class CustomerController extends Controller
 
         $this->logAudit('ARCHIVE', 'Customer', "Archived customer: {$customer->name}", [
             'customer_id' => $customer->id,
+            'name' => $customer->name,
+            'email' => $customer->email,
+            'status_changed' => 'Active → Inactive',
         ]);
 
         return $this->successResponse(
@@ -237,15 +249,15 @@ class CustomerController extends Controller
         $email = $request->email;
         $customerId = $request->customer_id;
 
-        // Check customers table
-        $existsInCustomers = Customer::where('email', $email)
+        // Check customers table (including soft-deleted and archived)
+        $existsInCustomers = Customer::withTrashed()->withArchived()->where('email', $email)
             ->when($customerId, function ($query) use ($customerId) {
                 return $query->where('id', '!=', $customerId);
             })
             ->exists();
 
-        // Also check users table (exclude the linked user account for this customer)
-        $userQuery = User::where('email', $email);
+        // Also check users table including soft-deleted & archived (exclude linked customer account)
+        $userQuery = User::withTrashed()->withArchived()->where('email', $email);
         if ($customerId) {
             $customer = Customer::find($customerId);
             if ($customer) {
@@ -305,12 +317,16 @@ class CustomerController extends Controller
             'attempts' => 0,
         ], now()->addMinutes(10));
 
-        // Send email
-        try {
-            $this->emailService->sendVerificationCode($customer->email, $code);
-        } catch (\Exception $e) {
-            return $this->errorResponse('Failed to send verification email. Please check mail configuration. Error: ' . $e->getMessage(), 500);
-        }
+        // Send email after response
+        $emailService = $this->emailService;
+        $customerEmail = $customer->email;
+        dispatch(function () use ($emailService, $customerEmail, $code) {
+            try {
+                $emailService->sendVerificationCode($customerEmail, $code);
+            } catch (\Exception $e) {
+                \Log::warning("Failed to send customer verification code to {$customerEmail}: " . $e->getMessage());
+            }
+        })->afterResponse();
 
         $this->logAudit('VERIFY_EMAIL', 'Customer', "Sent verification code to {$customer->email}", [
             'customer_id' => $customer->id,
@@ -429,20 +445,23 @@ class CustomerController extends Controller
         $customer = Customer::find($id);
         if (!$customer) return response()->json(['success' => true]);
 
-        try {
-            $this->emailService->sendAdminAlert(
-                "New Customer Added \u2014 {$customer->name}",
-                'New Customer Added',
-                "A new customer \"{$customer->name}\" ({$customer->email}) has been added to the system."
-            );
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $customer) {
+            try {
+                $emailService->sendAdminAlert(
+                    "New Customer Added \u2014 {$customer->name}",
+                    'New Customer Added',
+                    "A new customer \"{$customer->name}\" ({$customer->email}) has been added to the system."
+                );
 
-            $this->emailService->sendAlertTo(
-                $customer->email,
-                'Welcome \u2014 You Have Been Added as a Customer',
-                'Welcome to Our System',
-                "Hi {$customer->name},\n\nYou have been added as a customer in our system.\n\nContact: {$customer->contact}\nEmail: {$customer->email}\nPhone: {$customer->phone}\n\nIf you have any questions, please don't hesitate to contact us."
-            );
-        } catch (\Throwable $e) { /* silent */ }
+                $emailService->sendAlertTo(
+                    $customer->email,
+                    'Welcome \u2014 You Have Been Added as a Customer',
+                    'Welcome to Our System',
+                    "Hi {$customer->name},\n\nYou have been added as a customer in our system.\n\nContact: {$customer->contact}\nEmail: {$customer->email}\nPhone: {$customer->phone}\n\nIf you have any questions, please don't hesitate to contact us."
+                );
+            } catch (\Throwable $e) { /* silent */ }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }
@@ -459,21 +478,24 @@ class CustomerController extends Controller
         if (empty($changes)) return response()->json(['success' => true]);
 
         $changesSummary = "Changes made:\n" . implode("\n", $changes);
+        $emailService = $this->emailService;
 
-        try {
-            $this->emailService->sendAdminAlert(
-                "Customer Updated \u2014 {$customer->name}",
-                'Customer Information Updated',
-                "The customer \"{$customer->name}\" ({$customer->email}) has been updated in the system.\n\n{$changesSummary}"
-            );
+        dispatch(function () use ($emailService, $customer, $changesSummary) {
+            try {
+                $emailService->sendAdminAlert(
+                    "Customer Updated \u2014 {$customer->name}",
+                    'Customer Information Updated',
+                    "The customer \"{$customer->name}\" ({$customer->email}) has been updated in the system.\n\n{$changesSummary}"
+                );
 
-            $this->emailService->sendAlertTo(
-                $customer->email,
-                'Your Information Has Been Updated',
-                'Your Account Information Was Updated',
-                "Hi {$customer->name},\n\nYour information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
-            );
-        } catch (\Throwable $e) { /* silent */ }
+                $emailService->sendAlertTo(
+                    $customer->email,
+                    'Your Information Has Been Updated',
+                    'Your Account Information Was Updated',
+                    "Hi {$customer->name},\n\nYour information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
+                );
+            } catch (\Throwable $e) { /* silent */ }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }

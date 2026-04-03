@@ -18,14 +18,7 @@ import {
 import { Button, FormInput } from '../../../components/ui';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { websiteContentApi } from '../../../api';
-import { API_BASE_URL } from '../../../api/config';
-
-const getFullImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
-  const backendUrl = API_BASE_URL.replace('/api', '');
-  return `${backendUrl}${imagePath}`;
-};
+import { resolveStorageUrl } from '../../../api/config';
 
 const Contact = () => {
   const { settings } = useBusinessSettings();
@@ -42,19 +35,24 @@ const Contact = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [pageContent, setPageContent] = useState({
-    heroTag: 'Get In Touch',
-    heroTitle: 'Contact Us',
-    heroSubtitle: "Have questions or ready to place an order? We'd love to hear from you!",
+  const defaultPageContent = {
+    heroTag: '',
+    heroTitle: '',
+    heroSubtitle: '',
     heroImage: null,
-    formTitle: 'Send Us a Message',
-    faqs: [
-      { question: 'What is the minimum order for delivery?', answer: 'For deliveries within Rosario, we require a minimum of 2 sacks (50kg). For bulk orders outside Rosario, please contact us for arrangements.' },
-      { question: 'Do you offer wholesale pricing?', answer: 'Yes! We offer competitive wholesale prices for businesses, restaurants, and resellers. Contact us for our wholesale price list.' },
-      { question: 'What payment methods do you accept?', answer: 'We accept cash, bank transfer, GCash, Maya, and credit/debit cards for in-store purchases.' },
-    ],
-    socialTitle: 'Connect With Us',
-    socialDescription: 'Follow us on social media for updates and promotions',
+    formTitle: '',
+    faqs: [],
+    socialTitle: '',
+    socialDescription: '',
+  };
+
+  // Load cached content instantly
+  const [pageContent, setPageContent] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kjp-contact-content');
+      if (saved) return { ...defaultPageContent, ...JSON.parse(saved) };
+    } catch (e) {}
+    return defaultPageContent;
   });
 
   useEffect(() => {
@@ -63,15 +61,16 @@ const Contact = () => {
         const result = await websiteContentApi.getContactContent();
         if (result.success && result.data) {
           setPageContent(prev => ({ ...prev, ...result.data }));
+          localStorage.setItem('kjp-contact-content', JSON.stringify(result.data));
         }
       } catch (error) {
-        // Use defaults
+        // Use cached/defaults
       }
     };
     fetchContent();
 
     const handleStorageSync = (e) => {
-      if (e.key === 'kjp-contact-content') fetchContent();
+      if (e.key === 'kjp-contact-content' && !e.newValue) fetchContent();
     };
     window.addEventListener('storage', handleStorageSync);
     return () => window.removeEventListener('storage', handleStorageSync);
@@ -169,8 +168,8 @@ const Contact = () => {
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
           style={{ 
             backgroundImage: pageContent.heroImage
-              ? `url(${getFullImageUrl(pageContent.heroImage)})`
-              : 'url(https://images.unsplash.com/photo-1423666639041-f56000c27a9a?w=1920&h=600&fit=crop)',
+              ? `url(${resolveStorageUrl(pageContent.heroImage)})`
+              : 'none',
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-gray-900/50 to-gray-900" />

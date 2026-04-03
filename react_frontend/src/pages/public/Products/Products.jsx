@@ -15,16 +15,9 @@ import {
 import { Button, Skeleton } from '../../../components/ui';
 import { productsApi, websiteContentApi } from '../../../api';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
-import { API_BASE_URL } from '../../../api/config';
+import { resolveStorageUrl } from '../../../api/config';
 
 const iconMap = { Leaf, Award, Truck, Package };
-
-const getFullImageUrl = (imagePath) => {
-  if (!imagePath) return null;
-  if (imagePath.startsWith('http') || imagePath.startsWith('blob:')) return imagePath;
-  const backendUrl = API_BASE_URL.replace('/api', '');
-  return `${backendUrl}${imagePath}`;
-};
 
 // Fallback products — empty until real products loaded from API
 const fallbackProducts = [];
@@ -44,20 +37,19 @@ const Products = () => {
   const [isFromCache, setIsFromCache] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
-  // Fetch products from API
+  // Fetch products from API (shows cached instantly, refreshes in background)
   useEffect(() => {
+    let cancelled = false;
     const fetchProducts = async () => {
-      setLoading(true);
-      
       const result = await productsApi.getAll({
         search: searchTerm,
         variety: selectedVariety,
         sort: sortBy,
       });
 
+      if (cancelled) return;
       if (result.success) {
         setProducts(result.data || []);
-        // Only show cache banner if data came from cache due to a server error
         setIsFromCache(result.fromCache && result.error ? true : false);
       } else {
         setProducts(fallbackProducts);
@@ -67,11 +59,14 @@ const Products = () => {
       setLoading(false);
     };
 
-    const timeoutId = setTimeout(fetchProducts, 300);
-    return () => clearTimeout(timeoutId);
+    // Only show loading skeleton on first load (no products yet)
+    if (products.length > 0) setLoading(false);
+
+    const timeoutId = setTimeout(fetchProducts, searchTerm ? 300 : 0);
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, [searchTerm, selectedVariety, sortBy, retryCount]);
 
-  // Fetch varieties
+  // Fetch varieties once
   useEffect(() => {
     const fetchVarieties = async () => {
       const result = await productsApi.getVarieties();
@@ -118,19 +113,24 @@ const Products = () => {
   const { settings } = useBusinessSettings();
   const logoFallback = settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : null;
 
-  const [pageContent, setPageContent] = useState({
-    heroTag: 'Our Products',
-    heroTitle: 'Premium Rice Selection',
-    heroSubtitle: 'Discover our wide range of quality rice products, from premium jasmine to nutritious brown rice',
+  const defaultPageContent = {
+    heroTag: '',
+    heroTitle: '',
+    heroSubtitle: '',
     heroImage: null,
-    badges: [
-      { title: 'Fresh from Farm', icon: 'Leaf' },
-      { title: 'Quality Guaranteed', icon: 'Award' },
-      { title: 'Fast Delivery', icon: 'Truck' },
-    ],
-    ctaTitle: 'Need Bulk Orders or Custom Packaging?',
-    ctaDescription: 'Contact us for wholesale pricing, bulk orders, or custom packaging solutions for your business.',
-    ctaButtonText: 'Contact for Wholesale',
+    badges: [],
+    ctaTitle: '',
+    ctaDescription: '',
+    ctaButtonText: '',
+  };
+
+  // Load cached content instantly
+  const [pageContent, setPageContent] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kjp-products-content');
+      if (saved) return { ...defaultPageContent, ...JSON.parse(saved) };
+    } catch (e) {}
+    return defaultPageContent;
   });
 
   useEffect(() => {
@@ -139,15 +139,16 @@ const Products = () => {
         const result = await websiteContentApi.getProductsContent();
         if (result.success && result.data) {
           setPageContent(prev => ({ ...prev, ...result.data }));
+          localStorage.setItem('kjp-products-content', JSON.stringify(result.data));
         }
       } catch (error) {
-        // Use defaults
+        // Use cached/defaults
       }
     };
     fetchContent();
 
     const handleStorageSync = (e) => {
-      if (e.key === 'kjp-products-content') fetchContent();
+      if (e.key === 'kjp-products-content' && !e.newValue) fetchContent();
     };
     window.addEventListener('storage', handleStorageSync);
     return () => window.removeEventListener('storage', handleStorageSync);
@@ -170,8 +171,8 @@ const Products = () => {
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
           style={{ 
             backgroundImage: pageContent.heroImage 
-              ? `url(${getFullImageUrl(pageContent.heroImage)})`
-              : 'url(https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=1920&h=600&fit=crop)',
+              ? `url(${resolveStorageUrl(pageContent.heroImage)})`
+              : 'none',
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-gray-900/50 to-gray-900" />

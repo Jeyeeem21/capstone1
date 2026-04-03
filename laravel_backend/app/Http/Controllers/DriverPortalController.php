@@ -301,6 +301,7 @@ class DriverPortalController extends Controller
                     'total' => (float) $i->subtotal,
                 ])->toArray(),
                 'total_value' => (float) $s->total,
+                'delivery_fee' => (float) ($s->delivery_fee ?? 0),
                 'payment_method' => $s->payment_method,
                 'payment_status' => $s->payment_status,
                 'created_at' => $s->created_at?->toDateTimeString(),
@@ -391,6 +392,27 @@ class DriverPortalController extends Controller
             }
 
             $this->sendDriverOrderNotifications($sale, 'picked_up', $user->name);
+
+            // Send email after response to avoid blocking
+            $emailService = $this->emailService;
+            $saleSnapshot = $sale;
+            $driverName = $user->name;
+            dispatch(function () use ($emailService, $saleSnapshot, $driverName) {
+                try {
+                    $emailService->sendOrderStatusToAdmin(
+                        $saleSnapshot,
+                        'Return Picked Up',
+                        "Order #{$saleSnapshot->transaction_id} has been picked up by {$driverName}. Awaiting admin/super admin verification before marking as returned."
+                    );
+                    $emailService->sendOrderStatusToCustomer(
+                        $saleSnapshot,
+                        'Return Picked Up',
+                        "Your order #{$saleSnapshot->transaction_id} has been picked up by the driver. We'll verify and process your return shortly."
+                    );
+                } catch (\Throwable $e) {
+                    \Log::warning("Picked up email failed for sale #{$saleSnapshot->id}: " . $e->getMessage());
+                }
+            })->afterResponse();
 
         } elseif ($validated['status'] === 'delivered') {
             $sale->status = 'delivered';

@@ -1,5 +1,6 @@
 import { Heart, Mail, Phone, MapPin, Clock, Zap, Package, ShoppingCart, TrendingUp, BarChart3, Facebook, Twitter, Instagram, Linkedin, Wheat, Monitor, ClipboardList, User } from 'lucide-react';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { DEFAULT_LOGO } from '../../api/config';
 import { useAuth } from '../../context/AuthContext';
 
 const Footer = ({ 
@@ -59,7 +60,7 @@ const Footer = ({
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-xl bg-button-500 flex items-center justify-center shadow-lg shadow-button-500/30 overflow-hidden">
                 <img 
-                  src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
+                  src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : DEFAULT_LOGO} 
                   alt={settings.business_name || 'Business Logo'} 
                   className="w-10 h-10 object-contain"
                   onError={(e) => {

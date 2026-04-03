@@ -6,7 +6,11 @@ import { resolveStorageUrl, DEFAULT_LOGO } from '../api/config';
 const getFullLogoUrl = (logoPath) => {
   if (!logoPath || logoPath === '/logo.svg') return DEFAULT_LOGO;
   if (logoPath.startsWith('blob:')) return DEFAULT_LOGO;
-  if (logoPath.startsWith('http')) return logoPath;
+  if (logoPath.startsWith('http')) {
+    // Guard against malformed URLs from stale cache (e.g. https://.kjpricemill.com)
+    if (/https?:\/\/\./.test(logoPath)) return DEFAULT_LOGO;
+    return logoPath;
+  }
   return resolveStorageUrl(logoPath);
 };
 
@@ -88,6 +92,8 @@ const buildSettings = (data) => {
     shipping_base_km: data.shipping_base_km || '',
     warehouse_address: data.warehouse_address || '',
     google_maps_embed: data.google_maps_embed || '',
+    smtp_password: data.smtp_password || '', // Include SMTP password for warning check
+    smtp_configured: data.smtp_configured || false, // Flag to check if SMTP is configured
   };
 };
 
@@ -102,8 +108,14 @@ export const BusinessSettingsProvider = ({ children }) => {
       const result = isInitial
         ? await businessSettingsApi.getAll()
         : await businessSettingsApi.getFresh();
+      
+      console.log('API Response:', result);
+      console.log('SMTP Password from API:', result?.data?.smtp_password);
+      console.log('SMTP Configured from API:', result?.data?.smtp_configured);
+      
       if (result?.success && result?.data) {
         const newSettings = buildSettings(result.data);
+        console.log('Built Settings:', newSettings);
         setSettings(newSettings);
         localStorage.setItem('kjp-business-settings', JSON.stringify(newSettings));
       }
@@ -146,8 +158,12 @@ export const BusinessSettingsProvider = ({ children }) => {
     });
   };
 
-  // Allow manual refresh (e.g. after saving settings)
-  const refreshSettings = useCallback(() => fetchSettings(false), [fetchSettings]);
+  // Allow manual refresh (e.g. after saving settings) - clears cache first
+  const refreshSettings = useCallback(() => {
+    // Clear localStorage cache before fetching
+    localStorage.removeItem('kjp-business-settings');
+    return fetchSettings(false);
+  }, [fetchSettings]);
 
   return (
     <BusinessSettingsContext.Provider value={{ settings, loading, updateSettings, refreshSettings }}>

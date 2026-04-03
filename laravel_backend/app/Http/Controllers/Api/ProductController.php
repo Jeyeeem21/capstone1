@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class ProductController extends Controller
 {
+    use AuditLogger;
     /**
      * Get all products (public API)
      */
@@ -143,6 +145,13 @@ class ProductController extends Controller
 
         $product = Product::create($validated);
 
+        $this->logAudit('CREATE', 'Products', "Created product: {$product->name}", [
+            'product_id' => $product->id,
+            'name' => $product->name,
+            'variety' => $product->variety,
+            'price' => $product->price,
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Product created successfully',
@@ -172,6 +181,11 @@ class ProductController extends Controller
 
         $product->update($validated);
 
+        $this->logAudit('UPDATE', 'Products', "Updated product: {$product->name}", [
+            'product_id' => $product->id,
+            'changes' => $validated,
+        ]);
+
         return response()->json([
             'success' => true,
             'message' => 'Product updated successfully',
@@ -184,7 +198,13 @@ class ProductController extends Controller
      */
     public function destroy(Product $product): JsonResponse
     {
+        $productName = $product->name;
+        $productId = $product->id;
         $product->delete();
+
+        $this->logAudit('DELETE', 'Products', "Deleted product: {$productName}", [
+            'product_id' => $productId,
+        ]);
 
         return response()->json([
             'success' => true,

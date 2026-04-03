@@ -75,6 +75,21 @@ const websiteContentApi = {
   },
 
   /**
+   * Get legal content (terms & privacy)
+   */
+  getLegalContent: async () => {
+    return apiClient.get('/website-content/legal');
+  },
+
+  /**
+   * Save legal content (terms & privacy)
+   * @param {Object} data - Legal content data
+   */
+  saveLegalContent: async (data) => {
+    return apiClient.post('/website-content/legal', data);
+  },
+
+  /**
    * Upload hero image for any page
    * @param {File} file - Image file
    * @param {string} page - 'home', 'about', 'products', or 'contact'

@@ -12,7 +12,7 @@ class VerificationCode extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public string $code)
+    public function __construct(public string $code, public ?string $name = null)
     {
     }
 
@@ -27,7 +27,10 @@ class VerificationCode extends Mailable
     {
         return new Content(
             view: 'emails.verification-code',
-            with: ['code' => $this->code],
+            with: [
+                'code' => $this->code,
+                'name' => $this->name,
+            ],
         );
     }
 }

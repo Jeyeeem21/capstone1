@@ -126,6 +126,11 @@ class DryingProcessController extends Controller
         try {
             $drying = $this->dryingProcessService->updateDryingProcess($dryingProcess, $validator->validated());
 
+            $this->logAudit('UPDATE', 'Drying', "Updated drying process #{$drying->id}", [
+                'drying_id' => $drying->id,
+                'changes' => $validator->validated(),
+            ]);
+
             return $this->successResponse(
                 new DryingProcessResource($drying),
                 'Drying process updated successfully'

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Sun, Package, Clock, CheckCircle, DollarSign, Undo2, Check, PlusCircle, Calendar, Scale, Layers, Filter } from 'lucide-react';
+import { Sun, Package, Clock, CheckCircle, DollarSign, Undo2, Check, PlusCircle, Calendar, Scale, Layers, Filter, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -13,6 +13,7 @@ const DryingProcess = () => {
   const toast = useToast();
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartScopeActive, setChartScopeActive] = useState(false);
   const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
   const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
@@ -427,10 +428,11 @@ const DryingProcess = () => {
   }, [chartPeriod, chartMonth, chartYear, chartYearFrom, chartYearTo, getWeeksInMonth]);
 
   const chartFilteredDrying = useMemo(() => {
+    if (!chartScopeActive && !activeChartPoint) return dryingProcesses;
     const scoped = dryingProcesses.filter(isInChartScope);
     if (!activeChartPoint) return scoped;
     return scoped.filter(matchesChartPoint);
-  }, [dryingProcesses, isInChartScope, activeChartPoint, matchesChartPoint]);
+  }, [dryingProcesses, isInChartScope, activeChartPoint, matchesChartPoint, chartScopeActive]);
 
   const chartFilteredTableData = useMemo(() => {
     const filtered = chartFilteredDrying;
@@ -746,16 +748,37 @@ const DryingProcess = () => {
           <div className="lg:col-span-2">
             <LineChart
               title="Drying Cost Trends"
-              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Drying process cost overview"}
+              subtitle={(() => {
+                const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                if (!chartScopeActive && !activeChartPoint) return 'Drying process cost overview';
+                let scope = '';
+                if (chartPeriod === 'daily' || chartPeriod === 'weekly') { const [y,m] = chartMonth.split('-').map(Number); scope = `${months[m-1]} ${y}`; }
+                else if (chartPeriod === 'monthly' || chartPeriod === 'bi-annually') scope = String(chartYear);
+                else if (chartPeriod === 'annually') scope = `${chartYearFrom}–${chartYearTo}`;
+                const mode = chartPeriod.charAt(0).toUpperCase() + chartPeriod.slice(1);
+                if (activeChartPoint) return `${activeChartPoint} · ${scope}`;
+                return `${mode} · ${scope}`;
+              })()}
               data={chartData}
               lines={[{ dataKey: 'value', name: 'Cost (₱)' }]}
               height={280}
               yAxisUnit="₱"
               headerRight={
                 <div className="flex items-center gap-2 flex-wrap">
+                  {(activeChartPoint || chartScopeActive) && (
+                    <button
+                      onClick={() => { setActiveChartPoint(null); setChartScopeActive(false); setChartPeriod('daily'); const d = new Date(); setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setChartYear(d.getFullYear()); setChartYearFrom(d.getFullYear() - 4); setChartYearTo(d.getFullYear()); }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      title="Clear chart filter"
+                    >
+                      <X size={14} />
+                      Clear Filter
+                    </button>
+                  )}
                   <select
                     value={chartPeriod}
-                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                    onClick={() => { if (!chartScopeActive) { setActiveChartPoint(null); setChartScopeActive(true); } }}
+                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                     className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
@@ -765,37 +788,37 @@ const DryingProcess = () => {
                     <option value="annually">Annually</option>
                   </select>
                   {chartPeriod === 'daily' && (
-                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {chartPeriod === 'weekly' && (
-                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                    <input type="month" value={chartMonth} onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500" />
                   )}
                   {chartPeriod === 'monthly' && (
-                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); setChartScopeActive(true); }}
                       min="2000" max={new Date().getFullYear()}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {chartPeriod === 'bi-annually' && (
-                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                    <input type="number" value={chartYear} onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); setChartScopeActive(true); }}
                       min="2000" max={new Date().getFullYear()}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24" />
                   )}
                   {chartPeriod === 'annually' && (
                     <div className="flex items-center gap-1">
-                      <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                      <input type="number" value={chartYearFrom} onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min="2000" max={chartYearTo}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                       <span className="text-xs text-gray-500 dark:text-gray-400">to</span>
-                      <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                      <input type="number" value={chartYearTo} onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min={chartYearFrom} max={new Date().getFullYear()}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20" />
                     </div>
                   )}
                 </div>
               }
-              onDotClick={setActiveChartPoint}
+              onDotClick={(point) => { setActiveChartPoint(point); setChartScopeActive(true); }}
               activePoint={activeChartPoint}
               summaryStats={[
                 { label: 'Total Records', value: totalRecords.toString(), color: 'text-primary-600 dark:text-primary-400' },

@@ -21,11 +21,12 @@ import {
   Sun,
   Shield,
 } from 'lucide-react';
-import { Avatar } from '../ui';
+import { Avatar, useToast } from '../ui';
 import { ConfirmModal } from '../ui/Modal';
 import SidebarMenuItem from './SidebarMenuItem';
 import SidebarSubMenuItem from './SidebarSubMenuItem';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { DEFAULT_LOGO } from '../../api/config';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose }) => {
@@ -33,11 +34,22 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
   const navigate = useNavigate();
   const { settings } = useBusinessSettings();
   const { user, logout, isSuperAdmin, basePath } = useAuth();
+  const toast = useToast();
   const [openMenus, setOpenMenus] = useState({
     products: false,
     partners: false,
   });
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [showSmtpWarning, setShowSmtpWarning] = useState(false);
+
+  // Check SMTP configuration - show warning if SMTP password is empty/not configured
+  useEffect(() => {
+    // Check if SMTP is configured from context
+    const isConfigured = settings?.smtp_configured === true;
+    
+    // Show warning if NOT configured (empty smtp_password)
+    setShowSmtpWarning(!isConfigured);
+  }, [settings]); // Re-check when settings change
 
   // Auto-expand menus based on current route
   useEffect(() => {
@@ -64,6 +76,13 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
   };
 
   const handleLogout = async () => {
+    // Check if SMTP is configured before allowing logout
+    if (!settings?.smtp_configured) {
+      toast.error('SMTP Configuration Required', 'Please configure your Gmail App Password in Settings before logging out. This is required for email notifications.');
+      setIsLogoutModalOpen(false);
+      return;
+    }
+    
     setIsLogoutModalOpen(false);
     await logout();
     navigate('/?login=true');
@@ -110,7 +129,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             className="w-10 h-10 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25 overflow-hidden flex-shrink-0"
           >
             <img 
-              src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
+              src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : DEFAULT_LOGO} 
               alt={settings.business_name || 'Business Logo'} 
               className="w-8 h-8 object-contain"
               onError={(e) => {
@@ -280,6 +299,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             label="Settings"
             to={`${basePath}/settings`}
             isCollapsed={isCollapsed}
+            badge={showSmtpWarning ? 'warning' : null}
           />
         </div>
       </nav>

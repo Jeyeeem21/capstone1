@@ -55,7 +55,29 @@ const DonutChart = ({
   }, []);
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
-  
+
+  // Custom tooltip that hides placeholder/hidden items
+  const CustomTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length || payload[0]?.payload?.hideFromLegend) return null;
+    const entry = payload[0];
+    const pct = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0.0';
+    return (
+      <div style={{
+        backgroundColor: isDark ? '#1e293b' : 'white',
+        border: `1px solid ${isDark ? '#475569' : '#e5e7eb'}`,
+        borderRadius: '8px',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+        padding: '8px 12px',
+        fontSize: '12px',
+        color: isDark ? '#f1f5f9' : undefined,
+      }}>
+        <p style={{ color: isDark ? '#cbd5e1' : '#374151', margin: 0 }}>
+          {entry.name}: {entry.value.toLocaleString()}{valueUnit ? ` ${valueUnit}` : ''} ({pct}%)
+        </p>
+      </div>
+    );
+  };
+
   // Detect compact mode based on height
   const isCompact = compact || height <= 120;
 
@@ -90,19 +112,7 @@ const DonutChart = ({
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: isDark ? '#1e293b' : 'white', 
-                    border: `1px solid ${isDark ? '#475569' : '#e5e7eb'}`,
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    padding: '8px 12px',
-                    fontSize: '12px',
-                    color: isDark ? '#f1f5f9' : undefined
-                  }}
-                  itemStyle={{ color: isDark ? '#cbd5e1' : undefined }}
-                  formatter={(value, name) => [`${value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
-                />
+                <Tooltip content={CustomTooltip} />
               </PieChart>
             </ResponsiveContainer>
 
@@ -119,7 +129,7 @@ const DonutChart = ({
 
           {/* Legend beside chart */}
           <div className={`flex-1 ${compactLegend || data.length > 5 ? 'grid grid-cols-2 gap-x-3 gap-y-1' : 'space-y-1.5'}`}>
-            {data.map((item, index) => (
+            {data.filter(item => !item.hideFromLegend).map((item, index) => (
               <div key={item.name} className="flex items-center gap-1.5">
                 <div 
                   className={`rounded-full flex-shrink-0 ${compactLegend || data.length > 5 ? 'w-2.5 h-2.5' : 'w-3 h-3 mt-0.5'}`}
@@ -160,19 +170,7 @@ const DonutChart = ({
                     />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: isDark ? '#1e293b' : 'white', 
-                    border: `1px solid ${isDark ? '#475569' : '#e5e7eb'}`,
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                    padding: '8px 12px',
-                    fontSize: '12px',
-                    color: isDark ? '#f1f5f9' : undefined
-                  }}
-                  itemStyle={{ color: isDark ? '#cbd5e1' : undefined }}
-                  formatter={(value, name) => [`${value.toLocaleString()}${valueUnit ? ` ${valueUnit}` : ''} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`, name]}
-                />
+                <Tooltip content={CustomTooltip} />
               </PieChart>
             </ResponsiveContainer>
 
@@ -214,7 +212,7 @@ const DonutChart = ({
           {/* Full Legend */}
           {showLegend && (
             <div className="grid grid-cols-2 gap-2 mt-2">
-              {data.map((item, index) => (
+              {data.filter(item => !item.hideFromLegend).map((item, index) => (
                 <div key={item.name} className="flex items-start gap-2">
                   <div 
                     className="w-3 h-3 rounded-full mt-0.5 flex-shrink-0"

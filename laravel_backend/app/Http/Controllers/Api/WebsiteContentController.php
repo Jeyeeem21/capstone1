@@ -81,6 +81,7 @@ class WebsiteContentController extends Controller
             $about = $this->replaceYearPlaceholders($about);
             $products = WebsiteContent::getProductsContent();
             $contact = WebsiteContent::getContactContent();
+            $legal = WebsiteContent::getLegalContent();
             
             return response()->json([
                 'success' => true,
@@ -89,6 +90,7 @@ class WebsiteContentController extends Controller
                     'about' => $about,
                     'products' => $products,
                     'contact' => $contact,
+                    'legal' => $legal,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -351,6 +353,59 @@ class WebsiteContentController extends Controller
                 'message' => 'Failed to save contact content',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    /**
+     * Get Legal content (Terms & Privacy)
+     */
+    public function getLegalContent(): JsonResponse
+    {
+        try {
+            $content = WebsiteContent::getLegalContent();
+            return response()->json(['success' => true, 'data' => $content]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to fetch legal content'], 500);
+        }
+    }
+
+    /**
+     * Save Legal content (Terms & Privacy)
+     */
+    public function saveLegalContent(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'termsLastUpdated' => 'nullable|string|max:100',
+                'termsIntro' => 'nullable|string',
+                'termsSections' => 'nullable|array',
+                'termsSections.*.title' => 'required|string|max:255',
+                'termsSections.*.content' => 'required|string',
+                'privacyLastUpdated' => 'nullable|string|max:100',
+                'privacyIntro' => 'nullable|string',
+                'privacySections' => 'nullable|array',
+                'privacySections.*.title' => 'required|string|max:255',
+                'privacySections.*.content' => 'required|string',
+            ]);
+
+            WebsiteContent::saveLegalContent($validated);
+
+            $this->logAudit('UPDATE', 'Website Content', 'Updated terms & conditions and privacy policy', [
+                'terms_sections' => count($validated['termsSections'] ?? []),
+                'privacy_sections' => count($validated['privacySections'] ?? []),
+            ]);
+
+            $content = WebsiteContent::getLegalContent();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Legal content saved successfully',
+                'data' => $content,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to save legal content', 'error' => $e->getMessage()], 500);
         }
     }
 

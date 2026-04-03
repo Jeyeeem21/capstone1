@@ -367,7 +367,7 @@ const CustomerDashboard = () => {
             <DonutChart
               title="Order Status"
               subtitle={activeChartPoint ? `Filtered: ${activeChartPoint}` : "Breakdown of your orders"}
-              data={orderStatusData.length > 0 ? orderStatusData : [{ name: 'No Orders', value: 1, color: '#e5e7eb' }]}
+              data={orderStatusData.length > 0 ? orderStatusData : [{ name: 'No Orders', value: 1, color: '#e5e7eb', hideFromLegend: true }]}
               centerValue={`${activeChartPoint ? filteredOrders.length : orders.length}`}
               centerLabel="Orders"
               height={175}

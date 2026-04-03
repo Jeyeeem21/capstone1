@@ -56,6 +56,22 @@ const businessSettingsApi = {
   testEmail: async (smtpPassword) => {
     return apiClient.post('/business-settings/test-email', { smtp_password: smtpPassword });
   },
+
+  /**
+   * Check if business email is available
+   * @param {string} email - Email to check
+   */
+  checkBusinessEmail: async (email) => {
+    return apiClient.post('/business-settings/check-business-email', { email });
+  },
+
+  /**
+   * Verify business email change with code
+   * @param {string} code - 6-digit verification code
+   */
+  verifyBusinessEmailChange: async (code) => {
+    return apiClient.post('/business-settings/verify-business-email-change', { code });
+  },
 };
 
 export default businessSettingsApi;

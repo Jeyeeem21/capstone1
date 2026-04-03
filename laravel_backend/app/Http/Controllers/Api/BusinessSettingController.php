@@ -11,6 +11,8 @@ use App\Traits\ApiResponse;
 use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 
 class BusinessSettingController extends Controller
@@ -33,9 +35,15 @@ class BusinessSettingController extends Controller
             $settings = $this->settingService->getAllSettings();
             $settings['business_hours_formatted'] = $this->settingService->getFormattedBusinessHours();
 
-            // Never expose SMTP password — mask it if present
-            if (!empty($settings['smtp_password'])) {
+            // Add flag to indicate if SMTP is configured (check for non-empty string)
+            $smtpPassword = $settings['smtp_password'] ?? '';
+            $settings['smtp_configured'] = !empty(trim($smtpPassword));
+
+            // Never expose SMTP password — mask it if present, otherwise return empty string
+            if (!empty(trim($smtpPassword))) {
                 $settings['smtp_password'] = '••••••••';
+            } else {
+                $settings['smtp_password'] = '';
             }
 
             return $this->successResponse($settings);
@@ -78,12 +86,83 @@ class BusinessSettingController extends Controller
                 'google_maps_embed' => 'nullable|string|max:2000',
                 // SMTP / Email settings
                 'smtp_password' => 'nullable|string|max:255',
+                'current_password' => 'nullable|string', // Required when changing business_email
             ]);
 
             // Don't overwrite smtp_password if user sent the masked placeholder
             if (isset($validated['smtp_password']) && $validated['smtp_password'] === '••••••••') {
                 unset($validated['smtp_password']);
             }
+
+            $oldBusinessEmail = BusinessSetting::getValue('business_email') ?? '';
+            $emailChanging = isset($validated['business_email']) && 
+                            strtolower(trim($validated['business_email'])) !== strtolower(trim($oldBusinessEmail ?? ''));
+
+            // If business_email is being updated, require password verification and send verification code
+            if ($emailChanging) {
+                $user = $request->user();
+                
+                if (!isset($validated['current_password'])) {
+                    return $this->errorResponse('Password verification is required to change the business email address.', 422);
+                }
+
+                if (!\Illuminate\Support\Facades\Hash::check($validated['current_password'], $user->password)) {
+                    return $this->errorResponse('The password is incorrect.', 422);
+                }
+
+                $newBusinessEmail = strtolower(trim($validated['business_email']));
+                
+                // Generate verification code and cache it
+                $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $cacheKey = 'business_email_change_' . $user->id;
+
+                Cache::put($cacheKey, [
+                    'user_id' => $user->id,
+                    'old_email' => $oldBusinessEmail,
+                    'new_email' => $newBusinessEmail,
+                    'code' => $code,
+                    'attempts' => 0,
+                    'settings_data' => $validated, // Store all settings changes
+                ], now()->addMinutes(15));
+
+                // Send verification code to NEW email
+                try {
+                    // Check if SMTP is configured
+                    $smtpPassword = BusinessSetting::getValue('smtp_password');
+                    $businessEmail = BusinessSetting::getValue('business_email');
+                    
+                    if (!$smtpPassword || !$businessEmail) {
+                        return response()->json([
+                            'success' => false,
+                            'requires_smtp_setup' => true,
+                            'error' => 'Email verification cannot be sent because SMTP is not configured. Please set up your Gmail App Password in Business Settings → Email Notifications first.',
+                        ], 422);
+                    }
+
+                    $emailService = app(EmailService::class);
+                    $userName = $user->name;
+                    dispatch(function () use ($emailService, $newBusinessEmail, $code, $userName) {
+                        $emailService->sendEmailChangeVerification($newBusinessEmail, $code, $userName);
+                    })->afterResponse();
+                } catch (\Exception $e) {
+                    \Log::error('Failed to send business email verification', [
+                        'error' => $e->getMessage(),
+                        'to' => $newBusinessEmail,
+                    ]);
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'Failed to send verification email: ' . $e->getMessage(),
+                    ], 500);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'requires_verification' => true,
+                    'message' => 'Verification code sent to ' . $newBusinessEmail . '. Please check your email.',
+                ]);
+            }
+
+            unset($validated['current_password']);
 
             $settings = $this->settingService->updateSettings($validated);
             $settings['business_hours_formatted'] = $this->settingService->getFormattedBusinessHours();
@@ -103,6 +182,95 @@ class BusinessSettingController extends Controller
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to update business settings: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Verify business email change code and complete the change
+     */
+    public function verifyBusinessEmailChange(Request $request): JsonResponse
+    {
+        $request->validate([
+            'code' => 'required|string|size:6',
+        ]);
+
+        $user = $request->user();
+        $cacheKey = 'business_email_change_' . $user->id;
+        $cached = Cache::get($cacheKey);
+
+        if (!$cached) {
+            return $this->errorResponse('Verification code has expired. Please start over.', 422);
+        }
+
+        if ($cached['attempts'] >= 5) {
+            Cache::forget($cacheKey);
+            return $this->errorResponse('Too many failed attempts. Please start over.', 429);
+        }
+
+        if ($cached['code'] !== $request->code) {
+            $cached['attempts']++;
+            Cache::put($cacheKey, $cached, now()->addMinutes(15));
+            $remaining = 5 - $cached['attempts'];
+            return $this->errorResponse("Invalid code. {$remaining} attempt(s) remaining.", 422);
+        }
+
+        // Code is valid - update business settings
+        $oldEmail = $cached['old_email'];
+        $newEmail = $cached['new_email'];
+        $settingsData = $cached['settings_data'];
+
+        unset($settingsData['current_password']);
+
+        // SMTP password is NOT cleared here — it stays in DB until the user
+        // configures a new App Password via the mandatory SMTP modal.
+        // If the user cancels the email change, the email reverts and the
+        // existing SMTP password still works with the original email.
+        unset($settingsData['smtp_password']);
+
+        $settings = $this->settingService->updateSettings($settingsData);
+        $settings['business_hours_formatted'] = $this->settingService->getFormattedBusinessHours();
+
+        // Mask smtp_password in the response
+        if (!empty($settings['smtp_password'])) {
+            $settings['smtp_password'] = '••••••••';
+        }
+
+        // Find the super admin user and update their email
+        $superAdmin = \App\Models\User::where('role', 'super_admin')->first();
+        
+        if ($superAdmin) {
+            $superAdmin->update([
+                'email' => $newEmail,
+                'email_change_pending' => true,
+                'email_changed_at' => now(),
+            ]);
+            
+            $this->logAudit('UPDATE', 'User', 'Super admin email updated to match business email', [
+                'user_id' => $superAdmin->id,
+                'old_email' => $oldEmail,
+                'new_email' => $newEmail,
+            ]);
+        }
+
+        // Send notification to old email (non-blocking)
+        $userName = $user->name;
+        $ip = $request->ip();
+        dispatch(function () use ($oldEmail, $newEmail, $userName, $ip) {
+            try {
+                $emailService = app(EmailService::class);
+                $emailService->sendEmailChangeNotification($oldEmail, $newEmail, $userName, $ip);
+            } catch (\Exception $e) {
+                // Silent fail
+            }
+        })->afterResponse();
+
+        $this->logAudit('UPDATE', 'Business Settings', 'Business email changed', [
+            'old_email' => $oldEmail,
+            'new_email' => $newEmail,
+        ]);
+
+        Cache::forget($cacheKey);
+
+        return $this->successResponse($settings, 'Business email changed successfully. Please reconfigure your Gmail App Password for the new email address.');
     }
 
     /**
@@ -179,5 +347,59 @@ class BusinessSettingController extends Controller
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to send test email: ' . $e->getMessage(), 500);
         }
+    }
+
+    /**
+     * Check if business email is available
+     */
+    public function checkBusinessEmail(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $email = strtolower(trim($request->email));
+        $currentBusinessEmail = BusinessSetting::getValue('business_email');
+
+        \Log::info('Checking business email', [
+            'email' => $email,
+            'currentBusinessEmail' => $currentBusinessEmail,
+        ]);
+
+        // If it's the current business email, it's available (not taken)
+        if ($currentBusinessEmail && strtolower(trim($currentBusinessEmail)) === $email) {
+            \Log::info('Email matches current business email - available');
+            return $this->successResponse(
+                ['available' => true],
+                'Email is available'
+            );
+        }
+
+        // Check if email is taken by any user EXCEPT super admin
+        // (because super admin email is synced with business email)
+        $takenByUser = \App\Models\User::where('email', $email)
+            ->where('role', '!=', 'super_admin')
+            ->exists();
+
+        \Log::info('User check', ['takenByUser' => $takenByUser]);
+
+        // Check if email is taken by any customer
+        $takenByCustomer = \App\Models\Customer::where('email', $email)->exists();
+        
+        \Log::info('Customer check', ['takenByCustomer' => $takenByCustomer]);
+
+        // Check if email is taken by any supplier
+        $takenBySupplier = \App\Models\Supplier::where('email', $email)->exists();
+        
+        \Log::info('Supplier check', ['takenBySupplier' => $takenBySupplier]);
+
+        $taken = $takenByUser || $takenByCustomer || $takenBySupplier;
+
+        \Log::info('Final result', ['taken' => $taken, 'available' => !$taken]);
+
+        return $this->successResponse(
+            ['available' => !$taken],
+            $taken ? 'This email is already registered.' : 'Email is available.'
+        );
     }
 }

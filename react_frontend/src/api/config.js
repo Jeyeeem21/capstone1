@@ -40,8 +40,14 @@ export const ENDPOINTS = {
     LOGOUT: '/auth/logout',
     REGISTER: '/auth/register',
     FORGOT_PASSWORD: '/auth/forgot-password',
+    FORGOT_PASSWORD_VERIFY_CODE: '/auth/forgot-password/verify-code',
     RESET_PASSWORD: '/auth/reset-password',
     ME: '/auth/me',
+    CHECK_EMAIL: '/auth/check-email',
+    REGISTER_SEND_VERIFICATION: '/auth/register/send-verification',
+    REGISTER_VERIFY_CODE: '/auth/register/verify-code',
+    REGISTER_COMPLETE: '/auth/register/complete',
+    REGISTER_CANCEL: '/auth/register/cancel',
   },
   
   // Products

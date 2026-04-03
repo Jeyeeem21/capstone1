@@ -6,10 +6,12 @@ import {
   ClipboardList, Bell, ChevronDown, LayoutDashboard, Settings
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { DEFAULT_LOGO } from '../../api/config';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../../components/common/NotificationBell';
 import { Footer } from '../../components/common';
+import { ConfirmModal } from '../../components/ui';
 
 // Mobile Bottom Navigation (matches admin pattern)
 const CustomerBottomNav = ({ cartCount }) => {
@@ -72,6 +74,7 @@ const CustomerHeader = ({ customer, cartCount, handleLogout }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -110,6 +113,7 @@ const CustomerHeader = ({ customer, cartCount, handleLogout }) => {
   const businessName = settings?.business_name || 'KJP Ricemill';
 
   return (
+    <>
     <header 
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 shadow-sm border-b-2 border-primary-300 dark:border-primary-700"
       style={{ backgroundColor: 'var(--color-bg-sidebar)', color: 'var(--color-text-sidebar)' }}
@@ -134,7 +138,7 @@ const CustomerHeader = ({ customer, cartCount, handleLogout }) => {
                 style={{ background: `linear-gradient(135deg, ${theme.button_primary}, ${theme.button_primary}dd)` }}
               >
                 <img 
-                  src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                  src={settings.business_logo || DEFAULT_LOGO} 
                   alt={businessName} 
                   className="w-8 h-8 object-contain"
                   onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
@@ -219,7 +223,7 @@ const CustomerHeader = ({ customer, cartCount, handleLogout }) => {
                   </Link>
                   <div className="border-t my-1 border-primary-200 dark:border-primary-700" />
                   <button
-                    onClick={async () => { await handleLogout(); }}
+                    onClick={() => { setIsProfileOpen(false); setIsLogoutModalOpen(true); }}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full"
                   >
                     <LogOut size={16} />
@@ -255,6 +259,19 @@ const CustomerHeader = ({ customer, cartCount, handleLogout }) => {
         </div>
       </div>
     </header>
+
+    <ConfirmModal
+      isOpen={isLogoutModalOpen}
+      onClose={() => setIsLogoutModalOpen(false)}
+      onConfirm={async () => { setIsLogoutModalOpen(false); await handleLogout(); }}
+      title="Confirm Logout"
+      message="Are you sure you want to logout? You will need to login again to access the system."
+      confirmText="Logout"
+      cancelText="Cancel"
+      variant="danger"
+      icon={LogOut}
+    />
+    </>
   );
 };
 

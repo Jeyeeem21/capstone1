@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Package, ClipboardList, UserPlus, Send, ShieldCheck, Lock, Loader2, Edit, FileText, ScrollText, Eye, EyeOff } from 'lucide-react';
+import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Package, ClipboardList, UserPlus, Send, ShieldCheck, Lock, Loader2, Edit, FileText, ScrollText, Eye, EyeOff, AlertTriangle, ArrowLeft, KeyRound, Shield } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
-import { apiClient } from '../../../api';
+import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable, Button } from '../../../components/ui';
+import { apiClient, websiteContentApi, usersApi } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
 import { useAuth } from '../../../context/AuthContext';
 
@@ -34,7 +34,29 @@ const Customer = () => {
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [legalContent, setLegalContent] = useState(null);
+  const [loadingLegal, setLoadingLegal] = useState(false);
+  const [legalTab, setLegalTab] = useState('terms');
+  const [resendCountdown, setResendCountdown] = useState(0);
   const emailCheckTimeout = useRef(null);
+  const countdownRef = useRef(null);
+
+  // Manage Account Modal state (for existing accounts)
+  const [isManageAccountOpen, setIsManageAccountOpen] = useState(false);
+  const [manageAccountStep, setManageAccountStep] = useState('edit'); // 'edit' | 'verification'
+  const [manageFormData, setManageFormData] = useState({ email: '', password: '' });
+  const [manageEmailError, setManageEmailError] = useState('');
+  const [isCheckingManageEmail, setIsCheckingManageEmail] = useState(false);
+  const [showManagePassword, setShowManagePassword] = useState(false);
+  const [manageSaving, setManageSaving] = useState(false);
+  const [manageCreatedAccount, setManageCreatedAccount] = useState(null);
+  const [manageVerifyCode, setManageVerifyCode] = useState('');
+  const [manageVerifyError, setManageVerifyError] = useState('');
+  const [manageVerifying, setManageVerifying] = useState(false);
+  const [manageResendingCode, setManageResendingCode] = useState(false);
+  const [manageResendCountdown, setManageResendCountdown] = useState(0);
+  const manageEmailCheckTimeout = useRef(null);
+  const manageCountdownRef = useRef(null);
 
   // Super-fast data fetching with cache
   const { 
@@ -52,6 +74,15 @@ const Customer = () => {
     { value: 'Active', label: 'Active' },
     { value: 'Inactive', label: 'Inactive' },
   ], []);
+
+  // Pre-fetch legal content on mount so Terms modal opens instantly
+  useEffect(() => {
+    if (!legalContent) {
+      websiteContentApi.getLegalContent().then(res => {
+        if (res.success && res.data) setLegalContent(res.data);
+      }).catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced email validation
   const checkEmailAvailability = useCallback(async (email, customerId = null) => {
@@ -102,7 +133,27 @@ const Customer = () => {
       if (emailCheckTimeout.current) {
         clearTimeout(emailCheckTimeout.current);
       }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
+      if (manageEmailCheckTimeout.current) {
+        clearTimeout(manageEmailCheckTimeout.current);
+      }
+      if (manageCountdownRef.current) {
+        clearInterval(manageCountdownRef.current);
+      }
     };
+  }, []);
+
+  const startCountdown = useCallback((seconds = 60) => {
+    setResendCountdown(seconds);
+    clearInterval(countdownRef.current);
+    countdownRef.current = setInterval(() => {
+      setResendCountdown(prev => {
+        if (prev <= 1) { clearInterval(countdownRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
   }, []);
 
   // --- Customer Orders & Account handlers ---
@@ -130,18 +181,36 @@ const Customer = () => {
   const handleOpenAccountModal = useCallback((item) => {
     setSelectedItem(item);
     setTermsAccepted(false);
+    setLegalTab('terms');
     setShowTermsModal(true);
   }, []);
 
-  const handleAcceptTerms = useCallback(() => {
+  const handleAcceptTerms = useCallback(async () => {
     setTermsAccepted(true);
     setShowTermsModal(false);
-    setVerificationStep('initial');
+    setVerificationStep('code-sent');
     setVerificationCode('');
     setAccountFormData({ password: '', password_confirmation: '' });
     setErrors({});
     setIsAccountModalOpen(true);
-  }, []);
+    // Auto-send verification code
+    setSendingCode(true);
+    try {
+      const response = await apiClient.post(`/customers/${selectedItem.id}/send-verification`);
+      if (response.success) {
+        startCountdown(60);
+        toast.success('Code Sent', `Verification code sent to ${selectedItem.email}`);
+      } else {
+        toast.error('Error', response.message || 'Failed to send verification code');
+        setVerificationStep('initial');
+      }
+    } catch (error) {
+      toast.error('Error', error.message || 'Failed to send verification code');
+      setVerificationStep('initial');
+    } finally {
+      setSendingCode(false);
+    }
+  }, [selectedItem, toast, startCountdown]);
 
   const handleDeclineTerms = useCallback(() => {
     setShowTermsModal(false);
@@ -155,6 +224,7 @@ const Customer = () => {
       const response = await apiClient.post(`/customers/${selectedItem.id}/send-verification`);
       if (response.success) {
         setVerificationStep('code-sent');
+        startCountdown(60);
         toast.success('Code Sent', `Verification code sent to ${selectedItem.email}`);
       } else {
         toast.error('Error', response.message || 'Failed to send verification code');
@@ -165,7 +235,7 @@ const Customer = () => {
     } finally {
       setSendingCode(false);
     }
-  }, [selectedItem, toast]);
+  }, [selectedItem, toast, startCountdown]);
 
   const handleVerifyCode = useCallback(async (code) => {
     setVerifying(true);
@@ -290,7 +360,7 @@ const Customer = () => {
       
       if (response.success && response.data) {
         const customerName = formData.name;
-        // Close modal first
+        // Close add modal
         setIsAddModalOpen(false);
         
         toast.success('Customer Added', `${customerName} has been added successfully.`);
@@ -299,6 +369,10 @@ const Customer = () => {
         // Refetch in background
         invalidateCache(CACHE_KEY);
         refetch();
+
+        // Chain into account creation flow: open Terms modal
+        const newCustomer = response.data;
+        handleOpenAccountModal(newCustomer);
         return;
       } else {
         throw response;
@@ -396,6 +470,177 @@ const Customer = () => {
     }
   };
 
+  // ========== Manage Account Handlers (for existing customer accounts) ==========
+
+  const startManageCountdown = useCallback((seconds = 60) => {
+    setManageResendCountdown(seconds);
+    clearInterval(manageCountdownRef.current);
+    manageCountdownRef.current = setInterval(() => {
+      setManageResendCountdown(prev => {
+        if (prev <= 1) { clearInterval(manageCountdownRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const handleManageAccount = useCallback((item) => {
+    setSelectedItem(item);
+    setManageFormData({ email: item.email || '', password: '' });
+    setManageEmailError('');
+    setShowManagePassword(false);
+    setManageAccountStep('edit');
+    setManageVerifyCode('');
+    setManageVerifyError('');
+    setManageCreatedAccount(null);
+    setIsManageAccountOpen(true);
+  }, []);
+
+  const handleManageAccountFormChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setManageFormData(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'email') {
+      setManageEmailError('');
+      if (manageEmailCheckTimeout.current) {
+        clearTimeout(manageEmailCheckTimeout.current);
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!value || !emailRegex.test(value)) {
+        if (value) setManageEmailError('Please enter a valid email address.');
+        return;
+      }
+      if (value.toLowerCase() === selectedItem?.email?.toLowerCase()) {
+        setManageEmailError('');
+        return;
+      }
+      manageEmailCheckTimeout.current = setTimeout(async () => {
+        try {
+          setIsCheckingManageEmail(true);
+          const response = await usersApi.checkEmail(value);
+          if (response.success && response.data && response.data.taken) {
+            setManageEmailError('This email is already registered.');
+          } else {
+            setManageEmailError('');
+          }
+        } catch {
+          setManageEmailError('Error checking email availability.');
+        } finally {
+          setIsCheckingManageEmail(false);
+        }
+      }, 500);
+    }
+  }, [selectedItem]);
+
+  const handleManageAccountSubmit = useCallback(async () => {
+    if (manageEmailError || isCheckingManageEmail) {
+      toast.error('Error', 'Please fix the email address before submitting.');
+      return;
+    }
+    const emailChanged = manageFormData.email.toLowerCase() !== selectedItem.email.toLowerCase();
+    const passwordChanged = !!manageFormData.password;
+    if (!emailChanged && !passwordChanged) {
+      toast.info('No Changes', 'No changes were made to the account.');
+      return;
+    }
+    if (passwordChanged && manageFormData.password.length < 8) {
+      toast.error('Error', 'Password must be at least 8 characters long.');
+      return;
+    }
+    try {
+      setManageSaving(true);
+      const payload = {};
+      if (emailChanged) payload.email = manageFormData.email;
+      if (passwordChanged) payload.password = manageFormData.password;
+
+      const response = await usersApi.update(selectedItem.user_id, payload);
+
+      if (response._requires_reverification) {
+        setManageCreatedAccount({
+          id: selectedItem.user_id,
+          name: selectedItem.name,
+          email: manageFormData.email || selectedItem.email,
+        });
+        setManageAccountStep('verification');
+        setManageVerifyCode('');
+        setManageVerifyError('');
+        startManageCountdown(60);
+        toast.success('Account Updated', 'A verification code has been sent to the email.');
+        invalidateCache(CACHE_KEY);
+        refetch();
+      } else {
+        toast.success('Account Updated', 'Account has been updated successfully.');
+        handleManageAccountClose();
+        invalidateCache(CACHE_KEY);
+        refetch();
+      }
+      // Fire-and-forget notification email
+      apiClient.post(`/users/${selectedItem.user_id}/update-email`, { changes: response._changes || [] }).catch(() => {});
+    } catch (error) {
+      const msg = error?.response?.data?.message || 'Failed to update account.';
+      toast.error('Error', msg);
+    } finally {
+      setManageSaving(false);
+    }
+  }, [manageFormData, manageEmailError, isCheckingManageEmail, selectedItem, toast, startManageCountdown, refetch]);
+
+  const handleManageAccountClose = useCallback(() => {
+    setIsManageAccountOpen(false);
+    setManageAccountStep('edit');
+    setManageFormData({ email: '', password: '' });
+    setManageEmailError('');
+    setShowManagePassword(false);
+    setManageCreatedAccount(null);
+    setManageVerifyCode('');
+    setManageVerifyError('');
+    setManageResendCountdown(0);
+    clearInterval(manageCountdownRef.current);
+  }, []);
+
+  const handleManageVerifyCode = useCallback(async (code) => {
+    if (code.length < 6) return;
+    setManageVerifying(true);
+    setManageVerifyError('');
+    try {
+      const response = await apiClient.post(`/users/staff/${manageCreatedAccount.id}/verify-email`, {
+        email: manageCreatedAccount.email,
+        code: code,
+      });
+      if (response.success) {
+        toast.success('Email Verified', 'Customer email has been verified successfully!');
+        handleManageAccountClose();
+        invalidateCache(CACHE_KEY);
+        refetch();
+      } else {
+        setManageVerifyError(response.message || 'Invalid verification code.');
+      }
+    } catch (error) {
+      const msg = error?.response?.data?.message || 'Verification failed. Please try again.';
+      setManageVerifyError(msg);
+    } finally {
+      setManageVerifying(false);
+    }
+  }, [manageCreatedAccount, toast, handleManageAccountClose, refetch]);
+
+  const handleManageResendCode = useCallback(async () => {
+    if (manageResendCountdown > 0) return;
+    setManageResendingCode(true);
+    setManageVerifyError('');
+    try {
+      const response = await apiClient.post(`/users/staff/${manageCreatedAccount.id}/resend-verification`);
+      if (response.success) {
+        toast.success('Code Sent', 'A new verification code has been sent.');
+        startManageCountdown(60);
+      } else {
+        setManageVerifyError(response.message || 'Failed to resend code.');
+      }
+    } catch (error) {
+      const msg = error?.response?.data?.message || 'Failed to resend code.';
+      setManageVerifyError(msg);
+    } finally {
+      setManageResendingCode(false);
+    }
+  }, [manageCreatedAccount, manageResendCountdown, toast, startManageCountdown]);
+
   // Stats
   const totalCustomers = customers.length;
   const activeCustomers = customers.filter(c => c.status === 'Active').length;
@@ -412,13 +657,13 @@ const Customer = () => {
       cell: (row) => (
         <div className="space-y-1">
           <div className="flex items-center gap-1.5 text-sm">
-            <Mail size={14} className="text-green-600 dark:text-green-400" />
+            <Mail size={14} className={`shrink-0 ${row.has_account ? (row.email_verified_at ? '!text-green-500 dark:!text-green-400' : '!text-amber-500 dark:!text-amber-400') : '!text-gray-400 dark:!text-gray-500'}`} title={row.has_account ? (row.email_verified_at ? 'Email Verified' : 'Email Not Verified') : 'No Account'} />
             <a href={`mailto:${row.email}`} className="text-button-600 hover:text-button-700 dark:text-button-300 hover:underline">
               {row.email}
             </a>
           </div>
           <div className="flex items-center gap-1.5 text-sm">
-            <Phone size={14} className="text-purple-600 dark:text-purple-400" />
+            <Phone size={14} className="shrink-0 !text-purple-600 dark:!text-purple-400" />
             <a href={`tel:${row.phone}`} className="text-gray-700 dark:text-gray-200 hover:text-gray-900">
               {row.phone}
             </a>
@@ -445,7 +690,7 @@ const Customer = () => {
         >
           <ClipboardList size={15} />
         </button>
-        {!row.has_account && (
+        {!row.has_account ? (
           <button
             onClick={(e) => { e.stopPropagation(); handleOpenAccountModal(row); }}
             className="p-1.5 rounded-md hover:bg-green-50 dark:hover:bg-green-900/20 text-green-500 hover:text-green-700 dark:text-green-300 transition-colors"
@@ -453,11 +698,19 @@ const Customer = () => {
           >
             <UserPlus size={15} />
           </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleManageAccount(row); }}
+            className="p-1.5 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 hover:text-blue-700 dark:text-blue-300 transition-colors"
+            title="Manage Account"
+          >
+            <KeyRound size={15} />
+          </button>
         )}
         <ActionButtons onEdit={() => handleEdit(row)} onArchive={isSuperAdmin() ? () => handleDelete(row) : undefined} />
       </div>
     )},
-  ], [handleView, handleEdit, handleDelete, handleViewOrders, handleOpenAccountModal, isSuperAdmin]);
+  ], [handleView, handleEdit, handleDelete, handleViewOrders, handleOpenAccountModal, handleManageAccount, isSuperAdmin]);
 
   return (
     <div>
@@ -526,6 +779,17 @@ const Customer = () => {
                 className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2"
               >
                 <UserPlus size={16} /> Create Account
+              </button>
+            )}
+            {selectedItem && selectedItem.has_account && (
+              <button
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleManageAccount(selectedItem);
+                }}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                <KeyRound size={16} /> Manage Account
               </button>
             )}
             <button
@@ -691,6 +955,7 @@ const Customer = () => {
                 placeholder="email@example.com" 
                 submitted={submitted} 
                 error={errors.email?.[0]} 
+                loading={isCheckingEmail}
               />
             </div>
             <FormInput 
@@ -901,73 +1166,85 @@ const Customer = () => {
         )}
       </Modal>
 
-      {/* Terms and Conditions Modal */}
+      {/* Terms and Conditions / Privacy Policy Modal */}
       <Modal
         isOpen={showTermsModal}
         onClose={handleDeclineTerms}
-        title="Terms and Conditions"
+        title="Terms & Conditions and Privacy Policy"
         size="lg"
       >
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-button-600 dark:text-button-400">
             <ScrollText size={20} />
-            <p className="font-semibold">Please read and accept the Terms and Conditions before creating an account.</p>
+            <p className="font-semibold">Please read and accept the Terms & Conditions and Privacy Policy before creating an account.</p>
           </div>
 
-          <div className="max-h-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-primary-200 dark:border-primary-700 text-sm text-gray-700 dark:text-gray-300 space-y-4">
-            <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base">KJP Ricemill — Terms and Conditions</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Last updated: January 1, 2026</p>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">1. Account Registration</h4>
-              <p>By creating an account, you agree to provide accurate and complete information. You are responsible for maintaining the confidentiality of your account credentials. You must notify us immediately of any unauthorized access to your account.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">2. Use of Services</h4>
-              <p>Our system is designed to facilitate rice product purchasing, order management, and delivery services. You agree to use our services only for lawful purposes and in accordance with these terms. Misuse of the system may result in account suspension or termination.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">3. Orders and Payments</h4>
-              <p>All orders placed through the system are subject to availability and confirmation. Prices are subject to change without prior notice. Payment must be made in full according to the selected payment method. Unpaid orders may be cancelled after the agreed payment period.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">4. Delivery</h4>
-              <p>Delivery schedules are estimated and may vary depending on location and availability. KJP Ricemill will make reasonable efforts to deliver on time. The customer is responsible for providing accurate delivery addresses and being available to receive deliveries.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">5. Privacy and Data Protection</h4>
-              <p>We collect and process your personal information (name, email, phone, address) to provide our services. Your data will be kept confidential and will not be shared with unauthorized third parties. We comply with the Data Privacy Act of 2012 (Republic Act No. 10173).</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">6. Product Quality</h4>
-              <p>KJP Ricemill is committed to delivering premium quality rice products. If you receive a product that does not meet our quality standards, please contact us within 24 hours of delivery for resolution.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">7. Cancellations and Returns</h4>
-              <p>Orders may be cancelled before processing. Once an order has been processed or dispatched, cancellation is subject to approval. Returns are accepted only for defective or incorrect items within the specified return period.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">8. Limitation of Liability</h4>
-              <p>KJP Ricemill shall not be liable for any indirect, incidental, or consequential damages arising from the use of our services. Our total liability shall not exceed the amount paid for the specific order in question.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">9. Modifications</h4>
-              <p>We reserve the right to modify these terms at any time. Continued use of the system after changes constitutes acceptance of the updated terms. Users will be notified of significant changes via email or system notification.</p>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-gray-800 dark:text-gray-200">10. Contact Information</h4>
-              <p>For questions or concerns regarding these terms, please contact us through our website contact page or email us directly. Our team is committed to addressing your inquiries promptly.</p>
-            </div>
+          {/* Tabs */}
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1">
+            <button
+              onClick={() => setLegalTab('terms')}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all ${legalTab === 'terms' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+            >
+              <FileText size={14} />
+              Terms & Conditions
+            </button>
+            <button
+              onClick={() => setLegalTab('privacy')}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-all ${legalTab === 'privacy' ? 'bg-button-500 text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+            >
+              <ShieldCheck size={14} />
+              Privacy Policy
+            </button>
           </div>
+
+          {loadingLegal ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 size={24} className="animate-spin text-button-500" />
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-primary-200 dark:border-primary-700 text-sm text-gray-700 dark:text-gray-300 space-y-4">
+              {legalTab === 'terms' && (
+                <>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base">KJP Ricemill — Terms and Conditions</h3>
+                  {legalContent?.termsLastUpdated && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Last updated: {legalContent.termsLastUpdated}</p>
+                  )}
+                  {legalContent?.termsIntro && (
+                    <p className="text-gray-600 dark:text-gray-400">{legalContent.termsIntro}</p>
+                  )}
+                  {(legalContent?.termsSections || []).map((section, index) => (
+                    <div key={index}>
+                      <h4 className="font-semibold text-gray-800 dark:text-gray-200">{index + 1}. {section.title}</h4>
+                      <p>{section.content}</p>
+                    </div>
+                  ))}
+                  {(!legalContent?.termsSections || legalContent.termsSections.length === 0) && (
+                    <p className="text-center text-gray-400 dark:text-gray-500 py-4">No terms and conditions have been configured yet.</p>
+                  )}
+                </>
+              )}
+              {legalTab === 'privacy' && (
+                <>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base">KJP Ricemill — Privacy Policy</h3>
+                  {legalContent?.privacyLastUpdated && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Last updated: {legalContent.privacyLastUpdated}</p>
+                  )}
+                  {legalContent?.privacyIntro && (
+                    <p className="text-gray-600 dark:text-gray-400">{legalContent.privacyIntro}</p>
+                  )}
+                  {(legalContent?.privacySections || []).map((section, index) => (
+                    <div key={index}>
+                      <h4 className="font-semibold text-gray-800 dark:text-gray-200">{index + 1}. {section.title}</h4>
+                      <p>{section.content}</p>
+                    </div>
+                  ))}
+                  {(!legalContent?.privacySections || legalContent.privacySections.length === 0) && (
+                    <p className="text-center text-gray-400 dark:text-gray-500 py-4">No privacy policy has been configured yet.</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-3 pt-2">
             <button
@@ -981,120 +1258,264 @@ const Customer = () => {
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors font-medium"
             >
               <FileText size={16} />
-              I Accept the Terms & Conditions
+              I Accept
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Account Creation Modal */}
+      {/* Account Creation Modal — multi-step like Staff */}
       <Modal
         isOpen={isAccountModalOpen}
-        onClose={() => { setIsAccountModalOpen(false); setVerificationStep('initial'); setVerificationCode(''); setAccountFormData({ password: '', password_confirmation: '' }); setErrors({}); setShowPassword(false); setShowConfirmPassword(false); }}
-        title="Create Customer Account"
+        onClose={() => { setIsAccountModalOpen(false); setVerificationStep('initial'); setVerificationCode(''); setAccountFormData({ password: '', password_confirmation: '' }); setErrors({}); setShowPassword(false); setShowConfirmPassword(false); clearInterval(countdownRef.current); }}
+        title={
+          verificationStep === 'initial' ? 'Create Customer Account' :
+          verificationStep === 'code-sent' ? 'Verify Customer Email' :
+          'Set Account Password'
+        }
         size="lg"
       >
         {selectedItem && (
-          <div className="space-y-6">
-            {/* Customer Info */}
-            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg flex items-center gap-3">
-              <div className="p-2 bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400 rounded-lg">
-                <User size={20} />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-100">{selectedItem.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{selectedItem.email}</p>
-              </div>
-            </div>
+          <>
+            {/* Step 1: Send Verification Code */}
+            {verificationStep === 'initial' && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Mail size={32} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                    Verify Email Address
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Send a verification code to confirm <strong>{selectedItem.name}</strong>'s email
+                  </p>
+                </div>
 
-            {/* Step 1: Email Verification */}
-            <div className={`p-4 rounded-lg border-2 ${verificationStep === 'initial' ? 'border-button-200 dark:border-button-700 bg-button-50 dark:bg-button-900/20' : verificationStep === 'verified' ? 'border-green-200 dark:border-green-700 bg-green-50 dark:bg-green-900/20' : 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <Mail size={18} className={verificationStep === 'verified' ? 'text-green-600 dark:text-green-400' : 'text-button-600 dark:text-button-400'} />
-                <h3 className="font-semibold text-gray-800 dark:text-gray-100">Step 1: Verify Email</h3>
-                {verificationStep === 'verified' && <ShieldCheck size={18} className="text-green-600 dark:text-green-400" />}
-              </div>
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                    <ShieldCheck size={18} />
+                    Customer Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Business:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Contact:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.contact}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Email:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.email}</span>
+                    </div>
+                  </div>
+                </div>
 
-              {verificationStep === 'initial' && (
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Send a verification code to <strong>{selectedItem.email}</strong> to confirm the email address is valid.</p>
-                  <button
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <Button variant="outline" onClick={() => { setIsAccountModalOpen(false); }}>
+                    Cancel
+                  </Button>
+                  <Button
                     onClick={handleSendVerificationCode}
                     disabled={sendingCode}
-                    className="flex items-center gap-2 px-4 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
-                    {sendingCode ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                    {sendingCode ? 'Sending...' : 'Send Verification Code'}
-                  </button>
+                    {sendingCode ? (
+                      <><Loader2 size={16} className="mr-2 animate-spin" /> Sending...</>
+                    ) : (
+                      <><Send size={16} className="mr-2" /> Send Verification Code</>
+                    )}
+                  </Button>
                 </div>
-              )}
+              </div>
+            )}
 
-              {verificationStep === 'code-sent' && (
+            {/* Step 2: Enter Verification Code */}
+            {verificationStep === 'code-sent' && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Mail size={32} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                    Verify Customer Email
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    A 6-digit verification code has been sent to <strong>{selectedItem.email}</strong>
+                  </p>
+                </div>
+
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                    <ShieldCheck size={18} />
+                    Customer Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Business:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Contact:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.contact}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Email:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.email}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">A 6-digit code has been sent to <strong>{selectedItem.email}</strong>. Ask the customer for the code and enter it below.</p>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    Verification Code <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <input
                       type="text"
+                      inputMode="numeric"
                       value={verificationCode}
                       onChange={(e) => {
                         const val = e.target.value.replace(/\D/g, '').slice(0, 6);
                         setVerificationCode(val);
                         setErrors(prev => ({ ...prev, code: undefined }));
-                        if (val.length === 6) {
-                          handleVerifyCode(val);
-                        }
+                        if (val.length === 6) handleVerifyCode(val);
                       }}
-                      placeholder="Enter 6-digit code"
+                      placeholder="••••••"
                       maxLength={6}
                       disabled={verifying}
-                      className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500 text-center text-lg tracking-widest font-mono ${
-                        errors.code ? 'border-red-400 dark:border-red-500' : 'border-primary-300 dark:border-primary-700'
-                      } ${verifying ? 'opacity-60' : ''}`}
+                      className={`w-full px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono border-2 rounded-xl transition-all focus:outline-none focus:ring-4 ${
+                        errors.code
+                          ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20'
+                          : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 focus:border-button-500 focus:ring-button-500/20'
+                      }`}
+                      autoFocus
                     />
                     {verifying && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2">
                         <Loader2 size={20} className="animate-spin text-button-500" />
                       </div>
                     )}
                   </div>
-                  {errors.code && <p className="mt-1.5 text-sm text-red-500">{Array.isArray(errors.code) ? errors.code[0] : errors.code}</p>}
+                  {errors.code && (
+                    <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                      <AlertTriangle size={14} /> {Array.isArray(errors.code) ? errors.code[0] : errors.code}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Didn't receive the code?</span>
                   <button
+                    type="button"
                     onClick={handleSendVerificationCode}
-                    disabled={sendingCode}
-                    className="mt-2 text-sm text-button-600 hover:text-button-700 dark:text-button-300 underline"
+                    disabled={resendCountdown > 0 || sendingCode}
+                    className="font-medium text-button-600 dark:text-button-400 hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1"
                   >
-                    {sendingCode ? 'Sending...' : 'Resend Code'}
+                    {sendingCode ? (
+                      <><Loader2 size={14} className="animate-spin" /> Sending...</>
+                    ) : resendCountdown > 0 ? (
+                      `Resend in ${resendCountdown}s`
+                    ) : (
+                      'Resend Code'
+                    )}
                   </button>
                 </div>
-              )}
 
-              {verificationStep === 'verified' && (
-                <p className="text-sm text-green-600 dark:text-green-400 font-medium">Email verified successfully!</p>
-              )}
-            </div>
-
-            {/* Step 2: Set Password */}
-            {verificationStep === 'verified' && (
-              <div className="p-4 rounded-lg border-2 border-button-200 dark:border-button-700 bg-button-50 dark:bg-button-900/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <Lock size={18} className="text-button-600 dark:text-button-400" />
-                  <h3 className="font-semibold text-gray-800 dark:text-gray-100">Step 2: Set Password</h3>
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-500/30">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle size={18} className="text-green-600 dark:text-green-400 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-green-800 dark:text-green-300 mb-1">Next Steps</h4>
+                      <ol className="text-xs text-green-700 dark:text-green-400 space-y-1 list-decimal list-inside">
+                        <li>Ask {selectedItem.name} to check their email</li>
+                        <li>Enter the 6-digit code above to verify</li>
+                        <li>Once verified, set the account password</li>
+                      </ol>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-3">
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <Button variant="outline" onClick={() => { setIsAccountModalOpen(false); clearInterval(countdownRef.current); }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => handleVerifyCode(verificationCode)}
+                    disabled={verificationCode.length < 6 || verifying}
+                  >
+                    {verifying ? (
+                      <><Loader2 size={16} className="mr-2 animate-spin" /> Verifying...</>
+                    ) : (
+                      <><CheckCircle size={16} className="mr-2" /> Verify Email</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Set Password */}
+            {verificationStep === 'verified' && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lock size={32} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                    Set Account Password
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Create login credentials for <strong>{selectedItem.name}</strong>
+                  </p>
+                </div>
+
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
+                  <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                    <ShieldCheck size={18} />
+                    Customer Details
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Business:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Contact:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.contact}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Email:</span>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.email}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-blue-700 dark:text-blue-400">Email Status:</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <ShieldCheck size={14} /> Verified
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Password</label>
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                      Password <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative">
+                      <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={accountFormData.password}
                         onChange={(e) => setAccountFormData(prev => ({ ...prev, password: e.target.value }))}
                         placeholder="Minimum 8 characters"
-                        className="w-full px-4 py-2 pr-10 border border-primary-300 dark:border-primary-700 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                        className="w-full pl-10 pr-12 py-3 text-sm border-2 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+                        autoFocus
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
                       >
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
@@ -1102,35 +1523,252 @@ const Customer = () => {
                     {errors.password && <p className="mt-1 text-sm text-red-500">{errors.password[0]}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Confirm Password</label>
+                    <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                      Confirm Password <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative">
+                      <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={accountFormData.password_confirmation}
                         onChange={(e) => setAccountFormData(prev => ({ ...prev, password_confirmation: e.target.value }))}
                         placeholder="Re-enter password"
-                        className="w-full px-4 py-2 pr-10 border border-primary-300 dark:border-primary-700 rounded-lg focus:ring-2 focus:ring-button-500 focus:border-button-500"
+                        className="w-full pl-10 pr-12 py-3 text-sm border-2 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
                       >
                         {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
+                    {accountFormData.password && accountFormData.password_confirmation && accountFormData.password !== accountFormData.password_confirmation && (
+                      <p className="mt-1 text-sm text-red-500">Passwords do not match.</p>
+                    )}
                   </div>
-                  <button
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    This password will be shared with the customer for their first login.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <Button variant="outline" onClick={() => { setIsAccountModalOpen(false); }}>
+                    Cancel
+                  </Button>
+                  <Button
                     onClick={handleCreateAccountSubmit}
-                    disabled={creatingAccount || !accountFormData.password || !accountFormData.password_confirmation}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
+                    disabled={creatingAccount || !accountFormData.password || accountFormData.password.length < 8 || !accountFormData.password_confirmation || accountFormData.password !== accountFormData.password_confirmation}
                   >
-                    {creatingAccount ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-                    {creatingAccount ? 'Creating Account...' : 'Create Account'}
-                  </button>
+                    {creatingAccount ? (
+                      <><Loader2 size={16} className="mr-2 animate-spin" /> Creating Account...</>
+                    ) : (
+                      <><CheckCircle size={16} className="mr-2" /> Create Account</>
+                    )}
+                  </Button>
                 </div>
               </div>
             )}
+          </>
+        )}
+      </Modal>
+
+      {/* Manage Account Modal - Edit Email/Password with Verification */}
+      <Modal
+        isOpen={isManageAccountOpen}
+        onClose={handleManageAccountClose}
+        title={manageAccountStep === 'edit' ? 'Manage Account' : 'Verify Email'}
+        size="lg"
+      >
+        {/* Step 1: Edit Account */}
+        {manageAccountStep === 'edit' && selectedItem && (
+          <div className="space-y-6">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
+              <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                <Shield size={18} />
+                Customer Info
+              </h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-blue-700 dark:text-blue-400">Name:</span>
+                  <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-blue-700 dark:text-blue-400">Contact:</span>
+                  <span className="font-semibold text-blue-800 dark:text-blue-200">{selectedItem.contact}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-blue-700 dark:text-blue-400">Verification:</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    selectedItem.email_verified_at
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                      : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                  }`}>
+                    {selectedItem.email_verified_at ? (
+                      <><CheckCircle size={12} /> Verified</>
+                    ) : (
+                      <><AlertTriangle size={12} /> Not Verified</>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-500/30">
+              <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
+                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                Changing email or password will require email re-verification. The customer won't be able to log in until verified.
+              </p>
+            </div>
+
+            <FormInput 
+              label="Email" 
+              name="email" 
+              type="email" 
+              value={manageFormData.email} 
+              onChange={handleManageAccountFormChange} 
+              placeholder="email@example.com" 
+              error={manageEmailError}
+              loading={isCheckingManageEmail}
+            />
+
+            <div>
+              <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                New Password
+              </label>
+              <div className="relative">
+                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
+                <input
+                  type={showManagePassword ? 'text' : 'password'}
+                  name="password"
+                  value={manageFormData.password}
+                  onChange={handleManageAccountFormChange}
+                  placeholder="Leave blank to keep current"
+                  className="w-full pl-10 pr-12 py-3 text-sm border-2 rounded-xl transition-all shadow-sm focus:outline-none focus:ring-4 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20"
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowManagePassword(prev => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors z-10"
+                >
+                  {showManagePassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                Minimum 8 characters. Leave blank if not changing.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button variant="outline" onClick={handleManageAccountClose}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleManageAccountSubmit}
+                disabled={manageSaving || !!manageEmailError || isCheckingManageEmail}
+              >
+                {manageSaving ? (
+                  <>
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={16} className="mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Email Verification */}
+        {manageAccountStep === 'verification' && manageCreatedAccount && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Mail size={32} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+                Verify Customer Email
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                A 6-digit verification code has been sent to <strong>{manageCreatedAccount.email}</strong>
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                Verification Code <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={manageVerifyCode}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                    setManageVerifyCode(val);
+                    setManageVerifyError('');
+                    if (val.length === 6) handleManageVerifyCode(val);
+                  }}
+                  placeholder="••••••"
+                  maxLength={6}
+                  disabled={manageVerifying}
+                  className={`w-full px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono border-2 rounded-xl transition-all focus:outline-none focus:ring-4 ${
+                    manageVerifyError
+                      ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20'
+                      : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 focus:border-button-500 focus:ring-button-500/20'
+                  }`}
+                  autoFocus
+                />
+                {manageVerifying && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <Loader2 size={20} className="animate-spin text-button-500" />
+                  </div>
+                )}
+              </div>
+              {manageVerifyError && (
+                <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                  <AlertTriangle size={14} /> {manageVerifyError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Didn't receive the code?</span>
+              <button
+                type="button"
+                onClick={handleManageResendCode}
+                disabled={manageResendCountdown > 0 || manageResendingCode}
+                className="font-medium text-button-600 dark:text-button-400 hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1"
+              >
+                {manageResendingCode ? (
+                  <><Loader2 size={14} className="animate-spin" /> Sending...</>
+                ) : manageResendCountdown > 0 ? (
+                  `Resend in ${manageResendCountdown}s`
+                ) : (
+                  'Resend Code'
+                )}
+              </button>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button variant="outline" onClick={handleManageAccountClose}>
+                Skip for Now
+              </Button>
+              <Button 
+                onClick={() => handleManageVerifyCode(manageVerifyCode)}
+                disabled={manageVerifyCode.length < 6 || manageVerifying}
+              >
+                {manageVerifying ? (
+                  <><Loader2 size={16} className="mr-2 animate-spin" /> Verifying...</>
+                ) : (
+                  <><CheckCircle size={16} className="mr-2" /> Verify</>
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </Modal>

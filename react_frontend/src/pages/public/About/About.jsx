@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../../../components/ui';
 import { websiteContentApi } from '../../../api';
-import { API_BASE_URL } from '../../../api/config';
+import { resolveStorageUrl } from '../../../api/config';
 
 // Icon mapping for values
 const iconMap = {
@@ -43,12 +43,7 @@ const defaultContent = {
 };
 
 // Default team images
-const teamImages = [
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300&h=300&fit=crop',
-];
+const teamImages = [];
 
 // Get initial content from localStorage/window (preloaded in index.html)
 const getInitialAboutContent = () => {
@@ -110,14 +105,14 @@ const About = () => {
   // Map team with images
   const team = (content.team || defaultContent.team).map((member, index) => ({
     ...member,
-    image: teamImages[index % teamImages.length],
+    image: member.image ? resolveStorageUrl(member.image) : '/KJPLogo.png',
   }));
 
   const stats = [];
 
   // Default hero image if none set
-  const rawHeroImage = content.heroImage || 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=1920&h=800&fit=crop';
-  const heroImage = rawHeroImage.startsWith('/storage') ? `${API_BASE_URL.replace('/api', '')}${rawHeroImage}` : rawHeroImage;
+  const rawHeroImage = content.heroImage || null;
+  const heroImage = rawHeroImage ? (rawHeroImage.startsWith('/storage') ? resolveStorageUrl(rawHeroImage) : rawHeroImage) : null;
 
   return (
     <div className="overflow-hidden">

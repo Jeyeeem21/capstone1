@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useToast, Skeleton } from '../../../components/ui';
+import { DEFAULT_LOGO } from '../../../api/config';
 
 // Cart items — will connect to real state management
 const initialCartItems = [];
@@ -175,7 +176,7 @@ const Cart = () => {
                 style={{ border: `1px solid ${theme.border_color}` }}
               >
                 <img 
-                  src={item.image} 
+                  src={item.image || DEFAULT_LOGO} 
                   alt={item.name}
                   className="w-24 h-24 rounded-lg object-cover flex-shrink-0"
                 />

@@ -14,6 +14,8 @@ class CustomerResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $userAccount = $this->email ? \App\Models\User::where('email', $this->email)->where('role', 'customer')->first() : null;
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -23,7 +25,9 @@ class CustomerResource extends JsonResource
             'address' => $this->address,
             'status' => $this->status,
             'orders' => $this->orders,
-            'has_account' => $this->email ? \App\Models\User::where('email', $this->email)->where('role', 'customer')->exists() : false,
+            'has_account' => $userAccount !== null,
+            'user_id' => $userAccount?->id,
+            'email_verified_at' => $userAccount?->email_verified_at,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

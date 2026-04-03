@@ -6,10 +6,12 @@ import {
   Truck, ClipboardList, User, Settings, LayoutDashboard, MapPin
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { DEFAULT_LOGO } from '../../api/config';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../../components/common/NotificationBell';
 import { Footer } from '../../components/common';
+import { ConfirmModal } from '../../components/ui';
 
 // Mobile Bottom Navigation
 const DriverBottomNav = () => {
@@ -61,6 +63,7 @@ const DriverHeader = ({ driver, onLogout }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme } = useTheme();
@@ -95,6 +98,7 @@ const DriverHeader = ({ driver, onLogout }) => {
   const businessName = settings?.business_name || 'KJP Ricemill';
 
   return (
+    <>
     <header 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled ? 'shadow-lg border-b-2 border-primary-300 dark:border-primary-700' : 'shadow-sm border-b-2 border-primary-300 dark:border-primary-700'
@@ -120,7 +124,7 @@ const DriverHeader = ({ driver, onLogout }) => {
                 style={{ background: `linear-gradient(135deg, ${theme.button_primary}, ${theme.button_primary}dd)` }}
               >
                 <img 
-                  src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                  src={settings.business_logo || DEFAULT_LOGO} 
                   alt={businessName} 
                   className="w-8 h-8 object-contain"
                   onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
@@ -202,7 +206,7 @@ const DriverHeader = ({ driver, onLogout }) => {
                   </Link>
                   <div className="border-t border-primary-300 dark:border-primary-700 my-1" />
                   <button
-                    onClick={() => { if (onLogout) onLogout(); navigate('/'); }}
+                    onClick={() => { setIsProfileOpen(false); setIsLogoutModalOpen(true); }}
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
                   >
                     <LogOut size={16} />
@@ -246,6 +250,19 @@ const DriverHeader = ({ driver, onLogout }) => {
         </div>
       </div>
     </header>
+
+    <ConfirmModal
+      isOpen={isLogoutModalOpen}
+      onClose={() => setIsLogoutModalOpen(false)}
+      onConfirm={() => { setIsLogoutModalOpen(false); if (onLogout) onLogout(); navigate('/'); }}
+      title="Confirm Logout"
+      message="Are you sure you want to logout? You will need to login again to access the system."
+      confirmText="Logout"
+      cancelText="Cancel"
+      variant="danger"
+      icon={LogOut}
+    />
+    </>
   );
 };
 

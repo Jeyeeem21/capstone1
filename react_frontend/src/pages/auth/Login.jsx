@@ -3,6 +3,8 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn, User, Lock, Eye, EyeOff, Loader2, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
+import { DEFAULT_LOGO } from '../../api/config';
+import { apiClient } from '../../api';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -85,7 +87,28 @@ const Login = () => {
     setError('');
 
     try {
-      await login(formData.email, formData.password);
+      // Preload all common page chunks in parallel with the login API
+      [
+        () => import('../admin/Dashboard'),
+        () => import('../customer/Dashboard'),
+        () => import('../driver/Deliveries'),
+        () => import('../shared/PointOfSale'),
+      ].forEach(loader => loader().catch(() => {}));
+
+      const response = await login(formData.email, formData.password);
+
+      // Prefetch key API data into cache (don't await — fire and forget)
+      const role = response?.user?.role;
+      const position = response?.user?.position;
+      if (role === 'admin' || role === 'super_admin') {
+        apiClient.get('/dashboard/stats?period=monthly').catch(() => {});
+        apiClient.get('/dashboard/recent-activity?limit=15').catch(() => {});
+      } else if (role === 'customer') {
+        apiClient.get('/customer/dashboard').catch(() => {});
+      } else if (role === 'staff' && position === 'Driver') {
+        apiClient.get('/driver/my-deliveries').catch(() => {});
+      }
+
       // Redirect handled by useEffect above
     } catch (err) {
       const msg = err.message || '';
@@ -147,7 +170,7 @@ const Login = () => {
           <div className="flex justify-center mb-6">
             <div className="w-20 h-20 bg-gradient-to-br from-button-500 to-button-600 rounded-2xl flex items-center justify-center shadow-lg shadow-button-500/25 overflow-hidden">
               <img 
-                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : '/storage/logos/KJPLogo.png'} 
+                src={settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : DEFAULT_LOGO} 
                 alt={settings.business_name || 'KJP Ricemill'} 
                 className="w-16 h-16 object-contain"
                 onError={(e) => {
@@ -269,7 +292,7 @@ const Login = () => {
           <div className="mt-6 text-center">
             <Link 
               to="/" 
-              className="text-sm text-gray-500 dark:text-gray-400 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 transition-colors"
+              className="block text-sm text-gray-500 dark:text-gray-400 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 transition-colors"
             >
               &larr; Back to website
             </Link>

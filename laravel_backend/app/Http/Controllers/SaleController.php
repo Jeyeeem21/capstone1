@@ -477,6 +477,27 @@ class SaleController extends Controller
                 'sale_id' => $sale->id,
             ]);
 
+            // Send rejection emails non-blocking
+            $emailService = $this->emailService;
+            $saleCopy = $sale;
+            $txnId = $sale->transaction_id;
+            dispatch(function () use ($emailService, $saleCopy, $txnId) {
+                try {
+                    $emailService->sendOrderStatusToAdmin(
+                        $saleCopy,
+                        'Return Rejected',
+                        "Return request for order #{$txnId} has been rejected. Order reverted to delivered."
+                    );
+                    $emailService->sendOrderStatusToCustomer(
+                        $saleCopy,
+                        'Return Request Rejected',
+                        "Your return request for order #{$txnId} has been rejected. The order remains as delivered."
+                    );
+                } catch (\Throwable $e) {
+                    // Silent
+                }
+            })->afterResponse();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Return rejected. Order reverted to delivered.',
@@ -774,12 +795,15 @@ class SaleController extends Controller
     {
         $sale = \App\Models\Sale::with(['customer', 'items.product.variety'])->find($id);
         if ($sale) {
-            try {
-                $this->emailService->sendNewOrderToAdmin($sale);
-                $this->emailService->sendOrderPlacedToCustomer($sale);
-            } catch (\Throwable $e) {
-                // Silent — don't fail the request
-            }
+            $emailService = $this->emailService;
+            dispatch(function () use ($emailService, $sale) {
+                try {
+                    $emailService->sendNewOrderToAdmin($sale);
+                    $emailService->sendOrderPlacedToCustomer($sale);
+                } catch (\Throwable $e) {
+                    // Silent
+                }
+            })->afterResponse();
         }
         return response()->json(['success' => true]);
     }
@@ -833,46 +857,49 @@ class SaleController extends Controller
         $status = $sale->status;
         $notif = $statusNotifications[$status] ?? null;
 
-        try {
-            if ($notif) {
-                $this->emailService->sendOrderStatusToAdmin($sale, $notif['admin'][0], $notif['admin'][1]);
-                $this->emailService->sendOrderStatusToCustomer($sale, $notif['customer'][0], $notif['customer'][1]);
-            }
-
-            // Send driver delivery email if shipped
-            if ($status === 'shipped' && $sale->driver_name) {
-                $driverUser = User::where('role', 'staff')
-                    ->where('position', 'Driver')
-                    ->where('status', 'active')
-                    ->where(function ($q) use ($sale) {
-                        $q->where('name', $sale->driver_name)
-                          ->orWhere('truck_plate_number', $sale->driver_plate_number ?? '');
-                    })
-                    ->first();
-
-                if ($driverUser) {
-                    $this->emailService->sendDeliveryAssigned($sale, $driverUser);
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $sale, $status, $notif) {
+            try {
+                if ($notif) {
+                    $emailService->sendOrderStatusToAdmin($sale, $notif['admin'][0], $notif['admin'][1]);
+                    $emailService->sendOrderStatusToCustomer($sale, $notif['customer'][0], $notif['customer'][1]);
                 }
-            }
 
-            // Send driver pickup email if picking_up (return)
-            if ($status === 'picking_up' && $sale->return_pickup_driver) {
-                $driverUser = User::where('role', 'staff')
-                    ->where('position', 'Driver')
-                    ->where('status', 'active')
-                    ->where(function ($q) use ($sale) {
-                        $q->where('name', $sale->return_pickup_driver)
-                          ->orWhere('truck_plate_number', $sale->return_pickup_plate ?? '');
-                    })
-                    ->first();
+                // Send driver delivery email if shipped
+                if ($status === 'shipped' && $sale->driver_name) {
+                    $driverUser = \App\Models\User::where('role', 'staff')
+                        ->where('position', 'Driver')
+                        ->where('status', 'active')
+                        ->where(function ($q) use ($sale) {
+                            $q->where('name', $sale->driver_name)
+                              ->orWhere('truck_plate_number', $sale->driver_plate_number ?? '');
+                        })
+                        ->first();
 
-                if ($driverUser) {
-                    $this->emailService->sendDeliveryAssigned($sale, $driverUser);
+                    if ($driverUser) {
+                        $emailService->sendDeliveryAssigned($sale, $driverUser);
+                    }
                 }
+
+                // Send driver pickup email if picking_up (return)
+                if ($status === 'picking_up' && $sale->return_pickup_driver) {
+                    $driverUser = \App\Models\User::where('role', 'staff')
+                        ->where('position', 'Driver')
+                        ->where('status', 'active')
+                        ->where(function ($q) use ($sale) {
+                            $q->where('name', $sale->return_pickup_driver)
+                              ->orWhere('truck_plate_number', $sale->return_pickup_plate ?? '');
+                        })
+                        ->first();
+
+                    if ($driverUser) {
+                        $emailService->sendDeliveryAssigned($sale, $driverUser);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("sendStatusEmail failed for sale #{$sale->id} (status: {$status}): " . $e->getMessage());
             }
-        } catch (\Throwable $e) {
-            // Silent — don't fail the request
-        }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }
@@ -888,13 +915,16 @@ class SaleController extends Controller
         }
 
         $payMethod = strtoupper($sale->payment_method ?? 'UNKNOWN');
+        $emailService = $this->emailService;
 
-        try {
-            $this->emailService->sendOrderStatusToAdmin($sale, 'Payment Received', "Payment received for order #{$sale->transaction_id} via {$payMethod}.");
-            $this->emailService->sendOrderStatusToCustomer($sale, 'Payment Confirmed', "Your payment for order #{$sale->transaction_id} via {$payMethod} has been confirmed.");
-        } catch (\Throwable $e) {
-            // Silent
-        }
+        dispatch(function () use ($emailService, $sale, $payMethod) {
+            try {
+                $emailService->sendOrderStatusToAdmin($sale, 'Payment Received', "Payment received for order #{$sale->transaction_id} via {$payMethod}.");
+                $emailService->sendOrderStatusToCustomer($sale, 'Payment Confirmed', "Your payment for order #{$sale->transaction_id} via {$payMethod} has been confirmed.");
+            } catch (\Throwable $e) {
+                // Silent
+            }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }

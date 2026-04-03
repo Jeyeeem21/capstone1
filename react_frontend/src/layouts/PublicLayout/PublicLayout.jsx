@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Menu, X, Phone, Mail, MapPin, Clock, Facebook, Instagram, Twitter, Linkedin, ChevronUp } from 'lucide-react';
-import { Button, LoginModal } from '../../components/ui';
+import { Button, LoginModal, ForgotPasswordModal, RegisterModal } from '../../components/ui';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { DEFAULT_LOGO } from '../../api/config';
 
@@ -10,6 +10,9 @@ const PublicHeader = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { settings } = useBusinessSettings();
@@ -155,7 +158,27 @@ const PublicHeader = () => {
       </div>
 
       {/* Login Modal */}
-      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onSwitchToRegister={() => { setIsLoginModalOpen(false); setIsRegisterModalOpen(true); }}
+        onSwitchToForgotPassword={(email) => { setForgotPasswordEmail(email || ''); setIsLoginModalOpen(false); setIsForgotPasswordModalOpen(true); }}
+      />
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordModalOpen}
+        onClose={() => setIsForgotPasswordModalOpen(false)}
+        onSwitchToLogin={() => { setIsForgotPasswordModalOpen(false); setIsLoginModalOpen(true); }}
+        initialEmail={forgotPasswordEmail}
+      />
+
+      {/* Register Modal */}
+      <RegisterModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        onSwitchToLogin={() => { setIsRegisterModalOpen(false); setIsLoginModalOpen(true); }}
+      />
     </header>
   );
 };

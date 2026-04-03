@@ -33,6 +33,22 @@ use App\Http\Controllers\NotificationController;
 // Auth Routes
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    // Self-registration (public)
+    Route::post('/check-email', [AuthController::class, 'checkEmail']);
+    Route::post('/register/send-verification', [AuthController::class, 'registerSendVerification']);
+    Route::post('/register/verify-code', [AuthController::class, 'registerVerifyCode']);
+    Route::post('/register/complete', [AuthController::class, 'registerComplete']);
+    Route::post('/register/cancel', [AuthController::class, 'registerCancel']);
+    // Forgot password (public - customers only)
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/forgot-password/verify-code', [AuthController::class, 'forgotPasswordVerifyCode']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+});
+
+// Staff Email Verification (public - staff need to verify before they can login)
+Route::prefix('staff')->group(function () {
+    Route::post('/verify-email', [UserController::class, 'verifyStaffEmail']);
+    Route::post('/resend-verification', [UserController::class, 'resendStaffVerification']);
 });
 
 // Public-facing data (for the public website)
@@ -50,6 +66,7 @@ Route::prefix('website-content')->group(function () {
     Route::get('/about', [WebsiteContentController::class, 'getAboutContent']);
     Route::get('/products', [WebsiteContentController::class, 'getProductsContent']);
     Route::get('/contact', [WebsiteContentController::class, 'getContactContent']);
+    Route::get('/legal', [WebsiteContentController::class, 'getLegalContent']);
 });
 
 Route::prefix('business-settings')->group(function () {
@@ -73,7 +90,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/login-email', [AuthController::class, 'sendLoginEmail']);
         Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/check-profile-email', [AuthController::class, 'checkProfileEmail']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
+        Route::post('/verify-email-change', [AuthController::class, 'verifyEmailChange']);
+        Route::post('/clear-email-change-pending', [AuthController::class, 'clearEmailChangePending']);
+        Route::post('/revert-email-change', [AuthController::class, 'revertEmailChange']);
         Route::put('/password', [AuthController::class, 'updatePassword']);
     });
 
@@ -153,6 +174,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/about', [WebsiteContentController::class, 'saveAboutContent']);
             Route::post('/products', [WebsiteContentController::class, 'saveProductsContent']);
             Route::post('/contact', [WebsiteContentController::class, 'saveContactContent']);
+            // Note: GET /legal is public (defined outside auth middleware)
+            Route::post('/legal', [WebsiteContentController::class, 'saveLegalContent']);
             Route::post('/hero-image', [WebsiteContentController::class, 'uploadHeroImage']);
             Route::post('/seed', [WebsiteContentController::class, 'seedDefaults']);
         });
@@ -160,8 +183,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Business Settings (write operations)
         Route::prefix('business-settings')->group(function () {
             Route::put('/', [BusinessSettingController::class, 'update']);
+            Route::post('/verify-business-email-change', [BusinessSettingController::class, 'verifyBusinessEmailChange']);
             Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']);
             Route::post('/test-email', [BusinessSettingController::class, 'testEmail']);
+            Route::post('/check-business-email', [BusinessSettingController::class, 'checkBusinessEmail']);
         });
 
         // Database Backup Routes
@@ -310,8 +335,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::get('/statistics', [UserController::class, 'statistics']);
+        Route::post('/check-email', [UserController::class, 'checkEmail']);
         Route::post('/send-verification', [UserController::class, 'sendVerificationCode']);
         Route::post('/verify-code', [UserController::class, 'verifyEmailCode']);
+        Route::post('/staff/{id}/verify-email', [UserController::class, 'verifyStaffEmailByAdmin']);
+        Route::post('/staff/{id}/resend-verification', [UserController::class, 'resendStaffVerificationByAdmin']);
         Route::post('/', [UserController::class, 'store']);
         Route::get('/{id}', [UserController::class, 'show']);
         Route::put('/{id}', [UserController::class, 'update']);

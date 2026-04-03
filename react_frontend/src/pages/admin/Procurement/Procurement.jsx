@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, memo, useEffect } from 'react';
-import { ShoppingCart, Package, Truck, DollarSign, FileText, Archive, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Check, Layers, Sun, Calendar, List, Phone, Mail, MapPin } from 'lucide-react';
+import { ShoppingCart, Package, Truck, DollarSign, FileText, Archive, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Check, Layers, Sun, Calendar, List, Phone, Mail, MapPin, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -150,6 +150,7 @@ const Procurement = () => {
   const { isSuperAdmin } = useAuth();
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartScopeActive, setChartScopeActive] = useState(false);
   // Chart calendar filter state
   const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
@@ -408,16 +409,22 @@ const Procurement = () => {
 
   // Chart-filtered procurements — used for stats, cards, table (scoped by calendar + dot)
   const chartFilteredProcurements = useMemo(() => {
+    if (!chartScopeActive && !activeChartPoint) return procurements;
     const scoped = procurements.filter(isInChartScope);
     if (!activeChartPoint) return scoped;
     return scoped.filter(matchesChartPoint);
-  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint]);
+  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint, chartScopeActive]);
 
   // Chart-filtered batches — used for batches tab
   const chartFilteredBatches = useMemo(() => {
-    if (!activeChartPoint) return batches;
-    return batches.filter(matchesChartPoint);
-  }, [batches, activeChartPoint, matchesChartPoint]);
+    if (!chartScopeActive && !activeChartPoint) return batches;
+    const scopedBatches = batches.filter(b => {
+      if (!b.created_at) return false;
+      return isInChartScope(b);
+    });
+    if (!activeChartPoint) return scopedBatches;
+    return scopedBatches.filter(matchesChartPoint);
+  }, [batches, activeChartPoint, matchesChartPoint, chartScopeActive, isInChartScope]);
 
   // Apply batch filter to procurement list
   const filteredProcurements = useMemo(() => {
@@ -1257,7 +1264,7 @@ const Procurement = () => {
     const supplierTotals = {};
     
     procurements.forEach(p => {
-      if (!isInChartScope(p)) return;
+      if (chartScopeActive && !isInChartScope(p)) return;
       if (activeChartPoint && !matchesChartPoint(p)) return;
       
       const supplierName = p.supplier_name || 'Unknown';
@@ -1273,7 +1280,7 @@ const Procurement = () => {
         value: Math.round(value),
         color: colors[index % colors.length],
       }));
-  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint]);
+  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint, chartScopeActive]);
 
   // Sacks vs Kg comparison for donut chart - filtered by chart period + active point
   const quantityComparison = useMemo(() => {
@@ -1281,7 +1288,7 @@ const Procurement = () => {
     let filteredKg = 0;
     
     procurements.forEach(p => {
-      if (!isInChartScope(p)) return;
+      if (chartScopeActive && !isInChartScope(p)) return;
       if (activeChartPoint && !matchesChartPoint(p)) return;
       
       filteredSacks += parseInt(p.sacks || 0);
@@ -1292,7 +1299,7 @@ const Procurement = () => {
       { name: 'Total Sacks', value: filteredSacks, color: '#3b82f6' },
       { name: 'Total Kg', value: Math.round(filteredKg), color: '#22c55e' },
     ];
-  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint]);
+  }, [procurements, isInChartScope, activeChartPoint, matchesChartPoint, chartScopeActive]);
 
   // Average order value
   const avgOrderValue = totalProcurements > 0 ? Math.floor(totalCost / totalProcurements) : 0;
@@ -1537,17 +1544,38 @@ const Procurement = () => {
           <div className="lg:col-span-2">
             <LineChart 
               title="Procurement Trends" 
-              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Purchase order activity overview"}
+              subtitle={(() => {
+                const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                if (!chartScopeActive && !activeChartPoint) return 'Purchase order activity overview';
+                let scope = '';
+                if (chartPeriod === 'daily' || chartPeriod === 'weekly') { const [y,m] = chartMonth.split('-').map(Number); scope = `${months[m-1]} ${y}`; }
+                else if (chartPeriod === 'monthly' || chartPeriod === 'bi-annually') scope = String(chartYear);
+                else if (chartPeriod === 'annually') scope = `${chartYearFrom}–${chartYearTo}`;
+                const mode = chartPeriod.charAt(0).toUpperCase() + chartPeriod.slice(1);
+                if (activeChartPoint) return `${activeChartPoint} · ${scope}`;
+                return `${mode} · ${scope}`;
+              })()}
               data={chartData} 
               lines={[{ dataKey: 'value', name: 'Value (₱)' }]} 
               height={280} 
               yAxisUnit="₱"
               headerRight={
                 <div className="flex items-center gap-2 flex-wrap">
+                  {(activeChartPoint || chartScopeActive) && (
+                    <button
+                      onClick={() => { setActiveChartPoint(null); setChartScopeActive(false); setChartPeriod('daily'); const d = new Date(); setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setChartYear(d.getFullYear()); setChartYearFrom(d.getFullYear() - 4); setChartYearTo(d.getFullYear()); }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      title="Clear chart filter"
+                    >
+                      <X size={14} />
+                      Clear Filter
+                    </button>
+                  )}
                   {/* Period dropdown */}
                   <select
                     value={chartPeriod}
-                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                    onClick={() => { if (!chartScopeActive) { setActiveChartPoint(null); setChartScopeActive(true); } }}
+                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                     className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
@@ -1561,7 +1589,7 @@ const Procurement = () => {
                     <input
                       type="month"
                       value={chartMonth}
-                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
@@ -1569,7 +1597,7 @@ const Procurement = () => {
                     <input
                       type="month"
                       value={chartMonth}
-                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
@@ -1577,7 +1605,7 @@ const Procurement = () => {
                     <input
                       type="number"
                       value={chartYear}
-                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); setChartScopeActive(true); }}
                       min="2000"
                       max={new Date().getFullYear()}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
@@ -1587,7 +1615,7 @@ const Procurement = () => {
                     <input
                       type="number"
                       value={chartYear}
-                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); setChartScopeActive(true); }}
                       min="2000"
                       max={new Date().getFullYear()}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
@@ -1598,7 +1626,7 @@ const Procurement = () => {
                       <input
                         type="number"
                         value={chartYearFrom}
-                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min="2000"
                         max={chartYearTo}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1607,7 +1635,7 @@ const Procurement = () => {
                       <input
                         type="number"
                         value={chartYearTo}
-                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min={chartYearFrom}
                         max={new Date().getFullYear()}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1616,7 +1644,7 @@ const Procurement = () => {
                   )}
                 </div>
               }
-              onDotClick={setActiveChartPoint}
+              onDotClick={(point) => { setActiveChartPoint(point); setChartScopeActive(true); }}
               activePoint={activeChartPoint}
               summaryStats={[
                 { label: 'Total Orders', value: totalProcurements.toString(), color: 'text-primary-600 dark:text-primary-400' }, 

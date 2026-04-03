@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
 
 const SidebarMenuItem = ({ 
   icon: Icon, 
@@ -10,7 +10,8 @@ const SidebarMenuItem = ({
   onClick,
   children,
   basePath,
-  isCollapsed = false
+  isCollapsed = false,
+  badge = null
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -75,7 +76,7 @@ const SidebarMenuItem = ({
       to={to}
       title={isCollapsed ? label : ''}
       className={({ isActive }) => `
-        flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 mb-0.5 group
+        flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 mb-0.5 group relative
         ${isActive
           ? 'bg-gradient-to-r from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25'
           : 'hover:bg-button-50 dark:hover:bg-button-500/40 hover:text-button-700 dark:text-button-300 dark:hover:text-button-300'
@@ -87,6 +88,12 @@ const SidebarMenuItem = ({
         <>
           <Icon size={22} className={isActive ? 'text-white' : 'group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 dark:group-hover:text-button-300'} style={!isActive ? { color: 'var(--color-text-sidebar)' } : undefined} />
           {!isCollapsed && <span className="font-medium" style={{ fontSize: 'var(--font-size-sidebar)' }}>{label}</span>}
+          {badge === 'warning' && (
+            <AlertTriangle 
+              size={16} 
+              className={`${isCollapsed ? 'absolute -top-1 -right-1' : 'ml-auto'} text-orange-500 dark:text-orange-400 animate-pulse`}
+            />
+          )}
         </>
       )}
     </NavLink>

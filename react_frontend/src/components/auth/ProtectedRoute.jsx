@@ -9,7 +9,7 @@ export const ProtectedRoute = ({ children, allowedRoles = [], allowedPositions =
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-button-500"></div>
+        <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
       </div>
     );
   }

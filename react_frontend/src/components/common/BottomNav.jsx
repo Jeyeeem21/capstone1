@@ -16,15 +16,28 @@ import {
   UserCheck,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { basePath } = useAuth();
+  const { basePath, user } = useAuth();
+  const { settings } = useBusinessSettings();
   const scrollRef = useRef(null);
   const [expandedMenu, setExpandedMenu] = useState(null);
+  const [showSmtpWarning, setShowSmtpWarning] = useState(false);
+
+  // Check SMTP configuration - show warning if SMTP password is empty/not configured
+  useEffect(() => {
+    // Check if SMTP is configured from context
+    const isConfigured = settings?.smtp_configured === true;
+    
+    // Show warning if NOT configured (empty smtp_password)
+    setShowSmtpWarning(!isConfigured);
+  }, [settings]); // Re-check when settings change
 
   // Auto-expand submenu when on Products or Partners page
   useEffect(() => {
@@ -66,7 +79,7 @@ const BottomNav = () => {
     },
     { icon: UserCog, label: 'Staff', to: `${basePath}/staff-management` },
     { icon: TrendingUp, label: 'Sales', to: `${basePath}/sales` },
-    { icon: Settings, label: 'Settings', to: `${basePath}/settings` },
+    { icon: Settings, label: 'Settings', to: `${basePath}/settings`, badge: showSmtpWarning ? 'warning' : null },
   ];
 
   const handleMenuItemClick = (item) => {
@@ -191,7 +204,7 @@ const BottomNav = () => {
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={`flex flex-col items-center justify-center min-w-[64px] px-3 py-2 rounded-xl transition-all duration-200 flex-shrink-0
+                className={`flex flex-col items-center justify-center min-w-[64px] px-3 py-2 rounded-xl transition-all duration-200 flex-shrink-0 relative
                   ${isActive 
                     ? 'bg-gradient-to-t from-button-500 to-button-400 text-white shadow-lg shadow-button-500/25' 
                     : 'text-gray-500 dark:text-gray-400 active:bg-primary-100 dark:bg-primary-900/30 dark:active:bg-gray-700'
@@ -202,6 +215,12 @@ const BottomNav = () => {
                 <span className={`text-[10px] mt-1 font-medium ${isActive ? 'text-white' : ''}`}>
                   {item.label}
                 </span>
+                {item.badge === 'warning' && (
+                  <AlertTriangle 
+                    size={12} 
+                    className="absolute top-1 right-1 text-orange-500 dark:text-orange-400 animate-pulse"
+                  />
+                )}
               </NavLink>
             );
           })}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DEFAULT_LOGO } from '../../api/config';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -53,7 +54,7 @@ const StaffLayout = () => {
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-gradient-to-br from-button-500 to-button-600 rounded-lg flex items-center justify-center overflow-hidden shadow-md">
               <img 
-                src={settings.business_logo || '/storage/logos/KJPLogo.png'} 
+                src={settings.business_logo || DEFAULT_LOGO} 
                 alt={settings.business_name || 'Logo'} 
                 className="w-7 h-7 object-contain" 
                 onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} 
