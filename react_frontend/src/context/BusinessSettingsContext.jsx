@@ -16,8 +16,8 @@ const getFullLogoUrl = (logoPath) => {
 
 const BusinessSettingsContext = createContext(null);
 
-// Polling interval in milliseconds (30 seconds)
-const POLL_INTERVAL = 30000;
+// Polling interval in milliseconds (60 seconds)
+const POLL_INTERVAL = 60000;
 
 // Default settings to use as fallback
 const defaultSettings = {
@@ -108,10 +108,6 @@ export const BusinessSettingsProvider = ({ children }) => {
       const result = isInitial
         ? await businessSettingsApi.getAll()
         : await businessSettingsApi.getFresh();
-      
-      console.log('API Response:', result);
-      console.log('SMTP Password from API:', result?.data?.smtp_password);
-      console.log('SMTP Configured from API:', result?.data?.smtp_configured);
       
       if (result?.success && result?.data) {
         const newSettings = buildSettings(result.data);

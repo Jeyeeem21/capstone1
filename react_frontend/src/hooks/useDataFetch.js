@@ -15,13 +15,13 @@ import { apiClient } from '../api';
 // In-memory cache for instant access (faster than localStorage)
 const memoryCache = new Map();
 const cacheTimestamps = new Map();
-const MEMORY_CACHE_TTL = 2 * 60 * 1000; // 2 minutes for memory cache
-const STALE_TTL = 10 * 1000; // 10 seconds before background refresh
-const DEFAULT_POLL_INTERVAL = 5 * 1000; // 5 seconds — near-realtime admin ↔ super admin sync
+const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for memory cache
+const STALE_TTL = 30 * 1000; // 30 seconds before background refresh
+const DEFAULT_POLL_INTERVAL = 30 * 1000; // 30 seconds — balanced sync interval
 
 // ── Visibility-based refetch (real-time across tabs/browsers) ──
 // When user switches back to this tab, all active hooks refetch if stale.
-const REFETCH_ON_FOCUS_STALE = 5 * 1000; // 5s — refetch if data older than this on tab focus
+const REFETCH_ON_FOCUS_STALE = 15 * 1000; // 15s — refetch if data older than this on tab focus
 const activeHooks = new Set(); // stores refetch callbacks of mounted hooks
 
 let visibilityListenerAttached = false;

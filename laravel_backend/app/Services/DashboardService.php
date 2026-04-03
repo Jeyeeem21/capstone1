@@ -83,24 +83,26 @@ class DashboardService
         $startOfLastMonth = $now->copy()->subMonth()->startOfMonth();
         $endOfLastMonth = $now->copy()->subMonth()->endOfMonth();
 
-        // SALES — delivered/completed only
+        // SALES — delivered/completed only (use aggregate queries, not ->get())
         $completedStatuses = ['delivered', 'completed'];
 
-        $currentMonthSales = Sale::whereIn('status', $completedStatuses)
+        $currentMonthStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+            ->whereIn('status', $completedStatuses)
             ->where('created_at', '>=', $startOfMonth)
-            ->get();
-        $lastMonthSales = Sale::whereIn('status', $completedStatuses)
+            ->first();
+        $lastMonthStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+            ->whereIn('status', $completedStatuses)
             ->whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])
-            ->get();
+            ->first();
 
-        $currentRevenue = (float) $currentMonthSales->sum('total');
-        $lastRevenue = (float) $lastMonthSales->sum('total');
+        $currentRevenue = (float) $currentMonthStats->revenue;
+        $lastRevenue = (float) $lastMonthStats->revenue;
         $revenueTrend = $lastRevenue > 0
             ? round((($currentRevenue - $lastRevenue) / $lastRevenue) * 100, 1)
             : ($currentRevenue > 0 ? 100 : 0);
 
-        $currentOrders = $currentMonthSales->count();
-        $lastOrders = $lastMonthSales->count();
+        $currentOrders = (int) $currentMonthStats->order_count;
+        $lastOrders = (int) $lastMonthStats->order_count;
         $ordersTrend = $lastOrders > 0
             ? round((($currentOrders - $lastOrders) / $lastOrders) * 100, 1)
             : ($currentOrders > 0 ? 100 : 0);
@@ -147,15 +149,11 @@ class DashboardService
 
     /**
      * Revenue chart data — daily/weekly/monthly/bi-annually/annually
+     * Uses database-level aggregation instead of loading all sales into memory.
      */
     private function getRevenueData(string $period, array $chartParams = []): array
     {
         $completedStatuses = ['delivered', 'completed'];
-        $sales = Sale::with('items')
-            ->whereIn('status', $completedStatuses)
-            ->orderBy('created_at')
-            ->get();
-
         $now = Carbon::now();
         $result = [];
         $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -171,14 +169,35 @@ class DashboardService
                 }
             }
             $daysInMonth = Carbon::create($targetYear, $targetMonth, 1)->daysInMonth;
+            $start = Carbon::create($targetYear, $targetMonth, 1)->startOfDay();
+            $end = $start->copy()->endOfMonth()->endOfDay();
+
+            $salesByDay = Sale::selectRaw('DAY(created_at) as day_num, COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+                ->whereIn('status', $completedStatuses)
+                ->whereBetween('created_at', [$start, $end])
+                ->groupByRaw('DAY(created_at)')
+                ->pluck('revenue', 'day_num')
+                ->toArray();
+            $ordersByDay = Sale::selectRaw('DAY(created_at) as day_num, COUNT(*) as order_count')
+                ->whereIn('status', $completedStatuses)
+                ->whereBetween('created_at', [$start, $end])
+                ->groupByRaw('DAY(created_at)')
+                ->pluck('order_count', 'day_num')
+                ->toArray();
+            $itemsByDay = SaleItem::selectRaw('DAY(sales.created_at) as day_num, COALESCE(SUM(sale_items.quantity), 0) as items')
+                ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+                ->whereIn('sales.status', $completedStatuses)
+                ->whereBetween('sales.created_at', [$start, $end])
+                ->groupByRaw('DAY(sales.created_at)')
+                ->pluck('items', 'day_num')
+                ->toArray();
+
             for ($day = 1; $day <= $daysInMonth; $day++) {
-                $dateStr = Carbon::create($targetYear, $targetMonth, $day)->toDateString();
-                $daySales = $sales->filter(fn($s) => $s->created_at->toDateString() === $dateStr);
                 $result[] = [
                     'name' => (string) $day,
-                    'revenue' => round((float) $daySales->sum('total'), 2),
-                    'orders' => $daySales->count(),
-                    'items' => $daySales->sum(fn($s) => $s->items->sum('quantity')),
+                    'revenue' => round((float) ($salesByDay[$day] ?? 0), 2),
+                    'orders' => (int) ($ordersByDay[$day] ?? 0),
+                    'items' => (int) ($itemsByDay[$day] ?? 0),
                 ];
             }
         } elseif ($period === 'weekly') {
@@ -193,48 +212,104 @@ class DashboardService
             }
             $weeks = $this->getWeeksInMonth($targetYear, $targetMonth);
             foreach ($weeks as $week) {
-                $weekSales = $sales->filter(fn($s) =>
-                    $s->created_at->gte($week['start']) && $s->created_at->lte($week['end'])
-                );
+                $weekRevenue = Sale::whereIn('status', $completedStatuses)
+                    ->whereBetween('created_at', [$week['start'], $week['end']])
+                    ->selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+                    ->first();
+                $weekItems = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
+                    ->whereIn('sales.status', $completedStatuses)
+                    ->whereBetween('sales.created_at', [$week['start'], $week['end']])
+                    ->sum('sale_items.quantity');
                 $result[] = [
                     'name' => $week['label'],
-                    'revenue' => round((float) $weekSales->sum('total'), 2),
-                    'orders' => $weekSales->count(),
-                    'items' => $weekSales->sum(fn($s) => $s->items->sum('quantity')),
+                    'revenue' => round((float) $weekRevenue->revenue, 2),
+                    'orders' => (int) $weekRevenue->order_count,
+                    'items' => (int) $weekItems,
                 ];
             }
         } elseif ($period === 'monthly') {
             $targetYear = $chartParams['year'] ?? $now->year;
+            $start = Carbon::create($targetYear, 1, 1)->startOfDay();
+            $end = Carbon::create($targetYear, 12, 31)->endOfDay();
+
+            $salesByMonth = Sale::selectRaw('MONTH(created_at) as month_num, COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+                ->whereIn('status', $completedStatuses)
+                ->whereBetween('created_at', [$start, $end])
+                ->groupByRaw('MONTH(created_at)')
+                ->get()
+                ->keyBy('month_num');
+            $itemsByMonth = SaleItem::selectRaw('MONTH(sales.created_at) as month_num, COALESCE(SUM(sale_items.quantity), 0) as items')
+                ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+                ->whereIn('sales.status', $completedStatuses)
+                ->whereBetween('sales.created_at', [$start, $end])
+                ->groupByRaw('MONTH(sales.created_at)')
+                ->pluck('items', 'month_num')
+                ->toArray();
+
             foreach ($months as $idx => $monthName) {
-                $monthSales = $sales->filter(fn($s) =>
-                    $s->created_at->year === $targetYear &&
-                    $s->created_at->month === ($idx + 1)
-                );
+                $m = $idx + 1;
+                $row = $salesByMonth->get($m);
                 $result[] = [
                     'name' => $monthName,
-                    'revenue' => round((float) $monthSales->sum('total'), 2),
-                    'orders' => $monthSales->count(),
-                    'items' => $monthSales->sum(fn($s) => $s->items->sum('quantity')),
+                    'revenue' => round((float) ($row->revenue ?? 0), 2),
+                    'orders' => (int) ($row->order_count ?? 0),
+                    'items' => (int) ($itemsByMonth[$m] ?? 0),
                 ];
             }
         } elseif ($period === 'bi-annually') {
             $targetYear = $chartParams['year'] ?? $now->year;
-            $h1Sales = $sales->filter(fn($s) => $s->created_at->year === $targetYear && $s->created_at->month <= 6);
-            $h2Sales = $sales->filter(fn($s) => $s->created_at->year === $targetYear && $s->created_at->month > 6);
+            $start = Carbon::create($targetYear, 1, 1)->startOfDay();
+            $mid = Carbon::create($targetYear, 7, 1)->startOfDay();
+            $end = Carbon::create($targetYear, 12, 31)->endOfDay();
+
+            $h1 = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+                ->whereIn('status', $completedStatuses)
+                ->whereBetween('created_at', [$start, $mid->copy()->subSecond()])
+                ->first();
+            $h2 = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+                ->whereIn('status', $completedStatuses)
+                ->whereBetween('created_at', [$mid, $end])
+                ->first();
+            $h1Items = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
+                ->whereIn('sales.status', $completedStatuses)
+                ->whereBetween('sales.created_at', [$start, $mid->copy()->subSecond()])
+                ->sum('sale_items.quantity');
+            $h2Items = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
+                ->whereIn('sales.status', $completedStatuses)
+                ->whereBetween('sales.created_at', [$mid, $end])
+                ->sum('sale_items.quantity');
+
             $result = [
-                ['name' => 'H1', 'fullName' => "Jan - Jun {$targetYear}", 'revenue' => round((float) $h1Sales->sum('total'), 2), 'orders' => $h1Sales->count(), 'items' => $h1Sales->sum(fn($s) => $s->items->sum('quantity'))],
-                ['name' => 'H2', 'fullName' => "Jul - Dec {$targetYear}", 'revenue' => round((float) $h2Sales->sum('total'), 2), 'orders' => $h2Sales->count(), 'items' => $h2Sales->sum(fn($s) => $s->items->sum('quantity'))],
+                ['name' => 'H1', 'fullName' => "Jan - Jun {$targetYear}", 'revenue' => round((float) $h1->revenue, 2), 'orders' => (int) $h1->order_count, 'items' => (int) $h1Items],
+                ['name' => 'H2', 'fullName' => "Jul - Dec {$targetYear}", 'revenue' => round((float) $h2->revenue, 2), 'orders' => (int) $h2->order_count, 'items' => (int) $h2Items],
             ];
         } else { // annually
             $yearFrom = $chartParams['year_from'] ?? ($now->year - 4);
             $yearTo = $chartParams['year_to'] ?? $now->year;
+            $start = Carbon::create($yearFrom, 1, 1)->startOfDay();
+            $end = Carbon::create($yearTo, 12, 31)->endOfDay();
+
+            $salesByYear = Sale::selectRaw('YEAR(created_at) as year_num, COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+                ->whereIn('status', $completedStatuses)
+                ->whereBetween('created_at', [$start, $end])
+                ->groupByRaw('YEAR(created_at)')
+                ->get()
+                ->keyBy('year_num');
+            $itemsByYear = SaleItem::selectRaw('YEAR(sales.created_at) as year_num, COALESCE(SUM(sale_items.quantity), 0) as items')
+                ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+                ->whereIn('sales.status', $completedStatuses)
+                ->whereBetween('sales.created_at', [$start, $end])
+                ->groupByRaw('YEAR(sales.created_at)')
+                ->pluck('items', 'year_num')
+                ->toArray();
+
             for ($year = $yearFrom; $year <= $yearTo; $year++) {
-                $yearSales = $sales->filter(fn($s) => $s->created_at->year === $year);
+                $row = $salesByYear->get($year);
                 $result[] = [
                     'name' => (string) $year,
-                    'revenue' => round((float) $yearSales->sum('total'), 2),
-                    'orders' => $yearSales->count(),
-                    'items' => $yearSales->sum(fn($s) => $s->items->sum('quantity')),
+                    'revenue' => round((float) ($row->revenue ?? 0), 2),
+                    'orders' => (int) ($row->order_count ?? 0),
+                    'items' => (int) ($itemsByYear[$year] ?? 0),
                 ];
             }
         }
@@ -244,16 +319,14 @@ class DashboardService
 
     /**
      * Processing performance data (milling operations)
+     * Uses database-level aggregation instead of loading all records into memory.
      */
     private function getProcessingData(string $period, array $chartParams = []): array
     {
-        $processings = Processing::where('status', Processing::STATUS_COMPLETED)
-            ->orderBy('completed_date')
-            ->get();
-
         $now = Carbon::now();
         $result = [];
         $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        $completedStatus = Processing::STATUS_COMPLETED;
 
         if ($period === 'daily') {
             $targetYear = $now->year;
@@ -266,13 +339,22 @@ class DashboardService
                 }
             }
             $daysInMonth = Carbon::create($targetYear, $targetMonth, 1)->daysInMonth;
+            $start = Carbon::create($targetYear, $targetMonth, 1)->startOfDay();
+            $end = $start->copy()->endOfMonth()->endOfDay();
+
+            $byDay = Processing::selectRaw('DAY(completed_date) as day_num, COALESCE(SUM(input_kg), 0) as total_input, COALESCE(SUM(output_kg), 0) as total_output')
+                ->where('status', $completedStatus)
+                ->whereBetween('completed_date', [$start, $end])
+                ->groupByRaw('DAY(completed_date)')
+                ->get()
+                ->keyBy('day_num');
+
             for ($day = 1; $day <= $daysInMonth; $day++) {
-                $dateStr = Carbon::create($targetYear, $targetMonth, $day)->toDateString();
-                $dayProcessings = $processings->filter(fn($p) => $p->completed_date?->toDateString() === $dateStr);
+                $row = $byDay->get($day);
                 $result[] = [
                     'name' => (string) $day,
-                    'input' => round((float) $dayProcessings->sum('input_kg'), 2),
-                    'output' => round((float) $dayProcessings->sum('output_kg'), 2),
+                    'input' => round((float) ($row->total_input ?? 0), 2),
+                    'output' => round((float) ($row->total_output ?? 0), 2),
                 ];
             }
         } elseif ($period === 'weekly') {
@@ -287,54 +369,84 @@ class DashboardService
             }
             $weeks = $this->getWeeksInMonth($targetYear, $targetMonth);
             foreach ($weeks as $week) {
-                $weekProcessings = $processings->filter(fn($p) =>
-                    $p->completed_date && $p->completed_date->gte($week['start']) && $p->completed_date->lte($week['end'])
-                );
+                $agg = Processing::selectRaw('COALESCE(SUM(input_kg), 0) as total_input, COALESCE(SUM(output_kg), 0) as total_output')
+                    ->where('status', $completedStatus)
+                    ->whereBetween('completed_date', [$week['start'], $week['end']])
+                    ->first();
                 $result[] = [
                     'name' => $week['label'],
-                    'input' => round((float) $weekProcessings->sum('input_kg'), 2),
-                    'output' => round((float) $weekProcessings->sum('output_kg'), 2),
+                    'input' => round((float) $agg->total_input, 2),
+                    'output' => round((float) $agg->total_output, 2),
                 ];
             }
         } elseif ($period === 'monthly') {
             $targetYear = $chartParams['year'] ?? $now->year;
+            $start = Carbon::create($targetYear, 1, 1)->startOfDay();
+            $end = Carbon::create($targetYear, 12, 31)->endOfDay();
+
+            $byMonth = Processing::selectRaw('MONTH(completed_date) as month_num, COALESCE(SUM(input_kg), 0) as total_input, COALESCE(SUM(output_kg), 0) as total_output')
+                ->where('status', $completedStatus)
+                ->whereBetween('completed_date', [$start, $end])
+                ->groupByRaw('MONTH(completed_date)')
+                ->get()
+                ->keyBy('month_num');
+
             foreach ($months as $idx => $monthName) {
-                $monthProcessings = $processings->filter(fn($p) =>
-                    $p->completed_date?->year === $targetYear &&
-                    $p->completed_date?->month === ($idx + 1)
-                );
+                $m = $idx + 1;
+                $row = $byMonth->get($m);
                 $result[] = [
                     'name' => $monthName,
-                    'input' => round((float) $monthProcessings->sum('input_kg'), 2),
-                    'output' => round((float) $monthProcessings->sum('output_kg'), 2),
+                    'input' => round((float) ($row->total_input ?? 0), 2),
+                    'output' => round((float) ($row->total_output ?? 0), 2),
                 ];
             }
         } elseif ($period === 'bi-annually') {
             $targetYear = $chartParams['year'] ?? $now->year;
-            $h1 = $processings->filter(fn($p) => $p->completed_date?->year === $targetYear && $p->completed_date?->month <= 6);
-            $h2 = $processings->filter(fn($p) => $p->completed_date?->year === $targetYear && $p->completed_date?->month > 6);
+            $start = Carbon::create($targetYear, 1, 1)->startOfDay();
+            $mid = Carbon::create($targetYear, 7, 1)->startOfDay();
+            $end = Carbon::create($targetYear, 12, 31)->endOfDay();
+
+            $h1 = Processing::selectRaw('COALESCE(SUM(input_kg), 0) as total_input, COALESCE(SUM(output_kg), 0) as total_output')
+                ->where('status', $completedStatus)
+                ->whereBetween('completed_date', [$start, $mid->copy()->subSecond()])
+                ->first();
+            $h2 = Processing::selectRaw('COALESCE(SUM(input_kg), 0) as total_input, COALESCE(SUM(output_kg), 0) as total_output')
+                ->where('status', $completedStatus)
+                ->whereBetween('completed_date', [$mid, $end])
+                ->first();
+
             $result = [
-                ['name' => 'H1', 'fullName' => "Jan - Jun {$targetYear}", 'input' => round((float) $h1->sum('input_kg'), 2), 'output' => round((float) $h1->sum('output_kg'), 2)],
-                ['name' => 'H2', 'fullName' => "Jul - Dec {$targetYear}", 'input' => round((float) $h2->sum('input_kg'), 2), 'output' => round((float) $h2->sum('output_kg'), 2)],
+                ['name' => 'H1', 'fullName' => "Jan - Jun {$targetYear}", 'input' => round((float) $h1->total_input, 2), 'output' => round((float) $h1->total_output, 2)],
+                ['name' => 'H2', 'fullName' => "Jul - Dec {$targetYear}", 'input' => round((float) $h2->total_input, 2), 'output' => round((float) $h2->total_output, 2)],
             ];
         } else { // annually
             $yearFrom = $chartParams['year_from'] ?? ($now->year - 4);
             $yearTo = $chartParams['year_to'] ?? $now->year;
+            $start = Carbon::create($yearFrom, 1, 1)->startOfDay();
+            $end = Carbon::create($yearTo, 12, 31)->endOfDay();
+
+            $byYear = Processing::selectRaw('YEAR(completed_date) as year_num, COALESCE(SUM(input_kg), 0) as total_input, COALESCE(SUM(output_kg), 0) as total_output')
+                ->where('status', $completedStatus)
+                ->whereBetween('completed_date', [$start, $end])
+                ->groupByRaw('YEAR(completed_date)')
+                ->get()
+                ->keyBy('year_num');
+
             for ($year = $yearFrom; $year <= $yearTo; $year++) {
-                $yearProcessings = $processings->filter(fn($p) => $p->completed_date?->year === $year);
+                $row = $byYear->get($year);
                 $result[] = [
                     'name' => (string) $year,
-                    'input' => round((float) $yearProcessings->sum('input_kg'), 2),
-                    'output' => round((float) $yearProcessings->sum('output_kg'), 2),
+                    'input' => round((float) ($row->total_input ?? 0), 2),
+                    'output' => round((float) ($row->total_output ?? 0), 2),
                 ];
             }
         }
 
-        // Summary stats
+        // Summary stats — single aggregate queries instead of loading all records
         $totalInput = (float) Processing::sum('input_kg');
-        $totalOutput = (float) Processing::where('status', Processing::STATUS_COMPLETED)->sum('output_kg');
-        $avgYield = Processing::where('status', Processing::STATUS_COMPLETED)->count() > 0
-            ? round(Processing::where('status', Processing::STATUS_COMPLETED)->avg('yield_percent'), 2)
+        $totalOutput = (float) Processing::where('status', $completedStatus)->sum('output_kg');
+        $avgYield = Processing::where('status', $completedStatus)->count() > 0
+            ? round(Processing::where('status', $completedStatus)->avg('yield_percent'), 2)
             : 0;
 
         return [
