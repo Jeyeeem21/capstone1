@@ -20,7 +20,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            cd ~/app
+            cd /home/u940130461/capstone1
 
             # Pull latest code
             git pull origin main
