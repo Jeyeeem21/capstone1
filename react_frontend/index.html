@@ -10,6 +10,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
+    <!-- Preconnect to API backend for image/asset loading -->
+    <link rel="preconnect" href="https://api.kjpricemill.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.kjpricemill.com" />
+
     <!-- Load Google Fonts non-blocking: media="print" + onload swap to "all" -->
     <link rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
@@ -152,6 +156,22 @@
           
           if (homeContent) {
             window.__HOME_CONTENT__ = JSON.parse(homeContent);
+            
+            // Preload hero image immediately so browser starts downloading it
+            // instead of waiting for React → Component → useEffect → setState → CSS render
+            var heroImg = window.__HOME_CONTENT__.heroImage;
+            if (heroImg) {
+              var host = window.location.hostname;
+              var isProd = host === 'kjpricemill.com' || host === 'www.kjpricemill.com';
+              var backendUrl = isProd ? 'https://api.kjpricemill.com' : 'http://127.0.0.1:8000';
+              var fullUrl = heroImg.startsWith('http') ? heroImg : backendUrl + heroImg;
+              var link = document.createElement('link');
+              link.rel = 'preload';
+              link.as = 'image';
+              link.href = fullUrl;
+              link.fetchPriority = 'high';
+              document.head.appendChild(link);
+            }
           }
           if (aboutContent) {
             window.__ABOUT_CONTENT__ = JSON.parse(aboutContent);

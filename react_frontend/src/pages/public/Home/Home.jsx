@@ -273,9 +273,9 @@ const Home = () => {
                 {/* Product Image */}
                 <div className="relative h-44 overflow-hidden">
                   {product.image ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <img src={product.image} alt={product.name} width={400} height={176} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   ) : logoFallback ? (
-                    <img src={logoFallback} alt={product.name} className="w-full h-full object-contain p-6 opacity-60" />
+                    <img src={logoFallback} alt={product.name} width={400} height={176} loading="lazy" className="w-full h-full object-contain p-6 opacity-60" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-gray-600 dark:to-gray-700 flex items-center justify-center">
                       <Package size={36} className="text-primary-400 dark:text-gray-400" />
@@ -319,7 +319,10 @@ const Home = () => {
                 <img 
                   src={heroImage || '/KJPLogo.png'}
                   alt="Rice Mill"
-                  className="rounded-2xl shadow-2xl"
+                  width={600}
+                  height={400}
+                  loading="lazy"
+                  className="rounded-2xl shadow-2xl w-full h-auto"
                 />
               </div>
               <div className="absolute -bottom-8 -right-8 w-64 h-64 bg-green-500/20 rounded-2xl -z-0" />
