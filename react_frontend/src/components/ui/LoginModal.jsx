@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, User, Lock, Eye, EyeOff, Loader2, Check, AlertCircle } from 'lucide-react';
 import { Modal } from './Modal';
@@ -25,6 +25,7 @@ const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onSwitchToForgotPassw
   const [error, setError] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
+  const formRef = useRef(null);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -36,6 +37,77 @@ const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onSwitchToForgotPassw
       setShakeKey(0);
     }
   }, [isOpen]);
+
+  // Keyboard shortcuts for login form
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => {
+      const form = formRef.current;
+      if (!form) return;
+
+      // Ctrl+S or Ctrl+Enter → submit form
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'Enter')) {
+        e.preventDefault();
+        if (!isLoading) form.requestSubmit();
+        return;
+      }
+
+      // Ctrl+Shift+Backspace → clear all fields
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Backspace') {
+        e.preventDefault();
+        setFormData({ email: '', password: '' });
+        setTouched({ email: false, password: false });
+        setError('');
+        setSubmitted(false);
+        const firstInput = form.querySelector('input:not([type="hidden"]):not([disabled])');
+        if (firstInput) firstInput.focus();
+        return;
+      }
+
+      // Ctrl+Backspace → clear focused input field
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace' && !e.shiftKey) {
+        const active = document.activeElement;
+        if (active && active.tagName === 'INPUT' && active.closest('.fixed, [role="dialog"]')) {
+          e.preventDefault();
+          const fieldName = active.name;
+          if (fieldName) {
+            setFormData(prev => ({ ...prev, [fieldName]: '' }));
+            setError('');
+          }
+        }
+        return;
+      }
+
+      // Enter on input → move to next field if current has data, submit on last
+      if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const active = document.activeElement;
+        if (active && active.tagName === 'INPUT' && active.type !== 'submit' && active.type !== 'button') {
+          e.preventDefault();
+          const inputs = Array.from(form.querySelectorAll(
+            'input:not([type="hidden"]):not([disabled])'
+          )).filter(el => el.offsetParent !== null);
+          const idx = inputs.indexOf(active);
+          if (idx < 0) return;
+
+          // Don't advance if required field is empty
+          if (!active.value?.trim()) {
+            active.classList.add('animate-shake');
+            setTimeout(() => active.classList.remove('animate-shake'), 500);
+            return;
+          }
+
+          if (idx < inputs.length - 1) {
+            inputs[idx + 1].focus();
+          } else {
+            // Last field → submit
+            form.requestSubmit();
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, isLoading]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -192,7 +264,7 @@ const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onSwitchToForgotPassw
       title="Login to KJP Ricemill"
       size="sm"
     >
-      <form onSubmit={handleSubmit} className={`space-y-4 ${shakeKey > 0 ? 'animate-shake' : ''}`} key={shakeKey} noValidate>
+      <form ref={formRef} onSubmit={handleSubmit} className={`space-y-4 ${shakeKey > 0 ? 'animate-shake' : ''}`} key={shakeKey} noValidate>
         {/* Logo/Icon */}
         <div className="flex justify-center mb-4">
           <div className="w-16 h-16 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center shadow-lg shadow-button-500/25">

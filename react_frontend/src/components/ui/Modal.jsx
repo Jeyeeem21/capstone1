@@ -224,8 +224,8 @@ const FormModal = ({
           inputs.forEach(input => {
             if (input.tagName === 'SELECT') {
               input.selectedIndex = 0;
+              input.dispatchEvent(new Event('change', { bubbles: true }));
             } else {
-              // Use native setter to trigger React's onChange
               const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
                 input.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
                 'value'
@@ -237,7 +237,6 @@ const FormModal = ({
               }
             }
           });
-          // Focus first input after clearing
           if (inputs[0]) inputs[0].focus();
         }
         return;
@@ -246,31 +245,55 @@ const FormModal = ({
       // Ctrl+Backspace → clear focused input field
       if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace' && !e.shiftKey) {
         const active = document.activeElement;
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active.closest('.fixed, [role="dialog"]')) {
-          e.preventDefault();
-          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-            active.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
-            'value'
-          )?.set;
-          if (nativeInputValueSetter) {
-            nativeInputValueSetter.call(active, '');
-            active.dispatchEvent(new Event('input', { bubbles: true }));
+        if (active && active.closest('.fixed, [role="dialog"]')) {
+          if (active.tagName === 'SELECT') {
+            e.preventDefault();
+            active.selectedIndex = 0;
             active.dispatchEvent(new Event('change', { bubbles: true }));
+          } else if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
+            e.preventDefault();
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+              active.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+              'value'
+            )?.set;
+            if (nativeInputValueSetter) {
+              nativeInputValueSetter.call(active, '');
+              active.dispatchEvent(new Event('input', { bubbles: true }));
+              active.dispatchEvent(new Event('change', { bubbles: true }));
+            }
           }
         }
         return;
       }
 
-      // Enter on input (not textarea, not button) → move to next field
+      // Enter on input/select (not textarea, not button) → move to next field or submit
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
         const active = document.activeElement;
-        if (active && active.tagName === 'INPUT' && active.type !== 'submit' && active.type !== 'button' && form) {
+        if (!active || !form) return;
+        // Skip for textarea (allow newlines), buttons, and submit inputs
+        if (active.tagName === 'TEXTAREA' || active.tagName === 'BUTTON' ||
+            active.type === 'submit' || active.type === 'button') return;
+        // Handle inputs and selects
+        if (active.tagName === 'INPUT' || active.tagName === 'SELECT') {
           e.preventDefault();
           const inputs = getFocusableInputs(form);
           const idx = inputs.indexOf(active);
-          if (idx >= 0 && idx < inputs.length - 1) {
+          if (idx < 0) return;
+
+          // If field is required and empty, don't advance — shake it instead
+          const isRequired = active.hasAttribute('required') || active.hasAttribute('data-required');
+          const isEmpty = active.tagName === 'SELECT'
+            ? !active.value
+            : !active.value?.trim();
+          if (isRequired && isEmpty) {
+            active.classList.add('animate-shake');
+            setTimeout(() => active.classList.remove('animate-shake'), 500);
+            return;
+          }
+
+          if (idx < inputs.length - 1) {
             inputs[idx + 1].focus();
-          } else if (idx === inputs.length - 1) {
+          } else {
             // Last field → submit
             form.requestSubmit();
           }
