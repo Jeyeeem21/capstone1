@@ -24,6 +24,9 @@ export const authApi = {
     
     if (response.success && response.token) {
       setAuthToken(response.token);
+      if (response.session_token) {
+        localStorage.setItem('session_token', response.session_token);
+      }
     }
     
     return response;
@@ -35,6 +38,7 @@ export const authApi = {
   logout: async () => {
     const response = await apiClient.post(ENDPOINTS.AUTH.LOGOUT);
     setAuthToken(null);
+    localStorage.removeItem('session_token');
     apiClient.cache.clear();
     return response;
   },

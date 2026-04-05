@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi } from '../api';
 import apiClient from '../api/apiClient';
 
@@ -7,6 +7,8 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sessionKicked, setSessionKicked] = useState(false);
+  const sessionPollRef = useRef(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -17,12 +19,17 @@ export const AuthProvider = ({ children }) => {
           const response = await authApi.getCurrentUser();
           if (response.success && response.user) {
             setUser(response.user);
+            // Store session_token from server if present
+            if (response.session_token) {
+              localStorage.setItem('session_token', response.session_token);
+            }
           } else {
-            // Token invalid, clear it
             localStorage.removeItem('auth_token');
+            localStorage.removeItem('session_token');
           }
         } catch {
           localStorage.removeItem('auth_token');
+          localStorage.removeItem('session_token');
         }
       }
       setLoading(false);
@@ -32,16 +39,58 @@ export const AuthProvider = ({ children }) => {
 
   // Listen for forced logout from apiClient (401 responses)
   useEffect(() => {
-    const handleForcedLogout = () => {
+    const handleForcedLogout = (e) => {
+      // If it's a session kick (token revoked by new login), show notification
+      if (e.detail?.reason === 'session_kicked') {
+        setSessionKicked(true);
+      }
       setUser(null);
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('session_token');
     };
     window.addEventListener('auth:logout', handleForcedLogout);
     return () => window.removeEventListener('auth:logout', handleForcedLogout);
   }, []);
 
+  // Poll session-check for admin/super_admin to detect login from another device
+  useEffect(() => {
+    if (sessionPollRef.current) {
+      clearInterval(sessionPollRef.current);
+      sessionPollRef.current = null;
+    }
+
+    if (!user || !['super_admin', 'admin'].includes(user.role)) return;
+
+    const checkSession = async () => {
+      const token = localStorage.getItem('auth_token');
+      const storedSession = localStorage.getItem('session_token');
+      if (!token || !storedSession) return;
+
+      try {
+        const res = await apiClient.get('/auth/session-check');
+        if (res.session_token && res.session_token !== storedSession) {
+          // Another device logged in — this session is stale
+          setSessionKicked(true);
+          setUser(null);
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('session_token');
+          if (sessionPollRef.current) clearInterval(sessionPollRef.current);
+        }
+      } catch {
+        // 401 will be handled by apiClient's handle401
+      }
+    };
+
+    // Check every 15 seconds
+    sessionPollRef.current = setInterval(checkSession, 15000);
+    return () => {
+      if (sessionPollRef.current) clearInterval(sessionPollRef.current);
+    };
+  }, [user]);
+
   // Login function — calls real API
   const login = useCallback(async (email, password) => {
+    setSessionKicked(false);
     const response = await authApi.login({ email, password });
 
     if (response.success && response.user) {
@@ -67,6 +116,12 @@ export const AuthProvider = ({ children }) => {
     }
     setUser(null);
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('session_token');
+  }, []);
+
+  // Dismiss session kicked notification
+  const dismissSessionKicked = useCallback(() => {
+    setSessionKicked(false);
   }, []);
 
   // Check if user has a specific role
@@ -108,6 +163,8 @@ export const AuthProvider = ({ children }) => {
     isStaff,
     isAuthenticated: !!user,
     basePath,
+    sessionKicked,
+    dismissSessionKicked,
   };
 
   return (

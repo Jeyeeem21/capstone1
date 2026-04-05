@@ -207,12 +207,15 @@ const cache = {
  */
 const handle401 = (response) => {
   if (response.status === 401) {
+    const hadToken = !!localStorage.getItem('auth_token');
     // Clear token and dispatch event for React to handle navigation
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('session_token');
     cache.clear();
-    // Use custom event instead of window.location to avoid navigation chain warning
+    // If the user had a token that just became invalid, they were kicked by another login
+    const reason = hadToken ? 'session_kicked' : 'unauthenticated';
     if (window.location.pathname !== '/') {
-      window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason: 'unauthenticated' } }));
+      window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason } }));
     }
   }
   return response;

@@ -50,6 +50,7 @@ class User extends Authenticatable
         'is_archived',
         'archived_at',
         'date_hired',
+        'session_token',
     ];
 
     protected $hidden = [

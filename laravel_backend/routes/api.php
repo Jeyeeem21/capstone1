@@ -92,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/login-email', [AuthController::class, 'sendLoginEmail']);
         Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/session-check', [AuthController::class, 'sessionCheck']);
         Route::post('/check-profile-email', [AuthController::class, 'checkProfileEmail']);
         Route::put('/profile', [AuthController::class, 'updateProfile']);
         Route::post('/verify-email-change', [AuthController::class, 'verifyEmailChange']);

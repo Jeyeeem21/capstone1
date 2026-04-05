@@ -60,6 +60,10 @@ class AuthController extends Controller
         // Revoke all existing tokens for this user
         $user->tokens()->delete();
 
+        // Generate a unique session token for single-session enforcement
+        $sessionToken = bin2hex(random_bytes(32));
+        $user->update(['session_token' => $sessionToken]);
+
         // Create new token with role-based abilities
         $abilities = $this->getAbilitiesForRole($user->role);
         $token = $user->createToken('auth-token', $abilities)->plainTextToken;
@@ -78,6 +82,7 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'token' => $token,
+            'session_token' => $sessionToken,
             'user' => $this->formatUser($user),
             'message' => 'Login successful',
         ]);
@@ -131,9 +136,23 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
+        $user = $request->user();
         return response()->json([
             'success' => true,
-            'user' => $this->formatUser($request->user()),
+            'user' => $this->formatUser($user),
+            'session_token' => $user->session_token,
+        ]);
+    }
+
+    /**
+     * Lightweight session check — returns only the current session_token.
+     * Used by the frontend to detect if another device has logged in.
+     */
+    public function sessionCheck(Request $request)
+    {
+        $user = $request->user();
+        return response()->json([
+            'session_token' => $user->session_token,
         ]);
     }
 
