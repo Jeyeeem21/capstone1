@@ -31,16 +31,22 @@ const iconMap = {
 // Fallback products — empty until real products loaded from API
 const fallbackProducts = [];
 
-// Default content fallback — empty, real data comes from database
+// Default content — space-reserving placeholders to prevent CLS on first visit
+// Real data from database replaces these once API responds
 const defaultContent = {
-  heroTitle: '',
-  heroTitleHighlight: '',
-  heroSubtitle: '',
-  heroTag: '',
-  aboutTitle: '',
-  aboutDescription: '',
+  heroTitle: '\u00A0',
+  heroTitleHighlight: '\u00A0',
+  heroSubtitle: '\u00A0',
+  heroTag: '\u00A0',
+  aboutTitle: '\u00A0',
+  aboutDescription: '\u00A0',
   aboutPoints: [],
-  stats: [],
+  stats: [
+    { value: '\u00A0', label: '\u00A0' },
+    { value: '\u00A0', label: '\u00A0' },
+    { value: '\u00A0', label: '\u00A0' },
+    { value: '\u00A0', label: '\u00A0' },
+  ],
   features: [],
 };
 
