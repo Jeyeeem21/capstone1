@@ -27,16 +27,16 @@ const iconMap = {
   'Excellence': Award,
 };
 
-// Default content — space-reserving placeholders to prevent CLS on first visit
+// Default content — empty until API provides real data
 const defaultContent = {
-  heroTitle: '\u00A0',
-  heroTitleHighlight: '\u00A0',
-  heroSubtitle: '\u00A0',
-  missionTitle: '\u00A0',
-  missionDescription: '\u00A0',
+  heroTitle: '',
+  heroTitleHighlight: '',
+  heroSubtitle: '',
+  missionTitle: '',
+  missionDescription: '',
   missionPoints: [],
-  visionTitle: '\u00A0',
-  visionDescription: '\u00A0',
+  visionTitle: '',
+  visionDescription: '',
   visionPoints: [],
   values: [],
   timeline: [],
@@ -131,15 +131,26 @@ const About = () => {
           <span className="inline-block px-4 py-1 bg-button-500/20 border border-button-500/30 text-button-300 rounded-full text-sm font-medium mb-6">
             About KJP Ricemill
           </span>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
-            {content.heroTitle}
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-button-400 to-primary-400">
-              {content.heroTitleHighlight}
-            </span>
-          </h1>
-          <p className="text-lg text-gray-300 max-w-2xl mx-auto">
-            {content.heroSubtitle}
-          </p>
+          {loading && !content.heroTitle ? (
+            <div className="mb-6">
+              <Skeleton variant="text" width="w-96" height="h-14" className="mx-auto mb-3 !bg-white/10" />
+              <Skeleton variant="text" width="w-72" height="h-14" className="mx-auto !bg-white/10" />
+            </div>
+          ) : (
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6">
+              {content.heroTitle}
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-button-400 to-primary-400">
+                {content.heroTitleHighlight}
+              </span>
+            </h1>
+          )}
+          {loading && !content.heroSubtitle ? (
+            <Skeleton variant="text" width="w-2/3" height="h-6" className="mx-auto !bg-white/10" />
+          ) : (
+            <p className="text-lg text-gray-300 max-w-2xl mx-auto">
+              {content.heroSubtitle}
+            </p>
+          )}
         </div>
       </section>
 
@@ -152,18 +163,27 @@ const About = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-button-500 to-button-600 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-button-500/25">
                 <Target size={32} className="text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{content.missionTitle}</h2>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
-                {content.missionDescription}
-              </p>
-              <ul className="space-y-3">
-                {(content.missionPoints || defaultContent.missionPoints).map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-200">
-                    <CheckCircle size={18} className="text-button-600 dark:text-button-400 flex-shrink-0" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+              {loading && !content.missionTitle ? (
+                <>
+                  <Skeleton variant="title" width="w-1/2" className="mb-4" />
+                  <Skeleton variant="text" count={3} className="mb-6" />
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{content.missionTitle}</h2>
+                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
+                    {content.missionDescription}
+                  </p>
+                  <ul className="space-y-3">
+                    {(content.missionPoints || defaultContent.missionPoints).map((item) => (
+                      <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-200">
+                        <CheckCircle size={18} className="text-button-600 dark:text-button-400 flex-shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
 
             {/* Vision */}
@@ -171,18 +191,27 @@ const About = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-primary-500/25">
                 <Eye size={32} className="text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{content.visionTitle}</h2>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
-                {content.visionDescription}
-              </p>
-              <ul className="space-y-3">
-                {(content.visionPoints || defaultContent.visionPoints).map((item) => (
-                  <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-200">
-                    <CheckCircle size={18} className="text-primary-500 flex-shrink-0" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+              {loading && !content.visionTitle ? (
+                <>
+                  <Skeleton variant="title" width="w-1/2" className="mb-4" />
+                  <Skeleton variant="text" count={3} className="mb-6" />
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">{content.visionTitle}</h2>
+                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
+                    {content.visionDescription}
+                  </p>
+                  <ul className="space-y-3">
+                    {(content.visionPoints || defaultContent.visionPoints).map((item) => (
+                      <li key={item} className="flex items-center gap-3 text-gray-700 dark:text-gray-200">
+                        <CheckCircle size={18} className="text-primary-500 flex-shrink-0" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
           </div>
         </div>

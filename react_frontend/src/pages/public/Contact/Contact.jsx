@@ -37,14 +37,14 @@ const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const defaultPageContent = {
-    heroTag: '\u00A0',
-    heroTitle: '\u00A0',
-    heroSubtitle: '\u00A0',
+    heroTag: '',
+    heroTitle: '',
+    heroSubtitle: '',
     heroImage: null,
-    formTitle: '\u00A0',
+    formTitle: '',
     faqs: [],
-    socialTitle: '\u00A0',
-    socialDescription: '\u00A0',
+    socialTitle: '',
+    socialDescription: '',
   };
 
   // Load cached content instantly

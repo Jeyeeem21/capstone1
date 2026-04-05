@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   Search, Plus, Minus, Package,
   ShoppingCart, X, ChevronUp, ChevronDown, Grid, List,
-  Trash2, Smartphone, Receipt, CheckCircle, Banknote, Clock,
+  Trash2, Smartphone, Receipt, CheckCircle, Clock,
   Truck, MapPin, Loader2, Navigation, Camera, Upload
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
@@ -23,7 +23,6 @@ const sortOptions = [
 
 const paymentMethods = [
   { value: 'gcash', label: 'GCash', icon: Smartphone, color: '#3b82f6' },
-  { value: 'cod', label: 'COD', icon: Banknote, color: '#f59e0b' },
   { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#8b5cf6' },
 ];
 
@@ -51,6 +50,7 @@ const Shop = () => {
   const [calculatingDistance, setCalculatingDistance] = useState(false);
   const [estimatedDuration, setEstimatedDuration] = useState(null);
   const [warehouseCoords, setWarehouseCoords] = useState(null);
+  const [addressError, setAddressError] = useState('');
   const suggestionsRef = useRef(null);
   const addressInputRef = useRef(null);
   const distanceCalcTimer = useRef(null);
@@ -146,15 +146,22 @@ const Shop = () => {
   const autoCalcDistance = useCallback(async (address) => {
     if (!address) return;
     setCalculatingDistance(true);
+    setAddressError('');
     try {
       const wCoords = await getWarehouseCoords();
       if (!wCoords) { setCalculatingDistance(false); return; }
       const coords = await geocodeAddress(address);
       if (coords) {
         setSelectedCoords(coords);
+        setAddressError('');
         const result = await calculateDistance(wCoords.lat, wCoords.lng, coords.lat, coords.lng);
         setDistanceKm(String(result.distanceKm));
         setEstimatedDuration(result.durationMin);
+      } else {
+        setSelectedCoords(null);
+        setDistanceKm('');
+        setEstimatedDuration(null);
+        setAddressError('Address not found in the Philippines. Please enter a valid PH address.');
       }
     } catch (err) {
       console.error('Distance calc failed:', err);
@@ -169,6 +176,7 @@ const Shop = () => {
     setSelectedCoords(null);
     setDistanceKm('');
     setEstimatedDuration(null);
+    setAddressError('');
     debouncedSearchAddress(value, (results) => {
       setAddressSuggestions(results);
       setShowSuggestions(results.length > 0);
@@ -183,6 +191,7 @@ const Shop = () => {
   const handleSelectAddress = useCallback(async (suggestion) => {
     setDeliveryAddress(suggestion.label);
     setSelectedCoords({ lat: suggestion.lat, lng: suggestion.lng });
+    setAddressError('');
     setShowSuggestions(false);
     setAddressSuggestions([]);
     if (distanceCalcTimer.current) clearTimeout(distanceCalcTimer.current);
@@ -264,6 +273,11 @@ const Shop = () => {
       toast.error('Please enter a delivery address.');
       return;
     }
+    if (forDelivery && !selectedCoords) {
+      toast.error('Address not found', 'Please select a valid Philippine address from the suggestions or enter a recognizable address.');
+      setAddressError('Address not found in the Philippines. Please enter a valid PH address.');
+      return;
+    }
     setGcashReference('');
     setPaymentProofFiles([]);
     setPaymentProofPreviews([]);
@@ -289,7 +303,7 @@ const Shop = () => {
         formData.append(`items[${idx}][unit_price]`, item.price);
       });
       formData.append('payment_method', paymentMethod);
-      formData.append('amount_tendered', (paymentMethod === 'cod' || paymentMethod === 'pay_later') ? 0 : orderTotal);
+      formData.append('amount_tendered', paymentMethod === 'pay_later' ? 0 : orderTotal);
       if (paymentMethod === 'gcash') {
         formData.append('reference_number', gcashReference);
         paymentProofFiles.forEach(file => formData.append('payment_proof[]', file));
@@ -313,7 +327,6 @@ const Shop = () => {
         saleId: response.data?.sale_id,
         orderId: response.data?.transaction_id ?? `ORD-${Date.now()}`,
         gcashReference: paymentMethod === 'gcash' ? gcashReference : null,
-        isCod: paymentMethod === 'cod',
         isPayLater: paymentMethod === 'pay_later',
         isDelivery: forDelivery,
         deliveryAddress: forDelivery ? deliveryAddress : null,
@@ -448,7 +461,7 @@ const Shop = () => {
         <div className="mb-4 shrink-0 border-t-2 border-gray-200 dark:border-gray-700 pt-3">
           <p className="text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Order Type</p>
           <div className="grid grid-cols-2 gap-2 mb-2">
-            <button onClick={() => { setForDelivery(false); setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); if (paymentMethod === 'cod') setPaymentMethod('gcash'); }}
+            <button onClick={() => { setForDelivery(false); setDeliveryAddress(''); setDistanceKm(''); setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]); setAddressError(''); }}
               className={`flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs ${forDelivery ? 'border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400' : ''}`}
               style={!forDelivery
                 ? { backgroundColor: '#10b98115', border: '2px solid #10b981', color: '#10b981' }
@@ -496,6 +509,11 @@ const Shop = () => {
                 )}
               </div>
 
+              {/* Address Error */}
+              {addressError && !calculatingDistance && (
+                <p className="text-[10px] text-red-500 font-medium mt-1">{addressError}</p>
+              )}
+
               {/* Distance & Duration Info */}
               {(distanceKm || calculatingDistance) && (
                 <div className="flex items-center justify-between">
@@ -525,7 +543,7 @@ const Shop = () => {
         <div className="mb-4 shrink-0 border-t-2 border-gray-200 dark:border-gray-700 pt-4">
           <p className="text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Payment Method</p>
           <div className="grid grid-cols-2 gap-2">
-            {paymentMethods.filter(m => forDelivery || m.value !== 'cod').map(method => {
+            {paymentMethods.map(method => {
               const Icon = method.icon;
               const isSelected = paymentMethod === method.value;
               return (
@@ -707,8 +725,7 @@ const Shop = () => {
                 </h3>
                 <p className="text-sm text-white/80 mt-1">
                   {paymentMethod === 'gcash' ? 'Enter GCash reference number'
-                    : paymentMethod === 'cod' ? 'Payment collected upon delivery'
-                    : 'You can pay after delivery'}
+                    : 'You can pay later via GCash'}
                 </p>
               </div>
 
@@ -771,17 +788,12 @@ const Shop = () => {
                       <p className="text-xs text-blue-600 dark:text-blue-400">Enter the exact 13-digit GCash reference number and upload a screenshot or capture the payment confirmation as proof.</p>
                     </div>
                   </>
-                ) : paymentMethod === 'cod' ? (
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700 rounded-lg p-4 text-center">
-                    <Banknote size={32} className="mx-auto mb-2 text-amber-500" />
-                    <p className="text-sm font-bold text-amber-700 dark:text-amber-300">Cash on Delivery</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Payment will be collected when your order is delivered.</p>
-                  </div>
                 ) : (
                   <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
                     <Clock size={32} className="mx-auto mb-2 text-purple-500" />
                     <p className="text-sm font-bold text-purple-700 dark:text-purple-300">Pay Later</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Your order will be placed and payment will be arranged later.</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Your order will be placed now. When you're ready to pay, only <span className="font-bold">GCash</span> is accepted for online payment.</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">For cash payments, please visit the store directly.</p>
                   </div>
                 )}
               </div>
@@ -875,9 +887,6 @@ const Shop = () => {
                 <button
                   onClick={() => {
                     setShowOrderModal(false);
-                    if (lastOrder?.saleId) {
-                      apiClient.post(`/sales/${lastOrder.saleId}/notify`).catch(() => {});
-                    }
                   }}
                   className="w-full py-2.5 rounded-lg text-sm font-semibold text-white hover:opacity-90 transition-all"
                   style={{ backgroundColor: 'var(--color-button-500)' }}

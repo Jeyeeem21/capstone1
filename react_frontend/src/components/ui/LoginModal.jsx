@@ -282,12 +282,8 @@ const LoginModal = ({ isOpen, onClose, onSwitchToRegister, onSwitchToForgotPassw
           )}
         </div>
 
-        {/* Remember Me & Forgot Password */}
-        <div className="flex items-center justify-between text-sm">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 text-button-600 dark:text-button-400 border-primary-300 dark:border-primary-700 rounded focus:ring-button-500" />
-            <span className="text-gray-600 dark:text-gray-300">Remember me</span>
-          </label>
+        {/* Forgot Password */}
+        <div className="flex items-center justify-end text-sm">
           <button
             type="button"
             onClick={() => {

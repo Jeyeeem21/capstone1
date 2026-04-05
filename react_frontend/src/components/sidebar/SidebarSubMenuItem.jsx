@@ -1,4 +1,15 @@
 import { NavLink, useLocation } from 'react-router-dom';
+import { adminPageImports } from '../../App';
+
+const prefetchCache = new Set();
+const prefetchRoute = (to) => {
+  if (!to || prefetchCache.has(to)) return;
+  const seg = to.replace(/\/$/, '').split('/').pop();
+  if (seg && adminPageImports[seg]) {
+    prefetchCache.add(to);
+    adminPageImports[seg]();
+  }
+};
 
 const SidebarSubMenuItem = ({ icon: Icon, label, to }) => {
   const location = useLocation();
@@ -7,6 +18,8 @@ const SidebarSubMenuItem = ({ icon: Icon, label, to }) => {
   return (
     <NavLink
       to={to}
+      onMouseEnter={() => prefetchRoute(to)}
+      onTouchStart={() => prefetchRoute(to)}
       className={`
         flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 group
         ${isActive

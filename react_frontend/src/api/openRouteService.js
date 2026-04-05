@@ -134,43 +134,54 @@ export const calculateDistance = async (fromLat, fromLng, toLat, toLng) => {
 };
 
 /**
- * Geocode a full address to coordinates via Nominatim (with retry on network errors)
+ * Geocode a full address to coordinates via Nominatim.
+ * Tries the full address first, then progressively removes the most specific
+ * part (sitio, purok, etc.) so barangay/municipality-level addresses still resolve.
  * @param {string} address
- * @param {number} retries - Number of retries on failure
+ * @param {number} retries - Network retries per attempt
  * @returns {Promise<{ lat: number, lng: number } | null>}
  */
 export const geocodeAddress = async (address, retries = 2) => {
   if (!address) return null;
 
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      const params = new URLSearchParams({
-        q: address,
-        format: 'json',
-        limit: 1,
-        countrycodes: 'PH',
-      });
+  // Build an array of address variants from most specific to least
+  const variants = [address.trim()];
+  const parts = address.split(/[,]+/).map(p => p.trim()).filter(Boolean);
+  // Progressively drop the first segment (most specific: sitio, purok, etc.)
+  for (let i = 1; i < parts.length; i++) {
+    variants.push(parts.slice(i).join(', '));
+  }
 
-      const response = await fetch(`${NOMINATIM_URL}/search?${params}`, {
-        headers: { 'User-Agent': 'KJPRiceMillApp/1.0' },
-      });
-      if (!response.ok) return null;
+  for (const variant of variants) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const params = new URLSearchParams({
+          q: variant,
+          format: 'json',
+          limit: 1,
+          countrycodes: 'PH',
+        });
 
-      const data = await response.json();
-      if (data?.[0]) {
-        return {
-          lat: parseFloat(data[0].lat),
-          lng: parseFloat(data[0].lon),
-        };
+        const response = await fetch(`${NOMINATIM_URL}/search?${params}`, {
+          headers: { 'User-Agent': 'KJPRiceMillApp/1.0' },
+        });
+        if (!response.ok) break; // skip to next variant
+
+        const data = await response.json();
+        if (data?.[0]) {
+          return {
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon),
+          };
+        }
+        break; // no result for this variant, try next
+      } catch (error) {
+        console.error(`Nominatim geocode error (variant: "${variant}", attempt ${attempt + 1}/${retries + 1}):`, error);
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
       }
-      return null;
-    } catch (error) {
-      console.error(`Nominatim geocode error (attempt ${attempt + 1}/${retries + 1}):`, error);
-      if (attempt < retries) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      return null;
     }
   }
   return null;

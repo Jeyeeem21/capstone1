@@ -35,7 +35,7 @@ const StaffVerification = () => {
         
         // Redirect to login after 2 seconds
         setTimeout(() => {
-          navigate('/login', { 
+          navigate('/?login=true', { 
             state: { 
               message: 'Email verified successfully! You can now log in.',
               email: email 
@@ -193,7 +193,7 @@ const StaffVerification = () => {
 
         <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/?login=true')}
             className="flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           >
             <ArrowLeft size={16} />

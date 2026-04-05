@@ -1,5 +1,19 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
+import { adminPageImports, customerPageImports, staffPageImports, driverPageImports } from '../../App';
+
+// Build a route-segment → import() map for hover-prefetching
+const allImports = { ...adminPageImports, ...customerPageImports, ...staffPageImports, ...driverPageImports };
+const prefetchCache = new Set();
+const prefetchRoute = (to) => {
+  if (!to || prefetchCache.has(to)) return;
+  // Extract the last meaningful segment: /superadmin/drying → "drying"
+  const seg = to.replace(/\/$/, '').split('/').pop();
+  if (seg && allImports[seg]) {
+    prefetchCache.add(to);
+    allImports[seg]();
+  }
+};
 
 const SidebarMenuItem = ({ 
   icon: Icon, 
@@ -35,7 +49,7 @@ const SidebarMenuItem = ({
     };
 
     return (
-      <div className="mb-0.5">
+      <div className="mb-0.5" onMouseEnter={() => prefetchRoute(to)} onTouchStart={() => prefetchRoute(to)}>
         <button
           onClick={handleClick}
           className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-4 py-3 rounded-lg text-left transition-all duration-200 group
@@ -75,6 +89,8 @@ const SidebarMenuItem = ({
     <NavLink
       to={to}
       title={isCollapsed ? label : ''}
+      onMouseEnter={() => prefetchRoute(to)}
+      onTouchStart={() => prefetchRoute(to)}
       className={({ isActive }) => `
         flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-lg transition-all duration-200 mb-0.5 group relative
         ${isActive

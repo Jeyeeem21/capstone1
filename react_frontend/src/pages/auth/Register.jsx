@@ -667,7 +667,7 @@ const Register = () => {
             <div className="mt-5 text-center space-y-2">
               <p className="text-sm" style={{ color: theme.text_secondary }}>
                 Already have an account?{' '}
-                <Link to="/login" className="font-semibold hover:underline" style={{ color: theme.button_primary }}>
+                <Link to="/?login=true" className="font-semibold hover:underline" style={{ color: theme.button_primary }}>
                   Sign in
                 </Link>
               </p>

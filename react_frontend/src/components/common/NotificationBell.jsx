@@ -37,6 +37,16 @@ const NOTIFICATION_COLORS = {
 // Module-level singleton to prevent duplicate toasts across multiple NotificationBell instances
 const _shownNotifIds = new Set();
 let _lastToastTime = 0;
+let _loginToastShown = false;
+
+// Reset on logout so next login shows the toast again
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:logout', () => {
+    _shownNotifIds.clear();
+    _lastToastTime = 0;
+    _loginToastShown = false;
+  });
+}
 
 const NotificationBell = ({ className = '' }) => {
   const [notifications, setNotifications] = useState([]);
@@ -71,9 +81,18 @@ const NotificationBell = ({ className = '' }) => {
           const allNotifs = Array.isArray(data) ? data : [];
 
           if (isFirstPoll) {
-            // First poll: seed shown IDs so existing unreads don't toast
+            // First poll after mount (login): seed shown IDs and show summary toast
             allNotifs.forEach(n => _shownNotifIds.add(n.id));
-          } else if (hasNewNotifs && now - _lastToastTime > 5000 && !isNotifToastSuppressed()) {
+            if (count > 0 && !_loginToastShown) {
+              _loginToastShown = true;
+              toast.addToast({
+                type: 'info',
+                title: 'New Notifications',
+                message: `You have ${count} unread notification${count > 1 ? 's' : ''}`,
+                duration: 4000,
+              });
+            }
+          } else if (hasNewNotifs && now - _lastToastTime > 3000 && !isNotifToastSuppressed()) {
             _lastToastTime = now;
             // Only toast truly new notifications (max 2 to avoid flooding)
             const newUnread = allNotifs
@@ -130,10 +149,10 @@ const NotificationBell = ({ className = '' }) => {
     }
   }, []);
 
-  // Poll for unread count every 30 seconds
+  // Poll for unread count every 10 seconds
   useEffect(() => {
     fetchUnreadCount();
-    intervalRef.current = setInterval(fetchUnreadCount, 30000);
+    intervalRef.current = setInterval(fetchUnreadCount, 10000);
     return () => clearInterval(intervalRef.current);
   }, [fetchUnreadCount]);
 

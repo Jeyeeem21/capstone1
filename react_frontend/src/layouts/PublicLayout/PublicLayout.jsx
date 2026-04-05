@@ -5,6 +5,14 @@ import { Button, LoginModal, ForgotPasswordModal, RegisterModal } from '../../co
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { DEFAULT_LOGO } from '../../api/config';
 
+// Prefetch map for nav hover
+const prefetchMap = {
+  '/': () => import('../../pages/public/Home'),
+  '/about': () => import('../../pages/public/About'),
+  '/products': () => import('../../pages/public/Products'),
+  '/contact': () => import('../../pages/public/Contact'),
+};
+
 // Public Header/Navbar
 const PublicHeader = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -82,6 +90,8 @@ const PublicHeader = () => {
               <NavLink
                 key={link.to}
                 to={link.to}
+                onMouseEnter={() => prefetchMap[link.to]?.()}
+                onTouchStart={() => prefetchMap[link.to]?.()}
                 className={({ isActive }) => `
                   px-4 py-2 rounded-lg font-medium transition-all duration-200
                   ${isActive 
@@ -130,6 +140,8 @@ const PublicHeader = () => {
               <NavLink
                 key={link.to}
                 to={link.to}
+                onMouseEnter={() => prefetchMap[link.to]?.()}
+                onTouchStart={() => prefetchMap[link.to]?.()}
                 className={({ isActive }) => `
                   block px-4 py-3 rounded-lg font-medium transition-all duration-200
                   ${isActive 

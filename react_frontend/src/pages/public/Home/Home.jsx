@@ -32,22 +32,16 @@ const iconMap = {
 // Fallback products — empty until real products loaded from API
 const fallbackProducts = [];
 
-// Default content — space-reserving placeholders to prevent CLS on first visit
-// Real data from database replaces these once API responds
+// Default content — empty until API provides real data
 const defaultContent = {
-  heroTitle: '\u00A0',
-  heroTitleHighlight: '\u00A0',
-  heroSubtitle: '\u00A0',
-  heroTag: '\u00A0',
-  aboutTitle: '\u00A0',
-  aboutDescription: '\u00A0',
+  heroTitle: '',
+  heroTitleHighlight: '',
+  heroSubtitle: '',
+  heroTag: '',
+  aboutTitle: '',
+  aboutDescription: '',
   aboutPoints: [],
-  stats: [
-    { value: '\u00A0', label: '\u00A0' },
-    { value: '\u00A0', label: '\u00A0' },
-    { value: '\u00A0', label: '\u00A0' },
-    { value: '\u00A0', label: '\u00A0' },
-  ],
+  stats: [],
   features: [],
 };
 
@@ -168,21 +162,36 @@ const Home = () => {
         </div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-full text-green-300 text-sm font-medium mb-8">
-            <Leaf size={16} />
-            <span>{content.heroTag || ''}</span>
-          </div>
+          {loading && !content.heroTag ? (
+            <Skeleton variant="text" width="w-48" height="h-8" className="mx-auto mb-8 !bg-white/10" />
+          ) : content.heroTag ? (
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 backdrop-blur-sm border border-green-500/30 rounded-full text-green-300 text-sm font-medium mb-8">
+              <Leaf size={16} />
+              <span>{content.heroTag}</span>
+            </div>
+          ) : null}
           
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-            {content.heroTitle}
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-primary-400">
-              {content.heroTitleHighlight}
-            </span>
-          </h1>
+          {loading && !content.heroTitle ? (
+            <div className="mb-6">
+              <Skeleton variant="text" width="w-96" height="h-16" className="mx-auto mb-3 !bg-white/10" />
+              <Skeleton variant="text" width="w-80" height="h-16" className="mx-auto !bg-white/10" />
+            </div>
+          ) : (
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+              {content.heroTitle}
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-primary-400">
+                {content.heroTitleHighlight}
+              </span>
+            </h1>
+          )}
           
-          <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-10">
-            {content.heroSubtitle}
-          </p>
+          {loading && !content.heroSubtitle ? (
+            <Skeleton variant="text" width="w-2/3" height="h-6" className="mx-auto mb-10 !bg-white/10" />
+          ) : (
+            <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-10">
+              {content.heroSubtitle}
+            </p>
+          )}
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/products">
@@ -200,7 +209,14 @@ const Home = () => {
 
           {/* Stats */}
           <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6">
-            {stats.map((stat, index) => (
+            {loading && stats.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10">
+                  <Skeleton variant="text" width="w-20" height="h-12" className="mx-auto mb-2 !bg-white/10" />
+                  <Skeleton variant="text" width="w-24" height="h-4" className="mx-auto !bg-white/10" />
+                </div>
+              ))
+            ) : stats.map((stat, index) => (
               <div key={stat.label} className="group relative bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center border border-white/10 hover:border-button-400/50 hover:bg-white/15 transition-all duration-300">
                 <div className="absolute inset-0 bg-gradient-to-br from-button-500/10 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="relative">

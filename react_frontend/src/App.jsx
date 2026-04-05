@@ -66,6 +66,71 @@ const StaffVerification = lazy(() => import('./pages/auth/StaffVerification'));
 // Suspense fallback — nothing (ProtectedRoute spinner already covers the wait)
 const PageLoader = () => <div className="min-h-[60vh]" />;
 
+// ── Prefetch maps by role ──────────────────────────────────────────────
+// Used for eager prefetching after login and hover-prefetching on sidebar links.
+export const adminPageImports = {
+  dashboard:  () => import('./pages/admin/Dashboard'),
+  procurement:() => import('./pages/admin/Procurement'),
+  drying:     () => import('./pages/admin/DryingProcess'),
+  processing: () => import('./pages/admin/Processing'),
+  products:   () => import('./pages/admin/Products'),
+  varieties:  () => import('./pages/admin/Products'),
+  inventory:  () => import('./pages/admin/Products'),
+  sales:      () => import('./pages/admin/Sales'),
+  orders:     () => import('./pages/admin/Orders'),
+  partners:   () => import('./pages/admin/Partners'),
+  supplier:   () => import('./pages/admin/Partners'),
+  customer:   () => import('./pages/admin/Partners'),
+  'staff-management': () => import('./pages/admin/StaffManagement'),
+  settings:   () => import('./pages/admin/Settings'),
+  pos:        () => import('./pages/shared/PointOfSale'),
+};
+
+export const customerPageImports = {
+  dashboard: () => import('./pages/customer/Dashboard'),
+  products:  () => import('./pages/customer/Product'),
+  orders:    () => import('./pages/customer/Orders'),
+  cart:      () => import('./pages/customer/Cart'),
+  profile:   () => import('./pages/customer/Profile'),
+  settings:  () => import('./pages/customer/Settings'),
+  pos:       () => import('./pages/shared/PointOfSale'),
+};
+
+export const staffPageImports = {
+  dashboard: () => import('./pages/staff/Dashboard'),
+  profile:   () => import('./pages/staff/Profile'),
+  pos:       () => import('./pages/shared/PointOfSale'),
+};
+
+export const driverPageImports = {
+  dashboard:  () => import('./pages/driver/Dashboard'),
+  deliveries: () => import('./pages/driver/Deliveries'),
+  profile:    () => import('./pages/driver/Profile'),
+  settings:   () => import('./pages/driver/Settings'),
+};
+
+/** Prefetch all chunks for a given role — call once after auth resolves */
+export const prefetchForRole = (role, position) => {
+  let imports;
+  if (role === 'super_admin' || role === 'admin') imports = adminPageImports;
+  else if (role === 'customer') imports = customerPageImports;
+  else if (role === 'staff' && position === 'Driver') imports = driverPageImports;
+  else if (role === 'staff') imports = staffPageImports;
+  else return;
+  Object.values(imports).forEach(load => load());
+};
+
+// Eagerly prefetch all public page chunks so navigation is instant
+const publicPageImports = {
+  '/': () => import('./pages/public/Home'),
+  '/about': () => import('./pages/public/About'),
+  '/products': () => import('./pages/public/Products'),
+  '/contact': () => import('./pages/public/Contact'),
+};
+
+// Fire immediately — don't wait for idle
+Object.values(publicPageImports).forEach(load => load());
+
 // Role-based redirect component
 const RoleRedirect = () => {
   const { user, isAuthenticated } = useAuth();
@@ -103,6 +168,14 @@ const PosRedirect = () => {
 
 function AppRoutes() {
   const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
+
+  // Prefetch all page chunks for the authenticated user's role
+  useEffect(() => {
+    if (isAuthenticated && user?.role) {
+      prefetchForRole(user.role, user.position);
+    }
+  }, [isAuthenticated, user?.role, user?.position]);
 
   // Safety net: clear body scroll lock AND remove orphaned modal backdrop portals
   // on every route change. This catches edge cases where the LoginModal's createPortal
@@ -138,6 +211,8 @@ function AppRoutes() {
       </Route>
       
       {/* Auth Routes (public access) */}
+      <Route path="/login" element={<Navigate to="/?login=true" replace />} />
+      <Route path="/register" element={<Navigate to="/?register=true" replace />} />
       <Route path="/staff/verify" element={<ErrorBoundary><StaffVerification /></ErrorBoundary>} />
       
       {/* Standalone POS redirect */}

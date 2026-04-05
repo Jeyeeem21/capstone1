@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Keyboard } from 'lucide-react';
 import Button from './Button';
 
 // Helper: reset body scroll lock styles
@@ -9,6 +9,14 @@ const resetBodyStyles = () => {
   document.body.style.position = '';
   document.body.style.top = '';
   document.body.style.width = '';
+};
+
+// Helper: get all focusable input fields within a container
+const getFocusableInputs = (container) => {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll(
+    'input:not([type="hidden"]):not([disabled]):not([type="file"]), select:not([disabled]), textarea:not([disabled])'
+  )).filter(el => el.offsetParent !== null); // visible only
 };
 
 const Modal = ({ 
@@ -23,17 +31,27 @@ const Modal = ({
 }) => {
   const modalRef = useRef(null);
   const scrollPositionRef = useRef(0);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isOpen) {
-        onClose();
+        if (showShortcuts) {
+          setShowShortcuts(false);
+        } else {
+          onClose();
+        }
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, showShortcuts]);
+
+  // Reset shortcut help when modal closes
+  useEffect(() => {
+    if (!isOpen) setShowShortcuts(false);
+  }, [isOpen]);
 
   const overlayRef = useRef(null);
 
@@ -79,20 +97,52 @@ const Modal = ({
     >
       <div 
         ref={modalRef}
-        className={`${sizes[size]} w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transform transition-all animate-slideUp border-2 border-primary-300 dark:border-primary-700`}
+        className={`${sizes[size]} w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transform transition-all animate-slideUp border-2 border-primary-300 dark:border-primary-700 relative`}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b-2 border-primary-200 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-t-2xl">
           <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{title}</h2>
-          {showCloseButton && (
+          <div className="flex items-center gap-1">
             <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 rounded-lg transition-colors"
+              onClick={() => setShowShortcuts(v => !v)}
+              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              title="Keyboard shortcuts (?)"
             >
-              <X size={20} />
+              <Keyboard size={16} />
             </button>
-          )}
+            {showCloseButton && (
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Keyboard shortcuts overlay */}
+        {showShortcuts && (
+          <div className="absolute inset-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center p-6">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2"><Keyboard size={20} /> Keyboard Shortcuts</h3>
+            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+              {[
+                ['Esc', 'Close modal'],
+                ['Ctrl + S', 'Save / Submit'],
+                ['Enter', 'Next input field'],
+                ['Ctrl + Backspace', 'Clear current field'],
+                ['Ctrl + Shift + Backspace', 'Clear all fields'],
+                ['Ctrl + Enter', 'Confirm action'],
+              ].map(([key, desc]) => (
+                <div key={key} className="contents">
+                  <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono font-semibold text-gray-700 dark:text-gray-200 text-right whitespace-nowrap">{key}</kbd>
+                  <span className="text-gray-600 dark:text-gray-300 py-1">{desc}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowShortcuts(false)} className="mt-5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors">Got it</button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="px-5 py-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 120px)' }}>
@@ -124,6 +174,18 @@ const ConfirmModal = ({
   icon: Icon = null,
   isLoading = false,
 }) => {
+  // Enter or Ctrl+Enter to confirm
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => {
+      if ((e.key === 'Enter' && (e.ctrlKey || e.metaKey)) || (e.key === 'Enter' && !e.target.closest('input, textarea, select'))) {
+        e.preventDefault();
+        if (!isLoading && onConfirm) onConfirm();
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, isLoading, onConfirm]);
   const variants = {
     danger: { iconBg: 'bg-red-100 dark:bg-red-900/30', iconColor: 'text-red-600 dark:text-red-400', buttonVariant: 'danger' },
     warning: { iconBg: 'bg-yellow-100 dark:bg-yellow-900/30', iconColor: 'text-yellow-600 dark:text-yellow-400', buttonVariant: 'warning' },
@@ -174,6 +236,87 @@ const FormModal = ({
   const isSubmitDisabled = isDisabled || submitDisabled;
   const [submitted, setSubmitted] = useState(false);
   const [shakeKey, setShakeKey] = useState(0);
+  const formRef = useRef(null);
+
+  // Keyboard shortcuts for form modals
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => {
+      const form = formRef.current || document.getElementById('modal-form');
+
+      // Ctrl+S or Ctrl+Enter → submit form
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'Enter')) {
+        e.preventDefault();
+        if (!isSubmitDisabled && form) {
+          form.requestSubmit();
+        }
+        return;
+      }
+
+      // Ctrl+Shift+Backspace → clear all form fields
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Backspace') {
+        e.preventDefault();
+        if (form) {
+          const inputs = getFocusableInputs(form);
+          inputs.forEach(input => {
+            if (input.tagName === 'SELECT') {
+              input.selectedIndex = 0;
+            } else {
+              // Use native setter to trigger React's onChange
+              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                input.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+                'value'
+              )?.set;
+              if (nativeInputValueSetter) {
+                nativeInputValueSetter.call(input, '');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }
+          });
+          // Focus first input after clearing
+          if (inputs[0]) inputs[0].focus();
+        }
+        return;
+      }
+
+      // Ctrl+Backspace → clear focused input field
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Backspace' && !e.shiftKey) {
+        const active = document.activeElement;
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active.closest('.fixed, [role="dialog"]')) {
+          e.preventDefault();
+          const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+            active.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
+            'value'
+          )?.set;
+          if (nativeInputValueSetter) {
+            nativeInputValueSetter.call(active, '');
+            active.dispatchEvent(new Event('input', { bubbles: true }));
+            active.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+        return;
+      }
+
+      // Enter on input (not textarea, not button) → move to next field
+      if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const active = document.activeElement;
+        if (active && active.tagName === 'INPUT' && active.type !== 'submit' && active.type !== 'button' && form) {
+          e.preventDefault();
+          const inputs = getFocusableInputs(form);
+          const idx = inputs.indexOf(active);
+          if (idx >= 0 && idx < inputs.length - 1) {
+            inputs[idx + 1].focus();
+          } else if (idx === inputs.length - 1) {
+            // Last field → submit
+            form.requestSubmit();
+          }
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, isSubmitDisabled]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -238,7 +381,8 @@ const FormModal = ({
       }
     >
       <form 
-        id="modal-form" 
+        id="modal-form"
+        ref={formRef}
         onSubmit={handleSubmit} 
         noValidate
         key={shakeKey}

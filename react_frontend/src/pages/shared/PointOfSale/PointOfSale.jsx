@@ -1,7 +1,7 @@
 import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
 import { useState, useMemo, memo, useCallback, useRef, useEffect } from 'react';
 import { PageHeader } from '../../../components/common';
-import { Button, StatsCard, useToast } from '../../../components/ui';
+import { Button, useToast } from '../../../components/ui';
 import { useDataFetch, invalidateCache } from '../../../hooks/useDataFetch';
 import apiClient from '../../../api/apiClient';
 import { useAuth } from '../../../context/AuthContext';
@@ -304,7 +304,7 @@ const PointOfSale = () => {
   }, [getWarehouseCoords]);
 
   // Fetch real data from API
-  const { data: productsRaw, refetch: refetchProducts } = useDataFetch('/products');
+  const { data: productsRaw, loading: productsLoading, refetch: refetchProducts } = useDataFetch('/products');
   const { data: salesRaw, refetch: refetchSales } = useDataFetch('/sales');
   const { data: varietiesRaw } = useDataFetch('/varieties');
   const { data: customersRaw, refetch: refetchCustomers } = useDataFetch('/customers');
@@ -466,21 +466,6 @@ const PointOfSale = () => {
         status: s.status,
       }))
       .reverse();
-  }, [salesRaw]);
-
-  // Today's stats from real sales
-  const todayStats = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const todaySales = (salesRaw || []).filter(s => s.date_short === today && s.status === 'completed');
-    const totalSales = todaySales.reduce((s, sale) => s + (sale.total || 0), 0);
-    const transactions = todaySales.length;
-    const itemsSold = todaySales.reduce((s, sale) => s + (sale.total_quantity || 0), 0);
-    return {
-      totalSales,
-      transactions,
-      itemsSold,
-      avgTransaction: transactions > 0 ? Math.round(totalSales / transactions) : 0,
-    };
   }, [salesRaw]);
 
   const filteredProducts = products.filter(p => {
@@ -872,15 +857,7 @@ const PointOfSale = () => {
         icon={Monitor}
       />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-        <StatsCard label="Today's Sales" value={`₱${todayStats.totalSales.toLocaleString()}`} unit="revenue" icon={DollarSign} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-        <StatsCard label="Transactions" value={todayStats.transactions} unit="orders" icon={Receipt} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-        <StatsCard label="Items Sold" value={todayStats.itemsSold} unit="items" icon={Package} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-        <StatsCard label="Avg Transaction" value={`₱${todayStats.avgTransaction.toLocaleString()}`} unit="per order" icon={ShoppingCart} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-      </div>
-
-      <div className="flex gap-6" style={{ height: 'calc(100vh - 148px)', minHeight: '540px' }}>
+      <div className="flex gap-6" style={{ height: 'calc(100vh - 200px)', minHeight: '540px' }}>
         {/* Products Section - scrollable */}
         <div className="lg:col-span-2 flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4 flex flex-col overflow-hidden">
           {/* Search and Variety Filter */}
@@ -913,7 +890,17 @@ const PointOfSale = () => {
           {/* Products Grid - scrollable */}
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {filteredProducts.map((product) => {
+              {productsLoading && products.length === 0 ? (
+                Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700 shadow-sm p-3 text-center animate-pulse">
+                    <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-xl mx-auto mb-2" />
+                    <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mx-auto mb-2" />
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mx-auto mb-1" />
+                    <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mx-auto mb-1" />
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full w-2/5 mx-auto mt-1" />
+                  </div>
+                ))
+              ) : filteredProducts.map((product) => {
                 const hasNoPrice = !product.price || product.price <= 0;
                 return (
                 <div 

@@ -992,24 +992,9 @@ const Orders = () => {
 
             {/* Payment Method Selection */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method <span className="text-red-500">*</span></label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { value: 'gcash', label: 'GCash', icon: CreditCard, color: 'blue' },
-                  { value: 'cash', label: 'Cash', icon: DollarSign, color: 'green' },
-                ].map(m => (
-                  <button
-                    key={m.value}
-                    onClick={() => setPayMethod(m.value)}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border-2 transition-all ${
-                      payMethod === m.value
-                        ? `border-${m.color}-500 bg-${m.color}-50 text-${m.color}-700`
-                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300'
-                    }`}
-                  >
-                    <m.icon size={16} /> {m.label}
-                  </button>
-                ))}
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</label>
+              <div className="flex items-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                <CreditCard size={16} /> GCash
               </div>
             </div>
 
@@ -1069,10 +1054,10 @@ const Orders = () => {
             )}
 
             {payMethod === 'cash' && (
-              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4 text-center">
-                <Banknote size={32} className="mx-auto mb-2 text-green-500" />
-                <p className="text-sm font-bold text-green-700 dark:text-green-300">Cash Payment</p>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-1">Confirm that cash payment has been received.</p>
+              <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
+                <Banknote size={32} className="mx-auto mb-2 text-purple-500" />
+                <p className="text-sm font-bold text-purple-700 dark:text-purple-300">Cash Payment</p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">For cash payments, please visit the store directly.</p>
               </div>
             )}
           </div>
