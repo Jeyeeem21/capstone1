@@ -53,6 +53,8 @@ Route::prefix('staff')->group(function () {
 
 // Public-facing data (for the public website)
 Route::get('/products/featured', [ProductController::class, 'featured']);
+Route::get('/products', [ProductController::class, 'index']);
+Route::get('/varieties', [VarietyController::class, 'index']);
 
 Route::prefix('appearance')->group(function () {
     Route::get('/', [AppearanceSettingController::class, 'index']);

@@ -15,6 +15,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { Button } from '../../../components/ui';
+import Skeleton from '../../../components/ui/Skeleton';
 import { websiteContentApi } from '../../../api';
 import { resolveStorageUrl } from '../../../api/config';
 
@@ -26,16 +27,16 @@ const iconMap = {
   'Excellence': Award,
 };
 
-// Default content fallback (minimal - real data comes from DB seeder)
+// Default content — space-reserving placeholders to prevent CLS on first visit
 const defaultContent = {
-  heroTitle: '',
-  heroTitleHighlight: '',
-  heroSubtitle: '',
-  missionTitle: '',
-  missionDescription: '',
+  heroTitle: '\u00A0',
+  heroTitleHighlight: '\u00A0',
+  heroSubtitle: '\u00A0',
+  missionTitle: '\u00A0',
+  missionDescription: '\u00A0',
   missionPoints: [],
-  visionTitle: '',
-  visionDescription: '',
+  visionTitle: '\u00A0',
+  visionDescription: '\u00A0',
   visionPoints: [],
   values: [],
   timeline: [],
@@ -220,7 +221,15 @@ const About = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {values.map((value) => (
+            {loading && values.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-gray-700 rounded-xl p-8 shadow-lg border-2 border-primary-300 dark:border-primary-700 text-center">
+                  <Skeleton variant="circle" width="w-16" height="h-16" className="mx-auto mb-6" />
+                  <Skeleton variant="title" width="w-2/3" className="mx-auto mb-3" />
+                  <Skeleton variant="text" count={2} />
+                </div>
+              ))
+            ) : values.map((value) => (
               <div 
                 key={value.title}
                 className="group bg-white dark:bg-gray-700 rounded-xl p-8 shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400 text-center"
@@ -294,7 +303,18 @@ const About = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {team.map((member) => (
+            {loading && team.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-gray-700 rounded-xl overflow-hidden shadow-lg border-2 border-primary-300 dark:border-primary-700">
+                  <Skeleton variant="image" height="h-64" />
+                  <div className="p-6 text-center">
+                    <Skeleton variant="circle" width="w-20" height="h-20" className="mx-auto mb-4" />
+                    <Skeleton variant="title" width="w-2/3" className="mx-auto mb-2" />
+                    <Skeleton variant="text" width="w-1/2" className="mx-auto" />
+                  </div>
+                </div>
+              ))
+            ) : team.map((member) => (
               <div 
                 key={member.name}
                 className="group bg-white dark:bg-gray-700 rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400"

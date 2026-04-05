@@ -16,6 +16,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Button, FormInput } from '../../../components/ui';
+import Skeleton from '../../../components/ui/Skeleton';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { websiteContentApi } from '../../../api';
 import { resolveStorageUrl } from '../../../api/config';
@@ -36,14 +37,14 @@ const Contact = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const defaultPageContent = {
-    heroTag: '',
-    heroTitle: '',
-    heroSubtitle: '',
+    heroTag: '\u00A0',
+    heroTitle: '\u00A0',
+    heroSubtitle: '\u00A0',
     heroImage: null,
-    formTitle: '',
+    formTitle: '\u00A0',
     faqs: [],
-    socialTitle: '',
-    socialDescription: '',
+    socialTitle: '\u00A0',
+    socialDescription: '\u00A0',
   };
 
   // Load cached content instantly

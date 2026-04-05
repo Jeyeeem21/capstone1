@@ -16,6 +16,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Button } from '../../../components/ui';
+import Skeleton from '../../../components/ui/Skeleton';
 import { productsApi, websiteContentApi } from '../../../api';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { resolveStorageUrl } from '../../../api/config';
@@ -235,7 +236,15 @@ const Home = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {features.map((feature, index) => (
+            {loading && features.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-gray-700 rounded-xl p-8 shadow-lg border-2 border-primary-300 dark:border-primary-700">
+                  <Skeleton variant="circle" width="w-14" height="h-14" className="mb-6" />
+                  <Skeleton variant="title" width="w-2/3" className="mb-3" />
+                  <Skeleton variant="text" count={3} />
+                </div>
+              ))
+            ) : features.map((feature, index) => (
               <div 
                 key={feature.title}
                 className="group bg-white dark:bg-gray-700 rounded-xl p-8 shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400"
@@ -271,7 +280,21 @@ const Home = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products.map((product, index) => (
+            {loading && products.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-gray-700 rounded-xl overflow-hidden shadow-lg border-2 border-primary-300 dark:border-primary-700">
+                  <Skeleton variant="image" height="h-44" />
+                  <div className="p-6">
+                    <Skeleton variant="title" width="w-3/4" className="mb-2" />
+                    <Skeleton variant="text" width="w-1/2" className="mb-4" />
+                    <div className="flex items-end justify-between">
+                      <Skeleton variant="text" width="w-20" height="h-7" />
+                      <Skeleton variant="button" width="w-16" />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : products.map((product, index) => (
               <div 
                 key={product.id || index}
                 className="group bg-white dark:bg-gray-700 rounded-xl overflow-hidden shadow-lg shadow-primary-100/50 dark:shadow-none hover:shadow-xl transition-all duration-300 border-2 border-primary-300 dark:border-primary-700 hover:border-button-400"
