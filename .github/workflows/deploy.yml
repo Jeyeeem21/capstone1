@@ -22,6 +22,9 @@ jobs:
           script: |
             cd /home/u940130461/capstone1
 
+            # Discard any local changes (e.g. permission changes from chmod)
+            git checkout -- .
+
             # Pull latest code
             git pull origin main
 
