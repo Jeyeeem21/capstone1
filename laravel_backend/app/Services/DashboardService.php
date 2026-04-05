@@ -31,7 +31,7 @@ class DashboardService
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($period, $chartParams) {
             return [
-                'overview' => $this->getOverviewStats(),
+                'overview' => $this->getOverviewStats($period, $chartParams),
                 'revenue' => $this->getRevenueData($period, $chartParams),
                 'processing' => $this->getProcessingData($period, $chartParams),
                 'procurement' => $this->getProcurementSummary(),
@@ -75,76 +75,159 @@ class DashboardService
 
     /**
      * Overview cards: revenue, orders, customers, products
+     * Now respects the same period/chartParams as the charts.
      */
-    private function getOverviewStats(): array
+    private function getOverviewStats(string $period = 'monthly', array $chartParams = []): array
     {
         $now = Carbon::now();
-        $startOfMonth = $now->copy()->startOfMonth();
-        $startOfLastMonth = $now->copy()->subMonth()->startOfMonth();
-        $endOfLastMonth = $now->copy()->subMonth()->endOfMonth();
-
-        // SALES — delivered/completed only (use aggregate queries, not ->get())
         $completedStatuses = ['delivered', 'completed'];
 
-        $currentMonthStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+        // Determine date range based on the selected period (same logic as charts)
+        $dateRange = $this->getDateRangeForPeriod($period, $chartParams);
+        $start = $dateRange['start'];
+        $end = $dateRange['end'];
+        $previousStart = $dateRange['previous_start'];
+        $previousEnd = $dateRange['previous_end'];
+        $periodLabel = $dateRange['label'];
+
+        // SALES — delivered/completed only, filtered by period
+        $currentStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
             ->whereIn('status', $completedStatuses)
-            ->where('created_at', '>=', $startOfMonth)
+            ->whereBetween('created_at', [$start, $end])
             ->first();
-        $lastMonthStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+        $previousStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
             ->whereIn('status', $completedStatuses)
-            ->whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])
+            ->whereBetween('created_at', [$previousStart, $previousEnd])
             ->first();
 
-        $currentRevenue = (float) $currentMonthStats->revenue;
-        $lastRevenue = (float) $lastMonthStats->revenue;
-        $revenueTrend = $lastRevenue > 0
-            ? round((($currentRevenue - $lastRevenue) / $lastRevenue) * 100, 1)
+        $currentRevenue = (float) $currentStats->revenue;
+        $previousRevenue = (float) $previousStats->revenue;
+        $revenueTrend = $previousRevenue > 0
+            ? round((($currentRevenue - $previousRevenue) / $previousRevenue) * 100, 1)
             : ($currentRevenue > 0 ? 100 : 0);
 
-        $currentOrders = (int) $currentMonthStats->order_count;
-        $lastOrders = (int) $lastMonthStats->order_count;
-        $ordersTrend = $lastOrders > 0
-            ? round((($currentOrders - $lastOrders) / $lastOrders) * 100, 1)
+        $currentOrders = (int) $currentStats->order_count;
+        $previousOrders = (int) $previousStats->order_count;
+        $ordersTrend = $previousOrders > 0
+            ? round((($currentOrders - $previousOrders) / $previousOrders) * 100, 1)
             : ($currentOrders > 0 ? 100 : 0);
 
-        // ALL-TIME totals
-        $totalRevenue = (float) Sale::whereIn('status', $completedStatuses)->sum('total');
-        $totalOrders = Sale::whereIn('status', $completedStatuses)->count();
-
-        // CUSTOMERS
+        // CUSTOMERS within the period
+        $customersInPeriod = Customer::whereBetween('created_at', [$start, $end])->count();
+        $customersInPrevious = Customer::whereBetween('created_at', [$previousStart, $previousEnd])->count();
         $totalCustomers = Customer::count();
-        $newCustomersThisMonth = Customer::where('created_at', '>=', $startOfMonth)->count();
-        $newCustomersLastMonth = Customer::whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
-        $customersTrend = $newCustomersLastMonth > 0
-            ? round((($newCustomersThisMonth - $newCustomersLastMonth) / $newCustomersLastMonth) * 100, 1)
-            : ($newCustomersThisMonth > 0 ? 100 : 0);
+        $customersTrend = $customersInPrevious > 0
+            ? round((($customersInPeriod - $customersInPrevious) / $customersInPrevious) * 100, 1)
+            : ($customersInPeriod > 0 ? 100 : 0);
 
-        // PRODUCTS
+        // PRODUCTS (not time-dependent, always show current state)
         $totalProducts = Product::count();
         $activeProducts = Product::where('status', 'active')->count();
         $totalStock = (int) Product::sum('stocks');
 
-        // ITEMS SOLD
-        $totalItemsSold = (int) SaleItem::whereHas('sale', function ($q) use ($completedStatuses) {
-            $q->whereIn('status', $completedStatuses);
+        // ITEMS SOLD within the period
+        $totalItemsSold = (int) SaleItem::whereHas('sale', function ($q) use ($completedStatuses, $start, $end) {
+            $q->whereIn('status', $completedStatuses)->whereBetween('created_at', [$start, $end]);
         })->sum('quantity');
 
         return [
-            'total_revenue' => $totalRevenue,
-            'current_month_revenue' => $currentRevenue,
+            'total_revenue' => $currentRevenue,
+            'total_orders' => $currentOrders,
             'revenue_trend' => $revenueTrend,
-            'total_orders' => $totalOrders,
-            'current_month_orders' => $currentOrders,
             'orders_trend' => $ordersTrend,
             'total_customers' => $totalCustomers,
-            'new_customers_this_month' => $newCustomersThisMonth,
+            'new_customers' => $customersInPeriod,
             'customers_trend' => $customersTrend,
             'total_products' => $totalProducts,
             'active_products' => $activeProducts,
             'total_stock' => $totalStock,
             'total_items_sold' => $totalItemsSold,
-            'avg_order_value' => $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0,
+            'avg_order_value' => $currentOrders > 0 ? round($currentRevenue / $currentOrders, 2) : 0,
+            'period_label' => $periodLabel,
+            'trend_label' => $dateRange['trend_label'],
         ];
+    }
+
+    /**
+     * Determine date range + previous period for comparison based on period/chartParams.
+     */
+    private function getDateRangeForPeriod(string $period, array $chartParams = []): array
+    {
+        $now = Carbon::now();
+
+        switch ($period) {
+            case 'daily':
+            case 'weekly':
+                $targetYear = $now->year;
+                $targetMonth = $now->month;
+                if (!empty($chartParams['month'])) {
+                    $parts = explode('-', $chartParams['month']);
+                    if (count($parts) === 2) {
+                        $targetYear = (int) $parts[0];
+                        $targetMonth = (int) $parts[1];
+                    }
+                }
+                $start = Carbon::create($targetYear, $targetMonth, 1)->startOfDay();
+                $end = $start->copy()->endOfMonth()->endOfDay();
+                $previousStart = $start->copy()->subMonth()->startOfMonth()->startOfDay();
+                $previousEnd = $start->copy()->subMonth()->endOfMonth()->endOfDay();
+                $monthName = $start->format('M Y');
+                return [
+                    'start' => $start,
+                    'end' => $end,
+                    'previous_start' => $previousStart,
+                    'previous_end' => $previousEnd,
+                    'label' => $monthName,
+                    'trend_label' => 'vs prev month',
+                ];
+
+            case 'monthly':
+            case 'bi-annually':
+                $targetYear = $chartParams['year'] ?? $now->year;
+                $start = Carbon::create($targetYear, 1, 1)->startOfDay();
+                $end = Carbon::create($targetYear, 12, 31)->endOfDay();
+                $previousStart = Carbon::create($targetYear - 1, 1, 1)->startOfDay();
+                $previousEnd = Carbon::create($targetYear - 1, 12, 31)->endOfDay();
+                return [
+                    'start' => $start,
+                    'end' => $end,
+                    'previous_start' => $previousStart,
+                    'previous_end' => $previousEnd,
+                    'label' => (string) $targetYear,
+                    'trend_label' => 'vs prev year',
+                ];
+
+            case 'annually':
+                $yearFrom = $chartParams['year_from'] ?? ($now->year - 4);
+                $yearTo = $chartParams['year_to'] ?? $now->year;
+                $start = Carbon::create($yearFrom, 1, 1)->startOfDay();
+                $end = Carbon::create($yearTo, 12, 31)->endOfDay();
+                $rangeSpan = $yearTo - $yearFrom + 1;
+                $previousStart = Carbon::create($yearFrom - $rangeSpan, 1, 1)->startOfDay();
+                $previousEnd = Carbon::create($yearFrom - 1, 12, 31)->endOfDay();
+                return [
+                    'start' => $start,
+                    'end' => $end,
+                    'previous_start' => $previousStart,
+                    'previous_end' => $previousEnd,
+                    'label' => "{$yearFrom} - {$yearTo}",
+                    'trend_label' => 'vs prev range',
+                ];
+
+            default:
+                $start = Carbon::create($now->year, 1, 1)->startOfDay();
+                $end = Carbon::create($now->year, 12, 31)->endOfDay();
+                $previousStart = Carbon::create($now->year - 1, 1, 1)->startOfDay();
+                $previousEnd = Carbon::create($now->year - 1, 12, 31)->endOfDay();
+                return [
+                    'start' => $start,
+                    'end' => $end,
+                    'previous_start' => $previousStart,
+                    'previous_end' => $previousEnd,
+                    'label' => (string) $now->year,
+                    'trend_label' => 'vs prev year',
+                ];
+        }
     }
 
     /**

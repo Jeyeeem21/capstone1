@@ -44,8 +44,9 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
 
   // Check SMTP configuration - show warning if SMTP password is empty/not configured
   useEffect(() => {
-    // Check if SMTP is configured from context
-    const isConfigured = settings?.smtp_configured === true;
+    // Check both the explicit flag AND the presence of a masked password as fallback
+    const isConfigured = settings?.smtp_configured === true
+      || (settings?.smtp_password && settings.smtp_password !== '' && settings.smtp_password !== null);
     
     // Show warning if NOT configured (empty smtp_password)
     setShowSmtpWarning(!isConfigured);
@@ -77,7 +78,9 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
 
   const handleLogout = async () => {
     // Check if SMTP is configured before allowing logout
-    if (!settings?.smtp_configured) {
+    const isSmtpConfigured = settings?.smtp_configured === true
+      || (settings?.smtp_password && settings.smtp_password !== '' && settings.smtp_password !== null);
+    if (!isSmtpConfigured) {
       toast.error('SMTP Configuration Required', 'Please configure your Gmail App Password in Settings before logging out. This is required for email notifications.');
       setIsLogoutModalOpen(false);
       return;

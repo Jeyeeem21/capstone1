@@ -45,6 +45,8 @@ const defaultSettings = {
   shipping_base_km: '',
   warehouse_address: '',
   google_maps_embed: '',
+  smtp_password: '',
+  smtp_configured: false,
 };
 
 // Get initial settings from localStorage

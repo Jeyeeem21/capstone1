@@ -226,16 +226,27 @@ class AuthController extends Controller
 
             // Generate verification code and cache it
             $newEmail = strtolower(trim($validated['email']));
-            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $cacheKey = 'email_change_' . $user->id;
+
+            // Reuse existing code if same email change is already pending (prevents double-submit race condition)
+            $existing = Cache::get($cacheKey);
+            if ($existing && $existing['new_email'] === $newEmail && $existing['attempts'] < 3) {
+                $code = $existing['code'];
+            } else {
+                $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            }
+
+            // Remove current_password before caching profile data
+            $profileDataForCache = $validated;
+            unset($profileDataForCache['current_password']);
 
             Cache::put($cacheKey, [
                 'user_id' => $user->id,
                 'old_email' => $oldEmail,
                 'new_email' => $newEmail,
                 'code' => $code,
-                'attempts' => 0,
-                'profile_data' => $validated, // Store all profile changes
+                'attempts' => $existing['attempts'] ?? 0,
+                'profile_data' => $profileDataForCache,
             ], now()->addMinutes(15));
 
             // Send verification code to NEW email

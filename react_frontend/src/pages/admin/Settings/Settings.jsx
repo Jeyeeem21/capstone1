@@ -340,8 +340,9 @@ const Settings = () => {
 
   // Check SMTP configuration whenever settings change
   useEffect(() => {
-    const isConfigured = contextSettings?.smtp_configured === true;
-    console.log('SMTP Check:', { contextSettings, isConfigured, smtp_configured: contextSettings?.smtp_configured });
+    // Check both the explicit flag AND the presence of a masked password as fallback
+    const isConfigured = contextSettings?.smtp_configured === true 
+      || (contextSettings?.smtp_password && contextSettings.smtp_password !== '' && contextSettings.smtp_password !== null);
     if (!isConfigured) {
       setSmtpNotConfigured(true);
       setSmtpWarningMessage('SMTP is not configured. Email verification and notifications will not work until you configure your Gmail App Password.');
@@ -1033,7 +1034,9 @@ const Settings = () => {
           current_password: passwordForEmailChange,
         };
 
+        setBusinessSaving(true);
         const result = await authApi.updateProfile(profileData);
+        setBusinessSaving(false);
 
         if (result.success && result.requires_verification) {
           // Password verified, now show email verification modal
@@ -1073,9 +1076,7 @@ const Settings = () => {
         toast.error('Verification Failed', errorMessage);
       }
       
-      if (pendingProfileData?.type === 'business_email') {
-        setBusinessSaving(false);
-      }
+      setBusinessSaving(false);
     }
   }, [passwordForEmailChange, pendingProfileData, toast, refreshUser, logoPreview, contextSettings, updateContextSettings, refreshSettings]);
 

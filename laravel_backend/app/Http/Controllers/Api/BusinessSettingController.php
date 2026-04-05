@@ -113,16 +113,27 @@ class BusinessSettingController extends Controller
                 $newBusinessEmail = strtolower(trim($validated['business_email']));
                 
                 // Generate verification code and cache it
-                $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
                 $cacheKey = 'business_email_change_' . $user->id;
+
+                // Reuse existing code if same email change is already pending (prevents double-submit race condition)
+                $existing = Cache::get($cacheKey);
+                if ($existing && $existing['new_email'] === $newBusinessEmail && $existing['attempts'] < 3) {
+                    $code = $existing['code'];
+                } else {
+                    $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                }
+
+                // Remove current_password before caching settings data
+                $settingsDataForCache = $validated;
+                unset($settingsDataForCache['current_password']);
 
                 Cache::put($cacheKey, [
                     'user_id' => $user->id,
                     'old_email' => $oldBusinessEmail,
                     'new_email' => $newBusinessEmail,
                     'code' => $code,
-                    'attempts' => 0,
-                    'settings_data' => $validated, // Store all settings changes
+                    'attempts' => $existing['attempts'] ?? 0,
+                    'settings_data' => $settingsDataForCache,
                 ], now()->addMinutes(15));
 
                 // Send verification code to NEW email

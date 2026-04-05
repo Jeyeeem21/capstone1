@@ -213,31 +213,31 @@ const Dashboard = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatsCard
-            label="Total Revenue"
+            label="Revenue"
             value={fmt(overview.total_revenue)}
-            unit="all time"
+            unit={overview.period_label || 'all time'}
             icon={DollarSign}
             iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
             trend={overview.revenue_trend}
-            trendLabel="vs last month"
+            trendLabel={overview.trend_label || 'vs prev period'}
           />
           <StatsCard
-            label="Total Orders"
+            label="Orders"
             value={overview.total_orders || 0}
-            unit="completed"
+            unit={overview.period_label || 'completed'}
             icon={ShoppingBag}
             iconBgColor="bg-gradient-to-br from-green-400 to-green-600"
             trend={overview.orders_trend}
-            trendLabel="vs last month"
+            trendLabel={overview.trend_label || 'vs prev period'}
           />
           <StatsCard
             label="Customers"
             value={overview.total_customers || 0}
-            unit={`+${overview.new_customers_this_month || 0} this month`}
+            unit={`+${overview.new_customers || 0} in ${overview.period_label || 'period'}`}
             icon={Users}
             iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
             trend={overview.customers_trend}
-            trendLabel="vs last month"
+            trendLabel={overview.trend_label || 'vs prev period'}
           />
           <StatsCard
             label="Products"
@@ -378,7 +378,7 @@ const Dashboard = () => {
               onDotClick={(point) => setActiveChartPoint(point)}
               activePoint={activeChartPoint}
               summaryStats={[
-                { label: 'This Month', value: fmt(overview.current_month_revenue), color: 'text-primary-600 dark:text-primary-400' },
+                { label: 'Period Revenue', value: fmt(overview.total_revenue), color: 'text-primary-600 dark:text-primary-400' },
                 { label: 'Avg Order', value: fmt(overview.avg_order_value), color: 'text-primary-600 dark:text-primary-400' },
                 { label: 'Items Sold', value: (overview.total_items_sold || 0).toLocaleString(), color: 'text-green-600 dark:text-green-400' },
               ]}
