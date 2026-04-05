@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class ProductController extends Controller
 {
@@ -71,11 +72,13 @@ class ProductController extends Controller
      */
     public function featured(): JsonResponse
     {
-        $products = Product::featured()
-            ->public()
-            ->orderBy('sort_order', 'asc')
-            ->limit(4)
-            ->get();
+        $products = Cache::remember('products-featured', 300, function () {
+            return Product::featured()
+                ->public()
+                ->orderBy('sort_order', 'asc')
+                ->limit(4)
+                ->get();
+        });
 
         return response()->json([
             'success' => true,
@@ -144,6 +147,7 @@ class ProductController extends Controller
         ]);
 
         $product = Product::create($validated);
+        Cache::forget('products-featured');
 
         $this->logAudit('CREATE', 'Products', "Created product: {$product->name}", [
             'product_id' => $product->id,
@@ -180,6 +184,7 @@ class ProductController extends Controller
         ]);
 
         $product->update($validated);
+        Cache::forget('products-featured');
 
         $this->logAudit('UPDATE', 'Products', "Updated product: {$product->name}", [
             'product_id' => $product->id,
@@ -201,6 +206,7 @@ class ProductController extends Controller
         $productName = $product->name;
         $productId = $product->id;
         $product->delete();
+        Cache::forget('products-featured');
 
         $this->logAudit('DELETE', 'Products', "Deleted product: {$productName}", [
             'product_id' => $productId,

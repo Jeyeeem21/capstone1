@@ -11,6 +11,7 @@ use App\Models\SaleItem;
 use App\Traits\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class WebsiteContentController extends Controller
@@ -23,17 +24,16 @@ class WebsiteContentController extends Controller
     public function getHomeContent(): JsonResponse
     {
         try {
-            $content = WebsiteContent::getHomeContent();
-            
-            // Overlay real stats from database
-            $content['stats'] = $this->computeRealStats($content['stats'] ?? []);
-            
-            // Dynamically replace year-related values in text fields
-            $content = $this->replaceYearPlaceholders($content);
+            $data = Cache::remember('website-home-content', 600, function () {
+                $content = WebsiteContent::getHomeContent();
+                $content['stats'] = $this->computeRealStats($content['stats'] ?? []);
+                $content = $this->replaceYearPlaceholders($content);
+                return $content;
+            });
             
             return response()->json([
                 'success' => true,
-                'data' => $content,
+                'data' => $data,
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -50,10 +50,11 @@ class WebsiteContentController extends Controller
     public function getAboutContent(): JsonResponse
     {
         try {
-            $content = WebsiteContent::getAboutContent();
-            
-            // Dynamically replace year-related values in text fields
-            $content = $this->replaceYearPlaceholders($content);
+            $data = Cache::remember('website-about-content', 600, function () {
+                $content = WebsiteContent::getAboutContent();
+                $content = $this->replaceYearPlaceholders($content);
+                return $content;
+            });
             
             return response()->json([
                 'success' => true,
@@ -132,6 +133,7 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveHomeContent($validated);
+            Cache::forget('website-home-content');
 
             $this->logAudit('UPDATE', 'Website Content', 'Updated home page content', [
                 'updated_sections' => array_keys($validated),
@@ -192,6 +194,7 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveAboutContent($validated);
+            Cache::forget('website-about-content');
 
             $this->logAudit('UPDATE', 'Website Content', 'Updated about page content', [
                 'updated_sections' => array_keys($validated),
@@ -226,7 +229,9 @@ class WebsiteContentController extends Controller
     public function getProductsContent(): JsonResponse
     {
         try {
-            $content = WebsiteContent::getProductsContent();
+            $content = Cache::remember('website-products-content', 600, function () {
+                return WebsiteContent::getProductsContent();
+            });
             
             return response()->json([
                 'success' => true,
@@ -247,7 +252,9 @@ class WebsiteContentController extends Controller
     public function getContactContent(): JsonResponse
     {
         try {
-            $content = WebsiteContent::getContactContent();
+            $content = Cache::remember('website-contact-content', 600, function () {
+                return WebsiteContent::getContactContent();
+            });
             
             return response()->json([
                 'success' => true,
@@ -282,6 +289,7 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveProductsContent($validated);
+            Cache::forget('website-products-content');
 
             $this->logAudit('UPDATE', 'Website Content', 'Updated products page content', [
                 'updated_sections' => array_keys($validated),
@@ -329,6 +337,7 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveContactContent($validated);
+            Cache::forget('website-contact-content');
 
             $this->logAudit('UPDATE', 'Website Content', 'Updated contact page content', [
                 'updated_sections' => array_keys($validated),
@@ -362,7 +371,9 @@ class WebsiteContentController extends Controller
     public function getLegalContent(): JsonResponse
     {
         try {
-            $content = WebsiteContent::getLegalContent();
+            $content = Cache::remember('website-legal-content', 600, function () {
+                return WebsiteContent::getLegalContent();
+            });
             return response()->json(['success' => true, 'data' => $content]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to fetch legal content'], 500);
@@ -389,6 +400,7 @@ class WebsiteContentController extends Controller
             ]);
 
             WebsiteContent::saveLegalContent($validated);
+            Cache::forget('website-legal-content');
 
             $this->logAudit('UPDATE', 'Website Content', 'Updated terms & conditions and privacy policy', [
                 'terms_sections' => count($validated['termsSections'] ?? []),
