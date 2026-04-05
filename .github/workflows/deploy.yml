@@ -28,9 +28,9 @@ jobs:
             # Pull latest code
             git pull origin main
 
-            # Install/update PHP dependencies
+            # Install/update PHP dependencies (update handles PHP version differences)
             cd laravel_backend
-            composer install --optimize-autoloader --no-dev --quiet
+            composer update --optimize-autoloader --no-dev --quiet
 
             # Run any new migrations
             php artisan migrate --force
