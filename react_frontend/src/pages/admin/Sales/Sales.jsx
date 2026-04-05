@@ -907,7 +907,7 @@ const Sales = () => {
             {/* Items Table */}
             <div>
               <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Transaction Items</p>
-              <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden">
+              <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-primary-50 dark:bg-primary-900/20">
                     <tr>

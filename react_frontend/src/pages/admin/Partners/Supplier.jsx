@@ -755,6 +755,7 @@ const Supplier = () => {
                 </div>
               );
             })()}
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-700/50 border-b">
@@ -788,6 +789,7 @@ const Supplier = () => {
                 ))}
               </tbody>
             </table>
+            </div>
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border-t flex justify-between items-center text-sm">
               <span className="text-gray-500 dark:text-gray-400">{supplierProcurements.length} record{supplierProcurements.length !== 1 ? 's' : ''}</span>
               <span className="font-semibold text-gray-700 dark:text-gray-200">

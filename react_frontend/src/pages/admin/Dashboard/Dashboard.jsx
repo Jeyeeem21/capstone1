@@ -263,7 +263,7 @@ const Dashboard = () => {
             <Layers size={15} className="text-button-500" />
             Active Pipeline
           </h3>
-          <div className="flex items-center gap-1 overflow-x-auto">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
             {pipelineItems.map((item, idx) => {
               const Icon = item.icon;
               return (

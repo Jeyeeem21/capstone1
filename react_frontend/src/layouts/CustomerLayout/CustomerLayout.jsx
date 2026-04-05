@@ -294,7 +294,7 @@ const CustomerLayout = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-bg-body)', color: 'var(--color-text-content)' }}>
+    <div className="min-h-screen min-h-[100dvh] flex flex-col" style={{ backgroundColor: 'var(--color-bg-body)', color: 'var(--color-text-content)' }}>
       <CustomerHeader customer={customer} cartCount={cartCount} handleLogout={handleLogout} />
       <main className="flex-1 pt-16 pb-20 md:pb-0">
         <Outlet />

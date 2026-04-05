@@ -41,7 +41,7 @@ const StaffLayout = () => {
 
   return (
     <div 
-      className="min-h-screen transition-colors duration-300 flex flex-col"
+      className="min-h-screen min-h-[100dvh] transition-colors duration-300 flex flex-col"
       style={{ backgroundColor: 'var(--color-bg-body)' }}
     >
       {/* Header Navigation */}
@@ -185,7 +185,7 @@ const StaffLayout = () => {
       <main className="flex-1 flex flex-col">
         <div className="p-4 md:p-6 lg:p-8 flex-1">
           <div 
-            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-12rem)] transition-colors duration-300"
+            className="rounded-2xl shadow-xl border-2 border-primary-300 dark:border-primary-700 p-4 md:p-6 lg:p-8 min-h-[calc(100vh-12rem)] min-h-[calc(100dvh-12rem)] transition-colors duration-300 overflow-x-auto"
             style={{ 
               backgroundColor: 'var(--color-bg-content)', 
               color: 'var(--color-text-content)',

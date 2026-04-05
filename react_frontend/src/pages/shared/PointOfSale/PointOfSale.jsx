@@ -1596,7 +1596,7 @@ const PointOfSale = () => {
                     </div>
 
                     {/* Quick Amount Buttons */}
-                    <div className="grid grid-cols-4 gap-2 mb-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                       {[total, Math.ceil(total / 100) * 100, Math.ceil(total / 500) * 500, Math.ceil(total / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
                         <button
                           key={amount}

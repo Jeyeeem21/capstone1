@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Keyboard } from 'lucide-react';
+import { X } from 'lucide-react';
 import Button from './Button';
 
 // Helper: reset body scroll lock styles
@@ -8,6 +8,8 @@ const resetBodyStyles = () => {
   document.body.style.overflow = '';
   document.body.style.position = '';
   document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
   document.body.style.width = '';
 };
 
@@ -31,27 +33,16 @@ const Modal = ({
 }) => {
   const modalRef = useRef(null);
   const scrollPositionRef = useRef(0);
-  const [showShortcuts, setShowShortcuts] = useState(false);
-
   // Handle escape key
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isOpen) {
-        if (showShortcuts) {
-          setShowShortcuts(false);
-        } else {
-          onClose();
-        }
+        onClose();
       }
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose, showShortcuts]);
-
-  // Reset shortcut help when modal closes
-  useEffect(() => {
-    if (!isOpen) setShowShortcuts(false);
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const overlayRef = useRef(null);
 
@@ -62,6 +53,8 @@ const Modal = ({
       document.body.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollPositionRef.current}px`;
+      document.body.style.left = '0';
+      document.body.style.right = '0';
       document.body.style.width = '100%';
     } else {
       resetBodyStyles();
@@ -92,7 +85,7 @@ const Modal = ({
   return createPortal(
     <div 
       ref={overlayRef}
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm [-webkit-backdrop-filter:blur(4px)] animate-fadeIn"
       onClick={handleOverlayClick}
     >
       <div 
@@ -100,16 +93,9 @@ const Modal = ({
         className={`${sizes[size]} w-full bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transform transition-all animate-slideUp border-2 border-primary-300 dark:border-primary-700 relative`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-primary-200 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-t-2xl">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{title}</h2>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b-2 border-primary-200 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800 rounded-t-2xl">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-gray-100 truncate pr-2">{title}</h2>
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowShortcuts(v => !v)}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
-              title="Keyboard shortcuts (?)"
-            >
-              <Keyboard size={16} />
-            </button>
             {showCloseButton && (
               <button
                 onClick={onClose}
@@ -121,37 +107,14 @@ const Modal = ({
           </div>
         </div>
 
-        {/* Keyboard shortcuts overlay */}
-        {showShortcuts && (
-          <div className="absolute inset-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center p-6">
-            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2"><Keyboard size={20} /> Keyboard Shortcuts</h3>
-            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              {[
-                ['Esc', 'Close modal'],
-                ['Ctrl + S', 'Save / Submit'],
-                ['Enter', 'Next input field'],
-                ['Ctrl + Backspace', 'Clear current field'],
-                ['Ctrl + Shift + Backspace', 'Clear all fields'],
-                ['Ctrl + Enter', 'Confirm action'],
-              ].map(([key, desc]) => (
-                <div key={key} className="contents">
-                  <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-xs font-mono font-semibold text-gray-700 dark:text-gray-200 text-right whitespace-nowrap">{key}</kbd>
-                  <span className="text-gray-600 dark:text-gray-300 py-1">{desc}</span>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowShortcuts(false)} className="mt-5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary-500 text-white hover:bg-primary-600 transition-colors">Got it</button>
-          </div>
-        )}
-
         {/* Content */}
-        <div className="px-5 py-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 120px)' }}>
+        <div className="px-4 sm:px-5 py-3 sm:py-4 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(90vh - 120px)' }}>
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="px-5 py-3 border-t-2 border-primary-200 dark:border-primary-700 bg-primary-50/30 dark:bg-gray-700/30 rounded-b-2xl">
+          <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-t-2 border-primary-200 dark:border-primary-700 bg-primary-50/30 dark:bg-gray-700/30 rounded-b-2xl">
             {footer}
           </div>
         )}

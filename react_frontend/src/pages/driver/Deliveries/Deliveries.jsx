@@ -461,7 +461,7 @@ const Deliveries = () => {
                       </div>
 
                       <p className="text-[10px] font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">Order Items</p>
-                      <div className="rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                      <div className="rounded-lg border border-gray-200 dark:border-gray-600 overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead className="bg-gray-50 dark:bg-gray-700/50">
                             <tr>

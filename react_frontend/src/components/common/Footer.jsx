@@ -50,10 +50,10 @@ const Footer = ({
     <footer className={`rounded-xl overflow-hidden ${className}`}>
       {/* Main Footer Content */}
       <div 
-        className="px-8 py-10"
+        className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10"
         style={{ backgroundColor: 'var(--color-bg-footer)' }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 lg:gap-10">
           
           {/* Company Info */}
           <div>
@@ -129,11 +129,11 @@ const Footer = ({
       </div>
 
       {/* Bottom Bar */}
-      <div className="bg-gray-950 dark:bg-black px-8 py-4">
+      <div className="bg-gray-950 dark:bg-black px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-center sm:text-left">
             <p className="text-gray-400 text-sm">
-              © {currentYear} {settings.business_name || 'KJP Rice Mill'} {settings.footer_copyright || 'Management System. All rights reserved.'} V2.3
+              © {currentYear} {settings.business_name || 'KJP Rice Mill'} {settings.footer_copyright || 'Management System. All rights reserved.'} V2.4
             </p>
             <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
               Powered by <span className="text-button-400 font-medium">{frameworkText}</span>

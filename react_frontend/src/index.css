@@ -225,6 +225,12 @@ html.dark {
 }
 
 /* Dark mode scrollbar */
+/* Firefox */
+.dark * {
+  scrollbar-color: #4b5563 #1f2937;
+}
+
+/* Chrome, Safari, Edge */
 .dark ::-webkit-scrollbar-track {
   background: #1f2937;
 }
@@ -561,6 +567,7 @@ label {
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Hide scrollbar for sidebar */
@@ -579,6 +586,13 @@ label {
 }
 
 /* Custom scrollbar for better UX */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
+/* Chrome, Safari, Edge */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

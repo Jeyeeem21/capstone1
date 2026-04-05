@@ -115,7 +115,7 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
       
       <aside 
         className={`
-          fixed left-0 top-0 h-screen border-r-2 border-primary-300 dark:border-primary-700 
+          fixed left-0 top-0 h-screen h-[100dvh] border-r-2 border-primary-300 dark:border-primary-700 
           flex flex-col transition-all duration-300 z-50
           shadow-[4px_0_20px_-3px_rgba(0,0,0,0.2)]
           w-72

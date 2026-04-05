@@ -342,7 +342,7 @@ const PublicFooter = () => {
 // Main Public Layout
 const PublicLayout = () => {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen min-h-[100dvh] flex flex-col">
       <PublicHeader />
       <main className="flex-1">
         <Outlet />

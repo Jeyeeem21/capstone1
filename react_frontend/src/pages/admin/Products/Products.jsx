@@ -849,7 +849,7 @@ const Products = () => {
                 <p className="text-sm">No orders found for this product.</p>
               </div>
             ) : (
-              <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden max-h-[360px] overflow-y-auto">
+              <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-x-auto max-h-[360px] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-primary-50 dark:bg-primary-900/20 sticky top-0">
                     <tr>

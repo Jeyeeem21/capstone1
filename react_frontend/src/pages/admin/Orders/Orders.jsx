@@ -1529,7 +1529,7 @@ const AdminOrders = () => {
               {/* Items Table */}
               <div>
                 <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Order Items</p>
-                <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden">
+                <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-primary-50 dark:bg-primary-900/20">
                       <tr>
@@ -2324,7 +2324,7 @@ const AdminOrders = () => {
               </p>
             </div>
 
-            <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden">
+            <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-primary-50 dark:bg-primary-900/20">
                   <tr>
@@ -2479,7 +2479,7 @@ const AdminOrders = () => {
                   </div>
                 </div>
                 {/* Quick amounts */}
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[payOrder.total, Math.ceil(payOrder.total / 100) * 100, Math.ceil(payOrder.total / 500) * 500, Math.ceil(payOrder.total / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
                     <button key={amount} onClick={() => setPayCashTendered(String(amount))} className="py-1.5 rounded-lg text-xs font-semibold border border-primary-200 dark:border-primary-700 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">₱{amount.toLocaleString()}</button>
                   ))}
