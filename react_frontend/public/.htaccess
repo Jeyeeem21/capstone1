@@ -70,9 +70,3 @@
     # Rewrite everything else to index.html (no redirect, just internal rewrite)
     RewriteRule ^(.*)$ /index.html [L,QSA]
 </IfModule>
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-
-    # Otherwise, serve index.html (SPA client-side routing)
-    RewriteRule ^ index.html [L]
-</IfModule>

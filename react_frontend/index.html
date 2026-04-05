@@ -24,14 +24,20 @@
     <link rel="preconnect" href="https://api.kjpricemill.com" crossorigin />
     <link rel="dns-prefetch" href="https://api.kjpricemill.com" />
 
-    <!-- Load Google Fonts non-blocking: media="print" + onload swap to "all" -->
+    <!-- Load Google Fonts with display=optional: no font swap = no CLS
+         Font loads in background, used on next navigation/page load when cached -->
     <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=optional"
           media="print"
           onload="this.media='all'" />
     <noscript>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=optional" />
     </noscript>
+
+    <!-- Font fallback with size-adjust to match Inter metrics -->
+    <style>
+      @font-face{font-family:'Inter Fallback';src:local('Segoe UI'),local('Roboto'),local('Helvetica Neue'),local('Arial');size-adjust:107%;ascent-override:90%;descent-override:22%;line-gap-override:0%}
+    </style>
 
     <script>
       // Instant theme loader - applies colors BEFORE React loads

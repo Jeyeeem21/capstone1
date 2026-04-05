@@ -31,7 +31,7 @@ const iconMap = {
 // Fallback products — empty until real products loaded from API
 const fallbackProducts = [];
 
-// Default content fallback (minimal - real data comes from DB seeder)
+// Default content fallback — empty, real data comes from database
 const defaultContent = {
   heroTitle: '',
   heroTitleHighlight: '',
@@ -51,7 +51,7 @@ const getInitialContent = () => {
     const saved = localStorage.getItem('kjp-home-content');
     if (saved) return { ...defaultContent, ...JSON.parse(saved) };
   } catch (e) {}
-  return defaultContent;
+  return null;
 };
 
 const getInitialProducts = () => {
@@ -66,8 +66,8 @@ const getInitialProducts = () => {
 const Home = () => {
   // Initialize with cached data immediately - no flash!
   const [products, setProducts] = useState(getInitialProducts);
-  const [loading, setLoading] = useState(() => !window.__HOME_CONTENT__);
-  const [content, setContent] = useState(getInitialContent);
+  const [loading, setLoading] = useState(() => !getInitialContent());
+  const [content, setContent] = useState(() => getInitialContent() || defaultContent);
   const { settings } = useBusinessSettings();
   const logoFallback = settings.business_logo && !settings.business_logo.startsWith('blob:') ? settings.business_logo : null;
 
@@ -139,6 +139,9 @@ const Home = () => {
   // Default hero image if none set
   const rawHeroImage = content.heroImage || null;
   const heroImage = rawHeroImage ? (rawHeroImage.startsWith('/storage') ? resolveStorageUrl(rawHeroImage) : rawHeroImage) : null;
+
+  // Show nothing (keep loading shell visible) until real data arrives — prevents CLS
+  if (loading) return null;
 
   return (
     <div className="overflow-hidden">
