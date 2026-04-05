@@ -181,7 +181,7 @@ class SaleController extends Controller
                 'items_count' => count($validated['items']),
             ]);
 
-            // Notify admins of new order
+            // Notify admins + customer of new order (in-app)
             $customerName = $sale->customer?->name ?? 'Walk-in';
             $this->sendOrderNotification(
                 $sale,
@@ -192,7 +192,21 @@ class SaleController extends Controller
                 "Your order #{$sale->transaction_id} has been placed successfully."
             );
 
-            // Build response — emails sent separately after user confirms order
+            // Auto-send order emails (fire-and-forget, non-blocking)
+            $emailService = $this->emailService;
+            $saleForEmail = \App\Models\Sale::with(['customer', 'items.product.variety'])->find($sale->id);
+            if ($saleForEmail) {
+                dispatch(function () use ($emailService, $saleForEmail) {
+                    try {
+                        $emailService->sendNewOrderToAdmin($saleForEmail);
+                        $emailService->sendOrderPlacedToCustomer($saleForEmail);
+                    } catch (\Throwable $e) {
+                        // Silent — EmailService already logs failures
+                    }
+                })->afterResponse();
+            }
+
+            // Build response
             return response()->json([
                 'success' => true,
                 'message' => 'Order created successfully',
