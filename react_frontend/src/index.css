@@ -1,8 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* Google Fonts loaded via <link> in index.html for non-blocking render */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* System font stack fallback — renders text instantly, Inter swaps in when loaded */
+/* Using metrics-matched system fonts to minimize CLS */
+html, body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 /* CSS Variables for Theming - These are default fallback values */
 /* They will be overwritten by JavaScript from ThemeContext */

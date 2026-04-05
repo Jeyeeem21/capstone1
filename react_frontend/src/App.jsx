@@ -1,12 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, lazy, Suspense } from 'react';
-import { MainLayout, StaffLayout, PublicLayout, CustomerLayout, DriverLayout } from './layouts';
 import { ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BusinessSettingsProvider, useBusinessSettings } from './context/BusinessSettingsContext';
 import { ProtectedRoute, SuperAdminRoute } from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './pages/NotFound';
+
+// Lazy-loaded layouts — only the layout for the current route is downloaded
+const MainLayout = lazy(() => import('./layouts/MainLayout'));
+const StaffLayout = lazy(() => import('./layouts/StaffLayout'));
+const PublicLayout = lazy(() => import('./layouts/PublicLayout'));
+const CustomerLayout = lazy(() => import('./layouts/CustomerLayout'));
+const DriverLayout = lazy(() => import('./layouts/DriverLayout'));
 
 // Lazy-loaded page components — each role's pages are code-split into separate chunks
 // so a driver only downloads driver pages, a secretary only downloads staff pages, etc.

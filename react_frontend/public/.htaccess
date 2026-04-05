@@ -4,7 +4,6 @@
     AddOutputFilterByType DEFLATE text/javascript application/javascript application/x-javascript
     AddOutputFilterByType DEFLATE application/json application/ld+json
     AddOutputFilterByType DEFLATE application/xml application/xhtml+xml
-    AddOutputFilterByType DEFLATE application/rss+xml application/atom+xml
     AddOutputFilterByType DEFLATE image/svg+xml
     AddOutputFilterByType DEFLATE font/ttf font/otf font/woff font/woff2
 </IfModule>
@@ -34,7 +33,7 @@
 
 # ---------- CACHE-CONTROL HEADERS ----------
 <IfModule mod_headers.c>
-    # Hashed assets (JS/CSS from Vite) - immutable
+    # Hashed assets (Vite JS/CSS bundles) - immutable
     <FilesMatch "\.(js|css)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
@@ -44,7 +43,7 @@
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
 
-    # HTML - no cache
+    # HTML - no cache (SPA must always get fresh index.html)
     <FilesMatch "\.(html)$">
         Header set Cache-Control "no-cache, no-store, must-revalidate"
     </FilesMatch>
@@ -53,29 +52,15 @@
     Header append Vary Accept-Encoding
 </IfModule>
 
-# ---------- REWRITE RULES ----------
+# ---------- SPA ROUTING ----------
 <IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
-
     RewriteEngine On
+    RewriteBase /
 
-    # Handle Authorization Header
-    RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-
-    # Handle X-XSRF-Token Header
-    RewriteCond %{HTTP:x-xsrf-token} .
-    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
-
-    # Redirect Trailing Slashes If Not A Folder...
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} (.+)/$
-    RewriteRule ^ %1 [L,R=301]
-
-    # Send Requests To Front Controller...
-    RewriteCond %{REQUEST_FILENAME} !-d
+    # If the request is for an existing file or directory, serve it
     RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [L]
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Otherwise, serve index.html (SPA client-side routing)
+    RewriteRule ^ index.html [L]
 </IfModule>
