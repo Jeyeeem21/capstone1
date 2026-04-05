@@ -58,7 +58,7 @@ class WebsiteContentController extends Controller
             
             return response()->json([
                 'success' => true,
-                'data' => $content,
+                'data' => $data,
             ]);
         } catch (\Exception $e) {
             return response()->json([

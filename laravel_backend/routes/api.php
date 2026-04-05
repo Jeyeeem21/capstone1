@@ -112,9 +112,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/read-all', [NotificationController::class, 'markAllAsRead']);
     });
 
-    // Product Routes
+    // Product Routes (GET index is public, defined above)
     Route::prefix('products')->group(function () {
-        Route::get('/', [ProductController::class, 'index']);
         Route::post('/', [ProductController::class, 'store']);
         Route::get('/{id}', [ProductController::class, 'show']);
         Route::put('/{id}', [ProductController::class, 'update']);
@@ -243,9 +242,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/update-email', [SupplierController::class, 'sendUpdateEmail']);
     });
 
-    // Variety Routes
+    // Variety Routes (GET index is public, defined above)
     Route::prefix('varieties')->group(function () {
-        Route::get('/', [VarietyController::class, 'index']);
         Route::post('/', [VarietyController::class, 'store']);
         Route::get('/{id}', [VarietyController::class, 'show']);
         Route::put('/{id}', [VarietyController::class, 'update']);
