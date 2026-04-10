@@ -38,6 +38,7 @@ class CustomerController extends Controller
     public function index(): JsonResponse
     {
         $customers = $this->customerService->getAllCustomers();
+        CustomerResource::preloadUsers();
         
         return $this->successResponse(
             CustomerResource::collection($customers),
@@ -58,7 +59,7 @@ class CustomerController extends Controller
         $request->merge(['phone' => $data['phone'] ?? '']);
         
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'nullable|string|max:255',
             'contact' => 'required|string|max:255',
             'phone' => [
                 'required',
@@ -130,7 +131,7 @@ class CustomerController extends Controller
         $request->merge(['phone' => $data['phone'] ?? '']);
         
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'nullable|string|max:255',
             'contact' => 'required|string|max:255',
             'phone' => [
                 'required',
@@ -413,6 +414,7 @@ class CustomerController extends Controller
             'role' => 'customer',
             'phone' => $customer->phone,
             'status' => 'active',
+            'email_verified_at' => now(),
         ]);
 
         $this->logAudit('CREATE_ACCOUNT', 'Customer', "Created customer account for {$customer->name} ({$customer->email})", [
@@ -449,14 +451,14 @@ class CustomerController extends Controller
         dispatch(function () use ($emailService, $customer) {
             try {
                 $emailService->sendAdminAlert(
-                    "New Customer Added \u2014 {$customer->name}",
+                    "New Customer Added: {$customer->name}",
                     'New Customer Added',
                     "A new customer \"{$customer->name}\" ({$customer->email}) has been added to the system."
                 );
 
                 $emailService->sendAlertTo(
                     $customer->email,
-                    'Welcome \u2014 You Have Been Added as a Customer',
+                    'Welcome! You Have Been Added as a Customer',
                     'Welcome to Our System',
                     "Hi {$customer->name},\n\nYou have been added as a customer in our system.\n\nContact: {$customer->contact}\nEmail: {$customer->email}\nPhone: {$customer->phone}\n\nIf you have any questions, please don't hesitate to contact us."
                 );
@@ -483,7 +485,7 @@ class CustomerController extends Controller
         dispatch(function () use ($emailService, $customer, $changesSummary) {
             try {
                 $emailService->sendAdminAlert(
-                    "Customer Updated \u2014 {$customer->name}",
+                    "Customer Updated: {$customer->name}",
                     'Customer Information Updated',
                     "The customer \"{$customer->name}\" ({$customer->email}) has been updated in the system.\n\n{$changesSummary}"
                 );

@@ -202,27 +202,16 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
     } finally { setLoadingLegal(false); }
   };
   const handleAcceptTerms = () => {
-    setPassword('');
-    setPasswordConfirm('');
-    setAccountErrors({});
-    setAccountSubmitted(false);
+    setVerifyCode('');
+    setVerifyError('');
     setGlobalError('');
-    setStep('account');
+    handleSendVerification();
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 3: Create Account — send verification
+  // STEP 3: Send verification code & Verify email
   // ═══════════════════════════════════════════════════════════════════════════
-  const handleAccountSubmit = async () => {
-    setAccountSubmitted(true);
-    const errs = {};
-    if (!password) errs.password = ['Password is required.'];
-    else if (password.length < 8) errs.password = ['Minimum 8 characters.'];
-    if (!passwordConfirm) errs.password_confirmation = ['Please confirm your password.'];
-    else if (password !== passwordConfirm) errs.password_confirmation = ['Passwords do not match.'];
-
-    if (Object.keys(errs).length) { setAccountErrors(errs); return; }
-
+  const handleSendVerification = async () => {
     setSendingCode(true);
     setGlobalError('');
     try {
@@ -232,19 +221,14 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
         phone: customerForm.phone.replace(/\s/g, ''),
         email: customerForm.email.trim().toLowerCase(),
         address: customerForm.address.trim(),
-        password: password,
-        password_confirmation: passwordConfirm,
       });
       if (!res.success) {
         if (res.errors) {
           const serverDetailErrs = {};
-          const serverAccountErrs = {};
           Object.entries(res.errors).forEach(([key, val]) => {
             if (['business_name', 'contact_person', 'phone', 'email', 'address'].includes(key)) {
               const mappedKey = key === 'business_name' ? 'name' : key === 'contact_person' ? 'contact' : key;
               serverDetailErrs[mappedKey] = val;
-            } else {
-              serverAccountErrs[key] = val;
             }
           });
           if (Object.keys(serverDetailErrs).length) {
@@ -253,7 +237,6 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
             setStep('details');
             return;
           }
-          setAccountErrors(serverAccountErrs);
         }
         setGlobalError(res.error || res.message || 'Failed to send verification code.');
         return;
@@ -269,9 +252,6 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // STEP 4: Verify
-  // ═══════════════════════════════════════════════════════════════════════════
   const handleVerify = async (code) => {
     if (code.length < 6) return;
     setVerifying(true);
@@ -279,7 +259,13 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
     try {
       const res = await authApi.registerVerifyCode(customerForm.email.trim().toLowerCase(), code);
       if (!res.success) { setVerifyError(res.error || 'Invalid verification code.'); return; }
-      await handleComplete();
+      // Email verified — move to password step
+      setPassword('');
+      setPasswordConfirm('');
+      setAccountErrors({});
+      setAccountSubmitted(false);
+      setGlobalError('');
+      setStep('account');
     } catch (err) {
       setVerifyError(err.message || 'Verification failed.');
     } finally {
@@ -287,17 +273,33 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
     }
   };
 
-  const handleComplete = async () => {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STEP 4: Create Account — set password after verification
+  // ═══════════════════════════════════════════════════════════════════════════
+  const handleAccountSubmit = async () => {
+    setAccountSubmitted(true);
+    const errs = {};
+    if (!password) errs.password = ['Password is required.'];
+    else if (password.length < 8) errs.password = ['Minimum 8 characters.'];
+    if (!passwordConfirm) errs.password_confirmation = ['Please confirm your password.'];
+    else if (password !== passwordConfirm) errs.password_confirmation = ['Passwords do not match.'];
+
+    if (Object.keys(errs).length) { setAccountErrors(errs); return; }
+
     setCompleting(true);
+    setGlobalError('');
     try {
-      const res = await authApi.registerComplete(customerForm.email.trim().toLowerCase());
+      const res = await authApi.registerComplete(customerForm.email.trim().toLowerCase(), password, passwordConfirm);
       if (!res.success) {
-        setVerifyError(res.error || 'Registration failed. Please start over.');
+        if (res.errors) {
+          setAccountErrors(res.errors);
+        }
+        setGlobalError(res.error || res.message || 'Registration failed. Please try again.');
         return;
       }
       setStep('done');
     } catch (err) {
-      setVerifyError(err.message || 'Registration failed.');
+      setGlobalError(err.message || 'Registration failed.');
     } finally {
       setCompleting(false);
     }
@@ -314,8 +316,6 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
         phone: customerForm.phone.replace(/\s/g, ''),
         email: customerForm.email.trim().toLowerCase(),
         address: customerForm.address.trim(),
-        password: password,
-        password_confirmation: passwordConfirm,
       });
       if (res.success) startCountdown(60);
       else setVerifyError(res.error || 'Failed to resend code.');
@@ -506,30 +506,32 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
         </div>
       </Modal>
 
-      {/* ═══ STEP 3: Create Account (password) ═══ */}
+      {/* ═══ STEP 3: Email Verification ═══ */}
       <Modal
-        isOpen={step === 'account'}
-        onClose={() => setStep('terms')}
-        title="Create Account"
+        isOpen={step === 'verify'}
+        onClose={() => {}}
+        title="Verify Your Email"
         size="lg"
+        showCloseButton={false}
+        closeOnOverlayClick={false}
       >
         <div className="space-y-6">
           <div className="text-center">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock size={32} className="text-blue-600 dark:text-blue-400" />
+              <Mail size={32} className="text-blue-600 dark:text-blue-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
-              Create Account
+              Verify Your Email
             </h3>
             <p className="text-gray-600 dark:text-gray-300">
-              Set up login credentials for <strong>{customerForm.name || 'your account'}</strong>
+              A 6-digit verification code has been sent to <strong>{customerForm.email}</strong>
             </p>
           </div>
 
           <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
             <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
               <ShieldCheck size={18} />
-              Customer Details
+              Your Details
             </h4>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
@@ -544,9 +546,132 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
                 <span className="text-blue-700 dark:text-blue-400">Email:</span>
                 <span className="font-semibold text-blue-800 dark:text-blue-200">{customerForm.email}</span>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+              Verification Code <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={verifyCode}
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setVerifyCode(val);
+                  setVerifyError('');
+                  if (val.length === 6) handleVerify(val);
+                }}
+                placeholder="••••••"
+                maxLength={6}
+                disabled={verifying}
+                className={`w-full px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono border-2 rounded-xl transition-all focus:outline-none focus:ring-4 ${
+                  verifyError
+                    ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20'
+                    : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 focus:border-button-500 focus:ring-button-500/20'
+                }`}
+                autoFocus
+              />
+              {verifying && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <Loader2 size={20} className="animate-spin text-button-500" />
+                </div>
+              )}
+            </div>
+            {verifyError && (
+              <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                <AlertCircle size={14} /> {verifyError}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500 dark:text-gray-400">Didn't receive the code?</span>
+            <button
+              onClick={handleResend}
+              disabled={resendCountdown > 0 || sendingCode}
+              className="font-medium text-button-600 dark:text-button-400 hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1"
+            >
+              {sendingCode ? <><Loader2 size={14} className="animate-spin" /> Sending...</> :
+               resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Code'}
+            </button>
+          </div>
+
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-500/30">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 size={18} className="text-green-600 dark:text-green-400 mt-0.5" />
+              <div>
+                <h4 className="font-semibold text-green-800 dark:text-green-300 mb-1">Next Steps</h4>
+                <ol className="text-xs text-green-700 dark:text-green-400 space-y-1 list-decimal list-inside">
+                  <li>Check your email for the 6-digit code</li>
+                  <li>Enter the code above to verify</li>
+                  <li>Once verified, you'll set your password</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button variant="outline" onClick={handleCancelVerification} disabled={verifying}>
+              <XCircle size={16} className="mr-2" /> Cancel
+            </Button>
+            <Button
+              onClick={() => handleVerify(verifyCode)}
+              disabled={verifyCode.length < 6 || verifying}
+            >
+              {verifying
+                ? <><Loader2 size={16} className="mr-2 animate-spin" /> Verifying...</>
+                : <><Check size={16} className="mr-2" /> Verify & Continue</>}
+            </Button>
+          </div>
+
+          <p className="text-center text-xs text-gray-400 dark:text-gray-500">
+            Code expires in 15 minutes. Check your spam folder if you don't see it.
+          </p>
+        </div>
+      </Modal>
+
+      {/* ═══ STEP 4: Create Account (password — after email verified) ═══ */}
+      <Modal
+        isOpen={step === 'account'}
+        onClose={() => {}}
+        title="Set Your Password"
+        size="lg"
+        showCloseButton={false}
+        closeOnOverlayClick={false}
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock size={32} className="text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
+              Almost Done!
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300">
+              Your email has been verified. Set a password for <strong>{customerForm.name || 'your account'}</strong>
+            </p>
+          </div>
+
+          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-500/30">
+            <h4 className="font-semibold text-green-800 dark:text-green-300 mb-3 flex items-center gap-2">
+              <CheckCircle2 size={18} />
+              Email Verified
+            </h4>
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-blue-700 dark:text-blue-400">Phone:</span>
-                <span className="font-semibold text-blue-800 dark:text-blue-200">{customerForm.phone}</span>
+                <span className="text-green-700 dark:text-green-400">Business:</span>
+                <span className="font-semibold text-green-800 dark:text-green-200">{customerForm.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-700 dark:text-green-400">Contact:</span>
+                <span className="font-semibold text-green-800 dark:text-green-200">{customerForm.contact}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-green-700 dark:text-green-400">Email:</span>
+                <span className="font-semibold text-green-800 dark:text-green-200">{customerForm.email}</span>
               </div>
             </div>
           </div>
@@ -620,143 +745,12 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button variant="outline" onClick={() => setStep('terms')}>
-              <ArrowLeft size={16} className="mr-2" />
-              Back
-            </Button>
-            <Button onClick={handleAccountSubmit} disabled={sendingCode}>
-              {sendingCode
+            <Button onClick={handleAccountSubmit} disabled={completing} className="w-full">
+              {completing
                 ? <><Loader2 size={16} className="mr-2 animate-spin" /> Creating Account...</>
                 : <><CheckCircle2 size={16} className="mr-2" /> Create Account</>}
             </Button>
           </div>
-        </div>
-      </Modal>
-
-      {/* ═══ STEP 4: Email Verification ═══ */}
-      <Modal
-        isOpen={step === 'verify'}
-        onClose={() => {}}
-        title="Verify Your Email"
-        size="lg"
-        showCloseButton={false}
-        closeOnOverlayClick={false}
-      >
-        <div className="space-y-6">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Mail size={32} className="text-blue-600 dark:text-blue-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
-              Verify Your Email
-            </h3>
-            <p className="text-gray-600 dark:text-gray-300">
-              A 6-digit verification code has been sent to <strong>{customerForm.email}</strong>
-            </p>
-          </div>
-
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
-            <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
-              <ShieldCheck size={18} />
-              Account Credentials
-            </h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-blue-700 dark:text-blue-400">Business:</span>
-                <span className="font-semibold text-blue-800 dark:text-blue-200">{customerForm.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-blue-700 dark:text-blue-400">Contact:</span>
-                <span className="font-semibold text-blue-800 dark:text-blue-200">{customerForm.contact}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-blue-700 dark:text-blue-400">Email:</span>
-                <span className="font-semibold text-blue-800 dark:text-blue-200">{customerForm.email}</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
-              Verification Code <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={verifyCode}
-                onChange={e => {
-                  const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                  setVerifyCode(val);
-                  setVerifyError('');
-                  if (val.length === 6) handleVerify(val);
-                }}
-                placeholder="••••••"
-                maxLength={6}
-                disabled={verifying || completing}
-                className={`w-full px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono border-2 rounded-xl transition-all focus:outline-none focus:ring-4 ${
-                  verifyError
-                    ? 'border-red-400 bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20'
-                    : 'border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 focus:border-button-500 focus:ring-button-500/20'
-                }`}
-                autoFocus
-              />
-              {(verifying || completing) && (
-                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                  <Loader2 size={20} className="animate-spin text-button-500" />
-                </div>
-              )}
-            </div>
-            {verifyError && (
-              <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
-                <AlertCircle size={14} /> {verifyError}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-500 dark:text-gray-400">Didn't receive the code?</span>
-            <button
-              onClick={handleResend}
-              disabled={resendCountdown > 0 || sendingCode}
-              className="font-medium text-button-600 dark:text-button-400 hover:underline disabled:opacity-50 disabled:no-underline flex items-center gap-1"
-            >
-              {sendingCode ? <><Loader2 size={14} className="animate-spin" /> Sending...</> :
-               resendCountdown > 0 ? `Resend in ${resendCountdown}s` : 'Resend Code'}
-            </button>
-          </div>
-
-          <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-500/30">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 size={18} className="text-green-600 dark:text-green-400 mt-0.5" />
-              <div>
-                <h4 className="font-semibold text-green-800 dark:text-green-300 mb-1">Next Steps</h4>
-                <ol className="text-xs text-green-700 dark:text-green-400 space-y-1 list-decimal list-inside">
-                  <li>Check your email for the 6-digit code</li>
-                  <li>Enter the code above to verify</li>
-                  <li>Once verified, your account will be created</li>
-                </ol>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button variant="outline" onClick={handleCancelVerification} disabled={verifying || completing}>
-              <XCircle size={16} className="mr-2" /> Cancel
-            </Button>
-            <Button
-              onClick={() => handleVerify(verifyCode)}
-              disabled={verifyCode.length < 6 || verifying || completing}
-            >
-              {(verifying || completing)
-                ? <><Loader2 size={16} className="mr-2 animate-spin" /> Verifying...</>
-                : <><Check size={16} className="mr-2" /> Verify & Register</>}
-            </Button>
-          </div>
-
-          <p className="text-center text-xs text-gray-400 dark:text-gray-500">
-            Code expires in 15 minutes. Check your spam folder if you don't see it.
-          </p>
         </div>
       </Modal>
 

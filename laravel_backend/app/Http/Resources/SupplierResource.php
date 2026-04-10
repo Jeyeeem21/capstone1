@@ -23,18 +23,18 @@ class SupplierResource extends JsonResource
             'address' => $this->address,
             'status' => $this->status,
             'products' => $this->products ?? 0,
-            'total_sacks' => $this->whenLoaded('procurements', function () {
-                return (int) $this->procurements->sum('sacks');
-            }, 0),
-            'total_kg' => $this->whenLoaded('procurements', function () {
-                return (float) $this->procurements->sum('quantity_kg');
-            }, 0),
-            'total_cost' => $this->whenLoaded('procurements', function () {
-                return (float) $this->procurements->sum('total_cost');
-            }, 0),
-            'procurement_count' => $this->whenLoaded('procurements', function () {
+            'total_sacks' => (int) ($this->procurements_sum_sacks ?? ($this->whenLoaded('procurements', function () {
+                return $this->procurements->sum('sacks');
+            }, 0))),
+            'total_kg' => (float) ($this->procurements_sum_quantity_kg ?? ($this->whenLoaded('procurements', function () {
+                return $this->procurements->sum('quantity_kg');
+            }, 0))),
+            'total_cost' => (float) ($this->procurements_sum_total_cost ?? ($this->whenLoaded('procurements', function () {
+                return $this->procurements->sum('total_cost');
+            }, 0))),
+            'procurement_count' => (int) ($this->procurements_count ?? ($this->whenLoaded('procurements', function () {
                 return $this->procurements->count();
-            }, 0),
+            }, 0))),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
         ];

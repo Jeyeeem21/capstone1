@@ -366,9 +366,11 @@ const Customer = () => {
         toast.success('Customer Added', `${customerName} has been added successfully.`);
         // Fire-and-forget email
         apiClient.post(`/customers/${response.data.id}/store-email`).catch(() => {});
-        // Refetch in background
+        // Instantly show new customer in the table
+        optimisticUpdate(prev => [...prev, response.data]);
+        // Then confirm with fresh server data
         invalidateCache(CACHE_KEY);
-        refetch();
+        await refetch();
 
         // Chain into account creation flow: open Terms modal
         const newCustomer = response.data;
@@ -414,9 +416,11 @@ const Customer = () => {
         toast.success('Customer Updated', `${customerName} has been updated.`);
         // Fire-and-forget email
         apiClient.post(`/customers/${selectedItem.id}/update-email`, { changes: response._changes || [] }).catch(() => {});
-        // Refetch in background
+        // Instantly show updated customer in the table
+        optimisticUpdate(prev => prev.map(c => c.id === selectedItem.id ? response.data : c));
+        // Then confirm with fresh server data
         invalidateCache(CACHE_KEY);
-        refetch();
+        await refetch();
         return;
       } else {
         throw response;
@@ -532,24 +536,18 @@ const Customer = () => {
   }, [selectedItem]);
 
   const handleManageAccountSubmit = useCallback(async () => {
-    if (manageEmailError || isCheckingManageEmail) {
-      toast.error('Error', 'Please fix the email address before submitting.');
-      return;
-    }
-    const emailChanged = manageFormData.email.toLowerCase() !== selectedItem.email.toLowerCase();
     const passwordChanged = !!manageFormData.password;
-    if (!emailChanged && !passwordChanged) {
+    if (!passwordChanged) {
       toast.info('No Changes', 'No changes were made to the account.');
       return;
     }
-    if (passwordChanged && manageFormData.password.length < 8) {
+    if (manageFormData.password.length < 8) {
       toast.error('Error', 'Password must be at least 8 characters long.');
       return;
     }
     try {
       setManageSaving(true);
       const payload = {};
-      if (emailChanged) payload.email = manageFormData.email;
       if (passwordChanged) payload.password = manageFormData.password;
 
       const response = await usersApi.update(selectedItem.user_id, payload);
@@ -918,7 +916,6 @@ const Customer = () => {
               name="name" 
               value={formData.name} 
               onChange={handleFormChange} 
-              required 
               placeholder="Enter business name" 
               submitted={submitted} 
               error={errors.name?.[0]} 
@@ -990,7 +987,6 @@ const Customer = () => {
               name="name" 
               value={formData.name} 
               onChange={handleFormChange} 
-              required 
               placeholder="Enter business name" 
               submitted={submitted} 
               error={errors.name?.[0]} 
@@ -1028,6 +1024,8 @@ const Customer = () => {
                 submitted={submitted} 
                 error={errors.email?.[0]}
                 loading={isCheckingEmail}
+                disabled={selectedItem?.has_account}
+                hint={selectedItem?.has_account ? 'Email cannot be changed for customers with an account' : ''}
               />
             </div>
             <FormInput 
@@ -1616,22 +1614,13 @@ const Customer = () => {
               </div>
             </div>
 
-            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-500/30">
-              <p className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-2">
-                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
-                Changing email or password will require email re-verification. The customer won't be able to log in until verified.
-              </p>
-            </div>
-
             <FormInput 
               label="Email" 
               name="email" 
               type="email" 
               value={manageFormData.email} 
-              onChange={handleManageAccountFormChange} 
+              disabled={true}
               placeholder="email@example.com" 
-              error={manageEmailError}
-              loading={isCheckingManageEmail}
             />
 
             <div>

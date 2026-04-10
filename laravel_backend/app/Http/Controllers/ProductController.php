@@ -492,6 +492,7 @@ class ProductController extends Controller
         try {
             $logs = StockLog::with(['product.variety'])
                 ->orderBy('created_at', 'desc')
+                ->limit(500)
                 ->get();
 
             return response()->json([

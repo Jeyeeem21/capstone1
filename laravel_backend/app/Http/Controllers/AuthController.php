@@ -769,7 +769,6 @@ class AuthController extends Controller
                 },
             ],
             'address'  => 'required|string|max:500',
-            'password' => 'required|string|min:8|confirmed',
         ], [
             'phone.regex' => 'Phone must be in format: +63XXXXXXXXXX or 09XXXXXXXXX',
         ]);
@@ -784,7 +783,6 @@ class AuthController extends Controller
             'phone'          => preg_replace('/\s+/', '', $validated['phone']),
             'email'          => $email,
             'address'        => $validated['address'],
-            'password'       => Hash::make($validated['password']),
             'code'           => $code,
             'attempts'       => 0,
         ], now()->addMinutes(15));
@@ -876,7 +874,10 @@ class AuthController extends Controller
      */
     public function registerComplete(Request $request)
     {
-        $request->validate(['email' => 'required|email']);
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
 
         $email    = strtolower(trim($request->email));
         $cacheKey = 'self_register_' . md5($email);
@@ -916,10 +917,11 @@ class AuthController extends Controller
             'first_name' => $firstName,
             'last_name'  => $lastName,
             'email'      => $email,
-            'password'   => $cached['password'],
+            'password'   => Hash::make($request->password),
             'role'       => 'customer',
             'phone'      => $cached['phone'],
             'status'     => 'active',
+            'email_verified_at' => now(),
         ]);
 
         Cache::forget($cacheKey);

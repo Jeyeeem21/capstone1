@@ -50,6 +50,7 @@ class User extends Authenticatable
         'is_archived',
         'archived_at',
         'date_hired',
+        'email_verified_at',
         'session_token',
     ];
 

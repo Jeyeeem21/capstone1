@@ -25,6 +25,7 @@ use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ContactController;
 
 // ========================================
 // Public Routes (no auth required)
@@ -74,6 +75,9 @@ Route::prefix('website-content')->group(function () {
 Route::prefix('business-settings')->group(function () {
     Route::get('/', [BusinessSettingController::class, 'index']);
 });
+
+// Contact form (public)
+Route::post('/contact/send', [ContactController::class, 'send']);
 
 // ========================================
 // Authenticated Routes (require auth:sanctum)

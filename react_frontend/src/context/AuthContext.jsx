@@ -81,8 +81,8 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Check every 15 seconds
-    sessionPollRef.current = setInterval(checkSession, 15000);
+    // Check every 60 seconds
+    sessionPollRef.current = setInterval(checkSession, 60000);
     return () => {
       if (sessionPollRef.current) clearInterval(sessionPollRef.current);
     };

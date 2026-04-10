@@ -47,5 +47,17 @@
 <p><strong>Notes:</strong> {{ $sale->notes }}</p>
 @endif
 
+@if(!empty($sale->payment_proof) && is_array($sale->payment_proof))
+<h3 style="margin-top: 20px;">Payment Proof</h3>
+<div>
+    @foreach($sale->payment_proof as $proof)
+        @php $proofPath = storage_path('app/public/' . $proof); @endphp
+        @if(file_exists($proofPath))
+            <img src="{{ $message->embed($proofPath) }}" alt="Payment Proof" style="max-width: 300px; max-height: 200px; border-radius: 8px; margin: 5px 0; border: 1px solid #ddd;" />
+        @endif
+    @endforeach
+</div>
+@endif
+
 <p>Please review and process this order.</p>
 @endsection

@@ -100,7 +100,7 @@ export const ENDPOINTS = {
   
   // Contact
   CONTACT: {
-    SEND: '/contact',
+    SEND: '/contact/send',
   },
   
   // Website Content

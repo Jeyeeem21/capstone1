@@ -32,6 +32,7 @@ class DashboardController extends Controller
                 'year' => $request->query('year') ? (int) $request->query('year') : null,
                 'year_from' => $request->query('year_from') ? (int) $request->query('year_from') : null,
                 'year_to' => $request->query('year_to') ? (int) $request->query('year_to') : null,
+                'point' => $request->query('point'),
             ];
 
             $stats = $this->dashboardService->getStats($period, $chartParams);

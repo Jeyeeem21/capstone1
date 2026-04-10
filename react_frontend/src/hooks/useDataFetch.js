@@ -17,7 +17,7 @@ const memoryCache = new Map();
 const cacheTimestamps = new Map();
 const MEMORY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for memory cache
 const STALE_TTL = 30 * 1000; // 30 seconds before background refresh
-const DEFAULT_POLL_INTERVAL = 30 * 1000; // 30 seconds — balanced sync interval
+const DEFAULT_POLL_INTERVAL = 30 * 1000; // 30s — silent background refetch to keep data real-time across browsers/roles
 
 // ── Visibility-based refetch (real-time across tabs/browsers) ──
 // When user switches back to this tab, all active hooks refetch if stale.
@@ -36,13 +36,34 @@ const attachVisibilityListener = () => {
     }
   };
 
-  const handleWindowFocus = () => {
-    activeHooks.forEach(fn => fn());
-  };
-
   document.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('focus', handleWindowFocus);
 };
+
+// ── Cross-tab cache sync via BroadcastChannel ──
+// When one tab invalidates a cache key, other tabs in the same browser
+// automatically refetch that data for instant real-time sync.
+const crossTabChannel = typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel('kjp-cache-sync')
+  : null;
+
+// Map of cacheKey → Set of refetch callbacks (for cross-tab sync)
+const crossTabHooks = new Map();
+
+if (crossTabChannel) {
+  crossTabChannel.onmessage = (event) => {
+    const { type, key } = event.data || {};
+    if (type === 'invalidate' && key) {
+      // Clear local cache for this key
+      memoryCache.delete(key);
+      cacheTimestamps.delete(key);
+      // Trigger refetch on all hooks using this cache key
+      const hooks = crossTabHooks.get(key);
+      if (hooks) {
+        hooks.forEach(fn => fn());
+      }
+    }
+  };
+}
 
 /**
  * Get data from memory cache
@@ -74,7 +95,7 @@ const setToMemoryCache = (key, data) => {
  * Also clears dashboard frontend cache so Dashboard stats refresh
  * immediately after any data change (archive, restore, soft-delete, etc.).
  */
-export const invalidateCache = (key) => {
+export const invalidateCache = (key, _fromCrossTab = false) => {
   // Clear from hook's memory cache
   memoryCache.delete(key);
   cacheTimestamps.delete(key);
@@ -92,6 +113,11 @@ export const invalidateCache = (key) => {
   // Clear dashboard frontend cache so stats update after archive/restore/delete
   apiClient.cache.removeByPrefix('dashboard-stats');
   apiClient.cache.removeByPrefix('dashboard-activity');
+
+  // Broadcast to other tabs in the same browser for instant cross-tab sync
+  if (!_fromCrossTab && crossTabChannel) {
+    try { crossTabChannel.postMessage({ type: 'invalidate', key }); } catch { /* ignore */ }
+  }
 };
 
 /**
@@ -304,8 +330,17 @@ export const useDataFetch = (endpoint, options = {}) => {
 
     activeHooks.add(refetchIfStale);
 
+    // Register for cross-tab cache sync
+    if (!crossTabHooks.has(cacheKey)) crossTabHooks.set(cacheKey, new Set());
+    const crossTabRefetch = () => {
+      fetchInProgress.current = false;
+      fetchData(false, true, true); // silent, background, force network
+    };
+    crossTabHooks.get(cacheKey).add(crossTabRefetch);
+
     return () => {
       activeHooks.delete(refetchIfStale);
+      crossTabHooks.get(cacheKey)?.delete(crossTabRefetch);
     };
   }, [enabled, cacheKey, fetchData]);
 

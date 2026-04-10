@@ -19,6 +19,7 @@ export const dashboardApi = {
     if (chartParams.year) params.set('year', chartParams.year);
     if (chartParams.yearFrom) params.set('year_from', chartParams.yearFrom);
     if (chartParams.yearTo) params.set('year_to', chartParams.yearTo);
+    if (chartParams.point) params.set('point', chartParams.point);
     const cacheKey = `dashboard-stats-${period}-${JSON.stringify(chartParams)}`;
     return apiClient.get(`${ENDPOINTS.DASHBOARD.STATS}?${params.toString()}`, {
       useCache: true,

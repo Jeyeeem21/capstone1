@@ -5,34 +5,45 @@ namespace App\Http\Resources;
 use App\Models\DryingProcess;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 
 class ProcurementBatchResource extends JsonResource
 {
+    private static ?array $individualDryingCosts = null;
+
+    /**
+     * Preload individual drying costs for all batches in a single query.
+     * Call before using ::collection().
+     */
+    public static function preloadIndividualDryingCosts(): void
+    {
+        // Sum drying_processes.total_price for procurements IN a batch,
+        // where the drying_process itself is NOT batch-level (batch_id IS NULL).
+        self::$individualDryingCosts = DB::table('drying_processes')
+            ->join('procurements', 'drying_processes.procurement_id', '=', 'procurements.id')
+            ->whereNotNull('procurements.batch_id')
+            ->whereNull('drying_processes.batch_id')
+            ->whereNull('drying_processes.deleted_at')
+            ->groupBy('procurements.batch_id')
+            ->pluck(DB::raw('SUM(drying_processes.total_price)'), 'procurements.batch_id')
+            ->map(fn($v) => (float) $v)
+            ->toArray();
+    }
+
+    public static function resetPreload(): void
+    {
+        self::$individualDryingCosts = null;
+    }
+
     public function toArray(Request $request): array
     {
-        // Calculate total drying cost: batch-level drying + individual procurement-level drying
         $batchDryingCost = (float) ($this->drying_processes_sum_total_price ?? $this->dryingProcesses?->sum('total_price') ?? 0);
 
-        // Also sum individual drying processes for procurements within this batch
-        $individualDryingCost = 0;
-        if ($this->relationLoaded('procurements')) {
-            $procIds = $this->procurements->pluck('id')->toArray();
-            if (!empty($procIds)) {
-                $individualDryingCost = (float) DryingProcess::whereIn('procurement_id', $procIds)
-                    ->whereNull('batch_id')
-                    ->whereNull('deleted_at')
-                    ->sum('total_price');
-            }
-        } else {
-            // Fallback: query via procurement IDs from the batch
-            $procIds = $this->procurements()->pluck('id')->toArray();
-            if (!empty($procIds)) {
-                $individualDryingCost = (float) DryingProcess::whereIn('procurement_id', $procIds)
-                    ->whereNull('batch_id')
-                    ->whereNull('deleted_at')
-                    ->sum('total_price');
-            }
+        // Use preloaded data instead of per-resource query
+        if (self::$individualDryingCosts === null) {
+            self::preloadIndividualDryingCosts();
         }
+        $individualDryingCost = (float) (self::$individualDryingCosts[$this->id] ?? 0);
 
         $totalDryingCost = $batchDryingCost + $individualDryingCost;
 

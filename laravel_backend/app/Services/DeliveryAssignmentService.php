@@ -23,7 +23,7 @@ class DeliveryAssignmentService
     public function getAllDeliveries(): Collection
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return DeliveryAssignment::with(['driver', 'customer', 'items'])
+            return DeliveryAssignment::with(['driver', 'customer:id,name', 'items'])
                 ->orderBy('delivery_date', 'desc')
                 ->orderBy('created_at', 'desc')
                 ->get();

@@ -8,8 +8,38 @@ use App\Models\StockLog;
 
 class SaleResource extends JsonResource
 {
+    /**
+     * Per-request cache of average costs per product (avoids N+1 StockLog queries).
+     */
+    private static ?array $avgCosts = null;
+
+    /**
+     * Pre-load average costs for all products in a single query.
+     */
+    public static function preloadAvgCosts(): void
+    {
+        $rows = StockLog::where('type', 'in')
+            ->whereNotNull('total_cost')
+            ->where('total_cost', '>', 0)
+            ->groupBy('product_id')
+            ->selectRaw('product_id, SUM(total_cost) as total_cost, SUM(quantity_change) as total_units')
+            ->get();
+
+        self::$avgCosts = [];
+        foreach ($rows as $row) {
+            self::$avgCosts[$row->product_id] = $row->total_units > 0
+                ? round($row->total_cost / $row->total_units, 2)
+                : 0;
+        }
+    }
+
     public function toArray(Request $request): array
     {
+        // Build cache on first use if not preloaded
+        if (self::$avgCosts === null) {
+            self::preloadAvgCosts();
+        }
+
         $items = $this->items->map(function ($item) {
             $product = $item->product;
             $weight = $product?->weight;
@@ -17,18 +47,10 @@ class SaleResource extends JsonResource
                 ? (intval($weight) == $weight ? intval($weight) . ' kg' : number_format($weight, 2) . ' kg')
                 : null;
 
-            // Compute average cost per unit from stock logs
+            // Use pre-computed average cost per unit
             $avgCostPerUnit = 0;
             if ($product) {
-                $stockLogs = StockLog::where('product_id', $product->id)
-                    ->where('type', 'in')
-                    ->whereNotNull('total_cost')
-                    ->where('total_cost', '>', 0)
-                    ->selectRaw('SUM(total_cost) as total_cost, SUM(quantity_change) as total_units')
-                    ->first();
-                if ($stockLogs && $stockLogs->total_units > 0) {
-                    $avgCostPerUnit = round($stockLogs->total_cost / $stockLogs->total_units, 2);
-                }
+                $avgCostPerUnit = self::$avgCosts[$product->id] ?? 0;
             }
             $totalCost = round($avgCostPerUnit * $item->quantity, 2);
             $profit = round($item->subtotal - $totalCost, 2);

@@ -55,7 +55,7 @@ class SupplierController extends Controller
         $request->merge(['phone' => $data['phone'] ?? '']);
         
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'nullable|string|max:255',
             'contact' => 'required|string|max:255',
             'phone' => [
                 'required',
@@ -123,7 +123,7 @@ class SupplierController extends Controller
         $request->merge(['phone' => $data['phone'] ?? '']);
         
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'nullable|string|max:255',
             'contact' => 'required|string|max:255',
             'phone' => [
                 'required',
@@ -257,20 +257,23 @@ class SupplierController extends Controller
         $supplier = Supplier::find($id);
         if (!$supplier) return response()->json(['success' => true]);
 
-        try {
-            $this->emailService->sendAdminAlert(
-                "New Supplier Added \u2014 {$supplier->name}",
-                'New Supplier Added',
-                "A new supplier \"{$supplier->name}\" ({$supplier->email}) has been added to the system."
-            );
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $supplier) {
+            try {
+                $emailService->sendAdminAlert(
+                    "New Supplier Added: {$supplier->name}",
+                    'New Supplier Added',
+                    "A new supplier \"{$supplier->name}\" ({$supplier->email}) has been added to the system."
+                );
 
-            $this->emailService->sendAlertTo(
-                $supplier->email,
-                'Welcome \u2014 You Have Been Added as a Supplier',
-                'Welcome to Our System',
-                "Hi {$supplier->name},\n\nYou have been added as a supplier in our system.\n\nContact: {$supplier->contact}\nEmail: {$supplier->email}\nPhone: {$supplier->phone}\n\nIf you have any questions, please don't hesitate to contact us."
-            );
-        } catch (\Throwable $e) { /* silent */ }
+                $emailService->sendAlertTo(
+                    $supplier->email,
+                    'Welcome! You Have Been Added as a Supplier',
+                    'Welcome to Our System',
+                    "Hi {$supplier->name},\n\nYou have been added as a supplier in our system.\n\nContact: {$supplier->contact}\nEmail: {$supplier->email}\nPhone: {$supplier->phone}\n\nIf you have any questions, please don't hesitate to contact us."
+                );
+            } catch (\Throwable $e) { /* silent */ }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }
@@ -288,20 +291,23 @@ class SupplierController extends Controller
 
         $changesSummary = "Changes made:\n" . implode("\n", $changes);
 
-        try {
-            $this->emailService->sendAdminAlert(
-                "Supplier Updated \u2014 {$supplier->name}",
-                'Supplier Information Updated',
-                "The supplier \"{$supplier->name}\" ({$supplier->email}) has been updated in the system.\n\n{$changesSummary}"
-            );
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $supplier, $changesSummary) {
+            try {
+                $emailService->sendAdminAlert(
+                    "Supplier Updated: {$supplier->name}",
+                    'Supplier Information Updated',
+                    "The supplier \"{$supplier->name}\" ({$supplier->email}) has been updated in the system.\n\n{$changesSummary}"
+                );
 
-            $this->emailService->sendAlertTo(
-                $supplier->email,
-                'Your Information Has Been Updated',
-                'Your Supplier Information Was Updated',
-                "Hi {$supplier->name},\n\nYour information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
-            );
-        } catch (\Throwable $e) { /* silent */ }
+                $emailService->sendAlertTo(
+                    $supplier->email,
+                    'Your Information Has Been Updated',
+                    'Your Supplier Information Was Updated',
+                    "Hi {$supplier->name},\n\nYour information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
+                );
+            } catch (\Throwable $e) { /* silent */ }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }

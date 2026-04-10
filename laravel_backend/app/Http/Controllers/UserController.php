@@ -643,9 +643,12 @@ class UserController extends Controller
     {
         $user = User::find($id);
         if ($user) {
-            try {
-                $this->emailService->sendWelcomeEmail($user);
-            } catch (\Throwable $e) { /* silent */ }
+            $emailService = $this->emailService;
+            dispatch(function () use ($emailService, $user) {
+                try {
+                    $emailService->sendWelcomeEmail($user);
+                } catch (\Throwable $e) { /* silent */ }
+            })->afterResponse();
         }
         return response()->json(['success' => true]);
     }
@@ -662,21 +665,24 @@ class UserController extends Controller
         if (empty($changes)) return response()->json(['success' => true]);
 
         $changesSummary = "Changes made:\n" . implode("\n", $changes);
+        $emailService = $this->emailService;
 
-        try {
-            $this->emailService->sendAdminAlert(
-                "User Updated — {$user->name}",
-                'User Information Updated',
-                "The user \"{$user->name}\" ({$user->email}) has been updated.\n\n{$changesSummary}"
-            );
+        dispatch(function () use ($emailService, $user, $changesSummary) {
+            try {
+                $emailService->sendAdminAlert(
+                    "User Updated: {$user->name}",
+                    'User Information Updated',
+                    "The user \"{$user->name}\" ({$user->email}) has been updated.\n\n{$changesSummary}"
+                );
 
-            $this->emailService->sendAlertTo(
-                $user->email,
-                'Your Account Information Has Been Updated',
-                'Your Account Was Updated',
-                "Hi {$user->name},\n\nYour account information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
-            );
-        } catch (\Throwable $e) { /* silent */ }
+                $emailService->sendAlertTo(
+                    $user->email,
+                    'Your Account Information Has Been Updated',
+                    'Your Account Was Updated',
+                    "Hi {$user->name},\n\nYour account information has been updated by the administrator.\n\n{$changesSummary}\n\nIf you did not expect these changes, please contact us immediately."
+                );
+            } catch (\Throwable $e) { /* silent */ }
+        })->afterResponse();
 
         return response()->json(['success' => true]);
     }

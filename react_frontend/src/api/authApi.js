@@ -182,11 +182,11 @@ export const authApi = {
   },
 
   /**
-   * Step 3 – finalise registration; creates Customer + User records and
+   * Step 3 – finalise registration; sets password, creates Customer + User records and
    * returns an auth token so the user is logged in immediately.
    */
-  registerComplete: async (email) => {
-    const response = await apiClient.post(ENDPOINTS.AUTH.REGISTER_COMPLETE, { email });
+  registerComplete: async (email, password, password_confirmation) => {
+    const response = await apiClient.post(ENDPOINTS.AUTH.REGISTER_COMPLETE, { email, password, password_confirmation });
     if (response.success && response.token) {
       setAuthToken(response.token);
     }

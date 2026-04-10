@@ -474,11 +474,12 @@ class ArchiveController extends Controller
             }
         }
 
-        // Single query: get all relevant audit entries with user
+        // Single query: get all relevant audit entries with user (limited)
         $entries = AuditTrail::with('user:id,name')
             ->whereIn('module', array_keys($auditModuleMap))
             ->whereIn('action', array_unique($auditActions))
             ->orderBy('created_at', 'desc')
+            ->limit(2000)
             ->get();
 
         $lookup = [];

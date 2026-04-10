@@ -18,7 +18,7 @@ import {
 import { Button, FormInput } from '../../../components/ui';
 import Skeleton from '../../../components/ui/Skeleton';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
-import { websiteContentApi } from '../../../api';
+import { websiteContentApi, contactApi } from '../../../api';
 import { resolveStorageUrl } from '../../../api/config';
 
 const Contact = () => {
@@ -35,6 +35,7 @@ const Contact = () => {
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   const defaultPageContent = {
     heroTag: '',
@@ -85,12 +86,29 @@ const Contact = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitError(null);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    setIsSubmitting(false);
-    setIsSubmitted(true);
+    try {
+      const result = await contactApi.send({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || undefined,
+        company: formData.company || undefined,
+        subject: formData.subject,
+        inquiry_type: formData.inquiryType,
+        message: formData.message,
+      });
+
+      if (result.success) {
+        setIsSubmitted(true);
+      } else {
+        setSubmitError(result.message || result.error || 'Failed to send message. Please try again.');
+      }
+    } catch (err) {
+      setSubmitError(err.message || 'Something went wrong. Please try again later.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactInfo = [
@@ -365,6 +383,12 @@ const Contact = () => {
                     </>
                   )}
                 </Button>
+
+                {submitError && (
+                  <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm text-center">
+                    {submitError}
+                  </div>
+                )}
               </form>
             </div>
 

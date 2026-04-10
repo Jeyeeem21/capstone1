@@ -24,7 +24,7 @@ class ProcurementService
     public function getAllProcurements(): Collection
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Procurement::with(['supplier', 'variety', 'batch:id,batch_number,status', 'dryingProcesses:id,procurement_id,sacks,quantity_kg', 'dryingBatchAllocations:id,procurement_id,sacks_taken,quantity_kg'])                ->orderBy('created_at', 'desc')
+            return Procurement::with(['supplier:id,name', 'variety:id,name,color', 'batch:id,batch_number,status', 'dryingProcesses:id,procurement_id,sacks,quantity_kg', 'dryingBatchAllocations:id,procurement_id,sacks_taken,quantity_kg'])                ->orderBy('created_at', 'desc')
                 ->get();
         });
     }

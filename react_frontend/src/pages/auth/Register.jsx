@@ -12,10 +12,11 @@ import { authApi, websiteContentApi } from '../../api';
 import { DEFAULT_LOGO } from '../../api/config';
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
-// 1  details    – fill in the registration form
+// 1  details    – fill in the registration form (no password)
 // 2  terms      – read & accept terms/privacy
 // 3  verify     – enter the 6-digit email code
-// 4  done       – success screen (auto-redirect)
+// 4  account    – set password (after email verified)
+// 5  done       – success screen (auto-redirect)
 
 const PHONE_REGEX = /^(\+63\d{10}|09\d{9})$/;
 
@@ -31,7 +32,7 @@ const Register = () => {
   }, [isAuthenticated, navigate]);
 
   // ── step state ─────────────────────────────────────────────────────────────
-  const [step, setStep] = useState('details'); // details | terms | verify | done
+  const [step, setStep] = useState('details'); // details | terms | verify | account | done
 
   // ── form data ──────────────────────────────────────────────────────────────
   const [form, setForm] = useState({
@@ -111,6 +112,10 @@ const Register = () => {
     setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
+  // ── account step state ─────────────────────────────────────────────────────
+  const [accountSubmitted, setAccountSubmitted] = useState(false);
+  const [accountErrors, setAccountErrors] = useState({});
+
   // ── client-side validation for step 1 ─────────────────────────────────────
   const validateDetails = () => {
     const errs = {};
@@ -124,11 +129,6 @@ const Register = () => {
       errs.email = ['Enter a valid email address.'];
     else if (emailTaken)              errs.email           = ['This email is already registered.'];
     if (!form.address.trim())         errs.address         = ['Address is required.'];
-    if (!form.password)               errs.password        = ['Password is required.'];
-    else if (form.password.length < 8) errs.password       = ['Minimum 8 characters.'];
-    if (!form.password_confirmation)  errs.password_confirmation = ['Please confirm your password.'];
-    else if (form.password !== form.password_confirmation)
-      errs.password_confirmation = ['Passwords do not match.'];
     return errs;
   };
 
@@ -167,11 +167,8 @@ const Register = () => {
         phone:                 form.phone.trim(),
         email:                 form.email.trim().toLowerCase(),
         address:               form.address.trim(),
-        password:              form.password,
-        password_confirmation: form.password_confirmation,
       });
       if (!res.success) {
-        // Server-side validation errors
         if (res.errors) setErrors(res.errors);
         setGlobalError(res.error || res.message || 'Failed to send verification code.');
         setStep('details');
@@ -189,7 +186,7 @@ const Register = () => {
     }
   };
 
-  // ── Verify code ────────────────────────────────────────────────────────────
+  // ── Verify code → move to password step ────────────────────────────────────
   const handleVerify = async (code) => {
     if (code.length < 6) return;
     setVerifying(true);
@@ -200,8 +197,12 @@ const Register = () => {
         setVerifyError(res.error || 'Invalid verification code.');
         return;
       }
-      // Complete registration
-      await handleComplete();
+      // Email verified — move to password step
+      setForm(prev => ({ ...prev, password: '', password_confirmation: '' }));
+      setAccountErrors({});
+      setAccountSubmitted(false);
+      setGlobalError('');
+      setStep('account');
     } catch (err) {
       setVerifyError(err.message || 'Verification failed.');
     } finally {
@@ -209,21 +210,33 @@ const Register = () => {
     }
   };
 
-  // ── Complete registration ──────────────────────────────────────────────────
-  const handleComplete = async () => {
+  // ── Set password & complete registration ───────────────────────────────────
+  const handleAccountSubmit = async () => {
+    setAccountSubmitted(true);
+    const errs = {};
+    if (!form.password) errs.password = ['Password is required.'];
+    else if (form.password.length < 8) errs.password = ['Minimum 8 characters.'];
+    if (!form.password_confirmation) errs.password_confirmation = ['Please confirm your password.'];
+    else if (form.password !== form.password_confirmation) errs.password_confirmation = ['Passwords do not match.'];
+    if (Object.keys(errs).length) { setAccountErrors(errs); return; }
+
     setCompleting(true);
+    setGlobalError('');
     try {
-      const res = await authApi.registerComplete(form.email.trim().toLowerCase());
+      const res = await authApi.registerComplete(
+        form.email.trim().toLowerCase(),
+        form.password,
+        form.password_confirmation,
+      );
       if (!res.success) {
-        setVerifyError(res.error || 'Registration failed. Please start over.');
-        setStep('details');
+        if (res.errors) setAccountErrors(res.errors);
+        setGlobalError(res.error || res.message || 'Registration failed. Please try again.');
         return;
       }
       setStep('done');
-      // Auto-redirect to customer dashboard after a short delay
       setTimeout(() => navigate('/customer/dashboard', { replace: true }), 3000);
     } catch (err) {
-      setVerifyError(err.message || 'Registration failed.');
+      setGlobalError(err.message || 'Registration failed.');
     } finally {
       setCompleting(false);
     }
@@ -241,8 +254,6 @@ const Register = () => {
         phone:                 form.phone.trim(),
         email:                 form.email.trim().toLowerCase(),
         address:               form.address.trim(),
-        password:              form.password,
-        password_confirmation: form.password_confirmation,
       });
       if (res.success) startCountdown(60);
       else setVerifyError(res.error || 'Failed to resend code.');
@@ -264,7 +275,7 @@ const Register = () => {
   };
 
   // ── helpers ────────────────────────────────────────────────────────────────
-  const fieldError = (name) => errors[name]?.[0];
+  const fieldError = (name) => errors[name]?.[0] || accountErrors[name]?.[0];
   const inputClass = (name) => {
     const hasErr = !!fieldError(name);
     return [
@@ -400,7 +411,7 @@ const Register = () => {
                   disabled={verifyCode.length < 6 || verifying || completing}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-button-500 hover:bg-button-600 text-white rounded-xl transition-colors font-medium disabled:opacity-50"
                 >
-                  {(verifying || completing) ? <><Loader2 size={16} className="animate-spin" /> Verifying…</> : <><Check size={16} /> Verify & Register</>}
+                  {(verifying || completing) ? <><Loader2 size={16} className="animate-spin" /> Verifying…</> : <><Check size={16} /> Verify & Continue</>}
                 </button>
               </div>
             </div>
@@ -408,6 +419,79 @@ const Register = () => {
             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-4">
               Code expires in 15 minutes. Check your spam folder if you don't see it.
             </p>
+          </div>
+        )}
+
+        {/* ── ACCOUNT (set password after verification) ────────────────────── */}
+        {step === 'account' && (
+          <div className="rounded-2xl shadow-xl border-2 p-8" style={{ backgroundColor: theme.bg_primary, borderColor: theme.border_color + '40' }}>
+            <div className="flex justify-center mb-5">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: '#dcfce7' }}>
+                <Lock size={32} className="text-green-600" />
+              </div>
+            </div>
+            <div className="text-center mb-6">
+              <h1 className="text-xl font-bold" style={{ color: theme.text_primary }}>Almost Done!</h1>
+              <p className="text-sm mt-1" style={{ color: theme.text_secondary }}>
+                Your email has been verified. Set a password for your account.
+              </p>
+            </div>
+
+            {globalError && (
+              <div className="mb-4 p-3 bg-red-50 border-2 border-red-200 text-red-600 text-sm rounded-xl flex items-center gap-2">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                {globalError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Password */}
+              <div>
+                <label className="flex items-center gap-1 text-sm font-semibold mb-1.5" style={{ color: theme.text_primary }}>
+                  <Lock size={14} /> Password <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input name="password" type={showPassword ? 'text' : 'password'} value={form.password}
+                    onChange={handleChange} placeholder="Minimum 8 characters"
+                    className={`${inputClass('password')} pr-12`} autoFocus />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {(accountErrors.password || fieldError('password')) && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{accountErrors.password?.[0] || fieldError('password')}</p>}
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="flex items-center gap-1 text-sm font-semibold mb-1.5" style={{ color: theme.text_primary }}>
+                  <Lock size={14} /> Confirm Password <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input name="password_confirmation" type={showConfirm ? 'text' : 'password'} value={form.password_confirmation}
+                    onChange={handleChange} placeholder="Re-enter password"
+                    className={`${inputClass('password_confirmation')} pr-12`} />
+                  <button type="button" onClick={() => setShowConfirm(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {(accountErrors.password_confirmation || fieldError('password_confirmation')) && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{accountErrors.password_confirmation?.[0] || fieldError('password_confirmation')}</p>}
+              </div>
+
+              <button
+                onClick={handleAccountSubmit}
+                disabled={completing}
+                className="w-full flex items-center justify-center gap-2 py-3 mt-2 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
+                style={{ backgroundColor: theme.button_primary, boxShadow: `0 4px 16px ${theme.button_primary}40` }}
+              >
+                {completing
+                  ? <><Loader2 size={16} className="animate-spin" /> Creating Account…</>
+                  : <><CheckCircle2 size={16} /> Create Account</>}
+              </button>
+            </div>
           </div>
         )}
 
@@ -614,42 +698,6 @@ const Register = () => {
                     placeholder="Complete business address" className={inputClass('address')} />
                 </div>
                 {fieldError('address') && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{fieldError('address')}</p>}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="flex items-center gap-1 text-sm font-semibold mb-1.5" style={{ color: theme.text_primary }}>
-                  <Lock size={14} /> Password <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input name="password" type={showPassword ? 'text' : 'password'} value={form.password}
-                    onChange={handleChange} placeholder="Minimum 8 characters"
-                    className={`${inputClass('password')} pr-12`} />
-                  <button type="button" onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {fieldError('password') && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{fieldError('password')}</p>}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label className="flex items-center gap-1 text-sm font-semibold mb-1.5" style={{ color: theme.text_primary }}>
-                  <Lock size={14} /> Confirm Password <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input name="password_confirmation" type={showConfirm ? 'text' : 'password'} value={form.password_confirmation}
-                    onChange={handleChange} placeholder="Re-enter password"
-                    className={`${inputClass('password_confirmation')} pr-12`} />
-                  <button type="button" onClick={() => setShowConfirm(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {fieldError('password_confirmation') && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{fieldError('password_confirmation')}</p>}
               </div>
 
               {/* Next */}

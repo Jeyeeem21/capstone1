@@ -199,9 +199,11 @@ const Supplier = () => {
         toast.success('Supplier Added', `${supplierName} has been added successfully.`);
         // Fire-and-forget email
         apiClient.post(`/suppliers/${response.data.id}/store-email`).catch(() => {});
-        // Refetch in background
+        // Instantly show new supplier in the table
+        optimisticUpdate(prev => [...prev, response.data]);
+        // Then confirm with fresh server data
         invalidateCache(CACHE_KEY);
-        refetch();
+        await refetch();
         return;
       } else {
         throw response;
@@ -240,9 +242,11 @@ const Supplier = () => {
         toast.success('Supplier Updated', `${supplierName} has been updated.`);
         // Fire-and-forget email
         apiClient.post(`/suppliers/${selectedItem.id}/update-email`, { changes: response._changes || [] }).catch(() => {});
-        // Refetch in background
+        // Instantly show updated supplier in the table
+        optimisticUpdate(prev => prev.map(s => s.id === selectedItem.id ? response.data : s));
+        // Then confirm with fresh server data
         invalidateCache(CACHE_KEY);
-        refetch();
+        await refetch();
         return;
       } else {
         throw response;
@@ -555,7 +559,6 @@ const Supplier = () => {
               name="name" 
               value={formData.name} 
               onChange={handleFormChange} 
-              required 
               placeholder="Enter company name" 
               submitted={submitted} 
               error={errors.name?.[0]} 
@@ -627,7 +630,6 @@ const Supplier = () => {
               name="name" 
               value={formData.name} 
               onChange={handleFormChange} 
-              required 
               placeholder="Enter company name" 
               submitted={submitted} 
               error={errors.name?.[0]} 

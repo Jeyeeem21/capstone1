@@ -30,19 +30,34 @@ class DashboardService
         $cacheKey = self::CACHE_KEY . "_{$period}_{$paramKey}";
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($period, $chartParams) {
+            $point = $chartParams['point'] ?? null;
+            $pointRange = $point ? $this->getPointDateRange($period, $chartParams, $point) : null;
+
             return [
-                'overview' => $this->getOverviewStats($period, $chartParams),
+                'overview' => $pointRange
+                    ? $this->getOverviewStatsForRange($pointRange['start'], $pointRange['end'], $pointRange['label'])
+                    : $this->getOverviewStats($period, $chartParams),
                 'revenue' => $this->getRevenueData($period, $chartParams),
                 'processing' => $this->getProcessingData($period, $chartParams),
                 'procurement' => $this->getProcurementSummary(),
                 'inventory' => $this->getInventorySummary(),
-                'top_products' => $this->getTopProducts(),
-                'recent_sales' => $this->getRecentSales(),
+                'top_products' => $pointRange
+                    ? $this->getTopProducts($pointRange['start'], $pointRange['end'])
+                    : $this->getTopProducts(),
+                'recent_sales' => $pointRange
+                    ? $this->getRecentSales($pointRange['start'], $pointRange['end'])
+                    : $this->getRecentSales(),
                 'low_stock' => $this->getLowStockProducts(),
-                'payment_breakdown' => $this->getPaymentBreakdown($period, $chartParams),
-                'status_breakdown' => $this->getOrderStatusBreakdown($period, $chartParams),
+                'payment_breakdown' => $pointRange
+                    ? $this->getPaymentBreakdownForRange($pointRange['start'], $pointRange['end'])
+                    : $this->getPaymentBreakdown($period, $chartParams),
+                'status_breakdown' => $pointRange
+                    ? $this->getOrderStatusBreakdownForRange($pointRange['start'], $pointRange['end'])
+                    : $this->getOrderStatusBreakdown($period, $chartParams),
                 'pipeline' => $this->getPipelineSummary(),
                 'period' => $period,
+                'point' => $point,
+                'point_label' => $pointRange['label'] ?? null,
                 'generated_at' => now()->toISOString(),
             ];
         });
@@ -542,6 +557,220 @@ class DashboardService
     }
 
     /**
+     * Resolve a chart point to a specific date range within the period scope.
+     */
+    private function getPointDateRange(string $period, array $chartParams, string $point): ?array
+    {
+        $now = Carbon::now();
+        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        if ($period === 'daily') {
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            $day = (int) $point;
+            $daysInMonth = Carbon::create($targetYear, $targetMonth, 1)->daysInMonth;
+            if ($day < 1 || $day > $daysInMonth) return null;
+            $date = Carbon::create($targetYear, $targetMonth, $day);
+            $monthName = $months[$targetMonth - 1];
+            return [
+                'start' => $date->copy()->startOfDay(),
+                'end' => $date->copy()->endOfDay(),
+                'label' => "{$monthName} {$day}, {$targetYear}",
+            ];
+        }
+
+        if ($period === 'weekly') {
+            $targetYear = $now->year;
+            $targetMonth = $now->month;
+            if (!empty($chartParams['month'])) {
+                $parts = explode('-', $chartParams['month']);
+                if (count($parts) === 2) {
+                    $targetYear = (int) $parts[0];
+                    $targetMonth = (int) $parts[1];
+                }
+            }
+            $weeks = $this->getWeeksInMonth($targetYear, $targetMonth);
+            foreach ($weeks as $week) {
+                if ($week['label'] === $point) {
+                    return [
+                        'start' => $week['start'],
+                        'end' => $week['end'],
+                        'label' => $point,
+                    ];
+                }
+            }
+            return null;
+        }
+
+        if ($period === 'monthly') {
+            $targetYear = $chartParams['year'] ?? $now->year;
+            $monthIdx = array_search($point, $months);
+            if ($monthIdx === false) return null;
+            $month = $monthIdx + 1;
+            $start = Carbon::create($targetYear, $month, 1)->startOfDay();
+            return [
+                'start' => $start,
+                'end' => $start->copy()->endOfMonth()->endOfDay(),
+                'label' => "{$point} {$targetYear}",
+            ];
+        }
+
+        if ($period === 'bi-annually') {
+            $targetYear = $chartParams['year'] ?? $now->year;
+            if ($point === 'H1') {
+                return [
+                    'start' => Carbon::create($targetYear, 1, 1)->startOfDay(),
+                    'end' => Carbon::create($targetYear, 6, 30)->endOfDay(),
+                    'label' => "Jan - Jun {$targetYear}",
+                ];
+            }
+            if ($point === 'H2') {
+                return [
+                    'start' => Carbon::create($targetYear, 7, 1)->startOfDay(),
+                    'end' => Carbon::create($targetYear, 12, 31)->endOfDay(),
+                    'label' => "Jul - Dec {$targetYear}",
+                ];
+            }
+            return null;
+        }
+
+        if ($period === 'annually') {
+            $year = (int) $point;
+            if ($year < 1900 || $year > 2100) return null;
+            return [
+                'start' => Carbon::create($year, 1, 1)->startOfDay(),
+                'end' => Carbon::create($year, 12, 31)->endOfDay(),
+                'label' => (string) $year,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Overview stats for a specific date range (when chart point is selected).
+     */
+    private function getOverviewStatsForRange(Carbon $start, Carbon $end, string $label): array
+    {
+        $completedStatuses = ['delivered', 'completed'];
+
+        $currentStats = Sale::selectRaw('COUNT(*) as order_count, COALESCE(SUM(total), 0) as revenue')
+            ->whereIn('status', $completedStatuses)
+            ->whereBetween('created_at', [$start, $end])
+            ->first();
+
+        $currentRevenue = (float) $currentStats->revenue;
+        $currentOrders = (int) $currentStats->order_count;
+
+        $customersInRange = Customer::whereBetween('created_at', [$start, $end])->count();
+        $totalCustomers = Customer::count();
+        $totalProducts = Product::count();
+        $activeProducts = Product::where('status', 'active')->count();
+        $totalStock = (int) Product::sum('stocks');
+
+        $totalItemsSold = (int) SaleItem::whereHas('sale', function ($q) use ($completedStatuses, $start, $end) {
+            $q->whereIn('status', $completedStatuses)->whereBetween('created_at', [$start, $end]);
+        })->sum('quantity');
+
+        return [
+            'total_revenue' => $currentRevenue,
+            'total_orders' => $currentOrders,
+            'revenue_trend' => null,
+            'orders_trend' => null,
+            'total_customers' => $totalCustomers,
+            'new_customers' => $customersInRange,
+            'customers_trend' => null,
+            'total_products' => $totalProducts,
+            'active_products' => $activeProducts,
+            'total_stock' => $totalStock,
+            'total_items_sold' => $totalItemsSold,
+            'avg_order_value' => $currentOrders > 0 ? round($currentRevenue / $currentOrders, 2) : 0,
+            'period_label' => $label,
+            'trend_label' => null,
+        ];
+    }
+
+    /**
+     * Payment breakdown for a specific date range.
+     */
+    private function getPaymentBreakdownForRange(Carbon $start, Carbon $end): array
+    {
+        $completedStatuses = ['delivered', 'completed'];
+
+        return Sale::selectRaw("payment_method, COUNT(*) as count, SUM(total) as total_amount")
+            ->whereIn('status', $completedStatuses)
+            ->whereBetween('created_at', [$start, $end])
+            ->groupBy('payment_method')
+            ->get()
+            ->map(function ($row) {
+                $label = match ($row->payment_method) {
+                    'cash' => 'Cash',
+                    'gcash' => 'GCash',
+                    'cod' => 'COD',
+                    'pay_later' => 'Pay Later',
+                    default => ucfirst($row->payment_method ?? 'Cash'),
+                };
+                $color = match ($row->payment_method) {
+                    'cash' => '#22c55e',
+                    'gcash' => '#3b82f6',
+                    'cod' => '#f59e0b',
+                    'pay_later' => '#8b5cf6',
+                    default => '#6b7280',
+                };
+                return [
+                    'name' => $label,
+                    'value' => (int) $row->count,
+                    'amount' => round((float) $row->total_amount, 2),
+                    'color' => $color,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Order status breakdown for a specific date range.
+     */
+    private function getOrderStatusBreakdownForRange(Carbon $start, Carbon $end): array
+    {
+        $statuses = [
+            'pending' => ['label' => 'Pending', 'color' => '#f59e0b'],
+            'processing' => ['label' => 'Processing', 'color' => '#3b82f6'],
+            'shipped' => ['label' => 'Shipped', 'color' => '#8b5cf6'],
+            'delivered' => ['label' => 'Delivered', 'color' => '#22c55e'],
+            'completed' => ['label' => 'Completed', 'color' => '#10b981'],
+            'returned' => ['label' => 'Returned', 'color' => '#f97316'],
+            'cancelled' => ['label' => 'Cancelled', 'color' => '#ef4444'],
+            'voided' => ['label' => 'Voided', 'color' => '#6b7280'],
+        ];
+
+        $counts = Sale::selectRaw("status, COUNT(*) as count")
+            ->whereBetween('created_at', [$start, $end])
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        $result = [];
+        foreach ($statuses as $key => $meta) {
+            if (isset($counts[$key]) && $counts[$key] > 0) {
+                $result[] = [
+                    'name' => $meta['label'],
+                    'value' => (int) $counts[$key],
+                    'color' => $meta['color'],
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Helper: scope a query builder by period + chartParams on created_at
      */
     private function scopeQueryByPeriod($query, string $period, array $chartParams)
@@ -661,12 +890,17 @@ class DashboardService
     /**
      * Top selling products
      */
-    private function getTopProducts(): array
+    private function getTopProducts(?Carbon $start = null, ?Carbon $end = null): array
     {
         $completedStatuses = ['delivered', 'completed'];
 
         return SaleItem::selectRaw('product_id, SUM(quantity) as total_qty, SUM(subtotal) as total_revenue')
-            ->whereHas('sale', fn($q) => $q->whereIn('status', $completedStatuses))
+            ->whereHas('sale', function ($q) use ($completedStatuses, $start, $end) {
+                $q->whereIn('status', $completedStatuses);
+                if ($start && $end) {
+                    $q->whereBetween('created_at', [$start, $end]);
+                }
+            })
             ->groupBy('product_id')
             ->orderByDesc('total_revenue')
             ->limit(5)
@@ -690,11 +924,14 @@ class DashboardService
     /**
      * Most recent sales
      */
-    private function getRecentSales(): array
+    private function getRecentSales(?Carbon $start = null, ?Carbon $end = null): array
     {
-        return Sale::with(['customer:id,name', 'items'])
-            ->orderBy('created_at', 'desc')
-            ->limit(8)
+        $query = Sale::with(['customer:id,name', 'items']);
+        if ($start && $end) {
+            $query->whereBetween('created_at', [$start, $end]);
+        }
+        return $query->orderBy('created_at', 'desc')
+            ->limit($start && $end ? 20 : 8)
             ->get()
             ->map(function ($sale) {
                 return [
@@ -721,7 +958,7 @@ class DashboardService
      */
     private function getLowStockProducts(): array
     {
-        return Product::where('status', 'active')
+        return Product::with('variety')->where('status', 'active')
             ->where(function ($q) {
                 $q->where('stocks', '<=', 0)
                     ->orWhereColumn('stocks', '<=', 'stock_floor');

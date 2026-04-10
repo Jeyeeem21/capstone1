@@ -21,7 +21,7 @@ class SaleService
     public function getAllSales()
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Sale::with(['customer', 'items.product.variety'])
+            return Sale::with(['customer:id,name', 'items.product.variety'])
                 ->orderBy('created_at', 'desc')
                 ->get();
         });

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, DollarSign, ShoppingCart, Users, Package,
   TrendingUp, AlertTriangle, RefreshCw, Activity,
   Truck, Settings2, Droplets, ArrowRight, Clock,
-  ShoppingBag, Layers, X
+  ShoppingBag, Layers, X, Filter
 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import {
@@ -57,8 +57,9 @@ const Dashboard = () => {
     if (period === 'daily' || period === 'weekly') params.month = chartMonth;
     if (period === 'monthly' || period === 'bi-annually') params.year = chartYear;
     if (period === 'annually') { params.yearFrom = chartYearFrom; params.yearTo = chartYearTo; }
+    if (activeChartPoint) params.point = activeChartPoint;
     return params;
-  }, [period, chartMonth, chartYear, chartYearFrom, chartYearTo]);
+  }, [period, chartMonth, chartYear, chartYearFrom, chartYearTo, activeChartPoint]);
 
   // Fetch dashboard data
   const fetchData = useCallback(async (selectedPeriod, selectedChartParams = {}) => {
@@ -82,14 +83,15 @@ const Dashboard = () => {
     fetchData(period, chartParams);
   }, [period, chartParams, fetchData]);
 
-  // Realtime polling — refresh every 5s when tab is visible
+  // Refresh when tab becomes visible again (instead of constant polling)
   useEffect(() => {
-    const interval = setInterval(() => {
+    const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         fetchData(period, chartParams);
       }
-    }, 5000);
-    return () => clearInterval(interval);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [period, chartParams, fetchData]);
 
   const handleRefresh = async () => {
@@ -113,6 +115,18 @@ const Dashboard = () => {
   const paymentBreakdown = stats?.payment_breakdown || [];
   const statusBreakdown = stats?.status_breakdown || [];
   const pipeline = stats?.pipeline || {};
+  const pointLabel = stats?.point_label || activeChartPoint;
+
+  // Clear all chart filters
+  const clearChartFilter = () => {
+    setActiveChartPoint(null);
+    setPeriod('monthly');
+    const d = new Date();
+    setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    setChartYear(d.getFullYear());
+    setChartYearFrom(d.getFullYear() - 4);
+    setChartYearTo(d.getFullYear());
+  };
 
   // Format currency
   const fmt = (val) => `₱${Number(val || 0).toLocaleString()}`;
@@ -206,6 +220,30 @@ const Dashboard = () => {
           {refreshing ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
+
+      {/* ==================== FILTER INDICATOR (sticky) ==================== */}
+      {activeChartPoint && (
+        <div className="sticky top-0 z-30 mb-4">
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-200 dark:border-blue-700 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2">
+              <Filter size={15} className="text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                Filtered: <span className="text-blue-900 dark:text-blue-100">{pointLabel}</span>
+              </span>
+              <span className="text-xs text-blue-500 dark:text-blue-400">
+                — Cards, tables & charts below reflect this selection
+              </span>
+            </div>
+            <button
+              onClick={clearChartFilter}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+            >
+              <X size={14} />
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ==================== STATS CARDS ==================== */}
       {loading ? (
@@ -325,7 +363,7 @@ const Dashboard = () => {
                 <div className="flex items-center gap-2 flex-wrap">
                   {(activeChartPoint || period !== 'monthly' || chartYear !== new Date().getFullYear()) && (
                     <button
-                      onClick={() => { setActiveChartPoint(null); setPeriod('monthly'); const d = new Date(); setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setChartYear(d.getFullYear()); setChartYearFrom(d.getFullYear() - 4); setChartYearTo(d.getFullYear()); }}
+                      onClick={clearChartFilter}
                       className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                       title="Clear chart filter"
                     >
@@ -375,10 +413,10 @@ const Dashboard = () => {
                   )}
                 </div>
               }
-              onDotClick={(point) => setActiveChartPoint(point)}
+              onDotClick={(point) => setActiveChartPoint(prev => prev === point ? null : point)}
               activePoint={activeChartPoint}
               summaryStats={[
-                { label: 'Period Revenue', value: fmt(overview.total_revenue), color: 'text-primary-600 dark:text-primary-400' },
+                { label: activeChartPoint ? 'Filtered Revenue' : 'Period Revenue', value: fmt(overview.total_revenue), color: 'text-primary-600 dark:text-primary-400' },
                 { label: 'Avg Order', value: fmt(overview.avg_order_value), color: 'text-primary-600 dark:text-primary-400' },
                 { label: 'Items Sold', value: (overview.total_items_sold || 0).toLocaleString(), color: 'text-green-600 dark:text-green-400' },
               ]}
@@ -387,7 +425,7 @@ const Dashboard = () => {
           <div className="space-y-4">
             <DonutChart
               title="Payment Methods"
-              subtitle="Breakdown by type"
+              subtitle={activeChartPoint ? `Filtered: ${pointLabel}` : 'Breakdown by type'}
               data={paymentBreakdown}
               centerValue={paymentBreakdown.reduce((s, p) => s + p.value, 0)}
               centerLabel="Orders"
@@ -400,7 +438,7 @@ const Dashboard = () => {
             />
             <DonutChart
               title="Order Status"
-              subtitle="All order outcomes"
+              subtitle={activeChartPoint ? `Filtered: ${pointLabel}` : 'All order outcomes'}
               data={statusBreakdown}
               centerValue={statusBreakdown.reduce((s, p) => s + p.value, 0)}
               centerLabel="Total"
@@ -501,7 +539,7 @@ const Dashboard = () => {
         <div className="mb-6">
           <BarChart
             title="Top Selling Products"
-            subtitle="Best performers by revenue"
+            subtitle={activeChartPoint ? `Filtered: ${pointLabel}` : 'Best performers by revenue'}
             data={topProductsBarData}
             bars={[
               { dataKey: 'revenue', name: 'Revenue (₱)', color: themeColors.button },
@@ -519,12 +557,12 @@ const Dashboard = () => {
         <div className="mb-6">
           <DataTable
             title="Recent Sales"
-            subtitle="Latest transactions"
+            subtitle={activeChartPoint ? `Filtered: ${pointLabel}` : 'Latest transactions'}
             columns={recentSalesColumns}
             data={recentSales}
             searchable={false}
-            pagination={false}
-            defaultItemsPerPage={8}
+            pagination={activeChartPoint ? true : false}
+            defaultItemsPerPage={activeChartPoint ? 10 : 8}
           />
         </div>
       )}

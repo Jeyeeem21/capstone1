@@ -59,13 +59,15 @@ class DatabaseBackupController extends Controller
                     fwrite($handle, "DROP TABLE IF EXISTS `{$table}`;\n");
                     fwrite($handle, $createStatement . ";\n\n");
                     
-                    // Get table data
-                    $rows = DB::table($table)->get();
-                    
-                    if ($rows->count() > 0) {
-                        fwrite($handle, "-- --------------------------------------------------------\n");
-                        fwrite($handle, "-- Dumping data for table `{$table}`\n");
-                        fwrite($handle, "-- --------------------------------------------------------\n\n");
+                    // Get table data using chunking to prevent memory exhaustion
+                    $hasData = false;
+                    DB::table($table)->orderBy(DB::raw('1'))->chunk(500, function ($rows) use ($handle, &$hasData, $table) {
+                        if (!$hasData) {
+                            fwrite($handle, "-- --------------------------------------------------------\n");
+                            fwrite($handle, "-- Dumping data for table `{$table}`\n");
+                            fwrite($handle, "-- --------------------------------------------------------\n\n");
+                            $hasData = true;
+                        }
                         
                         foreach ($rows as $row) {
                             $rowArray = (array) $row;
@@ -82,6 +84,8 @@ class DatabaseBackupController extends Controller
                             
                             fwrite($handle, "INSERT INTO `{$table}` ({$columnsList}) VALUES ({$valuesList});\n");
                         }
+                    });
+                    if ($hasData) {
                         fwrite($handle, "\n");
                     }
                 }
@@ -194,17 +198,19 @@ class DatabaseBackupController extends Controller
         }
 
         foreach ($exportTables as $table) {
-            $rows = DB::table($table)->get();
-            if ($rows->isEmpty()) continue;
+            $firstRow = DB::table($table)->first();
+            if (!$firstRow) continue;
 
             $csv = fopen('php://temp', 'r+');
             // Header row
-            $columns = array_keys((array) $rows->first());
+            $columns = array_keys((array) $firstRow);
             fputcsv($csv, $columns);
-            // Data rows
-            foreach ($rows as $row) {
-                fputcsv($csv, array_values((array) $row));
-            }
+            // Data rows with chunking
+            DB::table($table)->orderBy(DB::raw('1'))->chunk(500, function ($rows) use ($csv) {
+                foreach ($rows as $row) {
+                    fputcsv($csv, array_values((array) $row));
+                }
+            });
             rewind($csv);
             $csvContent = stream_get_contents($csv);
             fclose($csv);
@@ -259,20 +265,48 @@ class DatabaseBackupController extends Controller
 
         DB::beginTransaction();
         try {
+            $batch = [];
             while (($row = fgetcsv($handle)) !== false) {
                 if (count($row) !== count($headers)) {
                     $errors++;
                     continue;
                 }
                 $data = array_combine($headers, $row);
-                // Convert 'NULL' strings to actual null
                 $data = array_map(fn($v) => $v === 'NULL' || $v === '' ? null : $v, $data);
+                $batch[] = $data;
                 
+                if (count($batch) >= 500) {
+                    try {
+                        DB::table($table)->insert($batch);
+                        $imported += count($batch);
+                    } catch (\Exception $e) {
+                        // Fall back to row-by-row for this batch
+                        foreach ($batch as $single) {
+                            try {
+                                DB::table($table)->insert($single);
+                                $imported++;
+                            } catch (\Exception $e2) {
+                                $errors++;
+                            }
+                        }
+                    }
+                    $batch = [];
+                }
+            }
+            // Insert remaining rows
+            if (!empty($batch)) {
                 try {
-                    DB::table($table)->insert($data);
-                    $imported++;
+                    DB::table($table)->insert($batch);
+                    $imported += count($batch);
                 } catch (\Exception $e) {
-                    $errors++;
+                    foreach ($batch as $single) {
+                        try {
+                            DB::table($table)->insert($single);
+                            $imported++;
+                        } catch (\Exception $e2) {
+                            $errors++;
+                        }
+                    }
                 }
             }
             DB::commit();

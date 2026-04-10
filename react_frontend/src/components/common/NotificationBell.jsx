@@ -149,10 +149,10 @@ const NotificationBell = ({ className = '' }) => {
     }
   }, []);
 
-  // Poll for unread count every 10 seconds
+  // Poll for unread count every 30 seconds
   useEffect(() => {
     fetchUnreadCount();
-    intervalRef.current = setInterval(fetchUnreadCount, 10000);
+    intervalRef.current = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(intervalRef.current);
   }, [fetchUnreadCount]);
 

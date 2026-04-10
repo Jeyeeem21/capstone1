@@ -13,22 +13,39 @@ class BusinessSetting extends Model
     protected $fillable = ['key', 'value', 'type'];
 
     /**
-     * Get a setting value by key (direct database query)
+     * Per-request cache of all settings (avoids repeated DB queries).
+     */
+    private static ?array $cachedSettings = null;
+
+    /**
+     * Get a setting value by key (cached — single DB query per request)
      */
     public static function getValue(string $key, $default = null)
     {
-        $setting = self::where('key', $key)->first();
-        
+        if (self::$cachedSettings === null) {
+            self::$cachedSettings = self::all()->keyBy('key')->toArray();
+        }
+
+        $setting = self::$cachedSettings[$key] ?? null;
+
         if (!$setting) {
             return $default;
         }
 
-        return match($setting->type) {
-            'boolean' => filter_var($setting->value, FILTER_VALIDATE_BOOLEAN),
-            'number' => is_numeric($setting->value) ? (float) $setting->value : $default,
-            'json' => json_decode($setting->value, true) ?? $default,
-            default => $setting->value,
+        return match($setting['type'] ?? 'string') {
+            'boolean' => filter_var($setting['value'], FILTER_VALIDATE_BOOLEAN),
+            'number' => is_numeric($setting['value']) ? (float) $setting['value'] : $default,
+            'json' => json_decode($setting['value'], true) ?? $default,
+            default => $setting['value'],
         };
+    }
+
+    /**
+     * Clear the settings cache (call after setValue)
+     */
+    public static function clearCache(): void
+    {
+        self::$cachedSettings = null;
     }
 
     /**
@@ -46,5 +63,7 @@ class BusinessSetting extends Model
             ['key' => $key],
             ['value' => $storedValue, 'type' => $type]
         );
+
+        self::clearCache();
     }
 }

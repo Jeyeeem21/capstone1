@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle, Scale, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, User, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle, Scale, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { Card, CardContent, Button, Tabs, FormInput, FormSelect, FormTextarea, useToast, SkeletonSettings } from '../../../components/ui';
 import AuditTrail from '../AuditTrail/AuditTrail';
@@ -376,13 +376,6 @@ const Settings = () => {
     }
   }, [user]);
   
-  const [notificationSettings, setNotificationSettings] = useState({
-    emailNotifications: true,
-    lowStockAlerts: true,
-    orderUpdates: true,
-    salesReports: false,
-    systemUpdates: true,
-  });
 
   // Load business settings on mount - use cached data first for instant display
   useEffect(() => {
@@ -779,6 +772,7 @@ const Settings = () => {
       const groups = [];
       daysOfWeek.forEach(day => {
         const d = hoursSchedule[day];
+        if (!d) return;
         const sig = d.closed ? 'closed' : `${d.open}-${d.close}`;
         if (groups.length > 0 && groups[groups.length - 1].sig === sig) {
           groups[groups.length - 1].end = day;
@@ -1084,6 +1078,11 @@ const Settings = () => {
   const handleEmailVerification = useCallback(async () => {
     if (!emailVerificationCode || emailVerificationCode.length !== 6) {
       setVerificationError('Please enter the 6-digit code.');
+      return;
+    }
+
+    if (verificationAttempts >= 5) {
+      setVerificationError('Too many failed attempts. Please request a new verification code.');
       return;
     }
 
@@ -1397,8 +1396,12 @@ const Settings = () => {
 
   // Skip new account password
   const handleSkipNewAccountPassword = useCallback(async () => {
-    // Clear the email_change_pending flag in database even if skipped
-    await authApi.clearEmailChangePending();
+    try {
+      // Clear the email_change_pending flag in database even if skipped
+      await authApi.clearEmailChangePending();
+    } catch {
+      // Non-critical — continue even if clearing fails
+    }
     
     // Keep SMTP warning visible since user skipped configuration
     // The warning will remain until user actually configures SMTP
@@ -1421,7 +1424,7 @@ const Settings = () => {
     toast.info('Email Change Complete', 'You can update your password later from the Security tab. Remember to configure your Gmail App Password for email notifications.');
   }, [toast, refreshUser]);
 
-  const handleSaveNotifications = () => toast.success('Notifications Updated', 'Notification preferences saved.');
+
 
   // Per-day schedule
   const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -1475,139 +1478,6 @@ const Settings = () => {
   const settingsSections = isSuperAdmin()
     ? allSettingsSections
     : allSettingsSections.filter(s => !s.superAdminOnly);
-
-  // Role Switcher Section (for demo purposes)
-  const RoleSwitcherSection = () => {
-    const handleRoleSwitch = (role) => {
-      switchRole(role);
-      toast.success('Role Switched', `You are now viewing as ${role === 'admin' ? 'Administrator' : 'Staff'}`);
-      if (role === 'staff') {
-        navigate('/secretary/pos');
-      } else if (role === 'super_admin') {
-        navigate('/superadmin/dashboard');
-      } else {
-        navigate('/admin/dashboard');
-      }
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-500/30 rounded-xl mb-6">
-          <p className="text-yellow-700 dark:text-yellow-300 text-sm">
-            <strong>Demo Mode:</strong> Use this section to test different user views. 
-            In production, users would be assigned roles through the Staff Management page.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Admin Role Card */}
-          <div 
-            className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-              user?.role === 'admin' 
-                ? 'border-button-500 bg-button-50 dark:bg-gray-700 shadow-lg' 
-                : 'border-primary-200 dark:border-primary-700 hover:border-button-300 dark:hover:border-button-700 bg-white dark:bg-gray-700'
-            }`}
-            onClick={() => handleRoleSwitch('admin')}
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className={`p-3 rounded-xl ${user?.role === 'admin' ? 'bg-button-500' : 'bg-gray-100 dark:bg-gray-600'}`}>
-                <Shield size={28} className={user?.role === 'admin' ? 'text-white' : 'text-gray-600 dark:text-gray-300'} />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Administrator</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Full system access</p>
-              </div>
-              {user?.role === 'admin' && (
-                <div className="ml-auto">
-                  <CheckCircle size={24} className="text-button-500" />
-                </div>
-              )}
-            </div>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Dashboard & Analytics
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Procurement & Processing
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Products & Inventory
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Sales & Point of Sale
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Partners & Staff Management
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Audit Trail & Settings
-              </li>
-            </ul>
-          </div>
-
-          {/* Staff Role Card */}
-          <div 
-            className={`p-6 rounded-xl border-2 cursor-pointer transition-all ${
-              user?.role === 'staff' 
-                ? 'border-button-500 bg-button-50 dark:bg-gray-700 shadow-lg' 
-                : 'border-primary-200 dark:border-primary-700 hover:border-button-300 dark:hover:border-button-700 bg-white dark:bg-gray-700'
-            }`}
-            onClick={() => handleRoleSwitch('staff')}
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className={`p-3 rounded-xl ${user?.role === 'staff' ? 'bg-button-500' : 'bg-gray-100 dark:bg-gray-600'}`}>
-                <User size={28} className={user?.role === 'staff' ? 'text-white' : 'text-gray-600 dark:text-gray-300'} />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">Staff</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Limited access</p>
-              </div>
-              {user?.role === 'staff' && (
-                <div className="ml-auto">
-                  <CheckCircle size={24} className="text-button-500" />
-                </div>
-              )}
-            </div>
-            <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Staff Dashboard (Low Stock Alerts)
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                Point of Sale Access
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-green-500" />
-                View Profile & Login History
-              </li>
-              <li className="flex items-center gap-2 text-gray-400">
-                <X size={14} className="text-red-400" />
-                Cannot edit profile
-              </li>
-              <li className="flex items-center gap-2 text-gray-400">
-                <X size={14} className="text-red-400" />
-                No access to admin features
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            <strong>Current Role:</strong> {user?.role === 'admin' ? 'Administrator' : 'Staff'} 
-            <span className="text-gray-400 ml-2">({user?.email || 'Not logged in'})</span>
-          </p>
-        </div>
-      </div>
-    );
-  };
 
   // General Settings Section - render function to avoid re-creating component
   const renderGeneralSection = () => {
@@ -2045,42 +1915,6 @@ const Settings = () => {
       </div>
     );
   };
-
-  // Notifications Section
-  const NotificationsSection = () => (
-    <div className="space-y-4">
-      {[
-        { key: 'emailNotifications', title: 'Email Notifications', description: 'Receive notifications via email' },
-        { key: 'lowStockAlerts', title: 'Low Stock Alerts', description: 'Get notified when products are running low' },
-        { key: 'orderUpdates', title: 'Order Updates', description: 'Receive updates on new and processed orders' },
-        { key: 'salesReports', title: 'Daily Sales Reports', description: 'Get daily sales summary via email' },
-        { key: 'systemUpdates', title: 'System Updates', description: 'Notifications about system maintenance' },
-      ].map((item) => (
-        <div key={item.key} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-primary-200 dark:border-primary-700 hover:border-primary-300 dark:border-primary-700 transition-colors">
-          <div>
-            <h4 className="font-semibold text-gray-800 dark:text-gray-100">{item.title}</h4>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{item.description}</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={notificationSettings[item.key]} 
-              onChange={() => setNotificationSettings({ ...notificationSettings, [item.key]: !notificationSettings[item.key] })}
-              className="sr-only peer" 
-            />
-            <div className="w-11 h-6 bg-gray-300 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white dark:bg-gray-700 dark:after:bg-gray-300 after:border-primary-300 dark:border-primary-700 dark:after:border-gray-500 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
-          </label>
-        </div>
-      ))}
-      
-      <div className="flex justify-end pt-4 border-t border-primary-200 dark:border-primary-700">
-        <Button onClick={handleSaveNotifications}>
-          <Save size={16} className="mr-1.5" />
-          Save Preferences
-        </Button>
-      </div>
-    </div>
-  );
 
   // Appearance Section
   const AppearanceSection = () => {
@@ -2620,8 +2454,9 @@ const Settings = () => {
 
     return (
       <div className="space-y-6">
-        {/* Tab Navigation - Centered */}
-        <div className="flex justify-center overflow-x-auto">
+        {/* Tab Navigation - Scrollable on mobile, centered on desktop */}
+        <div className="overflow-x-auto -mx-2 px-2 pb-1">
+          <div className="flex md:justify-center min-w-max md:min-w-0">
           <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1.5 gap-1">
             <button
               type="button"
@@ -2683,6 +2518,7 @@ const Settings = () => {
               <Scale size={16} />
               Terms & Privacy
             </button>
+          </div>
           </div>
         </div>
 
@@ -4124,7 +3960,7 @@ const Settings = () => {
               <Button variant="outline" onClick={handleCancelEmailVerification} className="flex-1">
                 Cancel
               </Button>
-              <Button onClick={handleEmailVerification} className="flex-1" disabled={emailVerificationCode.length !== 6}>
+              <Button onClick={handleEmailVerification} className="flex-1" disabled={emailVerificationCode.length !== 6 || verificationAttempts >= 5}>
                 <CheckCircle size={16} className="mr-1.5" />
                 Verify
               </Button>

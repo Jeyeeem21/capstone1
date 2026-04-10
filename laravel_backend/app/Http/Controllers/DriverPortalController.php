@@ -60,14 +60,14 @@ class DriverPortalController extends Controller
 
         if ($driver) {
             $driverId = $driver->id;
-            $deliveryAssignments = DeliveryAssignment::with(['customer', 'items'])
+            $deliveryAssignments = DeliveryAssignment::with(['customer:id,name', 'items'])
                 ->where('driver_id', $driver->id)
                 ->orderBy('delivery_date', 'desc')
                 ->get();
         }
 
         // Also get sales assigned to this driver (by name/plate text match)
-        $salesQuery = Sale::with(['customer', 'items'])
+        $salesQuery = Sale::with(['customer:id,name,address,phone', 'items'])
             ->where(function ($q) use ($user) {
                 $q->where('driver_name', $user->name);
                 if ($user->truck_plate_number) {
@@ -218,7 +218,7 @@ class DriverPortalController extends Controller
 
         // 1. Delivery Assignments
         if ($driver) {
-            $assignments = DeliveryAssignment::with(['customer', 'items'])
+            $assignments = DeliveryAssignment::with(['customer:id,name', 'items'])
                 ->where('driver_id', $driver->id)
                 ->orderBy('delivery_date', 'desc')
                 ->get();
@@ -253,7 +253,7 @@ class DriverPortalController extends Controller
         }
 
         // 2. Sales assigned to this driver (delivery OR return pickup)
-        $sales = Sale::with(['customer', 'items.product.variety'])
+        $sales = Sale::with(['customer:id,name,address,phone', 'items.product.variety'])
             ->where(function ($q) use ($user) {
                 $q->where('driver_name', $user->name)
                   ->orWhere('return_pickup_driver', $user->name);

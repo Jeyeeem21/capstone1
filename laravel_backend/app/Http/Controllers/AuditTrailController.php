@@ -48,7 +48,7 @@ class AuditTrailController extends Controller
             });
         }
 
-        $logs = $query->get();
+        $logs = $query->limit(min((int) $request->input('limit', 500), 1000))->get();
 
         return $this->successResponse(
             AuditTrailResource::collection($logs),
@@ -76,15 +76,16 @@ class AuditTrailController extends Controller
     {
         $today = now()->toDateString();
 
-        $stats = [
-            'today'    => AuditTrail::whereDate('created_at', $today)->count(),
-            'created'  => AuditTrail::where('action', 'CREATE')->count(),
-            'updated'  => AuditTrail::where('action', 'UPDATE')->count(),
-            'deleted'  => AuditTrail::where('action', 'DELETE')->count(),
-            'archived' => AuditTrail::where('action', 'ARCHIVE')->count(),
-            'restored' => AuditTrail::where('action', 'RESTORE')->count(),
-            'soft_deleted' => AuditTrail::whereIn('action', ['SOFT_DELETE', 'SOFT_DELETE_ALL'])->count(),
-        ];
+        // Single query with conditional aggregates instead of 7 separate COUNT queries
+        $stats = AuditTrail::selectRaw("
+            COUNT(CASE WHEN DATE(created_at) = ? THEN 1 END) as today,
+            COUNT(CASE WHEN action = 'CREATE' THEN 1 END) as created,
+            COUNT(CASE WHEN action = 'UPDATE' THEN 1 END) as updated,
+            COUNT(CASE WHEN action = 'DELETE' THEN 1 END) as deleted,
+            COUNT(CASE WHEN action = 'ARCHIVE' THEN 1 END) as archived,
+            COUNT(CASE WHEN action = 'RESTORE' THEN 1 END) as restored,
+            COUNT(CASE WHEN action IN ('SOFT_DELETE', 'SOFT_DELETE_ALL') THEN 1 END) as soft_deleted
+        ", [$today])->first();
 
         return $this->successResponse($stats, 'Statistics retrieved successfully');
     }
