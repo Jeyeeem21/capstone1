@@ -44,11 +44,15 @@ const DriverProfile = () => {
         const delivered = (s.delivered || 0) + (s.orders_delivered || 0) + (s.orders_completed || 0);
         const failed = (s.failed || 0) + (s.orders_returned || 0);
         const total = (s.total_assignments || 0) + (s.total_orders || 0);
-        setStats({
+        const next = {
           total_deliveries: total,
           successful_deliveries: delivered,
           failed_deliveries: failed,
           total_value_delivered: 0,
+        };
+        setStats(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+          return next;
         });
       }
     } catch (err) {

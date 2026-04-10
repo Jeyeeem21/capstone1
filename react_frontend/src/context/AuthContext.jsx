@@ -28,8 +28,12 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('session_token');
           }
         } catch {
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('session_token');
+          // If handle401() already fired (true 401), token was cleared — remove session_token too.
+          // If token is still present, this was a network/timeout error (server slow, Laragon warming up)
+          // — do NOT clear it so the user stays logged in on the next reload.
+          if (!localStorage.getItem('auth_token')) {
+            localStorage.removeItem('session_token');
+          }
         }
       }
       setLoading(false);

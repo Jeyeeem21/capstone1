@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { TrendingUp, DollarSign, ShoppingBag, FileText, CheckCircle, XCircle, Ban, RotateCcw, Receipt, Brain, User, Calendar, CreditCard, MapPin, Package, Truck, Store, StickyNote, X, Banknote, Loader2 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
@@ -10,6 +11,20 @@ import PredictiveAnalytics from './PredictiveAnalytics';
 
 const Sales = () => {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // URL-based tab state — persists on reload and is shareable as a link
+  const activeView = searchParams.get('view') || 'overview'; // 'overview' | 'predictions'
+  const activeStatusTab = searchParams.get('tab') || 'All';  // 'All' | status values
+
+  const setActiveView = useCallback((view) => {
+    setSearchParams(prev => { prev.set('view', view); return prev; }, { replace: true });
+  }, [setSearchParams]);
+
+  const setActiveStatusTab = useCallback((tab) => {
+    setSearchParams(prev => { prev.set('tab', tab); return prev; }, { replace: true });
+  }, [setSearchParams]);
+
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
   const [chartScopeActive, setChartScopeActive] = useState(false);
@@ -28,8 +43,6 @@ const Sales = () => {
   const [payCashTendered, setPayCashTendered] = useState('');
   const [payGcashRef, setPayGcashRef] = useState('');
   const [savingPay, setSavingPay] = useState(false);
-  const [activeStatusTab, setActiveStatusTab] = useState('All');
-  const [activeView, setActiveView] = useState('overview'); // 'overview' or 'predictions'
   const [payStatusFilter, setPayStatusFilter] = useState(''); // '' | 'paid' | 'not_paid'
   const [payMethodFilter, setPayMethodFilter] = useState(''); // '' | 'cash' | 'gcash' | 'cod' | 'pay_later'
 

@@ -7,6 +7,7 @@ import {
 import { Modal, FormModal } from './Modal';
 import Button from './Button';
 import { FormInput } from './FormElements';
+import AddressAutocomplete from './AddressAutocomplete';
 import { useAuth } from '../../context/AuthContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { authApi, websiteContentApi } from '../../api';
@@ -36,7 +37,7 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
 
   // ── Customer details (step 1) ──────────────────────────────────────────────
   const [customerForm, setCustomerForm] = useState({
-    name: '', contact: '', phone: '', email: '', address: '',
+    name: '', contact: '', phone: '', email: '', address: '', address_landmark: '',
   });
   const [detailErrors, setDetailErrors] = useState({});
   const [checkingEmail, setCheckingEmail] = useState(false);
@@ -221,6 +222,7 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
         phone: customerForm.phone.replace(/\s/g, ''),
         email: customerForm.email.trim().toLowerCase(),
         address: customerForm.address.trim(),
+        address_landmark: customerForm.address_landmark?.trim() || '',
       });
       if (!res.success) {
         if (res.errors) {
@@ -316,6 +318,7 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
         phone: customerForm.phone.replace(/\s/g, ''),
         email: customerForm.email.trim().toLowerCase(),
         address: customerForm.address.trim(),
+        address_landmark: customerForm.address_landmark?.trim() || '',
       });
       if (res.success) startCountdown(60);
       else setVerifyError(res.error || 'Failed to resend code.');
@@ -390,9 +393,11 @@ const RegisterModal = ({ isOpen, onClose, onSwitchToLogin }) => {
                 onChange={handleDetailChange} required placeholder="email@example.com"
                 submitted={submitted} error={detailErrors.email?.[0]} loading={checkingEmail} />
             </div>
-            <FormInput label="Address" name="address" value={customerForm.address}
-              onChange={handleDetailChange} required placeholder="Enter business address"
-              submitted={submitted} error={detailErrors.address?.[0]} />
+            <AddressAutocomplete label="Address" name="address" value={customerForm.address}
+              onChange={handleDetailChange} required
+              submitted={submitted} error={detailErrors.address?.[0]}
+              landmark={customerForm.address_landmark}
+              onLandmarkChange={handleDetailChange} />
 
             <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
               Already have an account?{' '}

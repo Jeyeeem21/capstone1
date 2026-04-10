@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { UserCheck, Users, ShoppingBag, CheckCircle, XCircle, Archive, Mail, Phone, MapPin, User, Building2, Package, ClipboardList, UserPlus, Send, ShieldCheck, Lock, Loader2, Edit, FileText, ScrollText, Eye, EyeOff, AlertTriangle, ArrowLeft, KeyRound, Shield } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable, Button } from '../../../components/ui';
+import { DataTable, StatusBadge, ActionButtons, StatsCard, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable, Button, AddressAutocomplete } from '../../../components/ui';
 import { apiClient, websiteContentApi, usersApi } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
 import { useAuth } from '../../../context/AuthContext';
@@ -283,7 +283,7 @@ const Customer = () => {
   }, [selectedItem, accountFormData, toast, refetch]);
 
   const handleAdd = useCallback(() => {
-    setFormData({ name: '', contact: '', phone: '', email: '', address: '', status: 'Active' });
+    setFormData({ name: '', contact: '', phone: '', email: '', address: '', address_landmark: '', status: 'Active' });
     setErrors({});
     setIsAddModalOpen(true);
   }, []);
@@ -295,7 +295,7 @@ const Customer = () => {
 
   const handleEdit = useCallback((item) => {
     setSelectedItem(item);
-    setFormData({ name: item.name, contact: item.contact, phone: item.phone, email: item.email, address: item.address, status: item.status });
+    setFormData({ name: item.name, contact: item.contact, phone: item.phone, email: item.email, address: item.address, address_landmark: item.address_landmark || '', status: item.status });
     setErrors({});
     setIsEditModalOpen(true);
   }, []);
@@ -955,15 +955,16 @@ const Customer = () => {
                 loading={isCheckingEmail}
               />
             </div>
-            <FormInput 
+            <AddressAutocomplete 
               label="Address" 
               name="address" 
               value={formData.address} 
               onChange={handleFormChange} 
               required 
-              placeholder="Enter business address" 
               submitted={submitted} 
-              error={errors.address?.[0]} 
+              error={errors.address?.[0]}
+              landmark={formData.address_landmark}
+              onLandmarkChange={handleFormChange}
             />
             <FormSelect 
               label="Status" 
@@ -1028,15 +1029,16 @@ const Customer = () => {
                 hint={selectedItem?.has_account ? 'Email cannot be changed for customers with an account' : ''}
               />
             </div>
-            <FormInput 
+            <AddressAutocomplete 
               label="Address" 
               name="address" 
               value={formData.address} 
               onChange={handleFormChange} 
               required 
-              placeholder="Enter business address" 
               submitted={submitted} 
-              error={errors.address?.[0]} 
+              error={errors.address?.[0]}
+              landmark={formData.address_landmark}
+              onLandmarkChange={handleFormChange}
             />
             <FormSelect 
               label="Status" 

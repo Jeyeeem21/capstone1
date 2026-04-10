@@ -127,6 +127,8 @@ class SaleController extends Controller
                 'new_customer_name' => 'nullable|string|max:255',
                 'new_customer_contact' => 'nullable|string|max:255',
                 'new_customer_email' => 'nullable|email|max:255',
+                'new_customer_address' => 'nullable|string|max:500',
+                'new_customer_landmark' => 'nullable|string|max:500',
                 'discount' => 'nullable|numeric|min:0',
                 'amount_tendered' => 'nullable|numeric|min:0',
                 'payment_method' => 'nullable|string|in:cash,gcash,cod,pay_later',
@@ -162,9 +164,11 @@ class SaleController extends Controller
             $newCustomerName = $validated['new_customer_name'] ?? null;
             $newCustomerContact = $validated['new_customer_contact'] ?? null;
             $newCustomerEmail = $validated['new_customer_email'] ?? null;
-            unset($validated['new_customer_name'], $validated['new_customer_contact'], $validated['new_customer_email']);
+            $newCustomerAddress = $validated['new_customer_address'] ?? null;
+            $newCustomerLandmark = $validated['new_customer_landmark'] ?? null;
+            unset($validated['new_customer_name'], $validated['new_customer_contact'], $validated['new_customer_email'], $validated['new_customer_address'], $validated['new_customer_landmark']);
 
-            $sale = $this->saleService->createOrder($validated, $newCustomerName, $newCustomerContact, $newCustomerEmail);
+            $sale = $this->saleService->createOrder($validated, $newCustomerName, $newCustomerContact, $newCustomerEmail, $newCustomerAddress, $newCustomerLandmark);
 
             // Log audit for inline customer creation
             if ($newCustomerName && $sale->customer_id) {

@@ -16,6 +16,7 @@ class Customer extends Model
         'phone',
         'email',
         'address',
+        'address_landmark',
         'status',
         'is_archived',
         'archived_at',

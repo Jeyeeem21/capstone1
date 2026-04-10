@@ -80,7 +80,13 @@ const StaffManagement = () => {
       if (!silent) setLoading(true);
       const response = await usersApi.getAll({ role: 'staff' });
       const data = response?.data?.data || response?.data || [];
-      setStaff(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      // Only update state if data actually changed — avoids unnecessary re-renders
+      // that reset DataTable pagination/search/sorting on every poll tick.
+      setStaff(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(list)) return prev;
+        return list;
+      });
     } catch (error) {
       console.error('Failed to fetch staff:', error);
       if (!silent) toast.error('Error', 'Failed to load staff members.');

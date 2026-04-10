@@ -35,8 +35,8 @@ export default function Profile() {
 
     // Sync active tab to URL
     useEffect(() => {
-        setSearchParams({ tab: activeTab }, { replace: true });
-    }, [activeTab]);
+        setSearchParams(prev => { prev.set('tab', activeTab); return prev; }, { replace: true });
+    }, [activeTab, setSearchParams]);
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState({

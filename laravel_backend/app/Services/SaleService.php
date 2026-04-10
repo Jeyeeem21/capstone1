@@ -30,9 +30,9 @@ class SaleService
     /**
      * Create a new order (POS — no stock deduction, starts as pending).
      */
-    public function createOrder(array $data, ?string $newCustomerName = null, ?string $newCustomerContact = null, ?string $newCustomerEmail = null): Sale
+    public function createOrder(array $data, ?string $newCustomerName = null, ?string $newCustomerContact = null, ?string $newCustomerEmail = null, ?string $newCustomerAddress = null, ?string $newCustomerLandmark = null): Sale
     {
-        return DB::transaction(function () use ($data, $newCustomerName, $newCustomerContact, $newCustomerEmail) {
+        return DB::transaction(function () use ($data, $newCustomerName, $newCustomerContact, $newCustomerEmail, $newCustomerAddress, $newCustomerLandmark) {
             // If new customer name is provided, create the customer first
             if ($newCustomerName && empty($data['customer_id'])) {
                 $customer = Customer::create([
@@ -40,7 +40,8 @@ class SaleService
                     'contact' => $newCustomerContact ?? $newCustomerName,
                     'phone' => $newCustomerContact,
                     'email' => $newCustomerEmail,
-                    'address' => null,
+                    'address' => $newCustomerAddress,
+                    'address_landmark' => $newCustomerLandmark,
                     'status' => 'Active',
                 ]);
                 $data['customer_id'] = $customer->id;

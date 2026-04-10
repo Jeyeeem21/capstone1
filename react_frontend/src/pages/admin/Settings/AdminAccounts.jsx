@@ -80,7 +80,11 @@ const AdminAccounts = () => {
       if (!silent) setLoading(true);
       const response = await usersApi.getAll({});
       const data = response?.data?.data || response?.data || [];
-      setAccounts(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setAccounts(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(list)) return prev;
+        return list;
+      });
     } catch (error) {
       console.error('Failed to fetch accounts:', error);
       if (!silent) toast.error('Error', 'Failed to load accounts.');

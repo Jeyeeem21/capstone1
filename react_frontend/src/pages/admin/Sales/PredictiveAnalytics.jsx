@@ -16,7 +16,10 @@ const PredictiveAnalytics = () => {
       if (!silent) setLoading(true);
       const response = await salesApi.getPredictions(selectedPeriod);
       if (response.success) {
-        setData(response.data);
+        setData(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(response.data)) return prev;
+          return response.data;
+        });
       }
     } catch (error) {
       if (!silent) toast.error('Prediction Error', 'Failed to load predictive analysis data.');

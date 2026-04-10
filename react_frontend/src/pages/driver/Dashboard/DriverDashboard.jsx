@@ -45,7 +45,10 @@ const DriverDashboard = () => {
     try {
       const res = await apiClient.get(ENDPOINTS.DRIVER_PORTAL.DASHBOARD);
       if (res.success) {
-        setDashboardData(res.data);
+        setDashboardData(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(res.data)) return prev;
+          return res.data;
+        });
       }
     } catch (err) {
       console.error('Failed to fetch driver dashboard:', err);

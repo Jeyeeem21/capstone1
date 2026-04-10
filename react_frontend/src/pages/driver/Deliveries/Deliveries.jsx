@@ -54,8 +54,8 @@ const Deliveries = () => {
   const [payChangeResult, setPayChangeResult] = useState(null);
 
   useEffect(() => {
-    setSearchParams({ tab: activeTab }, { replace: true });
-  }, [activeTab]);
+    setSearchParams(prev => { prev.set('tab', activeTab); return prev; }, { replace: true });
+  }, [activeTab, setSearchParams]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -65,7 +65,10 @@ const Deliveries = () => {
     try {
       const res = await apiClient.get(ENDPOINTS.DRIVER_PORTAL.MY_DELIVERIES);
       if (res.success) {
-        setDeliveries(res.data);
+        setDeliveries(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(res.data)) return prev;
+          return res.data;
+        });
       }
     } catch (err) {
       console.error('Failed to fetch deliveries:', err);

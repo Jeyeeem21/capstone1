@@ -24,8 +24,8 @@ const Inventory = () => {
 
   // Sync active tab to URL
   useEffect(() => {
-    setSearchParams({ tab: activeTab }, { replace: true });
-  }, [activeTab]);
+    setSearchParams(prev => { prev.set('tab', activeTab); return prev; }, { replace: true });
+  }, [activeTab, setSearchParams]);
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
   // In/Out chart calendar state

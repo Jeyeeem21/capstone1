@@ -12,46 +12,97 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org';
 let autocompleteTimer = null;
 
 /**
- * Search for addresses (autocomplete) via Nominatim
- * @param {string} query - Search text (e.g., "Cantil, Roxas, Oriental Mindoro")
- * @param {object} options - Optional: focus coordinates { lat, lng } to bias results
- * @returns {Promise<Array>} Array of { label, lat, lng }
+ * Strip non-geocodable parts from a PH address so Nominatim can find it.
+ *
+ * Philippine addresses often start with house/block/lot numbers, subdivision
+ * names, or street names that Nominatim doesn't have indexed, but the
+ * barangay/city/province portion is usually present. We strip the hyper-local
+ * parts and try the higher-level portion as a fallback.
+ *
+ * Examples:
+ *   "Blk 4 Apras, Brgy Sanjuan Cainta Rizal"  →  "Apras, Sanjuan, Cainta, Rizal"
+ *   "Anakpawis I, Heron St. Brgy Sanjuan Cainta Rizal"  →  "Sanjuan, Cainta, Rizal"
+ *   "bb1 bongabong oriental mindoro"  →  "bongabong oriental mindoro"
+ */
+const simplifyForGeocoding = (query) => {
+  return query
+    .replace(/\bblk\.?\s*\d+[a-z]?\b/gi, '')       // blk 4, blk4
+    .replace(/\bblock\.?\s*\d+[a-z]?\b/gi, '')      // block 4
+    .replace(/\blot\.?\s*\d+[a-z]?\b/gi, '')        // lot 4
+    .replace(/\bunit\.?\s*\d+[a-z]?\b/gi, '')       // unit 4
+    .replace(/\bbb\s*\d+\b/gi, '')                  // bb1, bb 4
+    .replace(/\b#\s*\d+[a-z]?\b/gi, '')             // #42B
+    .replace(/^\d+[a-z]?\s*,?\s*/i, '')             // leading house no. "123," or "123B"
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s,]+/, '')
+    .trim();
+};
+
+/**
+ * Parse a raw Nominatim response into our label/lat/lng format.
+ */
+const parseNominatimResults = (data) =>
+  (data || []).map(item => {
+    const addr = item.address || {};
+    const cleanLabel = item.display_name.replace(/,?\s*Philippines$/i, '').trim();
+    return {
+      label: cleanLabel,
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon),
+      region: addr.state || addr.region || '',
+      locality: addr.city || addr.town || addr.municipality || addr.county || '',
+    };
+  });
+
+/**
+ * Fetch from Nominatim with PH country filter.
+ */
+const nominatimSearch = async (rawQuery, options = {}) => {
+  const q = /philippines/i.test(rawQuery) ? rawQuery : `${rawQuery}, Philippines`;
+  const params = new URLSearchParams({ q, format: 'json', limit: 6, countrycodes: 'PH', addressdetails: 1 });
+  if (options.lat && options.lng) {
+    const off = 0.5;
+    params.append('viewbox', `${options.lng - off},${options.lat + off},${options.lng + off},${options.lat - off}`);
+    params.append('bounded', 0);
+  }
+  const res = await fetch(`${NOMINATIM_URL}/search?${params}`, { headers: { 'User-Agent': 'KJPRiceMillApp/1.0' } });
+  if (!res.ok) throw new Error('Address search failed');
+  return parseNominatimResults(await res.json());
+};
+
+/**
+ * Search for addresses (autocomplete) via Nominatim.
+ *
+ * Strategy:
+ *   1. Try the full query as typed.
+ *   2. If fewer than 2 results, also try a simplified version (block/unit/house
+ *      numbers stripped) so we still suggest city/barangay-level matches.
+ *   3. Merge both result sets (original results first), deduplicate by label.
+ *
+ * @param {string} query - Search text
+ * @param {object} options - Optional: focus coordinates { lat, lng }
+ * @returns {Promise<Array>} Array of { label, lat, lng, region, locality }
  */
 export const searchAddress = async (query, options = {}) => {
   if (!query || query.length < 3) return [];
 
   try {
-    const params = new URLSearchParams({
-      q: query,
-      format: 'json',
-      limit: 5,
-      countrycodes: 'PH',
-      addressdetails: 1,
-    });
+    const results1 = await nominatimSearch(query, options);
 
-    // Bias results near a viewbox around the focus point
-    if (options.lat && options.lng) {
-      const offset = 0.5; // ~55km bias radius
-      params.append('viewbox', `${options.lng - offset},${options.lat + offset},${options.lng + offset},${options.lat - offset}`);
-      params.append('bounded', 0);
+    // If we have good results from the original query, return them
+    if (results1.length >= 2) return results1;
+
+    // Try simplified query as fallback
+    const simplified = simplifyForGeocoding(query);
+    if (simplified && simplified !== query && simplified.length >= 3) {
+      const results2 = await nominatimSearch(simplified, options);
+      // Merge: original first, then unique simplified results
+      const seen = new Set(results1.map(r => r.label));
+      const merged = [...results1, ...results2.filter(r => !seen.has(r.label))];
+      return merged.slice(0, 6);
     }
 
-    const response = await fetch(`${NOMINATIM_URL}/search?${params}`, {
-      headers: { 'User-Agent': 'KJPRiceMillApp/1.0' },
-    });
-    if (!response.ok) throw new Error('Address search failed');
-    
-    const data = await response.json();
-    return (data || []).map(item => {
-      const addr = item.address || {};
-      return {
-        label: item.display_name,
-        lat: parseFloat(item.lat),
-        lng: parseFloat(item.lon),
-        region: addr.state || addr.region || '',
-        locality: addr.city || addr.town || addr.municipality || addr.county || '',
-      };
-    });
+    return results1;
   } catch (error) {
     console.error('Nominatim autocomplete error:', error);
     return [];

@@ -18,4 +18,5 @@ export { default as ForgotPasswordModal } from './ForgotPasswordModal';
 export { default as RegisterModal } from './RegisterModal';
 export { ToastProvider, useToast } from './Toast';
 export { FormInput, FormSelect, FormTextarea } from './FormElements';
+export { default as AddressAutocomplete } from './AddressAutocomplete';
 export { default as Skeleton, SkeletonCard, SkeletonTable, SkeletonForm, SkeletonStats, SkeletonList, SkeletonSettings, SkeletonDashboard } from './Skeleton';

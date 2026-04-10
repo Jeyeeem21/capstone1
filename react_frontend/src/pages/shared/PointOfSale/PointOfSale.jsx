@@ -16,7 +16,7 @@ const posPaymentMethods = [
 ];
 
 // customer combobox component - select existing or add new (requires name + contact or email)
-const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange, onInputChange, onContactChange, onEmailChange, customerOptions, selectedEmail, error, emailError }) => {
+const CustomerCombobox = memo(({ value, newName, newContact, newEmail, newAddress, newLandmark, onChange, onInputChange, onContactChange, onEmailChange, onAddressChange, onLandmarkChange, customerOptions, selectedEmail, error, emailError }) => {
   return (
     <div className="mb-3">
       <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
@@ -122,6 +122,30 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, onChange,
           {emailError && (
             <p className="text-[10px] text-red-500 flex items-center gap-1"><AlertCircle size={10} />{emailError}</p>
           )}
+          <div className="relative">
+            <input
+              type="text"
+              value={newAddress}
+              onChange={onAddressChange}
+              placeholder="Address (e.g. Brgy. San Jose, Cainta, Rizal)"
+              className={`w-full px-3 py-2 pl-8 text-sm border-2 rounded-lg transition-all focus:outline-none focus:ring-2 ${
+                newAddress
+                  ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:border-green-500 focus:ring-green-500/20'
+                  : 'border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20'
+              }`}
+            />
+            <MapPin size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${newAddress ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={newLandmark}
+              onChange={onLandmarkChange}
+              placeholder="Landmark/directions (optional)"
+              className="w-full px-3 py-2 pl-8 text-sm border-2 rounded-lg border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-800 hover:border-primary-400 focus:border-primary-500 focus:ring-primary-500/20 focus:outline-none focus:ring-2 transition-all"
+            />
+            <Navigation size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
         </div>
       )}
 
@@ -178,6 +202,8 @@ const PointOfSale = () => {
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerContact, setNewCustomerContact] = useState('');
   const [newCustomerEmail, setNewCustomerEmail] = useState('');
+  const [newCustomerAddress, setNewCustomerAddress] = useState('');
+  const [newCustomerLandmark, setNewCustomerLandmark] = useState('');
   const [customerError, setCustomerError] = useState('');
   const [emailError, setEmailError] = useState('');
   const emailCheckTimeout = useRef(null);
@@ -355,6 +381,8 @@ const PointOfSale = () => {
       setNewCustomerName('');
       setNewCustomerContact('');
       setNewCustomerEmail('');
+      setNewCustomerAddress('');
+      setNewCustomerLandmark('');
       setEmailError('');
       // Auto-fill delivery address from customer's saved address
       if (forDelivery) {
@@ -389,6 +417,8 @@ const PointOfSale = () => {
         setNewCustomerName('');
         setNewCustomerContact('');
         setNewCustomerEmail('');
+        setNewCustomerAddress('');
+        setNewCustomerLandmark('');
         return;
       }
       setSelectedCustomerId('');
@@ -398,6 +428,14 @@ const PointOfSale = () => {
   const handleNewCustomerContact = useCallback((e) => {
     setNewCustomerContact(e.target.value);
     setCustomerError('');
+  }, []);
+
+  const handleNewCustomerAddress = useCallback((e) => {
+    setNewCustomerAddress(e.target.value);
+  }, []);
+
+  const handleNewCustomerLandmark = useCallback((e) => {
+    setNewCustomerLandmark(e.target.value);
   }, []);
 
   const checkGcashReference = useCallback((ref) => {
@@ -561,6 +599,8 @@ const PointOfSale = () => {
     setNewCustomerName('');
     setNewCustomerContact('');
     setNewCustomerEmail('');
+    setNewCustomerAddress('');
+    setNewCustomerLandmark('');
     setCustomerError('');
     setEmailError('');
     setShowCustomerModal(true);
@@ -731,6 +771,8 @@ const PointOfSale = () => {
         if (newCustomerName) formData.append('new_customer_name', newCustomerName);
         if (newCustomerContact) formData.append('new_customer_contact', newCustomerContact);
         if (newCustomerEmail) formData.append('new_customer_email', newCustomerEmail);
+        if (newCustomerAddress) formData.append('new_customer_address', newCustomerAddress);
+        if (newCustomerLandmark) formData.append('new_customer_landmark', newCustomerLandmark);
         formData.append('payment_method', paymentMethod);
         formData.append('amount_tendered', total);
         formData.append('reference_number', gcashReference);
@@ -754,6 +796,8 @@ const PointOfSale = () => {
           new_customer_name: newCustomerName || null,
           new_customer_contact: newCustomerContact || null,
           new_customer_email: newCustomerEmail || null,
+          new_customer_address: newCustomerAddress || null,
+          new_customer_landmark: newCustomerLandmark || null,
           payment_method: paymentMethod,
           amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
           reference_number: paymentMethod === 'gcash' ? gcashReference : null,
@@ -797,6 +841,8 @@ const PointOfSale = () => {
         setNewCustomerName('');
         setNewCustomerContact('');
         setNewCustomerEmail('');
+        setNewCustomerAddress('');
+        setNewCustomerLandmark('');
         setCustomerError('');
         setEmailError('');
         setForDelivery(false);
@@ -1335,10 +1381,14 @@ const PointOfSale = () => {
                   newName={newCustomerName}
                   newContact={newCustomerContact}
                   newEmail={newCustomerEmail}
+                  newAddress={newCustomerAddress}
+                  newLandmark={newCustomerLandmark}
                   onChange={handleCustomerSelect}
                   onInputChange={handleNewCustomerInput}
                   onContactChange={handleNewCustomerContact}
                   onEmailChange={handleNewCustomerEmail}
+                  onAddressChange={handleNewCustomerAddress}
+                  onLandmarkChange={handleNewCustomerLandmark}
                   customerOptions={customerOptions}
                   selectedEmail={selectedCustomerId ? (customerOptions.find(o => o.value === selectedCustomerId)?.email || '') : ''}
                   error={customerError}

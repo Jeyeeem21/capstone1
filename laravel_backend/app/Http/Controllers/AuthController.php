@@ -768,7 +768,8 @@ class AuthController extends Controller
                     }
                 },
             ],
-            'address'  => 'required|string|max:500',
+            'address'          => 'required|string|max:500',
+            'address_landmark' => 'nullable|string|max:500',
         ], [
             'phone.regex' => 'Phone must be in format: +63XXXXXXXXXX or 09XXXXXXXXX',
         ]);
@@ -783,6 +784,7 @@ class AuthController extends Controller
             'phone'          => preg_replace('/\s+/', '', $validated['phone']),
             'email'          => $email,
             'address'        => $validated['address'],
+            'address_landmark' => $validated['address_landmark'] ?? null,
             'code'           => $code,
             'attempts'       => 0,
         ], now()->addMinutes(15));
@@ -899,13 +901,14 @@ class AuthController extends Controller
         }
 
         $customer = Customer::create([
-            'name'    => $cached['business_name'],
-            'contact' => $cached['contact_person'],
-            'phone'   => $cached['phone'],
-            'email'   => $email,
-            'address' => $cached['address'],
-            'status'  => 'Active',
-            'orders'  => 0,
+            'name'             => $cached['business_name'],
+            'contact'          => $cached['contact_person'],
+            'phone'            => $cached['phone'],
+            'email'            => $email,
+            'address'          => $cached['address'],
+            'address_landmark' => $cached['address_landmark'] ?? null,
+            'status'           => 'Active',
+            'orders'           => 0,
         ]);
 
         $nameParts = explode(' ', trim($cached['contact_person']));

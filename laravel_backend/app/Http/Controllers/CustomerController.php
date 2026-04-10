@@ -78,6 +78,7 @@ class CustomerController extends Controller
                 },
             ],
             'address' => 'required|string',
+            'address_landmark' => 'nullable|string',
             'status' => 'required|in:Active,Inactive',
         ], [
             'email.unique' => 'This email is already registered.',
@@ -160,6 +161,7 @@ class CustomerController extends Controller
                 },
             ],
             'address' => 'required|string',
+            'address_landmark' => 'nullable|string',
             'status' => 'required|in:Active,Inactive',
         ], [
             'email.unique' => 'This email is already registered.',

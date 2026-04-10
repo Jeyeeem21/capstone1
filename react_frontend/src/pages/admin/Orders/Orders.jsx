@@ -92,8 +92,8 @@ const AdminOrders = () => {
 
   // Sync active tab to URL
   useEffect(() => {
-    setSearchParams({ tab: activeStatusTab }, { replace: true });
-  }, [activeStatusTab]);
+    setSearchParams(prev => { prev.set('tab', activeStatusTab); return prev; }, { replace: true });
+  }, [activeStatusTab, setSearchParams]);
 
   // Fetch real orders from API
   const {

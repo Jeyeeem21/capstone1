@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { useTheme } from '../../context/ThemeContext';
 import { authApi, websiteContentApi } from '../../api';
+import { debouncedSearchAddress } from '../../api/openRouteService';
 import { DEFAULT_LOGO } from '../../api/config';
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ const Register = () => {
     phone:           '',
     email:           '',
     address:         '',
+    address_landmark: '',
     password:        '',
     password_confirmation: '',
   });
@@ -51,6 +53,8 @@ const Register = () => {
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
   const emailDebounce = useRef(null);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
 
   // ── terms ──────────────────────────────────────────────────────────────────
   const [legalContent, setLegalContent] = useState(null);
@@ -167,6 +171,7 @@ const Register = () => {
         phone:                 form.phone.trim(),
         email:                 form.email.trim().toLowerCase(),
         address:               form.address.trim(),
+        address_landmark:      form.address_landmark?.trim() || '',
       });
       if (!res.success) {
         if (res.errors) setErrors(res.errors);
@@ -254,6 +259,7 @@ const Register = () => {
         phone:                 form.phone.trim(),
         email:                 form.email.trim().toLowerCase(),
         address:               form.address.trim(),
+        address_landmark:      form.address_landmark?.trim() || '',
       });
       if (res.success) startCountdown(60);
       else setVerifyError(res.error || 'Failed to resend code.');
@@ -687,17 +693,76 @@ const Register = () => {
                 </div>
               </div>
 
-              {/* Address */}
+              {/* Address with Autocomplete */}
               <div>
                 <label className="flex items-center gap-1 text-sm font-semibold mb-1.5" style={{ color: theme.text_primary }}>
                   <MapPin size={14} /> Address <span className="text-red-500">*</span>
+                  <span className="ml-auto text-xs font-normal text-blue-500">🇵🇭 Philippines only</span>
                 </label>
                 <div className="relative">
-                  <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input name="address" value={form.address} onChange={handleChange}
-                    placeholder="Complete business address" className={inputClass('address')} />
+                  <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
+                  <input name="address" value={form.address} onChange={(e) => {
+                    handleChange(e);
+                    const val = e.target.value;
+                    if (val.length >= 3) {
+                      debouncedSearchAddress(val, (results) => {
+                        setAddressSuggestions(results);
+                        setShowAddressSuggestions(results.length > 0);
+                      });
+                    } else {
+                      setAddressSuggestions([]);
+                      setShowAddressSuggestions(false);
+                    }
+                  }}
+                    onFocus={() => { if (addressSuggestions.length > 0) setShowAddressSuggestions(true); }}
+                    placeholder="e.g. Brgy. San Jose, Roxas City, Capiz"
+                    autoComplete="off"
+                    className={inputClass('address')} />
+                  {showAddressSuggestions && addressSuggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {addressSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setForm(prev => ({ ...prev, address: s.label }));
+                            setShowAddressSuggestions(false);
+                            setAddressSuggestions([]);
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0 transition-colors flex items-start gap-2"
+                        >
+                          <MapPin size={14} className="text-gray-400 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-medium text-gray-800 dark:text-gray-100 leading-tight block">{s.label}</span>
+                            {s.locality && (
+                              <span className="text-xs text-gray-400">
+                                {s.locality}{s.region ? `, ${s.region}` : ''}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+                <p className="mt-1 text-xs text-gray-400">Philippine addresses only. Select from suggestions for accurate delivery computation.</p>
                 {fieldError('address') && <p className="mt-1 text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11} />{fieldError('address')}</p>}
+              </div>
+
+              {/* Landmark / Directions */}
+              <div>
+                <label className="flex items-center gap-1 text-sm font-semibold mb-1.5" style={{ color: theme.text_primary }}>
+                  <MapPin size={14} /> House/Block No. &amp; Landmark <span className="ml-1 text-xs font-normal text-gray-400">(Optional)</span>
+                </label>
+                <input
+                  name="address_landmark"
+                  value={form.address_landmark}
+                  onChange={handleChange}
+                  placeholder="e.g. Blk 4, tapat ng yellow house, looban ng Heron St."
+                  autoComplete="off"
+                  className={inputClass('address_landmark')}
+                />
+                <p className="mt-1 text-xs text-gray-400">Helps the driver find your exact location.</p>
               </div>
 
               {/* Next */}

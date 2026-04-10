@@ -44,8 +44,8 @@ const Orders = () => {
 
   // Sync active tab to URL
   useEffect(() => {
-    setSearchParams({ tab: activeTab }, { replace: true });
-  }, [activeTab]);
+    setSearchParams(prev => { prev.set('tab', activeTab); return prev; }, { replace: true });
+  }, [activeTab, setSearchParams]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
