@@ -89,16 +89,36 @@ function resolveStore(endpoint) {
  * Extract a human-readable description for the sync queue
  */
 function describeAction(method, endpoint, body) {
+  const RESOURCE_NAMES = {
+    'products': 'Product',
+    'varieties': 'Variety',
+    'customers': 'Customer',
+    'suppliers': 'Supplier',
+    'orders': 'Order',
+    'sales': 'Sale',
+    'procurements': 'Procurement',
+    'procurement-batches': 'Batch',
+    'drying-processes': 'Drying Process',
+    'processings': 'Processing',
+    'users': 'User',
+    'drivers': 'Driver',
+    'deliveries': 'Delivery',
+    'inventory': 'Inventory',
+    'settings': 'Settings',
+    'business-settings': 'Business Settings',
+    'appearance': 'Appearance',
+    'website-content': 'Website Content',
+    'notifications': 'Notification',
+    'archives': 'Archive',
+  };
+
   const parts = endpoint.split('/').filter(Boolean);
-  const resource = parts[0] || 'record';
-  
-  switch (method) {
-    case 'POST': return `Create ${resource}`;
-    case 'PUT': return `Update ${resource}`;
-    case 'PATCH': return `Update ${resource}`;
-    case 'DELETE': return `Delete ${resource}`;
-    default: return `${method} ${resource}`;
-  }
+  const resource = RESOURCE_NAMES[parts[0]] || parts[0] || 'record';
+  const verb = method === 'POST' ? 'Create'
+    : method === 'DELETE' ? 'Delete'
+    : 'Update';
+
+  return `${verb} ${resource}`;
 }
 
 // ============================================

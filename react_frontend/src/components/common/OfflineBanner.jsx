@@ -13,10 +13,13 @@ import { getPendingSyncActions } from '../../pwa/offlineDb';
 
 // Human-readable labels for queued actions
 function describeAction(action) {
+  // Use pre-built description if available
+  if (action.description) return action.description;
+
   const method = action.method?.toUpperCase();
-  const url = action.url || '';
-  const segment = url.split('/').filter(Boolean).pop() || 'item';
+  const url = action.endpoint || action.url || '';
   const resource = url.includes('orders') ? 'Order'
+    : url.includes('procurement-batches') ? 'Batch'
     : url.includes('procurement') ? 'Procurement'
     : url.includes('products') ? 'Product'
     : url.includes('customers') ? 'Customer'
@@ -27,7 +30,12 @@ function describeAction(action) {
     : url.includes('delivery') ? 'Delivery'
     : url.includes('users') ? 'User'
     : url.includes('varieties') ? 'Variety'
-    : segment;
+    : url.includes('inventory') ? 'Inventory'
+    : url.includes('settings') ? 'Settings'
+    : url.includes('appearance') ? 'Appearance'
+    : url.includes('website') ? 'Website Content'
+    : url.includes('notifications') ? 'Notification'
+    : url.split('/').filter(Boolean).pop() || 'item';
   if (method === 'POST')   return `Create ${resource}`;
   if (method === 'PUT')    return `Update ${resource}`;
   if (method === 'PATCH')  return `Update ${resource}`;
