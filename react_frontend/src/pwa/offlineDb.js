@@ -240,7 +240,7 @@ async function hashPassword(password, salt) {
  * Stores: user object + password hash (NOT the real password).
  */
 export async function cacheLoginCredentials(email, password, user) {
-  const salt = 'kjp-offline-' + email;
+  const salt = 'kjp-offline-' + email.toLowerCase();
   const passwordHash = await hashPassword(password, salt);
   const db = await getDb();
   await db.put(STORES.META, {

@@ -52,18 +52,15 @@ export const AuthProvider = ({ children }) => {
           localStorage.removeItem('session_token');
         }
       } catch {
-        // Network error — if offline restore from IndexedDB cache
-        if (!navigator.onLine) {
-          try {
-            const lastEmail = localStorage.getItem('offline_last_email');
-            if (lastEmail) {
-              const record = await getValue(STORES.META, 'offline_auth_' + lastEmail);
-              if (record?.user) setUser(record.user);
-            }
-          } catch { /* ignore */ }
-        } else if (!localStorage.getItem('auth_token')) {
-          localStorage.removeItem('session_token');
-        }
+        // Network error — restore from IndexedDB cache
+        // Don't rely on navigator.onLine (unreliable on mobile)
+        try {
+          const lastEmail = localStorage.getItem('offline_last_email');
+          if (lastEmail) {
+            const record = await getValue(STORES.META, 'offline_auth_' + lastEmail);
+            if (record?.user) setUser(record.user);
+          }
+        } catch { /* ignore */ }
       }
       setLoading(false);
     };
@@ -149,8 +146,18 @@ export const AuthProvider = ({ children }) => {
         }
         throw new Error(response.error || 'Login failed');
       } catch (err) {
-        // If it's a real server error (not network), don't fall through to offline
-        if (navigator.onLine) throw err;
+        // Check if this is a network error (fetch failed, timeout, etc.)
+        // navigator.onLine is unreliable on mobile — WiFi can be on but no internet
+        const isNetworkError = err instanceof TypeError
+          || err.message?.includes('fetch')
+          || err.message?.includes('Network')
+          || err.message?.includes('network')
+          || err.message?.includes('timeout')
+          || err.code === 'ERR_NETWORK';
+
+        // If it's a real server error (e.g. wrong password, 422), don't fall through
+        if (!isNetworkError) throw err;
+        // Otherwise fall through to offline login below
       }
     }
 
