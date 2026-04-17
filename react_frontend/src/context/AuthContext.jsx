@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi } from '../api';
 import apiClient from '../api/apiClient';
+import { clearAllData } from '../pwa/offlineDb';
 
 const AuthContext = createContext(null);
 
@@ -121,6 +122,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('session_token');
+    // Clear all offline/IndexedDB data on logout
+    try {
+      await clearAllData();
+    } catch {
+      // Ignore IndexedDB errors during logout
+    }
   }, []);
 
   // Dismiss session kicked notification

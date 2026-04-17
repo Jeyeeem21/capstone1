@@ -6,6 +6,8 @@ import { BusinessSettingsProvider, useBusinessSettings } from './context/Busines
 import { ProtectedRoute, SuperAdminRoute } from './components/auth/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './pages/NotFound';
+import OfflineBanner from './components/common/OfflineBanner';
+import PWAInstallPrompt from './components/common/PWAInstallPrompt';
 
 // Lazy-loaded layouts — only the layout for the current route is downloaded
 const MainLayout = lazy(() => import('./layouts/MainLayout'));
@@ -404,6 +406,8 @@ function App() {
         <ToastProvider>
           <BrowserRouter>
             <DynamicHead />
+            <OfflineBanner />
+            <PWAInstallPrompt />
             <SessionKickedOverlay />
             <AppRoutes />
           </BrowserRouter>

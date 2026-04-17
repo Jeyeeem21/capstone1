@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink, Link, useLocation, useSearchParams } from 'react-router-dom';
-import { Menu, X, Phone, Mail, MapPin, Clock, Facebook, Instagram, Twitter, Linkedin, ChevronUp } from 'lucide-react';
+import { Menu, X, Phone, Mail, MapPin, Clock, Facebook, Instagram, Twitter, Linkedin, ChevronUp, Download } from 'lucide-react';
 import { Button, LoginModal, ForgotPasswordModal, RegisterModal } from '../../components/ui';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
 import { DEFAULT_LOGO } from '../../api/config';
@@ -21,9 +21,31 @@ const PublicHeader = () => {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [isInstallable, setIsInstallable] = useState(false);
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { settings } = useBusinessSettings();
+
+  // Listen for PWA installability events from PWAInstallPrompt
+  useEffect(() => {
+    const onInstallable = () => setIsInstallable(true);
+    const onInstalled  = () => setIsInstallable(false);
+    // Also hide if already standalone
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstallable(false);
+      return;
+    }
+    window.addEventListener('pwa:installable', onInstallable);
+    window.addEventListener('pwa:installed',   onInstalled);
+    return () => {
+      window.removeEventListener('pwa:installable', onInstallable);
+      window.removeEventListener('pwa:installed',   onInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = () => {
+    window.dispatchEvent(new CustomEvent('pwa:show'));
+  };
 
   // Auto-open login modal when redirected with ?login=true
   useEffect(() => {
@@ -107,8 +129,21 @@ const PublicHeader = () => {
             ))}
           </nav>
 
-          {/* CTA Button */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* CTA Buttons */}
+          <div className="hidden md:flex items-center gap-2">
+            {isInstallable && (
+              <button
+                onClick={handleInstallClick}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  isScrolled
+                    ? 'bg-primary-50 dark:bg-primary-900/30 text-button-600 dark:text-button-400 hover:bg-primary-100 dark:hover:bg-primary-900/50 border border-primary-200 dark:border-primary-700'
+                    : 'bg-white/15 text-white hover:bg-white/25 border border-white/30'
+                }`}
+              >
+                <Download size={15} />
+                Install App
+              </button>
+            )}
             <Button 
               variant={isScrolled ? 'default' : 'outline'} 
               className={!isScrolled ? 'border-white text-white hover:bg-white dark:hover:bg-gray-700 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400' : ''}
@@ -117,7 +152,7 @@ const PublicHeader = () => {
               Login
             </Button>
           </div>
-
+            
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -153,7 +188,19 @@ const PublicHeader = () => {
                 {link.label}
               </NavLink>
             ))}
-            <div className="pt-2 border-t border-gray-200 dark:border-gray-600 mt-2">
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-600 mt-2 space-y-2">
+              {isInstallable && (
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleInstallClick();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary-50 dark:bg-primary-900/30 text-button-600 dark:text-button-400 border border-primary-200 dark:border-primary-700 font-semibold text-sm hover:bg-primary-100 transition-colors"
+                >
+                  <Download size={15} />
+                  Install App
+                </button>
+              )}
               <Button 
                 variant="default" 
                 className="w-full"

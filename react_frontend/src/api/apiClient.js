@@ -8,9 +8,11 @@
  * - Multi-layer caching (memory + localStorage)
  * - Auth token management
  * - Stale-while-revalidate pattern
+ * - PWA offline support (IndexedDB fallback + sync queue)
  */
 
 import { API_BASE_URL, REQUEST_CONFIG, CACHE_CONFIG } from './config';
+import { cacheApiResponse, offlineGet, offlineWrite } from '../pwa/offlineApi';
 
 // Track API availability
 let apiAvailable = null;
@@ -251,12 +253,21 @@ const apiClient = {
       }
     }
     
-    // Skip network if API is known to be unavailable
-    if (apiAvailable === false && useCache) {
+    // Skip network if API is known to be unavailable or browser is offline
+    if ((apiAvailable === false || !navigator.onLine) && useCache) {
       const cached = cache.get(effectiveCacheKey);
       if (cached?.data) {
         return { success: true, data: cached.data, fromCache: true };
       }
+    }
+
+    // If offline, try IndexedDB
+    if (!navigator.onLine) {
+      const offlineData = await offlineGet(endpoint, params);
+      if (offlineData) {
+        return offlineData;
+      }
+      return { success: false, error: 'You are offline and no cached data is available.' };
     }
     
     try {
@@ -284,6 +295,13 @@ const apiClient = {
       if (useCache && data.success !== false) {
         cache.set(effectiveCacheKey, data.data || data);
       }
+
+      // Mirror to IndexedDB for offline access
+      try {
+        await cacheApiResponse(endpoint, data);
+      } catch (_) {
+        // Non-critical — don't block the response
+      }
       
       return data;
     } catch (error) {
@@ -294,6 +312,12 @@ const apiClient = {
           return { success: true, data: cached.data, fromCache: true, error: error.message };
         }
       }
+
+      // Last resort: try IndexedDB
+      const offlineData = await offlineGet(endpoint, params);
+      if (offlineData) {
+        return { ...offlineData, error: error.message };
+      }
       
       return { success: false, error: error.message };
     }
@@ -303,6 +327,11 @@ const apiClient = {
    * POST request
    */
   post: async (endpoint, body = {}, options = {}) => {
+    // If offline, save to IndexedDB + sync queue
+    if (!navigator.onLine) {
+      return offlineWrite('POST', endpoint, body);
+    }
+
     try {
       const url = buildUrl(endpoint);
       const token = getAuthToken();
@@ -338,9 +367,16 @@ const apiClient = {
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
+
+      // Mirror created record to IndexedDB
+      try { await cacheApiResponse(endpoint, data); } catch (_) {}
       
       return data;
     } catch (error) {
+      // If network error and we're now offline, queue it
+      if (!navigator.onLine && error.message?.includes('fetch')) {
+        return offlineWrite('POST', endpoint, body);
+      }
       // Re-throw to preserve error structure including validation errors
       throw error;
     }
@@ -350,6 +386,11 @@ const apiClient = {
    * PUT request
    */
   put: async (endpoint, body = {}) => {
+    // If offline, save to IndexedDB + sync queue
+    if (!navigator.onLine) {
+      return offlineWrite('PUT', endpoint, body);
+    }
+
     try {
       const url = buildUrl(endpoint);
       const token = getAuthToken();
@@ -373,9 +414,15 @@ const apiClient = {
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
+
+      // Mirror updated record to IndexedDB
+      try { await cacheApiResponse(endpoint, data); } catch (_) {}
       
       return data;
     } catch (error) {
+      if (!navigator.onLine && error.message?.includes('fetch')) {
+        return offlineWrite('PUT', endpoint, body);
+      }
       // Re-throw to preserve error structure including validation errors
       throw error;
     }
@@ -385,6 +432,11 @@ const apiClient = {
    * PATCH request
    */
   patch: async (endpoint, body = {}) => {
+    // If offline, save to IndexedDB + sync queue
+    if (!navigator.onLine) {
+      return offlineWrite('PATCH', endpoint, body);
+    }
+
     try {
       const url = buildUrl(endpoint);
       const token = getAuthToken();
@@ -408,9 +460,15 @@ const apiClient = {
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
+
+      // Mirror updated record to IndexedDB
+      try { await cacheApiResponse(endpoint, data); } catch (_) {}
       
       return data;
     } catch (error) {
+      if (!navigator.onLine && error.message?.includes('fetch')) {
+        return offlineWrite('PATCH', endpoint, body);
+      }
       // Re-throw to preserve error structure including validation errors
       throw error;
     }
@@ -420,6 +478,11 @@ const apiClient = {
    * DELETE request
    */
   delete: async (endpoint) => {
+    // If offline, save to IndexedDB + sync queue
+    if (!navigator.onLine) {
+      return offlineWrite('DELETE', endpoint);
+    }
+
     try {
       const url = buildUrl(endpoint);
       const token = getAuthToken();
@@ -445,6 +508,9 @@ const apiClient = {
       
       return data;
     } catch (error) {
+      if (!navigator.onLine && error.message?.includes('fetch')) {
+        return offlineWrite('DELETE', endpoint);
+      }
       // Re-throw to preserve error structure including validation errors
       throw error;
     }
@@ -454,6 +520,11 @@ const apiClient = {
    * Upload file (multipart/form-data)
    */
   upload: async (endpoint, formData) => {
+    // If offline, queue the upload
+    if (!navigator.onLine) {
+      return offlineWrite('POST', endpoint, formData);
+    }
+
     try {
       const url = buildUrl(endpoint);
       const token = getAuthToken();
@@ -477,9 +548,15 @@ const apiClient = {
         error.response = { data }; // Attach the response data including validation errors
         throw error;
       }
+
+      // Mirror to IndexedDB
+      try { await cacheApiResponse(endpoint, data); } catch (_) {}
       
       return data;
     } catch (error) {
+      if (!navigator.onLine && error.message?.includes('fetch')) {
+        return offlineWrite('POST', endpoint, formData);
+      }
       // Re-throw to preserve error structure including validation errors
       throw error;
     }

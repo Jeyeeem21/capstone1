@@ -84,6 +84,11 @@ Route::post('/contact/send', [ContactController::class, 'send']);
 // ========================================
 Route::middleware('auth:sanctum')->group(function () {
 
+    // Offline Sync Routes (PWA)
+    Route::prefix('offline')->group(function () {
+        Route::post('/process-email', [\App\Http\Controllers\OfflineSyncController::class, 'processEmail']);
+    });
+
     // Dashboard Routes
     Route::prefix('dashboard')->group(function () {
         Route::get('/stats', [DashboardController::class, 'stats']);
