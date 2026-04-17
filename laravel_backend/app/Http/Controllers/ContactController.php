@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ContactMessageMail;
 use App\Models\BusinessSetting;
 use App\Models\ContactMessage;
+use App\Services\EmailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -12,6 +13,12 @@ use Illuminate\Support\Facades\RateLimiter;
 
 class ContactController extends Controller
 {
+    protected EmailService $emailService;
+
+    public function __construct(EmailService $emailService)
+    {
+        $this->emailService = $emailService;
+    }
     /**
      * Store a contact message and email it to the business.
      */
@@ -39,15 +46,17 @@ class ContactController extends Controller
 
         $contactMessage = ContactMessage::create($validated);
 
-        // Send email to business owner
+        // Send email to business owner (fire-and-forget, non-blocking)
         $businessEmail = BusinessSetting::getValue('business_email');
         if ($businessEmail) {
-            try {
-                Mail::to($businessEmail)->queue(new ContactMessageMail($contactMessage));
-            } catch (\Throwable $e) {
-                // Email sending failed, but message is saved — don't block the user
-                \Log::warning('Contact message email failed', ['error' => $e->getMessage()]);
-            }
+            $emailService = $this->emailService;
+            dispatch(function () use ($emailService, $businessEmail, $contactMessage) {
+                try {
+                    $emailService->sendContactEmail($businessEmail, $contactMessage);
+                } catch (\Throwable $e) {
+                    \Log::warning('Contact message email failed', ['error' => $e->getMessage()]);
+                }
+            })->afterResponse();
         }
 
         return response()->json([

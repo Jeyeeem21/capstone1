@@ -87,6 +87,9 @@ class BusinessSettingController extends Controller
                 // SMTP / Email settings
                 'smtp_password' => 'nullable|string|max:255',
                 'current_password' => 'nullable|string', // Required when changing business_email
+                // GCash Payment settings
+                'gcash_name' => 'nullable|string|max:100',
+                'gcash_number' => 'nullable|string|max:20',
             ]);
 
             // Don't overwrite smtp_password if user sent the masked placeholder
@@ -309,6 +312,34 @@ class BusinessSettingController extends Controller
             return $this->validationErrorResponse($e->errors());
         } catch (\Exception $e) {
             return $this->serverErrorResponse('Failed to upload logo: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Upload GCash QR code image
+     */
+    public function uploadGcashQr(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'gcash_qr' => 'required|file|mimes:png,jpg,jpeg,webp|max:5120',
+            ]);
+
+            if (!$request->hasFile('gcash_qr')) {
+                return $this->errorResponse('No file uploaded', 400);
+            }
+
+            $qrUrl = $this->settingService->uploadGcashQr($request->file('gcash_qr'));
+
+            $this->logAudit('UPDATE', 'Business Settings', 'Uploaded GCash QR code', [
+                'qr_url' => $qrUrl,
+            ]);
+
+            return $this->successResponse(['qr_url' => $qrUrl], 'GCash QR code uploaded successfully');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->validationErrorResponse($e->errors());
+        } catch (\Exception $e) {
+            return $this->serverErrorResponse('Failed to upload GCash QR code: ' . $e->getMessage());
         }
     }
 

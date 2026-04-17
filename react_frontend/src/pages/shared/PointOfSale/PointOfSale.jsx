@@ -18,8 +18,8 @@ const posPaymentMethods = [
 // customer combobox component - select existing or add new (requires name + contact or email)
 const CustomerCombobox = memo(({ value, newName, newContact, newEmail, newAddress, newLandmark, onChange, onInputChange, onContactChange, onEmailChange, onAddressChange, onLandmarkChange, customerOptions, selectedEmail, error, emailError }) => {
   return (
-    <div className="mb-3">
-      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
+    <div className="mb-2">
+      <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-1.5 uppercase tracking-wide">
         <User size={14} className="text-gray-400" />
         Customer <span className="text-red-500">*</span>
       </label>
@@ -59,7 +59,7 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, newAddres
       )}
 
       {/* OR divider */}
-      <div className="flex items-center gap-2 my-2">
+      <div className="flex items-center gap-2 my-1.5">
         <div className="flex-1 h-px bg-gray-200"></div>
         <span className="text-[10px] text-gray-400 uppercase font-medium">or add new</span>
         <div className="flex-1 h-px bg-gray-200"></div>
@@ -88,7 +88,7 @@ const CustomerCombobox = memo(({ value, newName, newContact, newEmail, newAddres
 
       {/* Contact & Email fields - shown when adding new customer */}
       {newName && (
-        <div className="mt-2 space-y-2">
+        <div className="mt-1.5 space-y-1.5">
           <div className="relative">
             <input
               type="text"
@@ -331,7 +331,7 @@ const PointOfSale = () => {
 
   // Fetch real data from API
   const { data: productsRaw, loading: productsLoading, refetch: refetchProducts } = useDataFetch('/products');
-  const { data: salesRaw, refetch: refetchSales } = useDataFetch('/sales');
+  const { data: salesRaw, refetch: refetchSales, optimisticUpdate: optimisticUpdateSales } = useDataFetch('/sales');
   const { data: varietiesRaw } = useDataFetch('/varieties');
   const { data: customersRaw, refetch: refetchCustomers } = useDataFetch('/customers');
 
@@ -558,6 +558,8 @@ const PointOfSale = () => {
       const payload = { reason: voidReason, admin_password: voidPassword };
       const response = await apiClient.post(`/sales/${selectedVoidTxn.saleId}/void`, payload);
       if (response.success) {
+        // Optimistic: mark as voided instantly
+        optimisticUpdateSales(prev => prev.map(s => s.id === selectedVoidTxn.saleId ? { ...s, status: 'voided' } : s));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetchSales();
@@ -903,9 +905,9 @@ const PointOfSale = () => {
         icon={Monitor}
       />
 
-      <div className="flex gap-6" style={{ height: 'calc(100vh - 200px)', minHeight: '540px' }}>
+      <div className="flex gap-4 lg:gap-6" style={{ height: 'calc(100vh - 200px)', minHeight: '540px' }}>
         {/* Products Section - scrollable */}
-        <div className="lg:col-span-2 flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4 flex flex-col overflow-hidden">
+        <div className="flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 p-4 flex flex-col overflow-hidden">
           {/* Search and Variety Filter */}
           <div className="flex flex-col sm:flex-row gap-3 mb-4 pb-4 border-b-2 border-primary-100 dark:border-primary-800 shrink-0">
             <div className="relative flex-1">
@@ -935,7 +937,7 @@ const PointOfSale = () => {
           
           {/* Products Grid - scrollable */}
           <div className="flex-1 overflow-y-auto min-h-0">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-3">
               {productsLoading && products.length === 0 ? (
                 Array.from({ length: 9 }).map((_, i) => (
                   <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-200 dark:border-primary-700 shadow-sm p-3 text-center animate-pulse">
@@ -979,7 +981,7 @@ const PointOfSale = () => {
         </div>
 
         {/* Cart Section - fixed, fills height */}
-        <div className="hidden lg:flex lg:flex-col w-80 xl:w-96 shrink-0">
+        <div className="hidden lg:flex lg:flex-col w-72 xl:w-96 shrink-0">
           <div className="bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30 overflow-hidden flex flex-col h-full">
             {/* Cart Header */}
             <div className="p-4 bg-gradient-to-r from-button-500 to-button-600 text-white border-b-2 border-button-600 shrink-0">
@@ -1027,6 +1029,7 @@ const PointOfSale = () => {
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
+                            onWheel={(e) => e.target.blur()}
                             className="w-10 text-center text-xs font-bold border border-primary-200 dark:border-primary-700 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-400 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                           />
                           <Button variant="outline" size="xs" onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}>
@@ -1352,24 +1355,24 @@ const PointOfSale = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowCustomerModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700 max-h-[90vh] flex flex-col">
               {/* Header */}
-              <div className="p-5 bg-gradient-to-r from-button-500 to-button-600 text-white shrink-0">
+              <div className="p-4 bg-gradient-to-r from-button-500 to-button-600 text-white shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <User size={20} />
                   Customer Information
                 </h3>
-                <p className="text-sm text-white/80 mt-1">Select an existing customer or add a new one</p>
+                <p className="text-xs text-white/80 mt-0.5">Select an existing customer or add a new one</p>
               </div>
 
-              <div className="p-5">
+              <div className="p-4 overflow-y-auto flex-1 min-h-0">
                 {/* Order Summary */}
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2.5 mb-3">
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-500 dark:text-gray-400">Items</span>
                     <span className="font-medium text-gray-800 dark:text-gray-100">{totalItems} items</span>
                   </div>
-                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-1.5 mt-1.5">
                     <span className="font-bold text-gray-800 dark:text-gray-100">Total</span>
                     <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{total.toLocaleString()}</span>
                   </div>
@@ -1397,7 +1400,7 @@ const PointOfSale = () => {
 
                 {/* Delivery Address × shown when For Delivery is toggled on */}
                 {forDelivery && (
-                  <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border-2 border-orange-200 dark:border-orange-700">
+                  <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl border-2 border-orange-200 dark:border-orange-700">
                     <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
                       <Truck size={14} className="text-orange-500" />
                       Delivery Address <span className="text-red-500">*</span>
@@ -1486,6 +1489,7 @@ const PointOfSale = () => {
                                   const val = e.target.value;
                                   if (val === '' || parseFloat(val) >= 0) setDistanceKm(val);
                                 }}
+                                onWheel={(e) => e.target.blur()}
                                 min="0"
                                 step="0.1"
                                 placeholder="0"
@@ -1540,7 +1544,7 @@ const PointOfSale = () => {
               </div>
 
               {/* Footer */}
-              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
+              <div className="p-3 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
                   onClick={() => setShowCustomerModal(false)}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
@@ -1564,7 +1568,7 @@ const PointOfSale = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowPaymentModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700">
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
               {/* Header */}
               <div className={`p-5 text-white shrink-0 ${paymentMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : paymentMethod === 'pay_later' ? 'bg-gradient-to-r from-purple-500 to-purple-600' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -1576,6 +1580,9 @@ const PointOfSale = () => {
                 </p>
               </div>
 
+              <div className={`${paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number) ? 'flex' : ''}`}>
+              {/* Left side: form content */}
+              <div className="flex-1 min-w-0">
               <div className="p-5">
                 {/* Order Summary */}
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
@@ -1638,6 +1645,7 @@ const PointOfSale = () => {
                           type="number"
                           value={cashTendered}
                           onChange={(e) => setCashTendered(e.target.value)}
+                          onWheel={(e) => e.target.blur()}
                           placeholder="0.00"
                           className="w-full pl-8 pr-4 py-3 text-lg font-bold border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-700 dark:text-gray-100"
                           autoFocus
@@ -1808,6 +1816,35 @@ const PointOfSale = () => {
                   </>
                 )}
               </div>
+              </div>{/* end left-side flex-1 */}
+
+              {/* Right side: GCash QR Code & Info Panel */}
+              {paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number) && (
+                <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4">
+                  <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide text-center">Send Payment Here</h4>
+                  {businessSettings.gcash_qr && (
+                    <div className="w-48 h-48 bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden shadow-lg">
+                      <img src={businessSettings.gcash_qr} alt="GCash QR Code" className="w-full h-full object-contain p-2" />
+                    </div>
+                  )}
+                  {businessSettings.gcash_name && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">Account Name</p>
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{businessSettings.gcash_name}</p>
+                    </div>
+                  )}
+                  {businessSettings.gcash_number && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">GCash Number</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wider">{businessSettings.gcash_number}</p>
+                    </div>
+                  )}
+                  <div className="mt-auto pt-2">
+                    <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center">Scan the QR code or send to the number above, then enter the reference number.</p>
+                  </div>
+                </div>
+              )}
+              </div>{/* end flex wrapper */}
 
               {/* Footer */}
               <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">

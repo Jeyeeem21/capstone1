@@ -35,7 +35,7 @@
             <p>If you did not make this change, please contact your administrator immediately.</p>
         </div>
         <div class="footer">
-            <p>This is an automated message from KJP Ricemill Management System.</p>
+            <p>This is an automated message from {{ \App\Models\BusinessSetting::getValue('business_name', config('app.name')) }} Management System.</p>
         </div>
     </div>
 </body>

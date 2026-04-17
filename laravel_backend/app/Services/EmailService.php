@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Mail\AdminAlert;
+use App\Mail\CustomerLoginNotification;
 use App\Mail\DailyUnpaidOrdersReport;
 use App\Mail\DeliveryAssigned;
 use App\Mail\DeliveryAssignmentNotification;
@@ -13,6 +15,7 @@ use App\Mail\ProcurementAdminNotification;
 use App\Mail\ProcurementNotification;
 use App\Mail\VerificationCode;
 use App\Mail\WelcomeAccount;
+use App\Jobs\SendEmail;
 use App\Models\BusinessSetting;
 use App\Models\DeliveryAssignment;
 use App\Models\Procurement;
@@ -79,25 +82,8 @@ class EmailService
      */
     private function sendSafely(string $to, $mailable): void
     {
-        try {
-            // Check if SMTP credentials are configured
-            $password = BusinessSetting::getValue('smtp_password');
-            $email = BusinessSetting::getValue('business_email');
-            if (!$email || !$password) {
-                Log::info("Email skipped (SMTP not configured): {$to}");
-                return;
-            }
-
-            $this->configureMailer();
-
-            $fromEmail = BusinessSetting::getValue('business_email', config('mail.from.address'));
-            $fromName = $this->getBusinessName();
-            $mailable->from($fromEmail, $fromName);
-
-            Mail::to($to)->send($mailable);
-        } catch (\Exception $e) {
-            Log::warning("Email failed to send to {$to}: " . $e->getMessage());
-        }
+        // Save to DB queue + spawn background worker — zero blocking
+        SendEmail::dispatchAndProcess($to, $mailable);
     }
 
     /**
@@ -156,40 +142,9 @@ class EmailService
         $adminEmail = $this->getAdminEmail();
         if (!$adminEmail) return;
 
-        $businessName = $this->getBusinessName();
-        $this->configureMailer();
+        $mailable = (new AdminAlert($heading, $body, $this->getBusinessName()))->subject($subject);
 
-        $mailable = new class($subject, $heading, $body, $businessName) extends \Illuminate\Mail\Mailable {
-            use \Illuminate\Bus\Queueable, \Illuminate\Queue\SerializesModels;
-            public string $heading;
-            public string $body;
-            public string $businessName;
-            public function __construct(
-                string $subject,
-                string $heading,
-                string $body,
-                string $businessName,
-            ) {
-                $this->subject = $subject;
-                $this->heading = $heading;
-                $this->body = $body;
-                $this->businessName = $businessName;
-            }
-            public function envelope(): \Illuminate\Mail\Mailables\Envelope {
-                return new \Illuminate\Mail\Mailables\Envelope(subject: $this->subject);
-            }
-            public function content(): \Illuminate\Mail\Mailables\Content {
-                return new \Illuminate\Mail\Mailables\Content(
-                    view: 'emails.admin-alert',
-                    with: [
-                        'heading' => $this->heading,
-                        'body'    => $this->body,
-                    ]
-                );
-            }
-        };
-
-        Mail::to($adminEmail)->send($mailable);
+        SendEmail::dispatchAndProcess($adminEmail, $mailable);
     }
 
     /**
@@ -199,36 +154,9 @@ class EmailService
     {
         if (!$toEmail) return;
 
-        $this->configureMailer();
+        $mailable = (new AdminAlert($heading, $body))->subject($subject);
 
-        $mailable = new class($subject, $heading, $body) extends \Illuminate\Mail\Mailable {
-            use \Illuminate\Bus\Queueable, \Illuminate\Queue\SerializesModels;
-            public string $heading;
-            public string $body;
-            public function __construct(
-                string $subject,
-                string $heading,
-                string $body,
-            ) {
-                $this->subject = $subject;
-                $this->heading = $heading;
-                $this->body = $body;
-            }
-            public function envelope(): \Illuminate\Mail\Mailables\Envelope {
-                return new \Illuminate\Mail\Mailables\Envelope(subject: $this->subject);
-            }
-            public function content(): \Illuminate\Mail\Mailables\Content {
-                return new \Illuminate\Mail\Mailables\Content(
-                    view: 'emails.admin-alert',
-                    with: [
-                        'heading' => $this->heading,
-                        'body'    => $this->body,
-                    ]
-                );
-            }
-        };
-
-        Mail::to($toEmail)->send($mailable);
+        SendEmail::dispatchAndProcess($toEmail, $mailable);
     }
 
     /**
@@ -273,26 +201,7 @@ class EmailService
 
         $businessName = $this->getBusinessName();
 
-        $this->sendSafely($user->email, new class($user, $ipAddress, $businessName) extends \Illuminate\Mail\Mailable {
-            use \Illuminate\Bus\Queueable, \Illuminate\Queue\SerializesModels;
-            public User $user;
-            public string $ipAddress;
-            public string $businessName;
-            public function __construct(User $user, string $ipAddress, string $businessName) {
-                $this->user = $user;
-                $this->ipAddress = $ipAddress;
-                $this->businessName = $businessName;
-            }
-            public function envelope(): \Illuminate\Mail\Mailables\Envelope {
-                return new \Illuminate\Mail\Mailables\Envelope(subject: 'Login Alert — ' . $this->businessName);
-            }
-            public function content(): \Illuminate\Mail\Mailables\Content {
-                return new \Illuminate\Mail\Mailables\Content(
-                    view: 'emails.customer-login-notification',
-                    with: ['user' => $this->user, 'ipAddress' => $this->ipAddress]
-                );
-            }
-        });
+        $this->sendSafely($user->email, new CustomerLoginNotification($user, $ipAddress, $businessName));
     }
 
     /**
@@ -327,26 +236,19 @@ class EmailService
     }
 
     /**
-     * Email all admins and super admins when a procurement purchase is created.
+     * Email the business owner / super admin when a procurement purchase is created.
      */
     public function sendProcurementToAdmin(Procurement $procurement): void
     {
+        $adminEmail = $this->getAdminEmail();
+        if (!$adminEmail) return;
+
         $procurement->load(['supplier', 'variety']);
-
-        $adminUsers = User::whereIn('role', [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN])
-            ->where('status', 'active')
-            ->whereNotNull('email')
-            ->get();
-
-        $mailable = new ProcurementAdminNotification($procurement);
-
-        foreach ($adminUsers as $admin) {
-            $this->sendSafely($admin->email, clone $mailable);
-        }
+        $this->sendSafely($adminEmail, new ProcurementAdminNotification($procurement));
     }
 
     /**
-     * Send daily unpaid orders report to all admins and super admins.
+     * Send daily unpaid orders report to the business owner / super admin.
      */
     public function sendDailyUnpaidOrdersReport(): void
     {
@@ -358,18 +260,11 @@ class EmailService
 
         if ($unpaidOrders->isEmpty()) return;
 
+        $adminEmail = $this->getAdminEmail();
+        if (!$adminEmail) return;
+
         $totalUnpaid = $unpaidOrders->sum('total');
-        $mailable = new DailyUnpaidOrdersReport($unpaidOrders, $totalUnpaid);
-
-        // Send to all active admins and super admins
-        $adminUsers = User::whereIn('role', [User::ROLE_SUPER_ADMIN, User::ROLE_ADMIN])
-            ->where('status', 'active')
-            ->whereNotNull('email')
-            ->get();
-
-        foreach ($adminUsers as $admin) {
-            $this->sendSafely($admin->email, clone $mailable);
-        }
+        $this->sendSafely($adminEmail, new DailyUnpaidOrdersReport($unpaidOrders, $totalUnpaid));
     }
 
     /**
@@ -414,5 +309,13 @@ class EmailService
     public function sendPasswordResetCode(string $email, string $code, string $name): void
     {
         $this->sendSafely($email, new \App\Mail\PasswordResetCode($code, $name));
+    }
+
+    /**
+     * Send contact form email to business owner.
+     */
+    public function sendContactEmail(string $toEmail, \App\Models\ContactMessage $contactMessage): void
+    {
+        $this->sendSafely($toEmail, new \App\Mail\ContactMessageMail($contactMessage));
     }
 }

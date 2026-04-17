@@ -1,6 +1,6 @@
 ﻿import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Warehouse, Package, AlertTriangle, XCircle, Box, Tag, Scale, Hash, DollarSign, Calendar, Trash2, ShoppingCart, Settings2, TrendingUp, TrendingDown, ArrowDownUp, BarChart3, Layers, Minus, Plus, RotateCcw, ArrowUpRight, ArrowDownRight, Receipt, Percent } from 'lucide-react';
+import { Warehouse, Package, AlertTriangle, XCircle, Box, Tag, Scale, Hash, DollarSign, Calendar, Trash2, ShoppingCart, Settings2, TrendingUp, TrendingDown, ArrowDownUp, BarChart3, Layers, Minus, Plus, RotateCcw, ArrowUpRight, ArrowDownRight, Receipt, Percent, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, BarChart, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable, Button } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -28,6 +28,7 @@ const Inventory = () => {
   }, [activeTab, setSearchParams]);
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartScopeActive, setChartScopeActive] = useState(false);
   // In/Out chart calendar state
   const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
@@ -35,13 +36,12 @@ const Inventory = () => {
   const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
   const [growthChartPeriod, setGrowthChartPeriod] = useState('daily');
   const [activeGrowthChartPoint, setActiveGrowthChartPoint] = useState(null);
+  const [growthChartScopeActive, setGrowthChartScopeActive] = useState(false);
   // Growth chart calendar state
   const [growthChartMonth, setGrowthChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [growthChartYear, setGrowthChartYear] = useState(() => new Date().getFullYear());
   const [growthChartYearFrom, setGrowthChartYearFrom] = useState(() => new Date().getFullYear() - 4);
   const [growthChartYearTo, setGrowthChartYearTo] = useState(() => new Date().getFullYear());
-  const [productGrowth, setProductGrowth] = useState(null);
-  const [loadingProductGrowth, setLoadingProductGrowth] = useState(false);
   const [growthCustomStart, setGrowthCustomStart] = useState('');
   const [growthCustomEnd, setGrowthCustomEnd] = useState('');
 
@@ -54,6 +54,10 @@ const Inventory = () => {
   const [isFloorModalOpen, setIsFloorModalOpen] = useState(false);
   const [isCostDetailOpen, setIsCostDetailOpen] = useState(false);
   const [selectedCostRecord, setSelectedCostRecord] = useState(null);
+  const [isMovementDetailOpen, setIsMovementDetailOpen] = useState(false);
+  const [selectedMovementGroup, setSelectedMovementGroup] = useState([]);
+  const [isGrowthDetailOpen, setIsGrowthDetailOpen] = useState(false);
+  const [selectedGrowthProduct, setSelectedGrowthProduct] = useState(null);
   const [processingDetails, setProcessingDetails] = useState([]);
   const [loadingProcessingDetail, setLoadingProcessingDetail] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -120,30 +124,6 @@ const Inventory = () => {
     cacheKey: '/sales',
     initialData: [],
   });
-
-  // Fetch per-product growth when period or custom dates change
-  useEffect(() => {
-    // For custom period, only fetch when both dates are provided
-    if (growthChartPeriod === 'custom' && (!growthCustomStart || !growthCustomEnd)) return;
-    const fetchProductGrowth = async () => {
-      setLoadingProductGrowth(true);
-      try {
-        let url = `/sales/product-growth?period=${growthChartPeriod}`;
-        if (growthChartPeriod === 'custom' && growthCustomStart && growthCustomEnd) {
-          url += `&custom_start=${growthCustomStart}&custom_end=${growthCustomEnd}`;
-        }
-        const response = await apiClient.get(url);
-        if (response.success && response.data) {
-          setProductGrowth(response.data);
-        }
-      } catch (error) {
-        console.error('Error fetching product growth:', error);
-      } finally {
-        setLoadingProductGrowth(false);
-      }
-    };
-    fetchProductGrowth();
-  }, [growthChartPeriod, growthCustomStart, growthCustomEnd]);
 
   // Variety options for dropdown (variety)
   const varietyOptions = useMemo(() => {
@@ -663,10 +643,87 @@ const Inventory = () => {
   }, [activeChartPoint, chartPeriod, chartMonth, chartYear, getWeeksInMonth]);
 
   const chartFilteredStockLogs = useMemo(() => {
+    if (!chartScopeActive && !activeChartPoint) return stockLogs;
     const scoped = stockLogs.filter(isInOutInScope);
     if (!activeChartPoint) return scoped;
     return scoped.filter(matchesInOutChartPoint);
-  }, [stockLogs, isInOutInScope, activeChartPoint, matchesInOutChartPoint]);
+  }, [stockLogs, isInOutInScope, activeChartPoint, matchesInOutChartPoint, chartScopeActive]);
+
+  // ─── Aggregate stock logs by product + type + period bucket ──────
+  const aggregatedStockLogs = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Build a bucket key for each log based on chartPeriod
+    const getBucketKey = (log) => {
+      if (!log.created_at) return null;
+      const d = new Date(log.created_at);
+      if (chartPeriod === 'daily') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (chartPeriod === 'weekly') {
+        const [y, m] = chartMonth.split('-').map(Number);
+        const weeks = getWeeksInMonth(y, m - 1);
+        const match = weeks.find(w => d >= w.start && d <= new Date(w.end.getFullYear(), w.end.getMonth(), w.end.getDate(), 23, 59, 59));
+        return match ? match.label : `${d.getFullYear()}-W?`;
+      }
+      if (chartPeriod === 'monthly') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (chartPeriod === 'bi-annually') return `${d.getFullYear()}-${d.getMonth() < 6 ? 'H1' : 'H2'}`;
+      if (chartPeriod === 'annually') return `${d.getFullYear()}`;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const getBucketLabel = (log) => {
+      if (!log.created_at) return '';
+      const d = new Date(log.created_at);
+      if (chartPeriod === 'daily') return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+      if (chartPeriod === 'weekly') {
+        const [y, m] = chartMonth.split('-').map(Number);
+        const weeks = getWeeksInMonth(y, m - 1);
+        const match = weeks.find(w => d >= w.start && d <= new Date(w.end.getFullYear(), w.end.getMonth(), w.end.getDate(), 23, 59, 59));
+        return match ? `${match.label}, ${y}` : '';
+      }
+      if (chartPeriod === 'monthly') return `${months[d.getMonth()]} ${d.getFullYear()}`;
+      if (chartPeriod === 'bi-annually') return `${d.getMonth() < 6 ? 'H1' : 'H2'} ${d.getFullYear()} (${d.getMonth() < 6 ? 'Jan - Jun' : 'Jul - Dec'})`;
+      if (chartPeriod === 'annually') return `${d.getFullYear()}`;
+      return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    };
+
+    const groups = {};
+    chartFilteredStockLogs.forEach(log => {
+      const bucket = getBucketKey(log);
+      if (!bucket) return;
+      const key = `${log.product_id}_${log.type}_${bucket}`;
+      if (!groups[key]) {
+        groups[key] = {
+          _groupKey: key,
+          product_id: log.product_id,
+          product_name: log.product_name,
+          variety_name: log.variety_name,
+          variety_color: log.variety_color,
+          type: log.type,
+          bucket,
+          bucket_label: getBucketLabel(log),
+          quantity_change: 0,
+          kg_amount: 0,
+          total_cost: 0,
+          movement_count: 0,
+          _logs: [],
+          // Keep the source_type breakdown
+          _sourceTypes: {},
+          created_at: log.created_at,
+        };
+      }
+      const g = groups[key];
+      g.quantity_change += log.quantity_change || 0;
+      g.kg_amount += log.kg_amount ? parseFloat(log.kg_amount) : 0;
+      g.total_cost += log.total_cost || 0;
+      g.movement_count += 1;
+      g._logs.push(log);
+      if (log.source_type) g._sourceTypes[log.source_type] = (g._sourceTypes[log.source_type] || 0) + 1;
+      // Keep earliest created_at for sorting
+      if (new Date(log.created_at) < new Date(g.created_at)) g.created_at = log.created_at;
+    });
+
+    return Object.values(groups).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }, [chartFilteredStockLogs, chartPeriod, chartMonth, getWeeksInMonth]);
 
   const inOutChartData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -778,12 +835,13 @@ const Inventory = () => {
   // In/Out: Stock distributed by variety (donut) — filtered by scope + activeChartPoint
   const varietyDistribution = useMemo(() => {
     const map = {};
+    const scopeActive = chartScopeActive || activeChartPoint;
     const logsToUse = stockLogs.length > 0 ? stockLogs.filter(l => l.type === 'in') : [];
 
     if (logsToUse.length > 0) {
       logsToUse.forEach(log => {
-        if (!isInOutInScope(log)) return;
-        if (!matchesInOutChartPoint(log)) return;
+        if (scopeActive && !isInOutInScope(log)) return;
+        if (scopeActive && !matchesInOutChartPoint(log)) return;
         const variety = log.variety_name || 'Unknown';
         if (!map[variety]) map[variety] = { name: variety, value: 0 };
         map[variety].value += log.quantity_change;
@@ -799,16 +857,17 @@ const Inventory = () => {
     }
 
     return Object.values(map).filter(v => v.value > 0).sort((a, b) => b.value - a.value);
-  }, [stockLogs, completedProcessings, isInOutInScope, matchesInOutChartPoint]);
+  }, [stockLogs, completedProcessings, isInOutInScope, matchesInOutChartPoint, chartScopeActive, activeChartPoint]);
 
   // In/Out: Product breakdown donut — filtered by scope + activeChartPoint
   const productBreakdown = useMemo(() => {
     const colors = ['#22c55e', '#3b82f6', '#eab308', '#f97316', '#8b5cf6'];
     const map = {};
+    const scopeActive = chartScopeActive || activeChartPoint;
 
     stockLogs.filter(l => l.type === 'in').forEach(log => {
-      if (!isInOutInScope(log)) return;
-      if (!matchesInOutChartPoint(log)) return;
+      if (scopeActive && !isInOutInScope(log)) return;
+      if (scopeActive && !matchesInOutChartPoint(log)) return;
       const name = log.product_name || 'Unknown';
       if (!map[name]) map[name] = { name, value: 0 };
       map[name].value += log.quantity_change;
@@ -819,21 +878,22 @@ const Inventory = () => {
       .sort((a, b) => b.value - a.value)
       .slice(0, 5)
       .map((item, idx) => ({ ...item, color: colors[idx % colors.length] }));
-  }, [stockLogs, isInOutInScope, matchesInOutChartPoint]);
+  }, [stockLogs, isInOutInScope, matchesInOutChartPoint, chartScopeActive, activeChartPoint]);
 
   // In/Out stats — filtered by scope + activeChartPoint
   const inOutStats = useMemo(() => {
     let totalIn = 0, totalOut = 0, inCount = 0, outCount = 0;
+    const scopeActive = chartScopeActive || activeChartPoint;
 
     stockLogs.forEach(log => {
-      if (!isInOutInScope(log)) return;
-      if (!matchesInOutChartPoint(log)) return;
+      if (scopeActive && !isInOutInScope(log)) return;
+      if (scopeActive && !matchesInOutChartPoint(log)) return;
       if (log.type === 'in') { totalIn += log.quantity_change; inCount++; }
       else { totalOut += log.quantity_change; outCount++; }
     });
 
     return { totalIn, totalOut, inCount, outCount, netChange: totalIn - totalOut };
-  }, [stockLogs, isInOutInScope, matchesInOutChartPoint]);
+  }, [stockLogs, isInOutInScope, matchesInOutChartPoint, chartScopeActive, activeChartPoint]);
 
   // ─── Cost Records: Distribution logs with cost data ──────
   const costRecords = useMemo(() => {
@@ -847,7 +907,7 @@ const Inventory = () => {
       };
     });
 
-    return chartFilteredStockLogs
+    return stockLogs
       .filter(l => l.type === 'in' && l.total_cost !== null && l.total_cost !== undefined)
       .map(log => {
         const product = productMap[log.product_id];
@@ -864,7 +924,7 @@ const Inventory = () => {
           product_unit: product?.unit || null,
         };
       });
-  }, [chartFilteredStockLogs, products]);
+  }, [stockLogs, products]);
 
   const costStats = useMemo(() => {
     if (costRecords.length === 0) return { totalCost: 0, avgCostPerUnit: 0, avgProfitPerUnit: 0, avgMargin: 0, totalUnits: 0, totalProfit: 0 };
@@ -882,7 +942,7 @@ const Inventory = () => {
   }, [costRecords]);
 
   // ─── Growth Analysis: Sales-based growth over time ──────
-  const completedSales = useMemo(() => sales.filter(s => s.status === 'completed'), [sales]);
+  const completedSales = useMemo(() => sales.filter(s => s.status === 'completed' || s.status === 'delivered'), [sales]);
 
   // Chart data — matches Procurement pattern: { name, value, quantity }
   const growthChartData = useMemo(() => {
@@ -987,6 +1047,159 @@ const Inventory = () => {
     return { totalRevenue, totalTransactions, totalUnitsSold, avgTransaction };
   }, [completedSales]);
 
+  // ─── Computed Product Growth (frontend, like In/Out) ──────
+  // Compares the "current" period vs "previous" period per product.
+  // When a chart dot is clicked (activeGrowthChartPoint), that specific segment vs its predecessor.
+  // Otherwise defaults to today vs yesterday / this week vs last week / etc.
+  const computedProductGrowth = useMemo(() => {
+    const now = new Date();
+    let currentStart, currentEnd, previousStart, previousEnd;
+
+    if (growthChartPeriod === 'custom' && growthCustomStart && growthCustomEnd) {
+      currentStart = new Date(growthCustomStart + 'T00:00:00');
+      currentEnd = new Date(growthCustomEnd + 'T23:59:59');
+      const duration = Math.ceil((currentEnd - currentStart) / (1000 * 60 * 60 * 24));
+      previousEnd = new Date(currentStart); previousEnd.setDate(previousEnd.getDate() - 1); previousEnd.setHours(23, 59, 59);
+      previousStart = new Date(previousEnd); previousStart.setDate(previousStart.getDate() - duration + 1); previousStart.setHours(0, 0, 0);
+
+    } else if (growthChartPeriod === 'daily') {
+      const [y, m] = growthChartMonth.split('-').map(Number);
+      let day;
+      if (activeGrowthChartPoint) {
+        day = parseInt(activeGrowthChartPoint);
+      } else {
+        const isCurrentMonth = y === now.getFullYear() && m === now.getMonth() + 1;
+        day = isCurrentMonth ? now.getDate() : new Date(y, m, 0).getDate();
+      }
+      currentStart = new Date(y, m - 1, day);
+      currentEnd = new Date(y, m - 1, day, 23, 59, 59);
+      if (day > 1) {
+        previousStart = new Date(y, m - 1, day - 1);
+        previousEnd = new Date(y, m - 1, day - 1, 23, 59, 59);
+      } else {
+        const pm = m === 1 ? 12 : m - 1; const py = m === 1 ? y - 1 : y;
+        const lastD = new Date(py, pm, 0).getDate();
+        previousStart = new Date(py, pm - 1, lastD); previousEnd = new Date(py, pm - 1, lastD, 23, 59, 59);
+      }
+
+    } else if (growthChartPeriod === 'weekly') {
+      const [y, m] = growthChartMonth.split('-').map(Number);
+      const weeks = getWeeksInMonth(y, m - 1);
+      let targetWeek = null;
+      if (activeGrowthChartPoint) {
+        targetWeek = weeks.find(w => w.label === activeGrowthChartPoint);
+      } else {
+        const isCurrentMonth = y === now.getFullYear() && m === now.getMonth() + 1;
+        if (isCurrentMonth) targetWeek = weeks.find(w => now >= w.start && now <= new Date(w.end.getFullYear(), w.end.getMonth(), w.end.getDate(), 23, 59, 59));
+        if (!targetWeek) targetWeek = weeks[weeks.length - 1];
+      }
+      if (targetWeek) {
+        currentStart = targetWeek.start;
+        currentEnd = new Date(targetWeek.end.getFullYear(), targetWeek.end.getMonth(), targetWeek.end.getDate(), 23, 59, 59);
+        // Always go exactly 7 days back — avoids the overlap bug where getWeeksInMonth
+        // for the previous month returns the same Monday-Sunday span as week 1 of current month
+        previousStart = new Date(currentStart); previousStart.setDate(previousStart.getDate() - 7);
+        previousEnd   = new Date(currentEnd);   previousEnd.setDate(previousEnd.getDate() - 7);
+      } else {
+        currentStart = new Date(y, m - 1, 1); currentEnd = new Date(y, m, 0, 23, 59, 59);
+        previousStart = new Date(y, m - 2, 1); previousEnd = new Date(y, m - 1, 0, 23, 59, 59);
+      }
+
+    } else if (growthChartPeriod === 'monthly') {
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      let mIdx;
+      if (activeGrowthChartPoint) {
+        mIdx = monthNames.indexOf(activeGrowthChartPoint);
+      } else {
+        const isCurrentYear = growthChartYear === now.getFullYear();
+        mIdx = isCurrentYear ? now.getMonth() : 11;
+      }
+      if (mIdx < 0) mIdx = 0;
+      currentStart = new Date(growthChartYear, mIdx, 1);
+      currentEnd = new Date(growthChartYear, mIdx + 1, 0, 23, 59, 59);
+      if (mIdx > 0) {
+        previousStart = new Date(growthChartYear, mIdx - 1, 1);
+        previousEnd = new Date(growthChartYear, mIdx, 0, 23, 59, 59);
+      } else {
+        previousStart = new Date(growthChartYear - 1, 11, 1);
+        previousEnd = new Date(growthChartYear - 1, 11, 31, 23, 59, 59);
+      }
+
+    } else if (growthChartPeriod === 'bi-annually') {
+      let half;
+      if (activeGrowthChartPoint) {
+        half = activeGrowthChartPoint === 'H1' ? 1 : 2;
+      } else {
+        const isCurrentYear = growthChartYear === now.getFullYear();
+        half = isCurrentYear ? (now.getMonth() < 6 ? 1 : 2) : 2;
+      }
+      if (half === 1) {
+        currentStart = new Date(growthChartYear, 0, 1); currentEnd = new Date(growthChartYear, 5, 30, 23, 59, 59);
+        previousStart = new Date(growthChartYear - 1, 6, 1); previousEnd = new Date(growthChartYear - 1, 11, 31, 23, 59, 59);
+      } else {
+        currentStart = new Date(growthChartYear, 6, 1); currentEnd = new Date(growthChartYear, 11, 31, 23, 59, 59);
+        previousStart = new Date(growthChartYear, 0, 1); previousEnd = new Date(growthChartYear, 5, 30, 23, 59, 59);
+      }
+
+    } else {
+      // annually
+      let refYear = activeGrowthChartPoint ? parseInt(activeGrowthChartPoint) : growthChartYearTo;
+      currentStart = new Date(refYear, 0, 1); currentEnd = new Date(refYear, 11, 31, 23, 59, 59);
+      previousStart = new Date(refYear - 1, 0, 1); previousEnd = new Date(refYear - 1, 11, 31, 23, 59, 59);
+    }
+
+    // Build product lookup for current stock
+    const productLookup = {};
+    products.forEach(p => {
+      productLookup[p.product_id] = { stocks: p.stocks || 0, variety_name: p.variety_name || 'Unknown', variety_color: p.variety_color || '#6B7280' };
+    });
+
+    // Aggregate per-product from sale items
+    const productData = {};
+    completedSales.forEach(sale => {
+      if (!sale.created_at || !sale.items) return;
+      const saleDate = new Date(sale.created_at);
+      const isCurrent  = saleDate >= currentStart && saleDate <= currentEnd;
+      const isPrevious = saleDate >= previousStart && saleDate <= previousEnd;
+      if (!isCurrent && !isPrevious) return;
+      sale.items.forEach(item => {
+        const pid = item.product_id;
+        if (!productData[pid]) {
+          const pInfo = productLookup[pid] || {};
+          productData[pid] = {
+            product_id: pid,
+            product_name: item.product_name || 'Unknown',
+            variety_name: item.variety_name || pInfo.variety_name || 'Unknown',
+            variety_color: item.variety_color || pInfo.variety_color || '#6B7280',
+            current_stock: pInfo.stocks || 0,
+            current_qty: 0, previous_qty: 0, current_revenue: 0, previous_revenue: 0,
+          };
+        }
+        if (isCurrent)       { productData[pid].current_qty += item.quantity || 0; productData[pid].current_revenue += item.subtotal || 0; }
+        else if (isPrevious) { productData[pid].previous_qty += item.quantity || 0; productData[pid].previous_revenue += item.subtotal || 0; }
+      });
+    });
+
+    Object.values(productData).forEach(p => {
+      p.stock_before = p.current_stock + p.current_qty;
+      p.qty_growth = p.previous_qty > 0 ? Math.round(((p.current_qty - p.previous_qty) / p.previous_qty) * 1000) / 10 : (p.current_qty > 0 ? 100 : 0);
+      p.revenue_growth = p.previous_revenue > 0 ? Math.round(((p.current_revenue - p.previous_revenue) / p.previous_revenue) * 1000) / 10 : (p.current_revenue > 0 ? 100 : 0);
+      p.trend = p.qty_growth > 0 ? 'up' : (p.qty_growth < 0 ? 'down' : 'stable');
+    });
+
+    const productList = Object.values(productData).sort((a, b) => b.current_revenue - a.current_revenue);
+    const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    return {
+      products: productList,
+      period: growthChartPeriod,
+      current_range: { start: fmtDate(currentStart), end: fmtDate(currentEnd) },
+      previous_range: { start: fmtDate(previousStart), end: fmtDate(previousEnd) },
+      _currentStart: currentStart,
+      _currentEnd: currentEnd,
+    };
+  }, [completedSales, products, growthChartPeriod, growthChartMonth, growthChartYear, growthChartYearFrom, growthChartYearTo, growthCustomStart, growthCustomEnd, activeGrowthChartPoint, getWeeksInMonth]);
+
   // Helper: does a sale match the current activeGrowthChartPoint filter?
   const matchesGrowthChartPoint = useCallback((createdAt) => {
     if (!activeGrowthChartPoint || !createdAt) return true;
@@ -1015,6 +1228,7 @@ const Inventory = () => {
 
   // Filtered sales for table (respects chart scope + point click)
   const filteredGrowthSales = useMemo(() => {
+    if (!growthChartScopeActive && !activeGrowthChartPoint) return completedSales;
     return completedSales.filter(sale => {
       if (!sale.created_at) return false;
       const date = new Date(sale.created_at);
@@ -1034,7 +1248,7 @@ const Inventory = () => {
       if (growthChartPeriod === 'annually' && (date.getFullYear() < growthChartYearFrom || date.getFullYear() > growthChartYearTo)) return false;
       return matchesGrowthChartPoint(sale.created_at);
     });
-  }, [completedSales, growthChartPeriod, growthChartMonth, growthChartYear, growthChartYearFrom, growthChartYearTo, matchesGrowthChartPoint, getWeeksInMonth]);
+  }, [completedSales, growthChartPeriod, growthChartMonth, growthChartYear, growthChartYearFrom, growthChartYearTo, matchesGrowthChartPoint, getWeeksInMonth, growthChartScopeActive, activeGrowthChartPoint]);
 
   // ─── Columns ─────────────────────────────────────────────────
 
@@ -1310,9 +1524,17 @@ const Inventory = () => {
                 height={280}
                 headerRight={
                   <div className="flex items-center gap-2 flex-wrap">
+                    {(activeChartPoint || chartScopeActive) && (
+                      <button
+                        onClick={() => { setActiveChartPoint(null); setChartScopeActive(false); setChartPeriod('daily'); const d = new Date(); setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setChartYear(d.getFullYear()); setChartYearFrom(d.getFullYear()-4); setChartYearTo(d.getFullYear()); }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                      >
+                        <X size={12} /> Clear Filter
+                      </button>
+                    )}
                     <select
                       value={chartPeriod}
-                      onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                     >
                       <option value="daily">Daily</option>
@@ -1325,7 +1547,7 @@ const Inventory = () => {
                       <input
                         type="month"
                         value={chartMonth}
-                        onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                        onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                         className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                     )}
@@ -1333,7 +1555,7 @@ const Inventory = () => {
                       <input
                         type="number"
                         value={chartYear}
-                        onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                        onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min="2000"
                         max={new Date().getFullYear()}
                         className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
@@ -1344,7 +1566,7 @@ const Inventory = () => {
                         <input
                           type="number"
                           value={chartYearFrom}
-                          onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                          onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                           min="2000"
                           max={chartYearTo}
                           className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1353,7 +1575,7 @@ const Inventory = () => {
                         <input
                           type="number"
                           value={chartYearTo}
-                          onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                          onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                           min={chartYearFrom}
                           max={new Date().getFullYear()}
                           className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1362,7 +1584,7 @@ const Inventory = () => {
                     )}
                   </div>
                 }
-                onDotClick={setActiveChartPoint}
+                onDotClick={(point) => { setActiveChartPoint(activeChartPoint === point ? null : point); setChartScopeActive(true); }}
                 activePoint={activeChartPoint}
                 yAxisUnit=" units"
                 summaryStats={[
@@ -1404,7 +1626,7 @@ const Inventory = () => {
           {/* Stock Movement History Table */}
           <DataTable
             title="Stock Movement History"
-            subtitle="All stock in/out movement records"
+            subtitle={chartScopeActive || activeChartPoint ? `Grouped by ${chartPeriod} period · Click row to see details` : "All stock movements · Click row to see details"}
             columns={[
               {
                 header: 'Product',
@@ -1433,7 +1655,9 @@ const Inventory = () => {
                     'return_loss': { label: 'Return Loss', color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-700' },
                     'sale_void': { label: 'Voided', color: 'bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-400 border-gray-200 dark:border-gray-700' },
                   };
-                  const source = sourceLabels[row.source_type] || null;
+                  // For aggregated rows, show top source types
+                  const sourceTypes = row._sourceTypes || (row.source_type ? { [row.source_type]: 1 } : {});
+                  const topSources = Object.entries(sourceTypes).sort((a, b) => b[1] - a[1]).slice(0, 2);
                   return (
                     <div className="flex flex-col gap-1">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
@@ -1444,11 +1668,14 @@ const Inventory = () => {
                         {row.type === 'in' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
                         {row.type === 'in' ? 'IN' : 'OUT'}
                       </span>
-                      {source && (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${source.color} w-fit`}>
-                          {source.label}
-                        </span>
-                      )}
+                      {topSources.map(([src]) => {
+                        const s = sourceLabels[src];
+                        return s ? (
+                          <span key={src} className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${s.color} w-fit`}>
+                            {s.label}
+                          </span>
+                        ) : null;
+                      })}
                     </div>
                   );
                 }
@@ -1461,33 +1688,34 @@ const Inventory = () => {
                     <span className={`font-bold ${row.type === 'in' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {row.type === 'in' ? '+' : '-'}{row.quantity_change.toLocaleString()}
                     </span>
-                    {row.kg_amount && (
-                      <p className="text-[10px] text-gray-400">{parseFloat(row.kg_amount).toLocaleString()} kg</p>
+                    {row.kg_amount > 0 && (
+                      <p className="text-[10px] text-gray-400">{row.kg_amount.toLocaleString()} kg</p>
                     )}
                   </div>
                 )
               },
               {
-                header: 'Stock',
-                accessor: 'quantity_after',
+                header: 'Movements',
+                accessor: 'movement_count',
                 cell: (row) => (
-                  <div className="text-xs">
-                    <span className="text-gray-400">{row.quantity_before.toLocaleString()}</span>
-                    <span className="mx-1 text-gray-300">→</span>
-                    <span className="font-bold text-blue-600 dark:text-blue-400">{row.quantity_after.toLocaleString()}</span>
-                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    {row.movement_count} {row.movement_count === 1 ? 'entry' : 'entries'}
+                  </span>
                 )
               },
               {
-                header: 'Date & Time',
-                accessor: 'date_formatted',
+                header: 'Period',
+                accessor: 'bucket_label',
                 cell: (row) => (
-                  <span className="text-xs text-gray-600 dark:text-gray-300">{row.date_formatted}</span>
+                  <span className="text-xs text-gray-600 dark:text-gray-300">{row.bucket_label}</span>
                 )
               },
             ]}
-            data={chartFilteredStockLogs}
+            data={aggregatedStockLogs}
             searchPlaceholder="Search stock movements..."
+            onRowDoubleClick={(row) => { setSelectedMovementGroup(row._logs || []); setIsMovementDetailOpen(true); }}
+            pagination={true}
+            defaultItemsPerPage={15}
           />
         </>
       )}
@@ -1514,9 +1742,17 @@ const Inventory = () => {
               yAxisUnit="₱"
               headerRight={
                 <div className="flex items-center gap-2 flex-wrap">
+                  {(activeGrowthChartPoint || growthChartScopeActive) && (
+                    <button
+                      onClick={() => { setActiveGrowthChartPoint(null); setGrowthChartScopeActive(false); setGrowthChartPeriod('daily'); const d = new Date(); setGrowthChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setGrowthChartYear(d.getFullYear()); setGrowthChartYearFrom(d.getFullYear()-4); setGrowthChartYearTo(d.getFullYear()); }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                    >
+                      <X size={12} /> Clear Filter
+                    </button>
+                  )}
                   <select
                     value={growthChartPeriod}
-                    onChange={(e) => { setGrowthChartPeriod(e.target.value); setActiveGrowthChartPoint(null); }}
+                    onChange={(e) => { setGrowthChartPeriod(e.target.value); setActiveGrowthChartPoint(null); setGrowthChartScopeActive(true); }}
                     className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
@@ -1529,7 +1765,7 @@ const Inventory = () => {
                     <input
                       type="month"
                       value={growthChartMonth}
-                      onChange={(e) => { setGrowthChartMonth(e.target.value); setActiveGrowthChartPoint(null); }}
+                      onChange={(e) => { setGrowthChartMonth(e.target.value); setActiveGrowthChartPoint(null); setGrowthChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
@@ -1537,7 +1773,7 @@ const Inventory = () => {
                     <input
                       type="number"
                       value={growthChartYear}
-                      onChange={(e) => { setGrowthChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveGrowthChartPoint(null); }}
+                      onChange={(e) => { setGrowthChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveGrowthChartPoint(null); setGrowthChartScopeActive(true); }}
                       min="2000"
                       max={new Date().getFullYear()}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
@@ -1548,7 +1784,7 @@ const Inventory = () => {
                       <input
                         type="number"
                         value={growthChartYearFrom}
-                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setGrowthChartYearFrom(v); setActiveGrowthChartPoint(null); }}
+                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setGrowthChartYearFrom(v); setActiveGrowthChartPoint(null); setGrowthChartScopeActive(true); }}
                         min="2000"
                         max={growthChartYearTo}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1557,7 +1793,7 @@ const Inventory = () => {
                       <input
                         type="number"
                         value={growthChartYearTo}
-                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setGrowthChartYearTo(v); setActiveGrowthChartPoint(null); }}
+                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setGrowthChartYearTo(v); setActiveGrowthChartPoint(null); setGrowthChartScopeActive(true); }}
                         min={growthChartYearFrom}
                         max={new Date().getFullYear()}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1566,7 +1802,7 @@ const Inventory = () => {
                   )}
                 </div>
               }
-              onDotClick={setActiveGrowthChartPoint}
+              onDotClick={(point) => { setActiveGrowthChartPoint(activeGrowthChartPoint === point ? null : point); setGrowthChartScopeActive(true); }}
               activePoint={activeGrowthChartPoint}
               summaryStats={[
                 { label: 'Transactions', value: filteredGrowthSales.length.toString(), color: 'text-primary-600 dark:text-primary-400' },
@@ -1577,20 +1813,17 @@ const Inventory = () => {
           </div>
 
           {/* ── Per-Product Growth Table ── */}
-          {loadingProductGrowth ? (
-            <SkeletonTable rows={5} columns={8} />
-          ) : (
             <DataTable
               title="Product Sales Growth"
-              subtitle={
-                productGrowth?.period === 'daily' ? `Today vs Yesterday  •  ${productGrowth?.current_range?.start || ''}` :
-                productGrowth?.period === 'weekly' ? `This Week vs Last Week  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
-                productGrowth?.period === 'monthly' ? `This Month vs Last Month  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
-                productGrowth?.period === 'bi-annually' ? `Current Half vs Previous Half  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
-                productGrowth?.period === 'annually' ? `This Year vs Last Year  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
-                productGrowth?.period === 'custom' ? `Custom Range  •  ${productGrowth?.current_range?.start || ''} → ${productGrowth?.current_range?.end || ''}` :
-                'Comparing current vs previous period'
-              }
+              subtitle={(() => {
+                const cr = computedProductGrowth?.current_range;
+                const pr = computedProductGrowth?.previous_range;
+                if (!cr || !pr) return 'Comparing current vs previous period';
+                const fmt = (d) => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+                const current = cr.start === cr.end ? fmt(cr.start) : `${fmt(cr.start)} → ${fmt(cr.end)}`;
+                const previous = pr.start === pr.end ? fmt(pr.start) : `${fmt(pr.start)} → ${fmt(pr.end)}`;
+                return `Current: ${current}  vs  Previous: ${previous}`;
+              })()}
               columns={[
                 {
                   header: 'Product',
@@ -1689,8 +1922,37 @@ const Inventory = () => {
                     </span>
                   )
                 },
+                {
+                  header: 'Date',
+                  accessor: '_date',
+                  cell: () => {
+                    const cr = computedProductGrowth?.current_range;
+                    if (!cr) return <span className="text-xs text-gray-400">—</span>;
+                    const fmt = (d) => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+                    return (
+                      <div className="text-xs text-gray-600 dark:text-gray-300">
+                        {cr.start === cr.end ? (
+                          <span>{fmt(cr.start)}</span>
+                        ) : (
+                          <span>{fmt(cr.start)} — {fmt(cr.end)}</span>
+                        )}
+                      </div>
+                    );
+                  }
+                },
               ]}
-              data={productGrowth?.products || []}
+              data={computedProductGrowth?.products || []}
+              onRowClick={(row) => {
+                const cs = computedProductGrowth?._currentStart;
+                const ce = computedProductGrowth?._currentEnd;
+                const salesForProduct = completedSales.filter(sale => {
+                  if (!sale.created_at || !sale.items) return false;
+                  const d = new Date(sale.created_at);
+                  return d >= cs && d <= ce && sale.items.some(item => item.product_id === row.product_id);
+                });
+                setSelectedGrowthProduct({ ...row, _sales: salesForProduct, _currentRange: computedProductGrowth?.current_range });
+                setIsGrowthDetailOpen(true);
+              }}
               searchPlaceholder="Search products..."
               filterField="trend"
               filterPlaceholder="All Trends"
@@ -1715,7 +1977,7 @@ const Inventory = () => {
                     ].map(opt => (
                       <button
                         key={opt.value}
-                        onClick={() => { setGrowthChartPeriod(opt.value); }}
+                        onClick={() => { setGrowthChartPeriod(opt.value); setGrowthChartScopeActive(true); }}
                         className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
                           growthChartPeriod === opt.value
                             ? 'bg-white dark:bg-gray-800 text-button-600 dark:text-button-400 shadow-sm'
@@ -1747,7 +2009,6 @@ const Inventory = () => {
                 </div>
               }
             />
-          )}
         </>
       )}
 
@@ -1930,6 +2191,203 @@ const Inventory = () => {
           />
         </>
       )}
+
+      {/* ─── Growth Product Detail Modal ──────────────────────── */}
+      <Modal
+        isOpen={isGrowthDetailOpen}
+        onClose={() => { setIsGrowthDetailOpen(false); setSelectedGrowthProduct(null); }}
+        title="Sales Detail"
+        size="full"
+      >
+        {selectedGrowthProduct && (() => {
+          const p = selectedGrowthProduct;
+          const cr = p._currentRange;
+          const fmt = (d) => { const dt = new Date(d + 'T00:00:00'); return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
+          const periodLabel = cr ? (cr.start === cr.end ? fmt(cr.start) : `${fmt(cr.start)} — ${fmt(cr.end)}`) : '';
+          return (
+            <div className="space-y-4">
+              {/* Product header */}
+              <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-gray-700">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: p.variety_color }} />
+                <span className="font-bold text-gray-800 dark:text-white text-base">{p.product_name}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: `${p.variety_color}20`, color: p.variety_color }}>{p.variety_name}</span>
+                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">{periodLabel}</span>
+              </div>
+              {/* Summary row */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-semibold mb-0.5">Units Sold (Current)</p>
+                  <p className="text-lg font-bold text-red-500">{p.current_qty.toLocaleString()}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-semibold mb-0.5">Units Sold (Previous)</p>
+                  <p className="text-lg font-bold text-gray-500 dark:text-gray-400">{p.previous_qty.toLocaleString()}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-semibold mb-0.5">Revenue (Current)</p>
+                  <p className="text-lg font-bold text-green-600 dark:text-green-400">₱{Number(p.current_revenue).toLocaleString()}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-semibold mb-0.5">Qty Growth</p>
+                  <p className={`text-lg font-bold ${p.qty_growth > 0 ? 'text-green-600 dark:text-green-400' : p.qty_growth < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                    {p.qty_growth > 0 ? '+' : ''}{p.qty_growth}%
+                  </p>
+                </div>
+              </div>
+              {/* Transactions table */}
+              {p._sales.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No transactions in this period</div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Transaction</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Qty</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Unit Price</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Subtotal</th>
+                        <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Total Sale</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                      {p._sales.map((sale, idx) => {
+                        const saleItem = sale.items?.find(i => i.product_id === p.product_id);
+                        return (
+                          <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td className="px-4 py-2.5 text-xs text-gray-600 dark:text-gray-300 font-mono">{sale.transaction_id || `#${sale.id}`}</td>
+                            <td className="px-4 py-2.5 text-right font-bold text-sm text-red-500">{(saleItem?.quantity ?? 0).toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-xs text-gray-600 dark:text-gray-300">₱{Number(saleItem?.unit_price ?? 0).toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold text-green-600 dark:text-green-400">₱{Number(saleItem?.subtotal ?? 0).toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-right text-xs text-gray-500 dark:text-gray-400">₱{Number(sale.total ?? 0).toLocaleString()}</td>
+                            <td className="px-4 py-2.5 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                              {sale.created_at ? new Date(sale.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${sale.status === 'completed' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'}`}>
+                                {sale.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <td className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Total ({p._sales.length} transactions)</td>
+                        <td className="px-4 py-2.5 text-right font-bold text-sm text-red-500">{p._sales.reduce((s, sale) => s + (sale.items?.find(i => i.product_id === p.product_id)?.quantity || 0), 0).toLocaleString()}</td>
+                        <td></td>
+                        <td className="px-4 py-2.5 text-right font-bold text-green-600 dark:text-green-400">₱{p._sales.reduce((s, sale) => s + (sale.items?.find(i => i.product_id === p.product_id)?.subtotal || 0), 0).toLocaleString()}</td>
+                        <td colSpan={3}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* ─── Movement Detail Modal ──────────────────────── */}
+      <Modal
+        isOpen={isMovementDetailOpen}
+        onClose={() => { setIsMovementDetailOpen(false); setSelectedMovementGroup([]); }}
+        title="Stock Movement Details"
+        size="full"
+      >
+        {selectedMovementGroup.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                {selectedMovementGroup[0]?.product_name}
+              </span>
+              {selectedMovementGroup[0]?.variety_name && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: `${selectedMovementGroup[0]?.variety_color}20`, color: selectedMovementGroup[0]?.variety_color }}>
+                  {selectedMovementGroup[0]?.variety_name}
+                </span>
+              )}
+              <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
+                {selectedMovementGroup.length} {selectedMovementGroup.length === 1 ? 'movement' : 'movements'}
+              </span>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Source</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Units</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Kg</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Stock Before → After</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Date & Time</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+                  {selectedMovementGroup.map((log, idx) => {
+                    const sourceLabels = {
+                      'processing_distribution': 'Processing',
+                      'order': 'Order',
+                      'order_cancelled': 'Cancelled',
+                      'order_return': 'Restocked',
+                      'return_loss': 'Return Loss',
+                      'sale_void': 'Voided',
+                    };
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                            log.type === 'in'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                          }`}>
+                            {log.type === 'in' ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                            {log.type === 'in' ? 'IN' : 'OUT'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+                          {sourceLabels[log.source_type] || (log.source_type ? log.source_type.replace(/_/g, ' ') : '—')}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-right">
+                          <span className={`font-bold text-sm ${log.type === 'in' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {log.type === 'in' ? '+' : '-'}{(log.quantity_change ?? 0).toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-right text-xs text-gray-500 dark:text-gray-400">
+                          {log.kg_amount ? parseFloat(log.kg_amount).toLocaleString() : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-center text-xs text-gray-600 dark:text-gray-300">
+                          {(log.stock_before ?? '—')} → {(log.stock_after ?? '—')}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+                          {log.created_at ? new Date(log.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 max-w-[200px] truncate">
+                          {log.notes || '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase">Total</td>
+                    <td className="px-4 py-2.5 text-right font-bold text-sm text-gray-800 dark:text-white">
+                      {selectedMovementGroup.reduce((sum, l) => sum + (l.type === 'in' ? (l.quantity_change || 0) : -(l.quantity_change || 0)), 0).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">
+                      {selectedMovementGroup.reduce((sum, l) => sum + (l.kg_amount ? parseFloat(l.kg_amount) : 0), 0).toLocaleString()}
+                    </td>
+                    <td colSpan={3}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* ─── Cost Record Detail Modal ──────────────────────── */}
       <Modal

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Settings as SettingsIcon, User, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle, Scale, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Settings as SettingsIcon, User, Lock, Palette, Database, Save, Building2, Mail, Phone, MapPin, Globe, Camera, Shield, Eye, EyeOff, Moon, Sun, Download, Upload, Trash2, CheckCircle, RotateCcw, Paintbrush, Square, Type, Layout, Loader2, Users, X, Info, Home, FileText, Edit3, Plus, Award, Target, Leaf, Heart, Truck, Calendar, RefreshCw, Clock, Facebook, Twitter, Instagram, Linkedin, Share2, MousePointer, ClipboardList, Archive, Package, MessageCircle, Scale, ShieldCheck, AlertTriangle, Smartphone, QrCode } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { Card, CardContent, Button, Tabs, FormInput, FormSelect, FormTextarea, useToast, SkeletonSettings } from '../../../components/ui';
 import AuditTrail from '../AuditTrail/AuditTrail';
@@ -295,12 +295,17 @@ const Settings = () => {
     warehouse_address: '',
     google_maps_embed: '',
     smtp_password: '',
+    gcash_name: '',
+    gcash_number: '',
   });
   const [businessLoading, setBusinessLoading] = useState(true);
   const [businessSaving, setBusinessSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(DEFAULT_LOGO);
   const logoInputRef = useRef(null);
+  const [gcashQrFile, setGcashQrFile] = useState(null);
+  const [gcashQrPreview, setGcashQrPreview] = useState('');
+  const gcashQrInputRef = useRef(null);
   
   const [profileInfo, setProfileInfo] = useState({
     firstName: '',
@@ -411,10 +416,13 @@ const Settings = () => {
           warehouse_address: cachedData.warehouse_address ?? '',
           google_maps_embed: cachedData.google_maps_embed ?? '',
           smtp_password: cachedData.smtp_password ?? '',
+          gcash_name: cachedData.gcash_name ?? '',
+          gcash_number: cachedData.gcash_number ?? '',
         });
         if (cachedData.business_logo && cachedData.business_logo !== '/logo.svg' && !cachedData.business_logo.startsWith('blob:')) {
           setLogoPreview(getFullLogoUrl(cachedData.business_logo));
         }
+        if (cachedData.gcash_qr) setGcashQrPreview(cachedData.gcash_qr);
         setBusinessLoading(false);
         // Clear any stale email errors
         setBusinessEmailError('');
@@ -478,10 +486,13 @@ const Settings = () => {
             warehouse_address: data.warehouse_address ?? '',
             google_maps_embed: data.google_maps_embed ?? '',
             smtp_password: data.smtp_password ?? '',
+            gcash_name: data.gcash_name ?? '',
+            gcash_number: data.gcash_number ?? '',
           });
           if (data.business_logo && data.business_logo !== '/logo.svg' && !data.business_logo.startsWith('blob:')) {
             setLogoPreview(getFullLogoUrl(data.business_logo));
           }
+          if (data.gcash_qr) setGcashQrPreview(resolveStorageUrl(data.gcash_qr));
           // Clear any stale email errors when fresh data loads
           setBusinessEmailError('');
           
@@ -714,6 +725,17 @@ const Settings = () => {
     }
   };
 
+  const handleGcashQrChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (gcashQrPreview && gcashQrPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(gcashQrPreview);
+      }
+      setGcashQrPreview(URL.createObjectURL(file));
+      setGcashQrFile(file);
+    }
+  };
+
   const handleSaveGeneral = async () => {
     // Check if business email is being checked
     if (isCheckingBusinessEmail) {
@@ -756,6 +778,22 @@ const Settings = () => {
       const currentLogoUrl = logoPreview && !logoPreview.startsWith('blob:') 
         ? logoPreview 
         : (contextSettings.business_logo || DEFAULT_LOGO);
+
+      // Upload GCash QR code if a new file was selected
+      let currentGcashQrUrl = gcashQrPreview && !gcashQrPreview.startsWith('blob:') ? gcashQrPreview : (contextSettings.gcash_qr || '');
+      if (gcashQrFile) {
+        try {
+          const qrResult = await businessSettingsApi.uploadGcashQr(gcashQrFile);
+          if (qrResult?.success && qrResult?.data?.qr_url) {
+            currentGcashQrUrl = resolveStorageUrl(qrResult.data.qr_url);
+            setGcashQrPreview(currentGcashQrUrl);
+            setGcashQrFile(null);
+          }
+        } catch (qrError) {
+          console.error('GCash QR upload error:', qrError);
+          toast.error('QR Upload Failed', 'Failed to upload GCash QR code. Other settings will still be saved.');
+        }
+      }
       
       // Save other settings — default warehouse_address to business_address if empty
       const dataToSave = {
@@ -791,6 +829,7 @@ const Settings = () => {
         business_logo: currentLogoUrl,
         business_hours: formattedHours,
         business_hours_formatted: formattedHours,
+        gcash_qr: currentGcashQrUrl,
       });
 
       // Trigger a fresh fetch so all tabs/roles get server-formatted data
@@ -1894,6 +1933,70 @@ const Settings = () => {
                 </p>
               </div>
             ) : null}
+          </div>
+        </div>
+
+        {/* GCash Payment Settings */}
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-500/30">
+          <h4 className="font-semibold text-gray-800 dark:text-gray-100 mb-1 flex items-center gap-2">
+            <Smartphone size={18} className="text-blue-600 dark:text-blue-400" />
+            GCash Payment Details
+          </h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            These details will be displayed in the GCash payment modal for customers, admins, secretaries, and super admins to reference when processing GCash payments.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <FormInput
+              label={<span className="flex items-center gap-1.5"><Smartphone size={14} /> GCash Account Name</span>}
+              name="gcash_name"
+              value={businessInfo.gcash_name}
+              onChange={handleBusinessChange}
+              placeholder="e.g. KJP Ricemill"
+            />
+            <FormInput
+              label={<span className="flex items-center gap-1.5"><Phone size={14} /> GCash Number</span>}
+              name="gcash_number"
+              value={businessInfo.gcash_number}
+              onChange={handleBusinessChange}
+              placeholder="e.g. 09XX XXX XXXX"
+            />
+          </div>
+          {/* QR Code Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+              <QrCode size={14} /> GCash QR Code
+            </label>
+            <div className="flex items-start gap-4">
+              {/* QR Preview */}
+              <div className="w-32 h-32 shrink-0 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden bg-white dark:bg-gray-800 flex items-center justify-center">
+                {gcashQrPreview ? (
+                  <img src={gcashQrPreview} alt="GCash QR Code" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <QrCode size={48} className="text-blue-200 dark:text-blue-700" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  Upload your GCash QR code image. This will be displayed beside the payment form so customers can scan it directly. (PNG, JPG - Max 5MB)
+                </p>
+                <input
+                  ref={gcashQrInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleGcashQrChange}
+                  className="hidden"
+                />
+                <Button variant="outline" size="sm" onClick={() => gcashQrInputRef.current?.click()}>
+                  <Camera size={16} className="mr-1.5" />
+                  {gcashQrPreview ? 'Change QR Code' : 'Upload QR Code'}
+                </Button>
+                {gcashQrFile && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 flex items-center gap-1">
+                    <CheckCircle size={12} /> New QR code selected — will be uploaded when you save.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
         

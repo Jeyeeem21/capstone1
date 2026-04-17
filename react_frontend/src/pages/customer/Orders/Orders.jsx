@@ -7,8 +7,9 @@ import {
   ImageIcon, X, DollarSign, Banknote, Smartphone, Upload, Camera, Ban
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
+import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { Skeleton, Pagination, Modal, ConfirmModal } from '../../../components/ui';
-import { useDataFetch } from '../../../hooks/useDataFetch';
+import { useDataFetch, invalidateCache } from '../../../hooks/useDataFetch';
 import apiClient from '../../../api/apiClient';
 import { resolveStorageUrl } from '../../../api/config';
 import { suppressNotifToasts } from '../../../utils/notifToastGuard';
@@ -36,6 +37,7 @@ const returnReasons = [
 
 const Orders = () => {
   const { theme } = useTheme();
+  const { settings: bizSettings } = useBusinessSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
     const tabFromUrl = searchParams.get('tab');
@@ -75,7 +77,7 @@ const Orders = () => {
   const returnStreamRef = useRef(null);
 
   // Fetch orders from API
-  const { data: rawOrders, loading, refetch } = useDataFetch('/sales/my-orders', {
+  const { data: rawOrders, loading, refetch, optimisticUpdate } = useDataFetch('/sales/my-orders', {
     cacheKey: '/sales/my-orders',
     initialData: [],
   });
@@ -160,6 +162,9 @@ const Orders = () => {
       stopReturnCamera();
       setIsReturnModalOpen(false);
       setReturnOrder(null);
+      // Optimistic: mark as return_requested instantly
+      optimisticUpdate(prev => prev.map(o => o.id === returnOrder.saleId ? { ...o, status: 'return_requested' } : o));
+      invalidateCache('/sales/my-orders');
       refetch();
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to submit return request.');
@@ -173,6 +178,9 @@ const Orders = () => {
       // Fire-and-forget email
       apiClient.post(`/sales/${order.saleId}/status-email`).catch(() => {});
       suppressNotifToasts();
+      // Optimistic: mark as cancelled instantly
+      optimisticUpdate(prev => prev.map(o => o.id === order.saleId ? { ...o, status: 'cancelled' } : o));
+      invalidateCache('/sales/my-orders');
       refetch();
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to cancel order.');
@@ -293,6 +301,9 @@ const Orders = () => {
       suppressNotifToasts();
       stopPayCamera();
       setShowPayModal(null);
+      // Optimistic: mark as paid instantly
+      optimisticUpdate(prev => prev.map(o => o.id === showPayModal.saleId ? { ...o, payment_status: 'paid' } : o));
+      invalidateCache('/sales/my-orders');
       refetch();
     } catch (err) {
       const errors = err?.response?.data?.errors;
@@ -958,53 +969,43 @@ const Orders = () => {
       </Modal>
 
       {/* Pay Now Modal */}
-      <Modal
-        isOpen={!!showPayModal}
-        onClose={() => { stopPayCamera(); setShowPayModal(null); }}
-        title="Record Payment"
-        size="sm"
-        footer={
-          <div className="flex gap-3 justify-end">
-            <button onClick={() => { stopPayCamera(); setShowPayModal(null); }}
-              className="px-4 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
-              Cancel
-            </button>
-            <button onClick={handlePaySubmit}
-              disabled={paySubmitting || (payMethod === 'gcash' ? (!payReference.trim() || payProofFiles.length === 0) : false)}
-              className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-              <CheckCircle size={14} /> {paySubmitting ? 'Processing...' : 'Confirm Payment'}
-            </button>
-          </div>
-        }
-      >
-        {showPayModal && (
-          <div className="space-y-4">
-            {/* Order Summary */}
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-primary-200 dark:border-primary-700">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{showPayModal.id}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{showPayModal.items?.length || 0} item(s)</p>
+      {!!showPayModal && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => { stopPayCamera(); setShowPayModal(null); }} />
+          <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${(bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
+              {/* Header */}
+              <div className="p-5 text-white shrink-0 bg-gradient-to-r from-blue-500 to-blue-600">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <CreditCard size={20} /> GCash Payment
+                </h3>
+                <p className="text-sm text-white/80 mt-1">Enter GCash reference number</p>
+              </div>
+
+              <div className={`${(bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'flex' : ''}`}>
+              {/* Left side: form content */}
+              <div className="flex-1 min-w-0">
+              <div className="p-5 space-y-4">
+                {/* Order Summary */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <div>
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{showPayModal.id}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{showPayModal.items?.length || 0} item(s)</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                    <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
+                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{showPayModal.total.toLocaleString()}</span>
+                  </div>
                 </div>
-                <p className="text-lg font-bold text-button-600 dark:text-button-400">₱{showPayModal.total.toLocaleString()}</p>
-              </div>
-            </div>
 
-            {/* Payment Method Selection */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</label>
-              <div className="flex items-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
-                <CreditCard size={16} /> GCash
-              </div>
-            </div>
-
-            {payMethod === 'gcash' && (
-              <>
+                {/* GCash Reference */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
                   <input type="text" value={payReference} onChange={(e) => { setPayReference(e.target.value); setPayRefError(''); }}
-                    placeholder="e.g. 1234 5678 9012"
-                    className={`w-full px-4 py-2.5 text-sm font-semibold border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${payRefError ? 'border-red-500' : 'border-primary-300 dark:border-primary-600'}`}
+                    placeholder="Enter 13-digit reference number"
+                    className={`w-full px-4 py-3 text-lg font-bold border-2 rounded-lg focus:outline-none focus:ring-2 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${payRefError ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-primary-200 dark:border-primary-700 focus:ring-blue-500 focus:border-blue-500'}`}
                     autoFocus />
                   {payRefError && <p className="text-xs text-red-500 font-medium mt-1">{payRefError}</p>}
                 </div>
@@ -1016,11 +1017,11 @@ const Orders = () => {
                   </label>
 
                   {payShowCamera && (
-                    <div className="relative mb-3 rounded-lg overflow-hidden border border-button-300 dark:border-button-600">
-                      <video ref={payVideoRef} autoPlay playsInline className="w-full h-40 object-cover bg-black" />
+                    <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-blue-300 dark:border-blue-700">
+                      <video ref={payVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
                       <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
-                        <button onClick={capturePayPhoto} className="px-3 py-1.5 bg-button-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-button-600 flex items-center gap-1.5"><Camera size={12} /> Capture</button>
-                        <button onClick={stopPayCamera} className="px-3 py-1.5 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={12} /> Cancel</button>
+                        <button onClick={capturePayPhoto} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-blue-600 flex items-center gap-1.5"><Camera size={14} /> Capture</button>
+                        <button onClick={stopPayCamera} className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={14} /> Cancel</button>
                       </div>
                     </div>
                   )}
@@ -1029,9 +1030,9 @@ const Orders = () => {
                     <div className="flex flex-wrap gap-2 mb-3">
                       {payProofPreviews.map((src, i) => (
                         <div key={i} className="relative group">
-                          <img src={src} alt={`Proof ${i + 1}`} className="w-16 h-16 object-cover rounded-lg border border-button-200 dark:border-button-700" />
+                          <img src={src} alt={`Proof ${i + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 dark:border-blue-700" />
                           <button onClick={() => { setPayProofFiles(prev => prev.filter((_, j) => j !== i)); setPayProofPreviews(prev => prev.filter((_, j) => j !== i)); }}
-                            className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                            className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
                         </div>
                       ))}
                     </div>
@@ -1039,30 +1040,85 @@ const Orders = () => {
 
                   {!payShowCamera && (
                     <div className="flex gap-2">
-                      <label className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold cursor-pointer">
-                        <ImageIcon size={14} /> Upload
+                      <label className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold cursor-pointer transition-all ${
+                        payProofFiles.length === 0
+                          ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                          : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                      }`}>
+                        <ImageIcon size={14} /> Upload Image
                         <input type="file" accept="image/*" multiple className="hidden" onChange={handlePayProofChange} />
                       </label>
                       <button type="button" onClick={startPayCamera}
-                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold">
-                        <Camera size={14} /> Camera
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                          payProofFiles.length === 0
+                            ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                            : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                        }`}>
+                        <Camera size={14} /> Open Camera
                       </button>
                     </div>
                   )}
+                  {payProofFiles.length === 0 && (
+                    <p className="mt-1 text-xs text-red-500">Payment proof is required.</p>
+                  )}
                 </div>
-              </>
-            )}
 
-            {payMethod === 'cash' && (
-              <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
-                <Banknote size={32} className="mx-auto mb-2 text-purple-500" />
-                <p className="text-sm font-bold text-purple-700 dark:text-purple-300">Cash Payment</p>
-                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">For cash payments, please visit the store directly.</p>
+                {/* GCash Info */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                  <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1 uppercase tracking-wide">Payment Verification</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Enter the exact 13-digit GCash reference number and upload a screenshot or capture the payment confirmation as proof.</p>
+                </div>
               </div>
-            )}
+              </div>{/* end left-side flex-1 */}
+
+              {/* Right side: GCash QR Code & Info Panel */}
+              {(bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) && (
+                <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4">
+                  <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide text-center">Send Payment Here</h4>
+                  {bizSettings.gcash_qr && (
+                    <div className="w-48 h-48 bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden shadow-lg">
+                      <img src={bizSettings.gcash_qr} alt="GCash QR Code" className="w-full h-full object-contain p-2" />
+                    </div>
+                  )}
+                  {bizSettings.gcash_name && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">Account Name</p>
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{bizSettings.gcash_name}</p>
+                    </div>
+                  )}
+                  {bizSettings.gcash_number && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">GCash Number</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wider">{bizSettings.gcash_number}</p>
+                    </div>
+                  )}
+                  <div className="mt-auto pt-2">
+                    <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center">Scan the QR code or send to the number above, then enter the reference number.</p>
+                  </div>
+                </div>
+              )}
+              </div>{/* end flex wrapper */}
+
+              {/* Footer */}
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
+                <button
+                  onClick={() => { stopPayCamera(); setShowPayModal(null); }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handlePaySubmit}
+                  disabled={paySubmitting || !payReference.trim() || payProofFiles.length === 0}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <CheckCircle size={14} /> {paySubmitting ? 'Processing...' : 'Confirm Payment'}
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-      </Modal>
+        </>
+      )}
     </div>
   );
 };

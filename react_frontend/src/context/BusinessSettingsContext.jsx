@@ -47,6 +47,9 @@ const defaultSettings = {
   google_maps_embed: '',
   smtp_password: '',
   smtp_configured: false,
+  gcash_name: '',
+  gcash_number: '',
+  gcash_qr: '',
 };
 
 // Get initial settings from localStorage
@@ -96,6 +99,9 @@ const buildSettings = (data) => {
     google_maps_embed: data.google_maps_embed || '',
     smtp_password: data.smtp_password || '', // Include SMTP password for warning check
     smtp_configured: data.smtp_configured || false, // Flag to check if SMTP is configured
+    gcash_name: data.gcash_name || '',
+    gcash_number: data.gcash_number || '',
+    gcash_qr: data.gcash_qr ? resolveStorageUrl(data.gcash_qr) : '',
   };
 };
 

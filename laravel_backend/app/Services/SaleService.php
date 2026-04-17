@@ -542,7 +542,7 @@ class SaleService
     /**
      * Get per-product sales data for growth analysis.
      */
-    public function getProductSalesGrowth(string $period = 'monthly', ?string $customStart = null, ?string $customEnd = null): array
+    public function getProductSalesGrowth(string $period = 'monthly', ?string $customStart = null, ?string $customEnd = null, ?string $month = null, ?int $year = null, ?int $yearFrom = null, ?int $yearTo = null): array
     {
         // Determine current and previous period date ranges
         $now = now();
@@ -557,42 +557,59 @@ class SaleService
         } else {
             switch ($period) {
                 case 'daily':
-                    $currentStart = $now->copy()->startOfDay();
-                    $currentEnd   = $now->copy()->endOfDay();
-                    $previousStart = $now->copy()->subDay()->startOfDay();
-                    $previousEnd   = $now->copy()->subDay()->endOfDay();
-                    break;
                 case 'weekly':
-                    $currentStart = $now->copy()->startOfWeek();
-                    $currentEnd   = $now->copy()->endOfWeek();
-                    $previousStart = $now->copy()->subWeek()->startOfWeek();
-                    $previousEnd   = $now->copy()->subWeek()->endOfWeek();
+                    // If month param provided, compare that month vs previous month
+                    if ($month) {
+                        $parts = explode('-', $month);
+                        $ref = \Carbon\Carbon::create((int)$parts[0], (int)$parts[1], 1);
+                        $currentStart = $ref->copy()->startOfMonth();
+                        $currentEnd   = $ref->copy()->endOfMonth();
+                        $previousStart = $ref->copy()->subMonth()->startOfMonth();
+                        $previousEnd   = $ref->copy()->subMonth()->endOfMonth();
+                    } else {
+                        if ($period === 'daily') {
+                            $currentStart = $now->copy()->startOfDay();
+                            $currentEnd   = $now->copy()->endOfDay();
+                            $previousStart = $now->copy()->subDay()->startOfDay();
+                            $previousEnd   = $now->copy()->subDay()->endOfDay();
+                        } else {
+                            $currentStart = $now->copy()->startOfWeek();
+                            $currentEnd   = $now->copy()->endOfWeek();
+                            $previousStart = $now->copy()->subWeek()->startOfWeek();
+                            $previousEnd   = $now->copy()->subWeek()->endOfWeek();
+                        }
+                    }
                     break;
                 case 'monthly':
-                    $currentStart = $now->copy()->startOfMonth();
-                    $currentEnd   = $now->copy()->endOfMonth();
-                    $previousStart = $now->copy()->subMonth()->startOfMonth();
-                    $previousEnd   = $now->copy()->subMonth()->endOfMonth();
+                    $refYear = $year ?? $now->year;
+                    $currentStart = \Carbon\Carbon::create($refYear, 1, 1)->startOfYear();
+                    $currentEnd   = \Carbon\Carbon::create($refYear, 12, 31)->endOfYear();
+                    $previousStart = \Carbon\Carbon::create($refYear - 1, 1, 1)->startOfYear();
+                    $previousEnd   = \Carbon\Carbon::create($refYear - 1, 12, 31)->endOfYear();
                     break;
                 case 'bi-annually':
-                    if ($now->month <= 6) {
-                        $currentStart = $now->copy()->startOfYear();
-                        $currentEnd   = $now->copy()->month(6)->endOfMonth();
-                        $previousStart = $now->copy()->subYear()->month(7)->startOfMonth();
-                        $previousEnd   = $now->copy()->subYear()->endOfYear();
+                    $refYear = $year ?? $now->year;
+                    $refMonth = $year ? 7 : $now->month; // If explicit year, default to H2 comparison
+                    if ($refMonth <= 6) {
+                        $currentStart = \Carbon\Carbon::create($refYear, 1, 1)->startOfDay();
+                        $currentEnd   = \Carbon\Carbon::create($refYear, 6, 30)->endOfDay();
+                        $previousStart = \Carbon\Carbon::create($refYear - 1, 7, 1)->startOfDay();
+                        $previousEnd   = \Carbon\Carbon::create($refYear - 1, 12, 31)->endOfDay();
                     } else {
-                        $currentStart = $now->copy()->month(7)->startOfMonth();
-                        $currentEnd   = $now->copy()->endOfYear();
-                        $previousStart = $now->copy()->startOfYear();
-                        $previousEnd   = $now->copy()->month(6)->endOfMonth();
+                        $currentStart = \Carbon\Carbon::create($refYear, 7, 1)->startOfDay();
+                        $currentEnd   = \Carbon\Carbon::create($refYear, 12, 31)->endOfDay();
+                        $previousStart = \Carbon\Carbon::create($refYear, 1, 1)->startOfDay();
+                        $previousEnd   = \Carbon\Carbon::create($refYear, 6, 30)->endOfDay();
                     }
                     break;
                 case 'annually':
                 default:
-                    $currentStart = $now->copy()->startOfYear();
-                    $currentEnd   = $now->copy()->endOfYear();
-                    $previousStart = $now->copy()->subYear()->startOfYear();
-                    $previousEnd   = $now->copy()->subYear()->endOfYear();
+                    $fromY = $yearFrom ?? ($now->year - 1);
+                    $toY   = $yearTo ?? $now->year;
+                    $currentStart = \Carbon\Carbon::create($toY, 1, 1)->startOfYear();
+                    $currentEnd   = \Carbon\Carbon::create($toY, 12, 31)->endOfYear();
+                    $previousStart = \Carbon\Carbon::create($fromY, 1, 1)->startOfYear();
+                    $previousEnd   = \Carbon\Carbon::create($fromY, 12, 31)->endOfYear();
                     break;
             }
         }

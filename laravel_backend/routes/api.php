@@ -163,16 +163,22 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ========================================
-    // Super Admin Only Routes
+    // Admin + Super Admin Routes
     // ========================================
 
-    // Appearance Settings (write operations) - Super Admin only
-    Route::middleware('role:super_admin')->group(function () {
+    // Appearance Settings (write operations) - Admin and Super Admin
+    Route::middleware('role:super_admin,admin')->group(function () {
         Route::prefix('appearance')->group(function () {
             Route::put('/', [AppearanceSettingController::class, 'update']);
             Route::put('/{key}', [AppearanceSettingController::class, 'updateSingle']);
             Route::post('/reset', [AppearanceSettingController::class, 'reset']);
         });
+    });
+
+    // ========================================
+    // Super Admin Only Routes
+    // ========================================
+    Route::middleware('role:super_admin')->group(function () {
 
         // Website Content (write operations)
         Route::prefix('website-content')->group(function () {
@@ -191,6 +197,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/', [BusinessSettingController::class, 'update']);
             Route::post('/verify-business-email-change', [BusinessSettingController::class, 'verifyBusinessEmailChange']);
             Route::post('/logo', [BusinessSettingController::class, 'uploadLogo']);
+            Route::post('/gcash-qr', [BusinessSettingController::class, 'uploadGcashQr']);
             Route::post('/test-email', [BusinessSettingController::class, 'testEmail']);
             Route::post('/check-business-email', [BusinessSettingController::class, 'checkBusinessEmail']);
         });
@@ -263,6 +270,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [ProcurementController::class, 'show']);
         Route::put('/{id}', [ProcurementController::class, 'update']);
         Route::delete('/{id}', [ProcurementController::class, 'destroy']);
+        Route::post('/{id}/store-email', [ProcurementController::class, 'sendStoreEmail']);
     });
 
     // Drying Process Routes

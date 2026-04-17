@@ -168,6 +168,8 @@ const Products = () => {
       
       if (response.success && response.data) {
         const productName = formData.product_name;
+        // Optimistic: show new product instantly
+        optimisticUpdate(prev => [response.data, ...prev]);
         // Close modal first
         setIsAddModalOpen(false);
         
@@ -216,6 +218,8 @@ const Products = () => {
       
       if (response.success && response.data) {
         const productName = formData.product_name;
+        // Optimistic: update product instantly
+        optimisticUpdate(prev => prev.map(p => p.product_id === selectedItem.product_id ? { ...p, ...response.data } : p));
         // Close modal first
         setIsEditModalOpen(false);
         

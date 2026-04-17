@@ -283,21 +283,23 @@ class ProcessingController extends Controller
     }
 
     /**
-     * Delete a processing (soft delete)
+     * Return processing to drying (soft delete + restore quantity)
      */
     public function destroy(Processing $processing): JsonResponse
     {
         try {
             $processingId = $processing->id;
+            $inputKg = $processing->input_kg;
             $this->processingService->deleteProcessing($processing);
 
-            $this->logAudit('ARCHIVE', 'Processing', "Archived processing #{$processingId}", [
+            $this->logAudit('RETURN', 'Processing', "Returned processing #{$processingId} to drying — {$inputKg} kg", [
                 'processing_id' => $processingId,
+                'input_kg' => $inputKg,
             ]);
 
-            return $this->successResponse(null, 'Processing record archived successfully');
+            return $this->successResponse(null, 'Processing record returned to drying successfully');
         } catch (\Exception $e) {
-            return $this->errorResponse('Failed to remove processing record: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Failed to return processing record to drying: ' . $e->getMessage(), 500);
         }
     }
 }

@@ -54,7 +54,9 @@ class DashboardService
                 'status_breakdown' => $pointRange
                     ? $this->getOrderStatusBreakdownForRange($pointRange['start'], $pointRange['end'])
                     : $this->getOrderStatusBreakdown($period, $chartParams),
-                'pipeline' => $this->getPipelineSummary(),
+                'pipeline' => $pointRange
+                    ? $this->getPipelineSummaryForRange($pointRange['start'], $pointRange['end'])
+                    : $this->getPipelineSummary($period, $chartParams),
                 'period' => $period,
                 'point' => $point,
                 'point_label' => $pointRange['label'] ?? null,
@@ -1057,22 +1059,56 @@ class DashboardService
     }
 
     /**
-     * Pipeline summary — active work across all stages
+     * Pipeline summary — active work across all stages, filtered by period
      */
-    private function getPipelineSummary(): array
+    private function getPipelineSummary(string $period = 'monthly', array $chartParams = []): array
     {
-        $procurementPending = Procurement::where('status', 'Pending')->count();
-        $dryingActive = DryingProcess::whereIn('status', ['Drying', 'Postponed'])->count();
-        $processingActive = Processing::whereIn('status', ['Pending', 'Processing'])->count();
-        $ordersPending = Sale::whereIn('status', ['pending', 'processing', 'shipped'])->count();
-        $deliveriesActive = DeliveryAssignment::whereIn('status', ['assigned', 'picked_up', 'in_transit'])->count();
+        $dateRange = $this->getDateRangeForPeriod($period, $chartParams);
+        $start = $dateRange['start'];
+        $end = $dateRange['end'];
+
+        $procurementPending = Procurement::where('status', 'Pending')
+            ->whereBetween('created_at', [$start, $end])->count();
+        $dryingActive = DryingProcess::whereIn('status', ['Drying', 'Postponed'])
+            ->whereBetween('created_at', [$start, $end])->count();
+        $processingActive = Processing::whereIn('status', ['Pending', 'Processing'])
+            ->whereBetween('created_at', [$start, $end])->count();
+        $ordersPending = Sale::whereIn('status', ['pending', 'processing'])
+            ->whereBetween('created_at', [$start, $end])->count();
+        $shipped = Sale::where('status', 'shipped')
+            ->whereBetween('created_at', [$start, $end])->count();
 
         return [
             'procurement_pending' => $procurementPending,
             'drying_active' => $dryingActive,
             'processing_active' => $processingActive,
             'orders_pending' => $ordersPending,
-            'deliveries_active' => $deliveriesActive,
+            'shipped' => $shipped,
+        ];
+    }
+
+    /**
+     * Pipeline summary for a specific date range (when a chart point is clicked)
+     */
+    private function getPipelineSummaryForRange(Carbon $start, Carbon $end): array
+    {
+        $procurementPending = Procurement::where('status', 'Pending')
+            ->whereBetween('created_at', [$start, $end])->count();
+        $dryingActive = DryingProcess::whereIn('status', ['Drying', 'Postponed'])
+            ->whereBetween('created_at', [$start, $end])->count();
+        $processingActive = Processing::whereIn('status', ['Pending', 'Processing'])
+            ->whereBetween('created_at', [$start, $end])->count();
+        $ordersPending = Sale::whereIn('status', ['pending', 'processing'])
+            ->whereBetween('created_at', [$start, $end])->count();
+        $shipped = Sale::where('status', 'shipped')
+            ->whereBetween('created_at', [$start, $end])->count();
+
+        return [
+            'procurement_pending' => $procurementPending,
+            'drying_active' => $dryingActive,
+            'processing_active' => $processingActive,
+            'orders_pending' => $ordersPending,
+            'shipped' => $shipped,
         ];
     }
 
@@ -1102,6 +1138,7 @@ class DashboardService
         Cache::forget("{$cacheKey}_daily");
         Cache::forget("{$cacheKey}_monthly");
         Cache::forget("{$cacheKey}_yearly");
+        Cache::forget("{$cacheKey}_pipeline");
         Cache::forget('dashboard_recent_activity');
 
         // For file cache driver: clear ALL dashboard_stats keys by scanning cache directory

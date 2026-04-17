@@ -137,7 +137,7 @@ const Dashboard = () => {
     { label: 'Drying', count: pipeline.drying_active || 0, icon: Droplets, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20', path: `${basePath}/drying` },
     { label: 'Processing', count: pipeline.processing_active || 0, icon: Settings2, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/20', path: `${basePath}/processing` },
     { label: 'Orders', count: pipeline.orders_pending || 0, icon: ShoppingBag, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/20', path: `${basePath}/orders` },
-    { label: 'Deliveries', count: pipeline.deliveries_active || 0, icon: Truck, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', path: `${basePath}/orders` },
+    { label: 'Shipped', count: pipeline.shipped || 0, icon: Truck, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', path: `${basePath}/orders` },
   ], [pipeline, basePath]);
 
   // Top products bar chart data

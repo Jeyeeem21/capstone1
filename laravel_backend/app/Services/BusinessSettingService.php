@@ -113,6 +113,36 @@ class BusinessSettingService
     }
 
     /**
+     * Upload and save GCash QR code
+     */
+    public function uploadGcashQr(UploadedFile $file): string
+    {
+        // Delete old QR if exists
+        $oldQr = $this->getValue('gcash_qr');
+        if ($oldQr && str_starts_with($oldQr, '/storage/')) {
+            $relativePath = str_replace('/storage/', '', $oldQr);
+            if (Storage::disk('public')->exists($relativePath)) {
+                Storage::disk('public')->delete($relativePath);
+            }
+        }
+
+        // Store new QR code
+        $filename = 'gcash_qr_' . time() . '.' . $file->getClientOriginalExtension();
+        $path = $file->storeAs('gcash', $filename, 'public');
+        $qrUrl = '/storage/' . $path;
+
+        // Update setting
+        BusinessSetting::updateOrCreate(
+            ['key' => 'gcash_qr'],
+            ['value' => $qrUrl, 'type' => 'string']
+        );
+
+        $this->clearCache();
+
+        return $qrUrl;
+    }
+
+    /**
      * Get formatted business hours
      */
     public function getFormattedBusinessHours(): string

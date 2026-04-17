@@ -196,20 +196,6 @@ class SaleController extends Controller
                 "Your order #{$sale->transaction_id} has been placed successfully."
             );
 
-            // Auto-send order emails (fire-and-forget, non-blocking)
-            $emailService = $this->emailService;
-            $saleForEmail = \App\Models\Sale::with(['customer', 'items.product.variety'])->find($sale->id);
-            if ($saleForEmail) {
-                dispatch(function () use ($emailService, $saleForEmail) {
-                    try {
-                        $emailService->sendNewOrderToAdmin($saleForEmail);
-                        $emailService->sendOrderPlacedToCustomer($saleForEmail);
-                    } catch (\Throwable $e) {
-                        // Silent — EmailService already logs failures
-                    }
-                })->afterResponse();
-            }
-
             // Build response
             return response()->json([
                 'success' => true,
@@ -780,7 +766,11 @@ class SaleController extends Controller
             $period = $request->query('period', 'monthly');
             $customStart = $request->query('custom_start');
             $customEnd = $request->query('custom_end');
-            $data = $this->saleService->getProductSalesGrowth($period, $customStart, $customEnd);
+            $month = $request->query('month');       // YYYY-MM for daily/weekly
+            $year = $request->query('year');          // int for monthly/bi-annually
+            $yearFrom = $request->query('year_from'); // int for annually
+            $yearTo = $request->query('year_to');     // int for annually
+            $data = $this->saleService->getProductSalesGrowth($period, $customStart, $customEnd, $month, $year ? (int)$year : null, $yearFrom ? (int)$yearFrom : null, $yearTo ? (int)$yearTo : null);
             return response()->json([
                 'success' => true,
                 'data' => $data,

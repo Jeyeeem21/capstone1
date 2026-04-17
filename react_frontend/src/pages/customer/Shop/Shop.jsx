@@ -10,7 +10,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { DEFAULT_LOGO } from '../../../api/config';
 import { apiClient } from '../../../api';
-import { useDataFetch } from '../../../hooks/useDataFetch';
+import { useDataFetch, invalidateCache } from '../../../hooks/useDataFetch';
 import { Skeleton, useToast } from '../../../components/ui';
 import { debouncedSearchAddress, calculateDistance, geocodeAddress } from '../../../api/openRouteService';
 
@@ -31,7 +31,7 @@ const Shop = () => {
   const { user } = useAuth();
   const { settings: bizSettings } = useBusinessSettings();
   const toast = useToast();
-  const { data: rawProducts, loading } = useDataFetch('/products');
+  const { data: rawProducts, loading, refetch: refetchProducts } = useDataFetch('/products');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVariety, setSelectedVariety] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
@@ -317,6 +317,15 @@ const Shop = () => {
       const response = await apiClient.post('/sales/order', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+
+      // Fire-and-forget: send order email notification (non-blocking)
+      if (response.data?.sale_id) {
+        apiClient.post(`/sales/${response.data.sale_id}/notify`).catch(() => {});
+      }
+
+      // Refresh product stock data in background
+      invalidateCache('/products');
+      refetchProducts();
 
       const method = paymentMethods.find(m => m.value === paymentMethod);
       setLastOrder({
@@ -716,9 +725,9 @@ const Shop = () => {
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowPaymentModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] border-2 border-primary-300 dark:border-primary-700">
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] border-2 border-primary-300 dark:border-primary-700 ${paymentMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
               {/* Header */}
-              <div className="p-5 text-white shrink-0" style={{ background: `linear-gradient(135deg, ${headerColor}, ${headerColor}cc)` }}>
+              <div className={`p-5 text-white shrink-0 ${paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-purple-500 to-purple-600'}`}>
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   {pm && <pm.icon size={20} />}
                   {pm?.label} Payment
@@ -730,58 +739,71 @@ const Shop = () => {
               </div>
 
               <div className="p-5 overflow-y-auto flex-1">
+                <div className={`${paymentMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'flex gap-4' : ''}`}>
+                <div className="flex-1 min-w-0">
                 {/* Order Summary */}
-                <div className="rounded-lg p-3 mb-4 bg-primary-50/50 dark:bg-primary-900/10">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
                   <div className="flex justify-between text-sm mb-1">
-                    <span style={{ color: 'var(--color-text-secondary)' }}>Items</span>
-                    <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{currentOrder.length} items</span>
+                    <span className="text-gray-500 dark:text-gray-400">Items</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{currentOrder.length} items</span>
                   </div>
                   {forDelivery && deliveryFee > 0 && (
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping Fee</span>
-                      <span className="font-medium text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      <span className="font-medium text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 mt-2 border-t border-primary-200/20 dark:border-primary-700/20">
-                    <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>Total Due</span>
-                    <span className="text-xl font-bold" style={{ color: 'var(--color-button-500)' }}>₱{orderTotal.toLocaleString()}</span>
+                  <div className="flex justify-between pt-2 mt-2 border-t border-gray-200 dark:border-gray-600">
+                    <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
+                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{orderTotal.toLocaleString()}</span>
                   </div>
                 </div>
 
                 {paymentMethod === 'gcash' ? (
                   <>
                     <div className="mb-3">
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>GCash Reference Number <span className="text-red-500">*</span></label>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
                       <input type="text" value={gcashReference} onChange={(e) => setGcashReference(e.target.value)}
                         placeholder="Enter 13-digit reference number"
-                        className="w-full px-4 py-3 text-lg font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wider border-2 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100"
+                        className="w-full px-4 py-3 text-lg font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wider border-2 border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100"
                         autoFocus />
                     </div>
                     <div className="mb-4">
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Payment Proof <span className="text-red-500">*</span></label>
-                      <div className="grid grid-cols-2 gap-2 mb-2">
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Proof <span className="text-red-500">*</span></label>
+                      <div className="flex gap-2 mb-2">
                         <button type="button" onClick={() => proofFileRef.current?.click()}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <Upload size={14} /> Upload Image
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                            paymentProofFiles.length === 0
+                              ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                              : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                          }`}>
+                          <ImageIcon size={14} /> Upload Image
                         </button>
                         <button type="button" onClick={() => proofCameraRef.current?.click()}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                            paymentProofFiles.length === 0
+                              ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                              : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                          }`}>
                           <Camera size={14} /> Open Camera
                         </button>
                       </div>
                       <input ref={proofFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleProofFileChange} />
                       <input ref={proofCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleProofFileChange} />
                       {paymentProofPreviews.length > 0 && (
-                        <div className="flex gap-2 flex-wrap mb-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           {paymentProofPreviews.map((src, i) => (
-                            <div key={i} className="relative">
-                              <img src={src} alt={`proof-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
-                              <button onClick={() => removeProofFile(i)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">×</button>
+                            <div key={i} className="relative group">
+                              <img src={src} alt={`proof-${i}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 dark:border-blue-700" />
+                              <button onClick={() => removeProofFile(i)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
                             </div>
                           ))}
                         </div>
                       )}
                       {paymentProofError && <p className="text-red-500 text-xs mt-1">{paymentProofError}</p>}
+                      {paymentProofFiles.length === 0 && !paymentProofError && (
+                        <p className="mt-1 text-xs text-red-500">Payment proof is required.</p>
+                      )}
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-3">
                       <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1 uppercase tracking-wide">Payment Verification</p>
@@ -796,20 +818,48 @@ const Shop = () => {
                     <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">For cash payments, please visit the store directly.</p>
                   </div>
                 )}
+                </div>{/* end left-side flex-1 */}
+
+                {/* Right side: GCash QR Code & Info Panel */}
+                {paymentMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) && (
+                  <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4">
+                    <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide text-center">Send Payment Here</h4>
+                    {bizSettings.gcash_qr && (
+                      <div className="w-48 h-48 bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden shadow-lg">
+                        <img src={bizSettings.gcash_qr} alt="GCash QR Code" className="w-full h-full object-contain p-2" />
+                      </div>
+                    )}
+                    {bizSettings.gcash_name && (
+                      <div className="text-center">
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">Account Name</p>
+                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{bizSettings.gcash_name}</p>
+                      </div>
+                    )}
+                    {bizSettings.gcash_number && (
+                      <div className="text-center">
+                        <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">GCash Number</p>
+                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wider">{bizSettings.gcash_number}</p>
+                      </div>
+                    )}
+                    <div className="mt-auto pt-2">
+                      <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center">Scan the QR code or send to the number above, then enter the reference number.</p>
+                    </div>
+                  </div>
+                )}
+                </div>{/* end flex wrapper */}
               </div>
 
-              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-200/20 dark:border-primary-700/20">
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
                   onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all border-2 border-primary-300 dark:border-primary-700 text-gray-500 dark:text-gray-400"
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmPayment}
                   disabled={submitting || (paymentMethod === 'gcash' ? (!gcashReference.trim() || paymentProofFiles.length === 0) : false)}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  style={{ backgroundColor: paymentMethods.find(m => m.value === paymentMethod)?.color || theme.button_primary }}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${paymentMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-purple-500 hover:bg-purple-600'}`}
                 >
                   <Receipt size={14} /> {submitting ? 'Processing...' : 'Place Order'}
                 </button>

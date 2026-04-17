@@ -30,7 +30,7 @@
             <p><strong>Important:</strong> If you did not make this change, your account may be compromised. Please contact your administrator immediately and change your password.</p>
         </div>
         <div class="footer">
-            <p>This is an automated security notification from KJP Ricemill Management System.</p>
+            <p>This is an automated security notification from {{ \App\Models\BusinessSetting::getValue('business_name', config('app.name')) }} Management System.</p>
         </div>
     </div>
 </body>

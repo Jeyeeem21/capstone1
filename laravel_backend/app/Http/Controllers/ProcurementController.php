@@ -116,13 +116,6 @@ class ProcurementController extends Controller
             'sacks' => $procurement->sacks,
         ]);
 
-        // Email supplier + admins after response to avoid blocking
-        $emailService = $this->emailService;
-        dispatch(function () use ($emailService, $procurement) {
-            $emailService->sendProcurementToSupplier($procurement);
-            $emailService->sendProcurementToAdmin($procurement);
-        })->afterResponse();
-
         return $this->successResponse(
             new ProcurementResource($procurement),
             'Procurement created successfully',
@@ -272,6 +265,25 @@ class ProcurementController extends Controller
             null,
             'Procurement archived successfully'
         );
+    }
+
+    /**
+     * Fire-and-forget: send procurement store emails (called from frontend after success).
+     */
+    public function sendStoreEmail(string $id): JsonResponse
+    {
+        $procurement = Procurement::with(['supplier', 'variety'])->find($id);
+        if (!$procurement) return response()->json(['success' => true]);
+
+        $emailService = $this->emailService;
+        dispatch(function () use ($emailService, $procurement) {
+            try {
+                $emailService->sendProcurementToSupplier($procurement);
+                $emailService->sendProcurementToAdmin($procurement);
+            } catch (\Throwable $e) { /* silent */ }
+        })->afterResponse();
+
+        return response()->json(['success' => true]);
     }
 
     /**

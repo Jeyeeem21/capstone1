@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Settings2, Package, CheckCircle, TrendingUp, FileText, Archive, Eye, Calendar, Hash, Scale, Activity, Play, User, Percent, Layers, RotateCcw, ArrowDown, X } from 'lucide-react';
+import { Settings2, Package, CheckCircle, TrendingUp, FileText, Archive, Eye, Calendar, Hash, Scale, Activity, Play, User, Percent, Layers, RotateCcw, ArrowDown, X, Undo2, Edit } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, useToast, Modal, Button, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -230,9 +230,9 @@ const Processing = () => {
   }, [toast, refetchDrying]);
 
   const handleDelete = useCallback((item) => {
-    // Only allow archiving Pending items
+    // Only allow returning Pending items to drying
     if (item.status !== 'Pending') {
-      toast.warning('Cannot Archive', 'Only pending records can be archived.');
+      toast.warning('Cannot Return', 'Only pending records can be returned to drying.');
       return;
     }
     setSelectedItem(item);
@@ -517,16 +517,16 @@ const Processing = () => {
         // Immediately remove from local data (optimistic update) for instant UI
         optimisticUpdateActive(prev => prev.filter(p => p.id !== archivedId));
         optimisticUpdateCompleted(prev => prev.filter(p => p.id !== archivedId));
-        toast.success('Processing Archived', 'Processing record has been archived.');
+        toast.success('Returned to Drying', 'Processing record has been returned to drying.');
         // Refetch in background to confirm
         invalidateAndRefetch();
         return;
       } else {
-        throw new Error(response.message || 'Failed to archive');
+        throw new Error(response.message || 'Failed to return to drying');
       }
     } catch (error) {
-      console.error('Error archiving processing:', error);
-      toast.error('Error', 'Failed to archive processing');
+      console.error('Error returning processing to drying:', error);
+      toast.error('Error', 'Failed to return processing to drying');
     } finally {
       setSaving(false);
     }
@@ -858,10 +858,26 @@ const Processing = () => {
             <CheckCircle size={16} />
           </button>
         )}
-        <ActionButtons 
-          onEdit={row.status === 'Pending' ? () => handleEdit(row) : null} 
-          onArchive={row.status === 'Pending' ? () => handleDelete(row) : null} 
-        />
+        {row.status === 'Pending' && (
+          <button
+            onClick={() => handleEdit(row)}
+            disabled={saving}
+            className="p-1.5 rounded-md hover:bg-button-50 dark:hover:bg-button-900/30 text-button-500 hover:text-button-700 dark:text-button-300 transition-colors disabled:opacity-50"
+            title="Edit"
+          >
+            <Edit size={15} />
+          </button>
+        )}
+        {row.status === 'Pending' && (
+          <button
+            onClick={() => handleDelete(row)}
+            disabled={saving}
+            className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors disabled:opacity-50"
+            title="Return to Drying"
+          >
+            <Undo2 size={16} />
+          </button>
+        )}
       </div>
     )},
   ], [handleView, handleEdit, handleDelete, handleStartProcessing, handleOpenCompleteModal, saving]);
@@ -1589,16 +1605,16 @@ const Processing = () => {
         }}
       </FormModal>
 
-      {/* Archive Confirmation Modal */}
+      {/* Return to Drying Confirmation Modal */}
       <ConfirmModal 
         isOpen={isDeleteModalOpen} 
         onClose={() => setIsDeleteModalOpen(false)} 
         onConfirm={handleDeleteConfirm} 
-        title="Archive Processing Record" 
-        message={`Are you sure you want to archive Processing #${String(selectedItem?.id || 0).padStart(4, '0')}? It will be moved to the archives and can be restored later.`} 
-        confirmText="Archive" 
+        title="Return to Drying" 
+        message={`Are you sure you want to return Processing #${String(selectedItem?.id || 0).padStart(4, '0')} back to drying? The input quantity will be restored to the drying source.`} 
+        confirmText="Return to Drying" 
         variant="warning" 
-        icon={Archive}
+        icon={Undo2}
         loading={saving}
       />
       

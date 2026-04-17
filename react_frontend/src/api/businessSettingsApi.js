@@ -51,6 +51,21 @@ const businessSettingsApi = {
   },
 
   /**
+   * Upload GCash QR code image
+   * @param {File} file - QR code image file
+   */
+  uploadGcashQr: async (file) => {
+    const formData = new FormData();
+    formData.append('gcash_qr', file);
+
+    // Clear all caches when uploading
+    localStorage.removeItem('kjp-business-settings');
+    apiClient.clearCache?.('business-settings');
+
+    return apiClient.post('/business-settings/gcash-qr', formData);
+  },
+
+  /**
    * Send a test email to verify SMTP configuration
    */
   testEmail: async (smtpPassword) => {

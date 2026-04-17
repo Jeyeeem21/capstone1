@@ -158,6 +158,8 @@ const DryingProcess = () => {
     try {
       const response = await apiClient.post(`/drying-processes/${item.id}/increment-day`);
       if (response.success) {
+        // Optimistic: update day count instantly
+        optimisticUpdate(prev => prev.map(d => d.id === item.id ? { ...d, days: (item.days || 0) + 1 } : d));
         toast.success('Day Added', `Day ${item.days + 1} added. Total: ₱${((parseInt(item.sacks || 0) * parseFloat(item.price)) * (item.days + 1)).toLocaleString()}`);
         invalidateAndRefetch();
       } else {
@@ -179,6 +181,8 @@ const DryingProcess = () => {
     try {
       const response = await apiClient.post(`/drying-processes/${item.id}/mark-dried`);
       if (response.success) {
+        // Optimistic: mark as dried instantly
+        optimisticUpdate(prev => prev.map(d => d.id === item.id ? { ...d, status: 'Dried' } : d));
         toast.success('Marked as Dried', `Drying #${String(item.id).padStart(4, '0')} is now dried and ready for processing.`);
         invalidateAndRefetch();
       } else {
@@ -306,6 +310,8 @@ const DryingProcess = () => {
 
       const response = await apiClient.post('/drying-processes', submitData);
       if (response.success && response.data) {
+        // Optimistic: show new drying process instantly
+        optimisticUpdate(prev => [response.data, ...prev]);
         setIsAddModalOpen(false);
         toast.success('Drying Started',
           dryingSource === 'batch' ? 'Batch drying process has been created.' : 'New drying process has been created.');

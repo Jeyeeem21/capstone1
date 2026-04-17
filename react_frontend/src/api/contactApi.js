@@ -16,13 +16,8 @@ export const contactApi = {
    * @param {string} data.subject - Message subject
    * @param {string} data.message - Message content
    */
-  send: async ({ name, email, subject, message }) => {
-    return apiClient.post(ENDPOINTS.CONTACT.SEND, {
-      name,
-      email,
-      subject,
-      message,
-    });
+  send: async (data) => {
+    return apiClient.post(ENDPOINTS.CONTACT.SEND, data);
   },
 };
 

@@ -30,7 +30,7 @@
             <p>If you did not request this change, please ignore this email and contact your administrator.</p>
         </div>
         <div class="footer">
-            <p>This is an automated message from KJP Ricemill Management System.</p>
+            <p>This is an automated message from {{ \App\Models\BusinessSetting::getValue('business_name', config('app.name')) }} Management System.</p>
         </div>
     </div>
 </body>

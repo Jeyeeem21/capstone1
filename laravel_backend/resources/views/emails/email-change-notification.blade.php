@@ -32,7 +32,7 @@
         </div>
         <div class="footer">
             <p>This notification was sent to your old email address for security purposes.</p>
-            <p>KJP Ricemill Management System</p>
+            <p>{{ \App\Models\BusinessSetting::getValue('business_name', config('app.name')) }} Management System</p>
         </div>
     </div>
 </body>

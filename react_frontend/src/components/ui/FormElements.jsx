@@ -51,6 +51,7 @@ const FormInput = ({
           value={value}
           onChange={onChange}
           onBlur={() => setTouched(true)}
+          onWheel={(e) => { if (type === 'number') e.target.blur(); }}
           placeholder={placeholder}
           required={required}
           disabled={disabled}

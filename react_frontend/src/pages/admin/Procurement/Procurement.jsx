@@ -756,6 +756,18 @@ const Procurement = () => {
             ? `Procurement added and new supplier "${formData.new_supplier_name}" created.`
             : 'Procurement record has been added.';
         
+        // Fire-and-forget: send email notification (non-blocking)
+        if (!isEdit && response.data?.id) {
+          apiClient.post(`/procurements/${response.data.id}/store-email`).catch(() => {});
+        }
+
+        // Optimistic update — instantly show the new/updated row
+        if (isEdit) {
+          optimisticUpdate(prev => prev.map(p => p.id === selectedItem.id ? { ...p, ...response.data } : p));
+        } else {
+          optimisticUpdate(prev => [response.data, ...prev]);
+        }
+
         // Close modal first
         isEdit ? setIsEditModalOpen(false) : setIsAddModalOpen(false);
         
@@ -901,6 +913,8 @@ const Procurement = () => {
       if (response.success && response.data) {
         setIsIndividualDryingOpen(false);
         toast.success('Sent to Drying', `${sacks} sacks from Procurement #${String(individualDryingItem.id).padStart(4, '0')} sent to drying.`);
+        // Optimistic: update procurement status instantly
+        optimisticUpdate(prev => prev.map(p => p.id === individualDryingItem.id ? { ...p, status: 'Sent to Drying' } : p));
         // Refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache('/drying-processes');
@@ -953,6 +967,11 @@ const Procurement = () => {
       if (response.success && response.data) {
         setIsSendToDryingOpen(false);
         toast.success('Sent to Drying', `${dryingSacks} sacks have been sent to drying.`);
+        // Optimistic: mark affected procurements as sent
+        const affectedIds = dryingPreview?.distribution?.map(d => d.procurement_id) || [];
+        if (affectedIds.length) {
+          optimisticUpdate(prev => prev.map(p => affectedIds.includes(p.id) ? { ...p, status: 'Sent to Drying' } : p));
+        }
         // Refetch in background
         invalidateCache(CACHE_KEY);
         invalidateCache(BATCHES_CACHE_KEY);

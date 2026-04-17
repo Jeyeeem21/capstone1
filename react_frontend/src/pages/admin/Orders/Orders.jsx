@@ -7,14 +7,17 @@ import { apiClient } from '../../../api';
 import { resolveStorageUrl } from '../../../api/config';
 import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
 import { useAuth } from '../../../context/AuthContext';
+import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { suppressNotifToasts } from '../../../utils/notifToastGuard';
 
 const AdminOrders = () => {
   const toast = useToast();
   const { isSuperAdmin, isAdmin, isAdminOrAbove } = useAuth();
+  const { settings: bizSettings } = useBusinessSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const [chartPeriod, setChartPeriod] = useState('daily');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
+  const [chartScopeActive, setChartScopeActive] = useState(false);
   // Chart calendar filter state
   const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
@@ -275,6 +278,8 @@ const AdminOrders = () => {
     try {
       const response = await apiClient.put(`/sales/${order.id}/status`, { status: nextStatus });
       if (response.success) {
+        // Optimistic: update status instantly
+        optimisticUpdate(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -309,6 +314,8 @@ const AdminOrders = () => {
       });
       if (!statusRes.success) throw statusRes;
 
+      // Optimistic: update status + driver info instantly
+      optimisticUpdate(prev => prev.map(o => o.id === shipOrder.id ? { ...o, status: 'shipped', driver_name: selectedDriver?.name || null } : o));
       invalidateCache('/sales');
       invalidateCache('/products');
       invalidateCache('/users');
@@ -350,6 +357,8 @@ const AdminOrders = () => {
       });
       const response = await apiClient.post(`/sales/${deliverOrder.id}/status`, formData);
       if (!response.success) throw response;
+      // Optimistic: mark as delivered instantly
+      optimisticUpdate(prev => prev.map(o => o.id === deliverOrder.id ? { ...o, status: 'delivered' } : o));
       invalidateCache('/sales');
       invalidateCache('/products');
       refetch();
@@ -388,6 +397,8 @@ const AdminOrders = () => {
       const payload = { reason: voidReason, admin_password: voidPassword };
       const response = await apiClient.post(`/sales/${voidOrder.id}/void`, payload);
       if (response.success) {
+        // Optimistic: mark as voided instantly
+        optimisticUpdate(prev => prev.map(o => o.id === voidOrder.id ? { ...o, status: 'voided' } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -509,6 +520,8 @@ const AdminOrders = () => {
         pickup_date: pickupDate || null,
       });
       if (response.success) {
+        // Optimistic: mark as picking_up instantly
+        optimisticUpdate(prev => prev.map(o => o.id === acceptReturnOrder.id ? { ...o, status: 'picking_up' } : o));
         invalidateCache('/sales');
         refetch();
         suppressNotifToasts();
@@ -533,6 +546,8 @@ const AdminOrders = () => {
     try {
       const response = await apiClient.post(`/sales/${order.id}/return/reject`);
       if (response.success) {
+        // Optimistic: revert to delivered
+        optimisticUpdate(prev => prev.map(o => o.id === order.id ? { ...o, status: 'delivered' } : o));
         invalidateCache('/sales');
         refetch();
         suppressNotifToasts();
@@ -560,6 +575,8 @@ const AdminOrders = () => {
     try {
       const response = await apiClient.post(`/sales/${markReturnOrder.id}/return/complete`);
       if (response.success) {
+        // Optimistic: mark as returned instantly
+        optimisticUpdate(prev => prev.map(o => o.id === markReturnOrder.id ? { ...o, status: 'returned' } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -600,6 +617,8 @@ const AdminOrders = () => {
       const items = selectedEntries.map(([id, quantity]) => ({ id: parseInt(id), quantity }));
       const response = await apiClient.post(`/sales/${restockOrder.id}/restock`, { items });
       if (response.success) {
+        // Optimistic: mark restocked items
+        optimisticUpdate(prev => prev.map(o => o.id === restockOrder.id ? { ...o, restocked: true } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -690,6 +709,8 @@ const AdminOrders = () => {
 
       const response = await apiClient.post(`/sales/${payOrder.id}/pay`, formData);
       if (response.success) {
+        // Optimistic: mark as paid instantly
+        optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, payment_status: 'paid', payment_method: payMethod } : o));
         invalidateCache('/sales');
         refetch();
         suppressNotifToasts();
@@ -783,10 +804,11 @@ const AdminOrders = () => {
 
   // Chart-filtered orders — used for stats, cards, table (scoped by calendar + dot)
   const chartFilteredOrders = useMemo(() => {
+    if (!chartScopeActive && !activeChartPoint) return mappedOrders;
     const scoped = mappedOrders.filter(isInChartScope);
     if (!activeChartPoint) return scoped;
     return scoped.filter(matchesChartPoint);
-  }, [mappedOrders, isInChartScope, activeChartPoint, matchesChartPoint]);
+  }, [mappedOrders, isInChartScope, activeChartPoint, matchesChartPoint, chartScopeActive]);
 
   const chartFilteredOrdersByTab = useMemo(() => {
     let result;
@@ -1113,16 +1135,25 @@ const AdminOrders = () => {
           <div className="lg:col-span-2">
             <LineChart
               title="Order Trends"
-              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : "Revenue from customer orders"}
+              subtitle={activeChartPoint ? `Filtered: ${activeChartPoint} — click dot again to clear` : !chartScopeActive ? 'Revenue from customer orders' : 'Filtered by chart scope'}
               data={chartData}
               lines={[{ dataKey: 'value', name: 'Revenue (₱)' }]}
               height={280}
               yAxisUnit="₱"
               headerRight={
                 <div className="flex items-center gap-2 flex-wrap">
+                  {(activeChartPoint || chartScopeActive) && (
+                    <button
+                      onClick={() => { setActiveChartPoint(null); setChartScopeActive(false); setChartPeriod('daily'); const d = new Date(); setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); setChartYear(d.getFullYear()); setChartYearFrom(d.getFullYear() - 4); setChartYearTo(d.getFullYear()); }}
+                      className="px-2 py-1 text-[10px] font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-md hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      ✕ Reset
+                    </button>
+                  )}
                   <select
                     value={chartPeriod}
-                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); }}
+                    onClick={() => { if (!chartScopeActive) { setActiveChartPoint(null); setChartScopeActive(true); } }}
+                    onChange={(e) => { setChartPeriod(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                     className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="daily">Daily</option>
@@ -1135,7 +1166,7 @@ const AdminOrders = () => {
                     <input
                       type="month"
                       value={chartMonth}
-                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartMonth(e.target.value); setActiveChartPoint(null); setChartScopeActive(true); }}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   )}
@@ -1143,7 +1174,7 @@ const AdminOrders = () => {
                     <input
                       type="number"
                       value={chartYear}
-                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); }}
+                      onChange={(e) => { setChartYear(parseInt(e.target.value) || new Date().getFullYear()); setActiveChartPoint(null); setChartScopeActive(true); }}
                       min="2000"
                       max={new Date().getFullYear()}
                       className="px-3 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-24"
@@ -1154,7 +1185,7 @@ const AdminOrders = () => {
                       <input
                         type="number"
                         value={chartYearFrom}
-                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); }}
+                        onChange={(e) => { const v = parseInt(e.target.value) || 2000; setChartYearFrom(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min="2000"
                         max={chartYearTo}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -1163,7 +1194,7 @@ const AdminOrders = () => {
                       <input
                         type="number"
                         value={chartYearTo}
-                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); }}
+                        onChange={(e) => { const v = parseInt(e.target.value) || new Date().getFullYear(); setChartYearTo(v); setActiveChartPoint(null); setChartScopeActive(true); }}
                         min={chartYearFrom}
                         max={new Date().getFullYear()}
                         className="px-2 py-1.5 text-sm font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 w-20"
@@ -2408,34 +2439,39 @@ const AdminOrders = () => {
       </Modal>
 
       {/* Mark as Paid Modal */}
-      <Modal
-        isOpen={isPayModalOpen}
-        onClose={() => { setIsPayModalOpen(false); setPayOrder(null); stopPayCamera(); }}
-        title="Record Payment"
-        maxWidth="md"
-        footer={
-          <div className="flex gap-3">
-            <button onClick={() => { setIsPayModalOpen(false); stopPayCamera(); }} className="flex-1 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">Cancel</button>
-            <button
-              onClick={handleConfirmPay}
-              disabled={saving || (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < (payOrder?.total || 0))) || (payMethod === 'gcash' && !payGcashRef.trim())}
-              className="flex-1 py-2 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <CheckCircle size={14} /> {saving ? 'Processing...' : 'Confirm Payment'}
-            </button>
-          </div>
-        }
-      >
+      {isPayModalOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => { setIsPayModalOpen(false); setPayOrder(null); stopPayCamera(); }} />
+          <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
+              {/* Header */}
+              <div className={`p-5 text-white shrink-0 ${payMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'}`}>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  {payMethod === 'cash' ? <DollarSign size={20} /> : <CreditCard size={20} />}
+                  {payMethod === 'cash' ? 'Cash Payment' : 'GCash Payment'}
+                </h3>
+                <p className="text-sm text-white/80 mt-1">
+                  {payMethod === 'cash' ? 'Enter amount tendered by customer' : 'Enter GCash reference number'}
+                </p>
+              </div>
+
+              <div className={`${payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'flex' : ''}`}>
+              {/* Left side: form content */}
+              <div className="flex-1 min-w-0">
+              <div className="p-5 space-y-4">
         {payOrder && (
-          <div className="space-y-4">
+          <>
             {/* Order Summary */}
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-primary-200 dark:border-primary-700">
-              <div className="flex justify-between items-center">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex justify-between items-center mb-1">
                 <div>
                   <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{payOrder.order_id}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{payOrder.customer}</p>
                 </div>
-                <p className="text-lg font-bold text-button-600 dark:text-button-400">₱{payOrder.total.toLocaleString()}</p>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
+                <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{payOrder.total.toLocaleString()}</span>
               </div>
             </div>
 
@@ -2452,8 +2488,8 @@ const AdminOrders = () => {
                     onClick={() => setPayMethod(m.value)}
                     className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border-2 transition-all ${
                       payMethod === m.value
-                        ? `border-${m.color}-500 bg-${m.color}-50 text-${m.color}-700`
-                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500 dark:border-gray-600'
+                        ? m.color === 'green' ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
                     }`}
                   >
                     <m.icon size={16} /> {m.label}
@@ -2464,6 +2500,7 @@ const AdminOrders = () => {
 
             {payMethod === 'cash' ? (
               <>
+                {/* Cash Tendered Input */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Cash Tendered <span className="text-red-500">*</span></label>
                   <div className="relative">
@@ -2473,34 +2510,42 @@ const AdminOrders = () => {
                       value={payCashTendered}
                       onChange={(e) => setPayCashTendered(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-8 pr-4 py-2.5 text-lg font-bold border border-primary-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 dark:text-gray-100"
+                      className="w-full pl-8 pr-4 py-3 text-lg font-bold border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white dark:bg-gray-700 dark:text-gray-100"
                       autoFocus
                     />
                   </div>
                 </div>
-                {/* Quick amounts */}
+
+                {/* Quick Amount Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[payOrder.total, Math.ceil(payOrder.total / 100) * 100, Math.ceil(payOrder.total / 500) * 500, Math.ceil(payOrder.total / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
-                    <button key={amount} onClick={() => setPayCashTendered(String(amount))} className="py-1.5 rounded-lg text-xs font-semibold border border-primary-200 dark:border-primary-700 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">₱{amount.toLocaleString()}</button>
+                    <button key={amount} onClick={() => setPayCashTendered(String(amount))} className="py-2 rounded-lg text-xs font-semibold border-2 border-primary-200 dark:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-400 transition-all dark:text-gray-200">₱{amount.toLocaleString()}</button>
                   ))}
                 </div>
-                {payCashTendered && parseFloat(payCashTendered) >= payOrder.total && (
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 text-center">
-                    <p className="text-xs font-bold text-green-600 dark:text-green-400 uppercase mb-1">Change</p>
-                    <p className="text-xl font-bold text-green-600 dark:text-green-400">₱{(parseFloat(payCashTendered) - payOrder.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+
+                {/* Change Display */}
+                {payCashTendered && (
+                  <div className={`rounded-lg p-3 text-center ${parseFloat(payCashTendered) >= payOrder.total ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
+                    <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(payCashTendered) >= payOrder.total ? '#16a34a' : '#dc2626' }}>
+                      {parseFloat(payCashTendered) >= payOrder.total ? 'Change' : 'Insufficient'}
+                    </p>
+                    <p className={`text-2xl font-bold ${parseFloat(payCashTendered) >= payOrder.total ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      ₱{Math.abs((parseFloat(payCashTendered) || 0) - payOrder.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
                   </div>
                 )}
               </>
             ) : (
               <>
+                {/* GCash Reference */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     value={payGcashRef}
                     onChange={(e) => setPayGcashRef(e.target.value)}
-                    placeholder="e.g. 1234 5678 9012"
-                    className="w-full px-4 py-2.5 text-sm font-semibold border border-primary-300 dark:border-primary-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100"
+                    placeholder="Enter 13-digit reference number"
+                    className="w-full px-4 py-3 text-lg font-bold border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100"
                     autoFocus
                   />
                 </div>
@@ -2512,11 +2557,11 @@ const AdminOrders = () => {
                   </label>
 
                   {payShowCamera && (
-                    <div className="relative mb-3 rounded-lg overflow-hidden border border-button-300 dark:border-button-600">
-                      <video ref={payVideoRef} autoPlay playsInline className="w-full h-40 object-cover bg-black" />
+                    <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-blue-300 dark:border-blue-700">
+                      <video ref={payVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
                       <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
-                        <button onClick={capturePayPhoto} className="px-3 py-1.5 bg-button-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-button-600 flex items-center gap-1.5"><Camera size={12} /> Capture</button>
-                        <button onClick={stopPayCamera} className="px-3 py-1.5 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={12} /> Cancel</button>
+                        <button onClick={capturePayPhoto} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-blue-600 flex items-center gap-1.5"><Camera size={14} /> Capture</button>
+                        <button onClick={stopPayCamera} className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={14} /> Cancel</button>
                       </div>
                     </div>
                   )}
@@ -2525,8 +2570,8 @@ const AdminOrders = () => {
                     <div className="flex flex-wrap gap-2 mb-3">
                       {payProofPreviews.map((url, idx) => (
                         <div key={idx} className="relative group">
-                          <img src={url} alt={`Proof ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-button-200 dark:border-button-700" />
-                          <button onClick={() => removePayProof(idx)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                          <img src={url} alt={`Proof ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 dark:border-blue-700" />
+                          <button onClick={() => removePayProof(idx)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
                         </div>
                       ))}
                     </div>
@@ -2534,21 +2579,85 @@ const AdminOrders = () => {
 
                   {!payShowCamera && (
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => payProofInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold">
-                        <ImageIcon size={14} /> Upload
+                      <button type="button" onClick={() => payProofInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                        payProofFiles.length === 0
+                          ? 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                      }`}>
+                        <ImageIcon size={14} /> Upload Image
                       </button>
-                      <button type="button" onClick={startPayCamera} className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-button-300 dark:border-button-600 text-button-600 dark:text-button-400 hover:bg-button-50 dark:hover:bg-button-900/20 text-xs font-semibold">
-                        <Camera size={14} /> Camera
+                      <button type="button" onClick={startPayCamera} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                        payProofFiles.length === 0
+                          ? 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                      }`}>
+                        <Camera size={14} /> Open Camera
                       </button>
                       <input ref={payProofInputRef} type="file" accept="image/*" multiple onChange={handlePayProofUpload} className="hidden" />
                     </div>
                   )}
                 </div>
+
+                {/* GCash Info */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                  <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1 uppercase tracking-wide">Payment Verification</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Enter the exact 13-digit GCash reference number and upload a screenshot or capture the payment confirmation as proof.</p>
+                </div>
               </>
             )}
-          </div>
+          </>
         )}
-      </Modal>
+              </div>
+              </div>{/* end left-side flex-1 */}
+
+              {/* Right side: GCash QR Code & Info Panel */}
+              {payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) && (
+                <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4">
+                  <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide text-center">Send Payment Here</h4>
+                  {bizSettings.gcash_qr && (
+                    <div className="w-48 h-48 bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden shadow-lg">
+                      <img src={bizSettings.gcash_qr} alt="GCash QR Code" className="w-full h-full object-contain p-2" />
+                    </div>
+                  )}
+                  {bizSettings.gcash_name && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">Account Name</p>
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{bizSettings.gcash_name}</p>
+                    </div>
+                  )}
+                  {bizSettings.gcash_number && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">GCash Number</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wider">{bizSettings.gcash_number}</p>
+                    </div>
+                  )}
+                  <div className="mt-auto pt-2">
+                    <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center">Scan the QR code or send to the number above, then enter the reference number.</p>
+                  </div>
+                </div>
+              )}
+              </div>{/* end flex wrapper */}
+
+              {/* Footer */}
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
+                <button
+                  onClick={() => { setIsPayModalOpen(false); stopPayCamera(); }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleConfirmPay}
+                  disabled={saving || (payMethod === 'cash' ? (!payCashTendered || parseFloat(payCashTendered) < (payOrder?.total || 0)) : !payGcashRef.trim())}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${payMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'}`}
+                >
+                  <CheckCircle size={14} /> {saving ? 'Processing...' : 'Confirm Payment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Void Order Modal */}
       <Modal
