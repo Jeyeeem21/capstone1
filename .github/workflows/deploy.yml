@@ -20,10 +20,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
+            set -e
             cd /home/u940130461/capstone1
 
             # Discard any local changes (e.g. permission changes from chmod)
-            git checkout -- .
+            git checkout -- . || true
+            git clean -fd || true
 
             # Pull latest code
             git pull origin main
