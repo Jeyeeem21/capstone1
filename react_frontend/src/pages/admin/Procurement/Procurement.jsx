@@ -1995,7 +1995,7 @@ const Procurement = () => {
                       name="batch_id"
                       value={formData.batch_id}
                       onChange={handleFormChange}
-                      className="flex-1 px-4 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+                      className="flex-1 min-w-0 px-4 py-2.5 text-sm border-2 border-primary-200 dark:border-primary-700 rounded-xl bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
                     >
                       {openBatchOptions.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -2004,10 +2004,11 @@ const Procurement = () => {
                     <button
                       type="button"
                       onClick={() => setIsCreatingBatch(true)}
-                      className="px-3 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-700 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 whitespace-nowrap"
+                      className="px-3 py-2.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-700 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 whitespace-nowrap flex-shrink-0"
                     >
                       <PlusCircle size={14} />
-                      New Batch
+                      <span className="hidden sm:inline">New Batch</span>
+                      <span className="sm:hidden">New</span>
                     </button>
                   </div>
                   {formData.batch_id && (() => {
@@ -2125,7 +2126,7 @@ const Procurement = () => {
               )}
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Sacks Accumulator */}
               <div>
                 <label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">

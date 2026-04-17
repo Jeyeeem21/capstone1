@@ -108,7 +108,7 @@ const Modal = ({
         </div>
 
         {/* Content */}
-        <div className="px-4 sm:px-5 py-3 sm:py-4 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(90vh - 120px)' }}>
+        <div className="px-4 sm:px-5 py-3 sm:py-4 overflow-y-auto overflow-x-hidden overscroll-contain" style={{ maxHeight: 'calc(90vh - 120px)' }}>
           {children}
         </div>
 

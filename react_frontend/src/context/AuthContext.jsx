@@ -17,6 +17,21 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem('auth_token');
       if (!token) { setLoading(false); return; }
 
+      // Auto-logout on tab/browser close:
+      // sessionStorage is cleared when the tab closes.
+      // If we have a token in localStorage but no session marker,
+      // the user closed the tab/browser → clear auth and force re-login.
+      const sessionAlive = sessionStorage.getItem('session_alive');
+      if (!sessionAlive && token !== 'offline_session') {
+        // Browser/tab was closed and reopened — log out
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('session_token');
+        localStorage.removeItem('offline_last_email');
+        try { await authApi.logout(); } catch { /* ignore */ }
+        setLoading(false);
+        return;
+      }
+
       // Special case: token is a placeholder set during offline-only login.
       // If online now, clear it so the login screen shows (user must do a real login).
       // If still offline, restore from IndexedDB cache.
@@ -32,7 +47,10 @@ export const AuthProvider = ({ children }) => {
           const lastEmail = localStorage.getItem('offline_last_email');
           if (lastEmail) {
             const record = await getValue(STORES.META, 'offline_auth_' + lastEmail);
-            if (record?.user) setUser(record.user);
+            if (record?.user) {
+              setUser(record.user);
+              sessionStorage.setItem('session_alive', '1');
+            }
           }
         } catch { /* ignore */ }
         setLoading(false);
@@ -44,6 +62,7 @@ export const AuthProvider = ({ children }) => {
         const response = await authApi.getCurrentUser();
         if (response.success && response.user) {
           setUser(response.user);
+          sessionStorage.setItem('session_alive', '1');
           if (response.session_token) {
             localStorage.setItem('session_token', response.session_token);
           }
@@ -58,7 +77,10 @@ export const AuthProvider = ({ children }) => {
           const lastEmail = localStorage.getItem('offline_last_email');
           if (lastEmail) {
             const record = await getValue(STORES.META, 'offline_auth_' + lastEmail);
-            if (record?.user) setUser(record.user);
+            if (record?.user) {
+              setUser(record.user);
+              sessionStorage.setItem('session_alive', '1');
+            }
           }
         } catch { /* ignore */ }
       }
@@ -127,6 +149,7 @@ export const AuthProvider = ({ children }) => {
       const response = await authApi.login({ email, password });
       if (response.success && response.user) {
         setUser(response.user);
+        sessionStorage.setItem('session_alive', '1');
 
         // Cache credentials for offline login (hashed, never plain text)
         try {
@@ -168,6 +191,7 @@ export const AuthProvider = ({ children }) => {
       const cachedUser = await getOfflineUser(email, password);
       if (cachedUser) {
         setUser(cachedUser);
+        sessionStorage.setItem('session_alive', '1');
         // Keep any existing token so initAuth works on reconnect
         if (!localStorage.getItem('auth_token')) {
           localStorage.setItem('auth_token', 'offline_session');
@@ -197,6 +221,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('session_token');
     localStorage.removeItem('offline_last_email');
+    sessionStorage.removeItem('session_alive');
     // Clear all offline/IndexedDB data on logout
     try {
       await clearAllData();

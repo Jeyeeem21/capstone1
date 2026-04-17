@@ -105,9 +105,20 @@ export function OfflineProvider({ children }) {
     return unsubscribe;
   }, [refreshPendingCount]);
 
-  // Initial count load
+  // Initial count load + auto-sync if online with pending items
   useEffect(() => {
-    refreshPendingCount();
+    refreshPendingCount().then(async () => {
+      // If we're online and have pending items, auto-sync on app load
+      if (navigator.onLine) {
+        try {
+          const count = await getPendingSyncCount();
+          const emailCount = await getPendingEmailCount();
+          if (count + emailCount > 0) {
+            setTimeout(() => processSyncQueue(), 1500);
+          }
+        } catch { /* ignore */ }
+      }
+    });
   }, [refreshPendingCount]);
 
   // Manual sync trigger

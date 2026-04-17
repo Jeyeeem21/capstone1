@@ -17,6 +17,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  Sun,
+  ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
@@ -54,6 +56,7 @@ const BottomNav = () => {
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', to: `${basePath}/dashboard` },
     { icon: ShoppingCart, label: 'Procurement', to: `${basePath}/procurement` },
+    { icon: Sun, label: 'Drying', to: `${basePath}/drying` },
     { icon: Settings2, label: 'Processing', to: `${basePath}/processing` },
     { 
       icon: Package, 
@@ -67,6 +70,7 @@ const BottomNav = () => {
       ]
     },
     { icon: Monitor, label: 'POS', to: `${basePath}/pos` },
+    { icon: ClipboardList, label: 'Orders', to: `${basePath}/orders` },
     { 
       icon: Users, 
       label: 'Partners', 

@@ -6,8 +6,8 @@
  * "N pending" badge is tappable — opens a modal listing queued actions.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { WifiOff, RefreshCw, CheckCircle, AlertTriangle, X, ClipboardList, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { WifiOff, Wifi, RefreshCw, CheckCircle, AlertTriangle, X, ClipboardList, Clock } from 'lucide-react';
 import { useOffline } from '../../pwa/OfflineContext';
 import { getPendingSyncActions } from '../../pwa/offlineDb';
 
@@ -142,10 +142,24 @@ export default function OfflineBanner() {
   } = useOffline();
 
   const [showModal, setShowModal] = useState(false);
+  const [backOnline, setBackOnline] = useState(false);
+  const wasOfflineRef = useRef(false);
   const openModal = useCallback(() => setShowModal(true), []);
   const closeModal = useCallback(() => setShowModal(false), []);
 
-  if (isOnline && pendingCount === 0 && !isSyncing && !lastSyncResult && conflicts.length === 0) {
+  // Track offline→online transition to show "Back Online" toast
+  useEffect(() => {
+    if (!isOnline) {
+      wasOfflineRef.current = true;
+    } else if (wasOfflineRef.current) {
+      wasOfflineRef.current = false;
+      setBackOnline(true);
+      const timer = setTimeout(() => setBackOnline(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOnline]);
+
+  if (isOnline && pendingCount === 0 && !isSyncing && !lastSyncResult && !backOnline && conflicts.length === 0) {
     return null;
   }
 
@@ -173,6 +187,19 @@ export default function OfflineBanner() {
                 <ClipboardList size={11} />
               </button>
             )}
+          </div>
+        )}
+
+        {/* BACK ONLINE NOTIFICATION */}
+        {isOnline && backOnline && !isSyncing && !lastSyncResult && pendingCount === 0 && (
+          <div className="bg-green-500 text-white px-4 py-2.5 flex items-center justify-between gap-3 shadow-md animate-slideDown">
+            <div className="flex items-center gap-2.5">
+              <Wifi size={18} className="flex-shrink-0" />
+              <span className="font-semibold text-sm">You're back online!</span>
+            </div>
+            <button onClick={() => setBackOnline(false)} className="text-white/80 hover:text-white flex-shrink-0">
+              <X size={16} />
+            </button>
           </div>
         )}
 
