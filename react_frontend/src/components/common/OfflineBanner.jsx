@@ -6,7 +6,7 @@
  * "N pending" badge is tappable — opens a modal listing queued actions.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WifiOff, RefreshCw, CheckCircle, AlertTriangle, X, ClipboardList, Clock } from 'lucide-react';
 import { useOffline } from '../../pwa/OfflineContext';
 import { getPendingSyncActions } from '../../pwa/offlineDb';
@@ -46,9 +46,9 @@ function timeAgo(ts) {
 function PendingModal({ onClose }) {
   const [actions, setActions] = useState(null);
 
-  useState(() => {
+  useEffect(() => {
     getPendingSyncActions().then(setActions).catch(() => setActions([]));
-  });
+  }, []);
 
   return (
     <div
@@ -151,7 +151,7 @@ export default function OfflineBanner() {
 
   return (
     <>
-      <div className="w-full z-[100]">
+      <div className="w-full z-[100] relative">
         {/* OFFLINE BANNER */}
         {!isOnline && (
           <div className="bg-amber-500 text-white px-4 py-2.5 flex items-center justify-between gap-3 shadow-md">

@@ -327,8 +327,11 @@ const apiClient = {
    * POST request
    */
   post: async (endpoint, body = {}, options = {}) => {
-    // If offline, save to IndexedDB + sync queue
-    if (!navigator.onLine) {
+    // Never queue auth endpoints for offline sync (security: don't store passwords)
+    const isAuthEndpoint = endpoint.includes('/auth/');
+
+    // If offline, save to IndexedDB + sync queue (skip auth endpoints)
+    if (!navigator.onLine && !isAuthEndpoint) {
       return offlineWrite('POST', endpoint, body);
     }
 
@@ -373,8 +376,15 @@ const apiClient = {
       
       return data;
     } catch (error) {
-      // If network error and we're now offline, queue it
-      if (!navigator.onLine && error.message?.includes('fetch')) {
+      // Detect network errors (navigator.onLine is unreliable on mobile)
+      const isNetworkError = !navigator.onLine
+        || error instanceof TypeError
+        || error.message?.includes('fetch')
+        || error.message?.includes('Failed to fetch')
+        || error.message?.includes('timeout');
+
+      // Queue for offline sync if it's a network error (but never queue auth requests)
+      if (isNetworkError && !isAuthEndpoint) {
         return offlineWrite('POST', endpoint, body);
       }
       // Re-throw to preserve error structure including validation errors

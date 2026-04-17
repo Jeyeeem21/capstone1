@@ -122,43 +122,45 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback(async (email, password) => {
     setSessionKicked(false);
 
-    // Online login
-    if (navigator.onLine) {
-      try {
-        const response = await authApi.login({ email, password });
-        if (response.success && response.user) {
-          setUser(response.user);
+    // Try online login first
+    try {
+      const response = await authApi.login({ email, password });
+      if (response.success && response.user) {
+        setUser(response.user);
 
-          // Cache credentials for offline login (hashed, never plain text)
-          try {
-            await cacheLoginCredentials(email, password, response.user);
-            localStorage.setItem('offline_last_email', email.toLowerCase());
-          } catch {
-            // IndexedDB error — non-critical
-          }
-
-          // Fire-and-forget: send login notification email AFTER dashboard data loads
-          setTimeout(() => {
-            apiClient.post('/auth/login-email').catch(() => {});
-          }, 5000);
-
-          return response;
+        // Cache credentials for offline login (hashed, never plain text)
+        try {
+          await cacheLoginCredentials(email, password, response.user);
+          localStorage.setItem('offline_last_email', email.toLowerCase());
+        } catch {
+          // IndexedDB error — non-critical
         }
-        throw new Error(response.error || 'Login failed');
-      } catch (err) {
-        // Check if this is a network error (fetch failed, timeout, etc.)
-        // navigator.onLine is unreliable on mobile — WiFi can be on but no internet
-        const isNetworkError = err instanceof TypeError
-          || err.message?.includes('fetch')
-          || err.message?.includes('Network')
-          || err.message?.includes('network')
-          || err.message?.includes('timeout')
-          || err.code === 'ERR_NETWORK';
 
-        // If it's a real server error (e.g. wrong password, 422), don't fall through
-        if (!isNetworkError) throw err;
-        // Otherwise fall through to offline login below
+        // Fire-and-forget: send login notification email AFTER dashboard data loads
+        setTimeout(() => {
+          apiClient.post('/auth/login-email').catch(() => {});
+        }, 5000);
+
+        return response;
       }
+      throw new Error(response.error || 'Login failed');
+    } catch (err) {
+      // Check if this is a network error (fetch failed, timeout, etc.)
+      // navigator.onLine is unreliable on mobile — WiFi can be on but no internet
+      const isNetworkError = err instanceof TypeError
+        || err.message?.includes('fetch')
+        || err.message?.includes('Failed to fetch')
+        || err.message?.includes('Network')
+        || err.message?.includes('network')
+        || err.message?.includes('timeout')
+        || err.message?.includes('INTERNET_DISCONNECTED')
+        || err.message?.includes('ERR_')
+        || err.message?.includes('server may be unavailable')
+        || err.code === 'ERR_NETWORK';
+
+      // If it's a real server error (e.g. wrong password, 422), don't fall through
+      if (!isNetworkError) throw err;
+      // Otherwise fall through to offline login below
     }
 
     // Offline login — verify password hash against cached credentials
