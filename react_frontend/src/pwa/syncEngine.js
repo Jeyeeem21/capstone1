@@ -105,6 +105,17 @@ async function sendRequest(method, endpoint, body = null) {
 export async function processSyncQueue() {
   if (isSyncing) return { synced: 0, failed: 0, conflicts: 0 };
   
+  // Don't sync if we don't have a real auth token
+  const token = getAuthToken();
+  if (!token || token === 'offline_session') {
+    return { synced: 0, failed: 0, conflicts: 0 };
+  }
+
+  // Double-check we're actually online
+  if (!navigator.onLine) {
+    return { synced: 0, failed: 0, conflicts: 0 };
+  }
+
   const pending = await getPendingSyncActions();
   if (pending.length === 0) return { synced: 0, failed: 0, conflicts: 0 };
   

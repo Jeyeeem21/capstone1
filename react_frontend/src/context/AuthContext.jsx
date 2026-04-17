@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi } from '../api';
 import apiClient from '../api/apiClient';
-import { clearAllData, cacheLoginCredentials, getOfflineUser, clearOfflineAuth, getValue, STORES } from '../pwa/offlineDb';
+import { clearAllData, cacheLoginCredentials, getOfflineUser, clearOfflineAuth, getValue, STORES, getPendingSyncCount } from '../pwa/offlineDb';
+import { processSyncQueue } from '../pwa/syncEngine';
 
 const AuthContext = createContext(null);
 
@@ -163,6 +164,14 @@ export const AuthProvider = ({ children }) => {
         setTimeout(() => {
           apiClient.post('/auth/login-email').catch(() => {});
         }, 5000);
+
+        // Sync any pending offline actions now that we have a real token
+        setTimeout(async () => {
+          try {
+            const count = await getPendingSyncCount();
+            if (count > 0) processSyncQueue();
+          } catch { /* ignore */ }
+        }, 2000);
 
         return response;
       }

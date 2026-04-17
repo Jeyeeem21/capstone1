@@ -119,6 +119,20 @@ export function OfflineProvider({ children }) {
         } catch { /* ignore */ }
       }
     });
+
+    // Periodic retry: check every 30s if there are still pending items to sync
+    const retryInterval = setInterval(async () => {
+      if (!navigator.onLine) return;
+      try {
+        const count = await getPendingSyncCount();
+        const emailCount = await getPendingEmailCount();
+        if (count + emailCount > 0) {
+          processSyncQueue();
+        }
+      } catch { /* ignore */ }
+    }, 30000);
+
+    return () => clearInterval(retryInterval);
   }, [refreshPendingCount]);
 
   // Manual sync trigger

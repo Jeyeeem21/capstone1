@@ -242,8 +242,11 @@ const apiClient = {
     if (useCache) {
       const cached = cache.get(effectiveCacheKey);
       if (cached?.data) {
-        // Return cached data immediately
-        // If stale, we'll still return it but could trigger background refresh
+        // If offline and cache is stale, skip to IndexedDB which has fresh mutations
+        if (!navigator.onLine && cached.isStale) {
+          const offlineData = await offlineGet(endpoint, params);
+          if (offlineData?.success) return offlineData;
+        }
         return { 
           success: true, 
           data: cached.data, 
@@ -254,19 +257,24 @@ const apiClient = {
     }
     
     // Skip network if API is known to be unavailable or browser is offline
-    if ((apiAvailable === false || !navigator.onLine) && useCache) {
-      const cached = cache.get(effectiveCacheKey);
-      if (cached?.data) {
-        return { success: true, data: cached.data, fromCache: true };
+    // Always try IndexedDB first (has fresh offline mutations), then memory cache
+    if (apiAvailable === false || !navigator.onLine) {
+      const offlineData = await offlineGet(endpoint, params);
+      if (offlineData?.success) return offlineData;
+      // Fall back to memory cache only if IndexedDB has nothing
+      if (useCache) {
+        const cached = cache.get(effectiveCacheKey);
+        if (cached?.data) return { success: true, data: cached.data, fromCache: true };
+      }
+      if (!navigator.onLine) {
+        return { success: false, error: 'You are offline and no cached data is available.' };
       }
     }
 
-    // If offline, try IndexedDB
+    // If clearly offline (confirmed by browser), don't even try network
     if (!navigator.onLine) {
       const offlineData = await offlineGet(endpoint, params);
-      if (offlineData) {
-        return offlineData;
-      }
+      if (offlineData) return offlineData;
       return { success: false, error: 'You are offline and no cached data is available.' };
     }
     
@@ -305,7 +313,12 @@ const apiClient = {
       
       return data;
     } catch (error) {
-      // Return cached data on error if available
+      // On network error: always prefer IndexedDB over stale memory cache.
+      // IndexedDB contains freshly written offline mutations; memory cache is stale.
+      const offlineData = await offlineGet(endpoint, params);
+      if (offlineData?.success) return offlineData;
+
+      // Fall back to memory/localStorage cache if IndexedDB has nothing
       if (useCache) {
         const cached = cache.get(effectiveCacheKey);
         if (cached?.data) {
@@ -313,12 +326,6 @@ const apiClient = {
         }
       }
 
-      // Last resort: try IndexedDB
-      const offlineData = await offlineGet(endpoint, params);
-      if (offlineData) {
-        return { ...offlineData, error: error.message };
-      }
-      
       return { success: false, error: error.message };
     }
   },
