@@ -30,11 +30,18 @@ const PublicHeader = () => {
   useEffect(() => {
     const onInstallable = () => setIsInstallable(true);
     const onInstalled  = () => setIsInstallable(false);
-    // Also hide if already standalone
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    // Hide if already running as standalone
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      ('standalone' in window.navigator && window.navigator.standalone)
+    ) {
       setIsInstallable(false);
       return;
     }
+    // iOS devices are always "installable" (via Safari share menu)
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIOS) { setIsInstallable(true); return; }
+
     window.addEventListener('pwa:installable', onInstallable);
     window.addEventListener('pwa:installed',   onInstalled);
     return () => {
@@ -152,7 +159,7 @@ const PublicHeader = () => {
               Login
             </Button>
           </div>
-            
+
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
