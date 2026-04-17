@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi } from '../api';
 import apiClient from '../api/apiClient';
-import { clearAllData } from '../pwa/offlineDb';
+import { clearAllData, cacheLoginCredentials, getOfflineUser, clearOfflineAuth, getValue, STORES } from '../pwa/offlineDb';
 
 const AuthContext = createContext(null);
 
@@ -15,26 +15,54 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('auth_token');
-      if (token) {
+      if (!token) { setLoading(false); return; }
+
+      // Special case: token is a placeholder set during offline-only login.
+      // If online now, clear it so the login screen shows (user must do a real login).
+      // If still offline, restore from IndexedDB cache.
+      if (token === 'offline_session') {
+        if (navigator.onLine) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('session_token');
+          setLoading(false);
+          return;
+        }
+        // Offline — restore cached user
         try {
-          const response = await authApi.getCurrentUser();
-          if (response.success && response.user) {
-            setUser(response.user);
-            // Store session_token from server if present
-            if (response.session_token) {
-              localStorage.setItem('session_token', response.session_token);
+          const lastEmail = localStorage.getItem('offline_last_email');
+          if (lastEmail) {
+            const record = await getValue(STORES.META, 'offline_auth_' + lastEmail);
+            if (record?.user) setUser(record.user);
+          }
+        } catch { /* ignore */ }
+        setLoading(false);
+        return;
+      }
+
+      // Normal real token flow
+      try {
+        const response = await authApi.getCurrentUser();
+        if (response.success && response.user) {
+          setUser(response.user);
+          if (response.session_token) {
+            localStorage.setItem('session_token', response.session_token);
+          }
+        } else {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('session_token');
+        }
+      } catch {
+        // Network error — if offline restore from IndexedDB cache
+        if (!navigator.onLine) {
+          try {
+            const lastEmail = localStorage.getItem('offline_last_email');
+            if (lastEmail) {
+              const record = await getValue(STORES.META, 'offline_auth_' + lastEmail);
+              if (record?.user) setUser(record.user);
             }
-          } else {
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('session_token');
-          }
-        } catch {
-          // If handle401() already fired (true 401), token was cleared — remove session_token too.
-          // If token is still present, this was a network/timeout error (server slow, Laragon warming up)
-          // — do NOT clear it so the user stays logged in on the next reload.
-          if (!localStorage.getItem('auth_token')) {
-            localStorage.removeItem('session_token');
-          }
+          } catch { /* ignore */ }
+        } else if (!localStorage.getItem('auth_token')) {
+          localStorage.removeItem('session_token');
         }
       }
       setLoading(false);
@@ -93,23 +121,60 @@ export const AuthProvider = ({ children }) => {
     };
   }, [user]);
 
-  // Login function — calls real API
+  // Login function — tries online API first, falls back to offline cached credentials
   const login = useCallback(async (email, password) => {
     setSessionKicked(false);
-    const response = await authApi.login({ email, password });
 
-    if (response.success && response.user) {
-      setUser(response.user);
+    // Online login
+    if (navigator.onLine) {
+      try {
+        const response = await authApi.login({ email, password });
+        if (response.success && response.user) {
+          setUser(response.user);
 
-      // Fire-and-forget: send login notification email AFTER dashboard data loads
-      setTimeout(() => {
-        apiClient.post('/auth/login-email').catch(() => {});
-      }, 5000);
+          // Cache credentials for offline login (hashed, never plain text)
+          try {
+            await cacheLoginCredentials(email, password, response.user);
+            localStorage.setItem('offline_last_email', email.toLowerCase());
+          } catch {
+            // IndexedDB error — non-critical
+          }
 
-      return response;
+          // Fire-and-forget: send login notification email AFTER dashboard data loads
+          setTimeout(() => {
+            apiClient.post('/auth/login-email').catch(() => {});
+          }, 5000);
+
+          return response;
+        }
+        throw new Error(response.error || 'Login failed');
+      } catch (err) {
+        // If it's a real server error (not network), don't fall through to offline
+        if (navigator.onLine) throw err;
+      }
     }
 
-    throw new Error(response.error || 'Login failed');
+    // Offline login — verify password hash against cached credentials
+    try {
+      const cachedUser = await getOfflineUser(email, password);
+      if (cachedUser) {
+        setUser(cachedUser);
+        // Keep any existing token so initAuth works on reconnect
+        if (!localStorage.getItem('auth_token')) {
+          localStorage.setItem('auth_token', 'offline_session');
+        }
+        localStorage.setItem('offline_last_email', email.toLowerCase());
+        return { success: true, user: cachedUser, offline: true };
+      }
+    } catch {
+      // IndexedDB error
+    }
+
+    throw new Error(
+      navigator.onLine
+        ? 'Login failed'
+        : 'You are offline. Please login online at least once first so your credentials are cached.'
+    );
   }, []);
 
   // Logout function
@@ -122,6 +187,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('session_token');
+    localStorage.removeItem('offline_last_email');
     // Clear all offline/IndexedDB data on logout
     try {
       await clearAllData();

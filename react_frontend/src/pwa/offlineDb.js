@@ -220,6 +220,74 @@ export async function setValue(storeName, key, value) {
 }
 
 // ============================================
+// OFFLINE AUTH (cached login for offline use)
+// ============================================
+
+/**
+ * Hash a password using SHA-256 via Web Crypto API.
+ * We never store the actual password — only a one-way hash.
+ */
+async function hashPassword(password, salt) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(salt + ':' + password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Cache login credentials after a successful online login.
+ * Stores: user object + password hash (NOT the real password).
+ */
+export async function cacheLoginCredentials(email, password, user) {
+  const salt = 'kjp-offline-' + email;
+  const passwordHash = await hashPassword(password, salt);
+  const db = await getDb();
+  await db.put(STORES.META, {
+    key: 'offline_auth_' + email.toLowerCase(),
+    value: {
+      user,
+      passwordHash,
+      email: email.toLowerCase(),
+      cachedAt: Date.now(),
+    },
+    updatedAt: Date.now(),
+  });
+}
+
+/**
+ * Attempt offline login: compare entered password hash with cached hash.
+ * Returns the cached user object if credentials match, or null.
+ */
+export async function getOfflineUser(email, password) {
+  const db = await getDb();
+  const record = await db.get(STORES.META, 'offline_auth_' + email.toLowerCase());
+  if (!record?.value) return null;
+
+  const salt = 'kjp-offline-' + email.toLowerCase();
+  const enteredHash = await hashPassword(password, salt);
+  if (enteredHash !== record.value.passwordHash) return null;
+
+  return record.value.user;
+}
+
+/**
+ * Clear cached credentials for a specific user (called on logout).
+ */
+export async function clearOfflineAuth() {
+  const db = await getDb();
+  const tx = db.transaction(STORES.META, 'readwrite');
+  const store = tx.objectStore(STORES.META);
+  const allKeys = await store.getAllKeys();
+  for (const key of allKeys) {
+    if (typeof key === 'string' && key.startsWith('offline_auth_')) {
+      store.delete(key);
+    }
+  }
+  await tx.done;
+}
+
+// ============================================
 // SYNC QUEUE OPERATIONS
 // ============================================
 
