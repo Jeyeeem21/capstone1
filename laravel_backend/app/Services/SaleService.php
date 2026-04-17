@@ -178,6 +178,11 @@ class SaleService
             $sale = Sale::with('items.product')->findOrFail($saleId);
             $oldStatus = $sale->status;
 
+            // Idempotent: if already at requested status, return as-is (handles offline sync duplicates)
+            if ($oldStatus === $newStatus) {
+                return $sale;
+            }
+
             // Valid transitions
             $validTransitions = [
                 'pending' => ['processing', 'cancelled'],

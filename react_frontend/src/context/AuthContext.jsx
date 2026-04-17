@@ -156,8 +156,8 @@ export const AuthProvider = ({ children }) => {
         try {
           await cacheLoginCredentials(email, password, response.user);
           localStorage.setItem('offline_last_email', email.toLowerCase());
-        } catch {
-          // IndexedDB error — non-critical
+        } catch (cacheErr) {
+          console.warn('[Auth] Failed to cache credentials for offline use:', cacheErr);
         }
 
         // Fire-and-forget: send login notification email AFTER dashboard data loads
@@ -208,8 +208,8 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('offline_last_email', email.toLowerCase());
         return { success: true, user: cachedUser, offline: true };
       }
-    } catch {
-      // IndexedDB error
+    } catch (offlineErr) {
+      console.error('[Auth] Offline login error:', offlineErr);
     }
 
     throw new Error(

@@ -70,8 +70,15 @@ function resolveStore(endpoint) {
     // Match /products/123, /products/123/something
     const regex = new RegExp(`^${pattern.replace(/\//g, '\\/')}\\/[^/]+$`);
     if (regex.test(endpoint)) {
-      const id = endpoint.split('/').pop();
+      const id = endpoint.split('/')[pattern.split('/').length];
       return { type: 'single', store, id };
+    }
+    
+    // Match sub-resource endpoints: /products/123/status, /sales/123/return, etc.
+    const subRegex = new RegExp(`^${pattern.replace(/\//g, '\\/')}\\/([^/]+)\\/[^/]+$`);
+    const subMatch = endpoint.match(subRegex);
+    if (subMatch) {
+      return { type: 'single', store, id: subMatch[1], subResource: endpoint.split('/').pop() };
     }
   }
   

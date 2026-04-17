@@ -435,14 +435,27 @@ export async function getLastSyncTime(storeName) {
 // ============================================
 
 /**
- * Clear ALL data (on logout)
+ * Clear ALL data (on logout).
+ * Preserves cached login credentials in META so offline login still works
+ * after a normal logout. Credentials are password hashes, not real passwords.
  */
 export async function clearAllData() {
   const db = await getDb();
   const storeNames = [...db.objectStoreNames];
   const tx = db.transaction(storeNames, 'readwrite');
   for (const name of storeNames) {
-    tx.objectStore(name).clear();
+    if (name === STORES.META) {
+      // Keep offline_auth_* entries — delete everything else in META
+      const metaStore = tx.objectStore(name);
+      const allKeys = await metaStore.getAllKeys();
+      for (const key of allKeys) {
+        if (typeof key !== 'string' || !key.startsWith('offline_auth_')) {
+          metaStore.delete(key);
+        }
+      }
+    } else {
+      tx.objectStore(name).clear();
+    }
   }
   await tx.done;
 }
