@@ -131,8 +131,14 @@ export async function processSyncQueue() {
       // Mark as syncing
       await updateSyncAction(action.id, { status: 'syncing' });
       
+      // Inject the original offline timestamp so the server records the actual action time
+      let body = action.body;
+      if (body && typeof body === 'object' && !(body instanceof FormData) && action.createdAt) {
+        body = { ...body, _offline_performed_at: new Date(action.createdAt).toISOString() };
+      }
+      
       // Send the request
-      const response = await sendRequest(action.method, action.endpoint, action.body);
+      const response = await sendRequest(action.method, action.endpoint, body);
       
       // If this was a CREATE with a temp ID, update the local record with the real ID
       if (action.tempId && action.store && response.data?.id) {
