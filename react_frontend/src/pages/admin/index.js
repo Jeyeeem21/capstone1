@@ -11,3 +11,4 @@ export { default as AdminOrders } from './Orders';
 export { default as AuditTrail } from './AuditTrail';
 export { default as Archives } from './Archives';
 export { default as Settings } from './Settings';
+export { default as Reports } from './Reports';

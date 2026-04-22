@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Sun,
   ClipboardList,
+  FileBarChart,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useBusinessSettings } from '../../context/BusinessSettingsContext';
@@ -84,6 +85,7 @@ const BottomNav = () => {
     },
     { icon: UserCog, label: 'Staff', to: `${basePath}/staff-management` },
     { icon: TrendingUp, label: 'Sales', to: `${basePath}/sales` },
+    { icon: FileBarChart, label: 'Reports', to: `${basePath}/reports` },
     { icon: Settings, label: 'Settings', to: `${basePath}/settings`, badge: showSmtpWarning ? 'warning' : null },
   ];
 

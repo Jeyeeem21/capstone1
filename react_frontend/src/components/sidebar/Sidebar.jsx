@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Sun,
   Shield,
+  FileBarChart,
 } from 'lucide-react';
 import { Avatar, useToast } from '../ui';
 import { ConfirmModal } from '../ui/Modal';
@@ -293,6 +294,14 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             icon={TrendingUp}
             label="Sales"
             to={`${basePath}/sales`}
+            isCollapsed={isCollapsed}
+          />
+
+          {/* Reports */}
+          <SidebarMenuItem
+            icon={FileBarChart}
+            label="Reports"
+            to={`${basePath}/reports`}
             isCollapsed={isCollapsed}
           />
 

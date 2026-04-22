@@ -14,6 +14,7 @@ and how profit/loss is calculated from the existing database.
 TABLE OF CONTENTS
 ================================================================================
 
+  0. COST RECORDS PAGE — WHAT IT ALREADY SHOWS (INSIGHTS)
   1. WHY ADD PRINTED REPORTS
   2. WHERE TO ADD REPORTS (PAGE PLACEMENT)
   3. REPORT #1 — PROFIT & LOSS (P&L) STATEMENT  ← MOST IMPORTANT
@@ -26,6 +27,126 @@ TABLE OF CONTENTS
  10. HOW PROFIT IS CALCULATED (FORMULA BREAKDOWN)
  11. DATA SOURCES FOR EACH REPORT (DATABASE FIELDS)
  12. IMPLEMENTATION PLAN (WHICH PAGE TO ADD EACH REPORT)
+
+
+================================================================================
+0. COST RECORDS PAGE — WHAT IT ALREADY SHOWS (INSIGHTS)
+================================================================================
+
+Location: Admin Panel → Inventory → "Costs" tab (4th tab)
+Route:    /admin/inventory?tab=costs
+
+This tab already EXISTS in the system and is the closest thing to a
+cost/profit report. Understanding what it shows is critical before building
+the full Reports page.
+
+── WHAT THE COSTS TAB SHOWS ─────────────────────────────────────────────────
+
+  Each row in the table = one STOCK DISTRIBUTION EVENT
+  (i.e., when completed processing output was added to a product's inventory)
+
+  COLUMNS:
+  ┌─────────────────┬──────────────────────────────────────────────────────┐
+  │ Column          │ What It Means                                        │
+  ├─────────────────┼──────────────────────────────────────────────────────┤
+  │ Product         │ Product name + variety color dot                     │
+  │ Units           │ Bags/units added + total kg + kg per sack            │
+  │ Procurement     │ Raw palay cost share for this batch                  │
+  │ Drying          │ Drying cost share for this batch                     │
+  │ Total Cost      │ Procurement + Drying (COGS for this distribution)    │
+  │ Cost / Unit     │ Total Cost ÷ Units added = break-even per bag        │
+  │ Sell Price      │ Current selling price per bag (from Products table)  │
+  │ Profit / Unit   │ Sell Price − Cost/Unit (green = profit, red = loss)  │
+  │ Margin          │ (Profit/Unit ÷ Sell Price) × 100%                    │
+  │                 │   Green ≥ 20% | Amber ≥ 0% | Red < 0%               │
+  │ Date            │ When the stock was distributed into inventory        │
+  └─────────────────┴──────────────────────────────────────────────────────┘
+
+  STATS CARDS AT TOP:
+  ┌──────────────────────────┬──────────────────────────────────────────────┐
+  │ Card                     │ Formula                                      │
+  ├──────────────────────────┼──────────────────────────────────────────────┤
+  │ Total Production Cost    │ SUM(total_cost) of all distributions         │
+  │ Avg. Cost / Unit         │ Total Cost ÷ Total Units produced            │
+  │ Avg. Profit / Unit       │ Average of all (Sell Price − Cost/Unit)      │
+  │ Avg. Profit Margin       │ Average margin % + total profit amount       │
+  └──────────────────────────┴──────────────────────────────────────────────┘
+
+  DOUBLE-CLICK a row → opens detail modal showing the exact processing
+  records that produced the stock, with drying source breakdown.
+
+── DATA SOURCE ───────────────────────────────────────────────────────────────
+
+  All data comes from the `stock_logs` table, filtered to:
+    - type = 'in'  (stock additions only)
+    - total_cost IS NOT NULL  (only distributions with cost data)
+
+  Fields used from stock_logs:
+    procurement_cost, drying_cost, total_cost, cost_per_unit,
+    selling_price, profit_per_unit, profit_margin, kg_amount,
+    source_type, source_processing_ids
+
+── KEY INSIGHT: SELL PRICE IS LIVE, NOT HISTORICAL ──────────────────────────
+
+  !! IMPORTANT — The "Sell Price" and therefore "Profit/Unit" and "Margin"
+     are computed using the CURRENT product price from the Products table.
+
+  This means:
+    - If a product's selling price was ₱1,200 when the stock was created,
+      but you changed it to ₱1,500 later, the Costs tab will show ₱1,500
+      as the sell price, recalculating all profit figures dynamically.
+    - This is POTENTIAL profit per unit (at current price), not ACTUAL
+      realized profit from historical sales.
+
+  For ACTUAL realized profit (what was truly earned), use:
+    - sale_items.unit_price  (the price at time of sale)
+    - combined with stock_logs.cost_per_unit (cost at time of production)
+
+── WHAT THE COSTS TAB IS GOOD FOR ───────────────────────────────────────────
+
+  ✓ Knowing the break-even price per bag for each production batch
+  ✓ Checking if current selling price covers production costs
+  ✓ Identifying which product batches had low or negative margins
+  ✓ Tracing full cost chain per stock distribution event
+  ✓ Comparing procurement + drying cost split per product
+
+── WHAT THE COSTS TAB IS NOT GOOD FOR ───────────────────────────────────────
+
+  ✗ Knowing total profit for a specific time period (monthly/yearly)
+  ✗ Comparing revenue earned vs costs incurred for a period
+  ✗ Showing actual sale amounts vs actual production costs
+  ✗ Filtering by date range for a specific period report
+  ✗ Printing a formatted report for accounting/management
+
+── WHAT NEEDS TO BE ADDED FOR PROPER PROFIT REPORTS ─────────────────────────
+
+  1. The Costs tab should get a DATE FILTER (from/to) so cost records for a
+     specific period can be isolated
+
+  2. A "Print Cost Report" button on the Costs tab to print the filtered table
+
+  3. The full P&L Report (Report #1 below) needs to JOIN:
+       stock_logs.total_cost  (production costs incurred in period)
+     WITH:
+       sale_items.unit_price × quantity (actual revenue earned in period)
+     TO PRODUCE:
+       Actual Realized Gross Profit = Revenue Earned − Production Costs Used
+
+  4. The stock_logs already store profit_per_unit and profit_margin at time
+     of distribution (using the price at that moment). A report should use
+     THOSE stored values for historical accuracy, not recalculate dynamically.
+
+── SUMMARY: COST RECORDS PAGE vs FULL P&L REPORT ────────────────────────────
+
+  Cost Records Tab (Inventory → Costs):
+    Shows: Production cost per distribution batch + potential unit profit
+    Good for: Pricing decisions, batch cost review, break-even analysis
+    Missing: Time-period filtering, actual sale revenue, printable format
+
+  Full P&L Report (to be built on Reports page):
+    Shows: Revenue earned − costs incurred = net profit for a period
+    Good for: "Did we make money this month?" business question
+    Requires: New Reports page + ReportController + 6 API endpoints
 
 
 ================================================================================

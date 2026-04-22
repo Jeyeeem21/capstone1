@@ -26,6 +26,7 @@ use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\ReportController;
 
 // ========================================
 // Public Routes (no auth required)
@@ -364,5 +365,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [UserController::class, 'destroy']);
         Route::post('/{id}/welcome-email', [UserController::class, 'sendWelcomeEmailEndpoint']);
         Route::post('/{id}/update-email', [UserController::class, 'sendUpdateEmail']);
+    });
+
+    // Reports Routes (admin + super_admin)
+    Route::prefix('reports')->group(function () {
+        Route::get('/profit-loss', [ReportController::class, 'profitLoss']);
+        Route::get('/sales-summary', [ReportController::class, 'salesSummary']);
+        Route::get('/procurement-cost', [ReportController::class, 'procurementCost']);
+        Route::get('/drying-cost', [ReportController::class, 'dryingCost']);
+        Route::get('/processing-yield', [ReportController::class, 'processingYield']);
+        Route::get('/inventory-valuation', [ReportController::class, 'inventoryValuation']);
     });
 });

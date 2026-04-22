@@ -34,6 +34,7 @@ const Supplier = lazy(() => import('./pages/admin/Partners').then(m => ({ defaul
 const Customer = lazy(() => import('./pages/admin/Partners').then(m => ({ default: m.Customer })));
 const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
+const Reports = lazy(() => import('./pages/admin/Reports'));
 
 // Shared pages
 const PointOfSale = lazy(() => import('./pages/shared/PointOfSale'));
@@ -85,6 +86,7 @@ export const adminPageImports = {
   customer:   () => import('./pages/admin/Partners'),
   'staff-management': () => import('./pages/admin/StaffManagement'),
   settings:   () => import('./pages/admin/Settings'),
+  reports:    () => import('./pages/admin/Reports'),
   pos:        () => import('./pages/shared/PointOfSale'),
 };
 
@@ -244,6 +246,7 @@ function AppRoutes() {
         
         <Route path="staff-management" element={<ErrorBoundary><StaffManagement /></ErrorBoundary>} />
         <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+        <Route path="reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
         
         <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
         <Route path="orders" element={<ErrorBoundary><AdminOrders /></ErrorBoundary>} />
@@ -274,6 +277,7 @@ function AppRoutes() {
         
         <Route path="staff-management" element={<ErrorBoundary><StaffManagement /></ErrorBoundary>} />
         <Route path="settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+        <Route path="reports" element={<ErrorBoundary><Reports /></ErrorBoundary>} />
         
         <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
         <Route path="orders" element={<ErrorBoundary><AdminOrders /></ErrorBoundary>} />
