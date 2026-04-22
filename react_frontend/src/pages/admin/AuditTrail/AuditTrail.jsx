@@ -1,18 +1,21 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ClipboardList, User, Calendar, Clock, Filter, FileText, Package, ShoppingCart, UserCog, Settings, TrendingUp, Monitor } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { ClipboardList, User, Calendar, Clock, Filter, FileText, Package, ShoppingCart, UserCog, Settings, TrendingUp, Monitor, RefreshCw } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatsCard, FormModal, useToast, Skeleton, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
-import { useDataFetch } from '../../../hooks';
+import { useDataFetch, invalidateCache } from '../../../hooks';
 
 const CACHE_KEY = '/audit-trails';
+const POLL_INTERVAL = 10 * 1000; // 10 s — audit trail should feel real-time
 
 const AuditTrail = () => {
   const toast = useToast();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
 
-  // Fetch audit trail data from API
+  // Fetch audit trail data — poll every 10 s for near-realtime updates
   const {
     data: auditLogs,
     loading,
@@ -21,7 +24,33 @@ const AuditTrail = () => {
   } = useDataFetch('/audit-trails', {
     cacheKey: CACHE_KEY,
     initialData: [],
+    pollInterval: POLL_INTERVAL,
   });
+
+  // Force a fresh network fetch on every mount so we never show stale cache
+  useEffect(() => {
+    invalidateCache(CACHE_KEY);
+    refetch().then(() => setLastUpdated(Date.now()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Track last-updated timestamp whenever data arrives
+  useEffect(() => {
+    if (!loading && !isRefreshing) setLastUpdated(Date.now());
+  }, [auditLogs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tick "X seconds ago" counter
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSecondsAgo(lastUpdated ? Math.floor((Date.now() - lastUpdated) / 1000) : 0);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lastUpdated]);
+
+  const handleManualRefresh = useCallback(async () => {
+    await refetch();
+    setLastUpdated(Date.now());
+  }, [refetch]);
 
   // Stats calculations
   const todayStr = new Date().toISOString().split('T')[0];
@@ -60,6 +89,7 @@ const AuditTrail = () => {
       'Staff': UserCog,
       'Settings': Settings,
       'Procurement': ShoppingCart,
+      'Procurement Batches': ShoppingCart,
       'Processing': Settings,
       'Authentication': User,
     };
@@ -161,6 +191,30 @@ const AuditTrail = () => {
       {loading ? (
         <SkeletonTable rows={8} columns={7} />
       ) : (
+      <>
+        {/* Realtime status bar */}
+        <div className="flex items-center justify-between px-1 -mb-2">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
+            Live &mdash; auto-refreshes every {POLL_INTERVAL / 1000}s
+            {lastUpdated && (
+              <span className="ml-1 text-gray-400 dark:text-gray-500">
+                &bull; updated {secondsAgo}s ago
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       <DataTable
         title="Activity Logs"
         subtitle="Complete history of system activities"
@@ -176,6 +230,7 @@ const AuditTrail = () => {
         dateFilterField="timestamp"
         onRowDoubleClick={handleViewDetails}
       />
+      </>
       )}
 
       {/* Detail Modal */}

@@ -82,10 +82,17 @@ function resolveStore(endpoint) {
     }
   }
   
-  // Check KV patterns with params
+  // Check KV patterns with params (e.g. /dashboard/stats?period=monthly)
+  // Use the full query string as part of the storage key so each period/param
+  // combination is cached separately and doesn't overwrite other periods.
   for (const [pattern, config] of Object.entries(KV_ENDPOINT_MAP)) {
     if (endpoint.startsWith(pattern)) {
-      return { type: 'kv', ...config };
+      // If there are query params, derive a unique key from the base key + params
+      const queryPart = endpoint.slice(pattern.length);
+      const derivedKey = queryPart
+        ? `${config.key}_${queryPart.replace(/^[?&]/, '').replace(/[^a-zA-Z0-9_=&-]/g, '_')}`
+        : config.key;
+      return { type: 'kv', store: config.store, key: derivedKey };
     }
   }
   

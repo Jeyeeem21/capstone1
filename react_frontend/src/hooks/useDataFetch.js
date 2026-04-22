@@ -232,8 +232,10 @@ export const useDataFetch = (endpoint, options = {}) => {
         onSuccess?.(transformedData);
         
         // Stale-while-revalidate: if data came from cache and is stale,
-        // do a background network fetch to update with fresh data
-        if (response.fromCache && response.isStale && !forceNetwork) {
+        // do a background network fetch to update with fresh data.
+        // Skip SWR when offline — the background fetch will also return stale
+        // data, causing an unnecessary re-render without improving freshness.
+        if (response.fromCache && response.isStale && !forceNetwork && navigator.onLine) {
           fetchInProgress.current = false; // allow the background fetch
           try {
             const freshResponse = await apiClient.get(endpoint, {

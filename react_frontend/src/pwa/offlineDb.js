@@ -435,27 +435,19 @@ export async function getLastSyncTime(storeName) {
 // ============================================
 
 /**
- * Clear ALL data (on logout).
- * Preserves cached login credentials in META so offline login still works
- * after a normal logout. Credentials are password hashes, not real passwords.
+ * Clear ONLY the sync/email queues on logout.
+ * Preserves all cached data stores and offline_auth credentials so that:
+ *  1. The user can log back in offline after going offline.
+ *  2. Pages load with cached data while fresh data is fetched in the background.
+ * Stale cached data is overwritten when the user is back online and pages reload.
  */
 export async function clearAllData() {
   const db = await getDb();
-  const storeNames = [...db.objectStoreNames];
-  const tx = db.transaction(storeNames, 'readwrite');
-  for (const name of storeNames) {
-    if (name === STORES.META) {
-      // Keep offline_auth_* entries — delete everything else in META
-      const metaStore = tx.objectStore(name);
-      const allKeys = await metaStore.getAllKeys();
-      for (const key of allKeys) {
-        if (typeof key !== 'string' || !key.startsWith('offline_auth_')) {
-          metaStore.delete(key);
-        }
-      }
-    } else {
-      tx.objectStore(name).clear();
-    }
+  // Only wipe the queues — keep all data mirrors and auth credentials intact
+  const queueStores = [STORES.SYNC_QUEUE, STORES.EMAIL_QUEUE];
+  const tx = db.transaction(queueStores, 'readwrite');
+  for (const name of queueStores) {
+    tx.objectStore(name).clear();
   }
   await tx.done;
 }

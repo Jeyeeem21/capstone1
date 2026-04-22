@@ -62,14 +62,18 @@ class ProcurementBatchController extends Controller
 
         try {
             $batch = $this->service->createBatch($data);
+            $batch->load('variety');
 
-            $this->logAudit('CREATE', 'Procurement Batches', "Created procurement batch #{$batch->id}", [
-                'batch_id' => $batch->id,
-                'variety_id' => $batch->variety_id,
-                'season_date' => $batch->season_date,
+            $this->logAudit('CREATE', 'Procurement Batches', "Created procurement batch {$batch->batch_number}", [
+                'batch_id'     => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'variety_id'   => $batch->variety_id,
+                'variety_name' => $batch->variety?->name,
+                'season_date'  => $batch->season_date,
+                'notes'        => $batch->notes,
             ]);
 
-            return $this->successResponse(new ProcurementBatchResource($batch), 201);
+            return $this->createdResponse(new ProcurementBatchResource($batch), 'Batch created successfully');
         } catch (Throwable $e) {
             return $this->errorResponse('Failed to create batch: ' . $e->getMessage(), 500);
         }
@@ -90,10 +94,11 @@ class ProcurementBatchController extends Controller
             $oldValues = $batch->only(['variety_id', 'season_date', 'notes', 'status']);
             $batch = $this->service->updateBatch($batch, $data);
 
-            $this->logAudit('UPDATE', 'Procurement Batches', "Updated procurement batch #{$batch->id}", [
-                'batch_id' => $batch->id,
-                'old_values' => $oldValues,
-                'new_values' => $batch->only(['variety_id', 'season_date', 'notes', 'status']),
+            $this->logAudit('UPDATE', 'Procurement Batches', "Updated procurement batch {$batch->batch_number}", [
+                'batch_id'     => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'old_values'   => $oldValues,
+                'new_values'   => $batch->only(['variety_id', 'season_date', 'notes', 'status']),
             ]);
 
             return $this->successResponse(new ProcurementBatchResource($batch));
@@ -108,10 +113,11 @@ class ProcurementBatchController extends Controller
         try {
             $batch = ProcurementBatch::findOrFail($id);
 
-            $this->logAudit('DELETE', 'Procurement Batches', "Deleted procurement batch #{$batch->id}", [
-                'batch_id' => $batch->id,
-                'variety_id' => $batch->variety_id,
-                'status' => $batch->status,
+            $this->logAudit('DELETE', 'Procurement Batches', "Deleted procurement batch {$batch->batch_number}", [
+                'batch_id'     => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'variety_id'   => $batch->variety_id,
+                'status'       => $batch->status,
             ]);
 
             $this->service->deleteBatch($batch);

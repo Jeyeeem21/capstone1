@@ -1,8 +1,33 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { authApi } from '../api';
+import { authApi, dashboardApi } from '../api';
 import apiClient from '../api/apiClient';
 import { clearAllData, cacheLoginCredentials, getOfflineUser, clearOfflineAuth, getValue, STORES, getPendingSyncCount } from '../pwa/offlineDb';
 import { processSyncQueue } from '../pwa/syncEngine';
+
+/**
+ * Pre-populate IndexedDB with critical data after a successful online login.
+ * Uses dashboardApi.getStats() directly so the URL + cacheKey match exactly
+ * what the Dashboard component will use when loading offline.
+ * Runs fire-and-forget — never blocks the login flow.
+ */
+async function prefetchCriticalData() {
+  const year = new Date().getFullYear();
+
+  // Fetch in parallel — dashboard stats first because they're the heaviest
+  const tasks = [
+    // Dashboard: use dashboardApi so cacheKey + endpoint match Dashboard component exactly
+    dashboardApi.getStats('monthly', { year }),
+    dashboardApi.getRecentActivity(15),
+    // Other module data
+    apiClient.get('/procurement-batches'),
+    apiClient.get('/procurements'),
+    apiClient.get('/suppliers'),
+    apiClient.get('/varieties'),
+    apiClient.get('/inventory'),
+  ];
+
+  await Promise.allSettled(tasks); // allSettled so one failure doesn't stop others
+}
 
 const AuthContext = createContext(null);
 
@@ -164,6 +189,13 @@ export const AuthProvider = ({ children }) => {
         setTimeout(() => {
           apiClient.post('/auth/login-email').catch(() => {});
         }, 5000);
+
+        // Pre-fetch critical data into IndexedDB so offline mode works immediately
+        // after login (background, non-blocking, runs after a short delay so the
+        // main UI has a chance to load first)
+        setTimeout(() => {
+          prefetchCriticalData().catch(() => {});
+        }, 3000);
 
         // Sync any pending offline actions now that we have a real token
         setTimeout(async () => {

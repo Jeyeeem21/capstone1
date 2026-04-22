@@ -5,6 +5,7 @@ import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, Co
 import { apiClient } from '../../../api';
 import { useDataFetch, invalidateCache } from '../../../hooks';
 import { useAuth } from '../../../context/AuthContext';
+import { put as dbPut, STORES as DB_STORES } from '../../../pwa/offlineDb';
 
 const CACHE_KEY = '/procurements';
 const SUPPLIERS_CACHE_KEY = '/suppliers';
@@ -287,7 +288,7 @@ const Procurement = () => {
   const batchOptions = useMemo(() => {
     const opts = batches.map(b => ({
       value: String(b.id),
-      label: `${b.batch_number || '(Pending Sync)'} — ${b.variety_name || '?'} (${b.remaining_sacks ?? 0}/${b.total_sacks ?? 0} sacks left)`,
+      label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks}/${b.total_sacks} sacks left)`,
     }));
     return [{ value: '', label: 'All Batches' }, { value: 'no-batch', label: 'No Batch (Standalone)' }, ...opts];
   }, [batches]);
@@ -298,7 +299,7 @@ const Procurement = () => {
       .filter(b => b.status === 'Open')
       .map(b => ({
         value: String(b.id),
-        label: `${b.batch_number || '(Pending Sync)'} — ${b.variety_name || '?'} (${b.remaining_sacks ?? 0} sacks)`,
+        label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks)`,
       }));
     return [{ value: '', label: 'None (standalone)' }, ...opts];
   }, [batches]);
@@ -319,7 +320,7 @@ const Procurement = () => {
       .filter(b => b.status === 'Open' && b.remaining_sacks > 0)
       .map(b => ({
         value: String(b.id),
-        label: `${b.batch_number || '(Pending Sync)'} — ${b.variety_name || '?'} (${b.remaining_sacks ?? 0} sacks remaining)`,
+        label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks remaining)`,
       }));
     return [{ value: '', label: 'Select batch...' }, ...opts];
   }, [batches]);
@@ -739,7 +740,13 @@ const Procurement = () => {
         price_per_kg: parseFloat(formData.price_per_kg),
         description: formData.description,
         status: formData.status,
-        batch_id: formData.batch_id ? parseInt(formData.batch_id) : null,
+        // Preserve temp IDs (offline-created batches) as strings so the sync
+        // engine can replace them once back online. Only parseInt real numeric IDs.
+        batch_id: formData.batch_id
+          ? (String(formData.batch_id).startsWith('temp_')
+              ? formData.batch_id          // keep as temp string for sync engine
+              : parseInt(formData.batch_id))
+          : null,
       };
 
       let response;
@@ -2063,35 +2070,37 @@ const Procurement = () => {
                       if (!formData.variety_id) return;
                       setCreatingBatchLoading(true);
                       try {
-                        const varietyName = varieties.find(v => String(v.id) === String(formData.variety_id))?.name || '';
                         const res = await apiClient.post('/procurement-batches', {
                           variety_id: parseInt(formData.variety_id),
                           notes: newBatchNotes || null,
-                          // Offline display fields — server sets proper values on sync,
-                          // but these ensure the batch is usable immediately offline:
-                          status: 'Open',
-                          variety_name: varietyName,
-                          remaining_sacks: 0,
-                          total_sacks: 0,
                         });
                         if (res.success && res.data) {
                           const newBatch = res.data;
-                          // Optimistically add the new batch immediately so the dropdown updates right away
-                          // (works even when offline from internet since Laragon is local)
-                          optimisticUpdateBatches(prev => [{
+                          const varietyName = varieties.find(v => String(v.id) === String(formData.variety_id))?.name || '';
+                          // Build a complete batch object so the dropdown works even when offline
+                          // (offline temp record lacks status/variety_name/batch_number)
+                          const enrichedBatch = {
                             ...newBatch,
                             variety_name: newBatch.variety_name || varietyName,
                             remaining_sacks: newBatch.remaining_sacks ?? 0,
                             total_sacks: newBatch.total_sacks ?? 0,
                             status: newBatch.status || 'Open',
-                          }, ...prev]);
-                          setFormData(prev => ({ ...prev, batch_id: String(newBatch.id) }));
+                            batch_number: newBatch.batch_number || `OFFLINE-${Date.now()}`,
+                            variety_color: newBatch.variety_color || null,
+                          };
+                          // If this was an offline write, persist the enriched record to IndexedDB
+                          // so that refetchBatches() returns the correct status/variety_name fields
+                          if (newBatch._offlineCreated) {
+                            try { await dbPut(DB_STORES.PROCUREMENT_BATCHES, enrichedBatch); } catch { /* non-critical */ }
+                          }
+                          optimisticUpdateBatches(prev => [enrichedBatch, ...prev]);
+                          setFormData(prev => ({ ...prev, batch_id: String(enrichedBatch.id) }));
                           setIsCreatingBatch(false);
                           setNewBatchNotes('');
-                          toast.success('Batch Created', `Batch ${newBatch.batch_number} created successfully.`);
-                          // Background sync
+                          toast.success('Batch Created', `Batch created successfully.`);
+                          // Background sync — use optimisticUpdate already set, only refetch when online
                           invalidateCache(BATCHES_CACHE_KEY);
-                          refetchBatches();
+                          if (navigator.onLine) refetchBatches();
                         }
                       } catch (err) {
                         toast.error('Error', err.response?.data?.message || 'Failed to create batch');
@@ -2106,8 +2115,7 @@ const Procurement = () => {
                     ) : (
                       <><PlusCircle size={14} /> Create Batch & Assign</>
                     )}
-                  </button>
-                </div>
+                  </button>                </div>
               )}
             </div>
 
