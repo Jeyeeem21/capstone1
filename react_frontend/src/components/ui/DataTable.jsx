@@ -19,6 +19,8 @@ const DataTable = ({
   onRowClick,
   onRowDoubleClick,
   selectable = false,
+  selectedRows: externalSelectedRows = null, // External selection state
+  onSelectionChange = null, // External selection change handler
   filterField = null,
   filterOptions = [],
   filterPlaceholder = 'All',
@@ -31,9 +33,13 @@ const DataTable = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(defaultItemsPerPage);
   const [filterValue, setFilterValue] = useState('');
-  const [selectedRows, setSelectedRows] = useState([]);
+  const [internalSelectedRows, setInternalSelectedRows] = useState([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // Use external selection state if provided, otherwise use internal
+  const selectedRows = externalSelectedRows !== null ? externalSelectedRows : internalSelectedRows;
+  const setSelectedRows = onSelectionChange || setInternalSelectedRows;
 
   // Generate filter options from data if not provided
   const computedFilterOptions = useMemo(() => {
@@ -186,12 +192,28 @@ const DataTable = ({
     );
   };
 
-  // Handle select all
+  // Handle select all (only for current page or all filtered data)
   const handleSelectAll = () => {
-    if (selectedRows.length === paginatedData.length) {
-      setSelectedRows([]);
+    // Get all IDs from the entire filtered dataset (not just current page)
+    const allFilteredIds = sortedData.map(row => row.id);
+    
+    // Check if all filtered items are selected
+    const allSelected = allFilteredIds.every(id => selectedRows.includes(id));
+    
+    if (allSelected) {
+      // Deselect all filtered items
+      setSelectedRows(prev => prev.filter(id => !allFilteredIds.includes(id)));
     } else {
-      setSelectedRows(paginatedData.map(row => row.id));
+      // Select all filtered items
+      setSelectedRows(prev => {
+        const newSelection = [...prev];
+        allFilteredIds.forEach(id => {
+          if (!newSelection.includes(id)) {
+            newSelection.push(id);
+          }
+        });
+        return newSelection;
+      });
     }
   };
 
@@ -318,12 +340,18 @@ const DataTable = ({
                   <button
                     onClick={handleSelectAll}
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                      selectedRows.length === paginatedData.length && paginatedData.length > 0
+                      sortedData.length > 0 && sortedData.every(row => selectedRows.includes(row.id))
                         ? 'bg-button-500 border-button-500 text-white'
+                        : sortedData.some(row => selectedRows.includes(row.id))
+                        ? 'bg-button-300 border-button-500 text-white'
                         : 'border-primary-300 dark:border-primary-600 bg-white dark:bg-gray-800 hover:border-primary-400'
                     }`}
+                    title={sortedData.every(row => selectedRows.includes(row.id)) ? 'Deselect all' : 'Select all filtered orders'}
                   >
-                    {selectedRows.length === paginatedData.length && paginatedData.length > 0 && <Check size={12} />}
+                    {sortedData.length > 0 && sortedData.every(row => selectedRows.includes(row.id)) && <Check size={12} />}
+                    {sortedData.some(row => selectedRows.includes(row.id)) && !sortedData.every(row => selectedRows.includes(row.id)) && (
+                      <div className="w-2 h-0.5 bg-white rounded" />
+                    )}
                   </button>
                 </th>
               )}

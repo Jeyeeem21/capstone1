@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store } from 'lucide-react';
+import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -9,6 +9,203 @@ import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
 import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { suppressNotifToasts } from '../../../utils/notifToastGuard';
+
+// ─── Print Receipt Helper ─────────────────────────────────────────────────────
+const printOrderReceipt = (order, bizName = 'KJP Ricemill', copies = 1) => {
+  const win = window.open('', '_blank', 'width=480,height=660');
+  if (!win) return;
+
+  const payStatus = order.payment_status === 'not_paid' ? 'UNPAID' : 'PAID';
+  const payColor  = order.payment_status === 'not_paid' ? '#dc2626' : '#16a34a';
+
+  const itemRows = (order.items || []).map(item => `
+    <tr>
+      <td>${(item.product_name || item.name || '')}${item.weight_formatted ? ` (${item.weight_formatted})` : ''}</td>
+      <td class="c">${item.quantity}</td>
+      <td class="r">&#8369;${(item.unit_price || item.price || 0).toLocaleString()}</td>
+      <td class="r">&#8369;${(item.subtotal || 0).toLocaleString()}</td>
+    </tr>`).join('');
+
+  const receiptHTML = `
+  <div class="rcpt">
+    <div class="hdr">
+      <div class="biz">${bizName}</div>
+      <div class="sub">OFFICIAL RECEIPT</div>
+    </div>
+    <hr class="d"/>
+    <table class="meta">
+      <tr><td class="ml">TXN ID:</td><td class="mv">${order.order_id}</td></tr>
+      <tr><td class="ml">Date:</td><td class="mv">${order.date_formatted || ''}</td></tr>
+      <tr><td class="ml">Customer:</td><td class="mv">${order.customer}</td></tr>
+      <tr><td class="ml">Type:</td><td class="mv">${order.is_delivery ? 'Delivery' : 'Pick Up'}</td></tr>
+      ${order.delivery_address ? `<tr><td class="ml">Address:</td><td class="mv">${order.delivery_address}</td></tr>` : ''}
+      <tr><td class="ml">Payment:</td><td class="mv">${order.payment_method} &mdash; <span style="color:${payColor};font-weight:700">${payStatus}</span></td></tr>
+      ${order.driver_name ? `<tr><td class="ml">Driver:</td><td class="mv">${order.driver_name}</td></tr>` : ''}
+    </table>
+    <hr class="d"/>
+    <table class="items">
+      <thead><tr><th>Product</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Subtotal</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+    <hr class="d"/>
+    <table class="totals">
+      ${(order.delivery_fee > 0) ? `<tr><td class="tl">Delivery Fee</td><td class="tr_">&#8369;${Number(order.delivery_fee).toLocaleString()}</td></tr>` : ''}
+      ${(order.discount > 0) ? `<tr><td class="tl">Discount</td><td class="tr_" style="color:#dc2626">-&#8369;${Number(order.discount).toLocaleString()}</td></tr>` : ''}
+      <tr class="grand"><td>TOTAL</td><td class="tr_">&#8369;${Number(order.total).toLocaleString()}</td></tr>
+      ${(order.amount_tendered > 0) ? `<tr><td class="tl">Tendered</td><td class="tr_">&#8369;${Number(order.amount_tendered).toLocaleString()}</td></tr>` : ''}
+      ${(order.change_amount > 0) ? `<tr><td class="tl">Change</td><td class="tr_">&#8369;${Number(order.change_amount).toLocaleString()}</td></tr>` : ''}
+    </table>
+    <hr class="d"/>
+    <div class="status">Status: <strong>${order.status}</strong></div>
+    <div class="ftr">Thank you! &mdash; System-generated</div>
+  </div>`;
+
+  const allCopies = Array.from({ length: copies }, (_, i) =>
+    i < copies - 1 ? `${receiptHTML}<div class="pb"></div>` : receiptHTML
+  ).join('');
+
+  win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+    <title>Receipt &mdash; ${order.order_id}</title>
+    <style>
+      @page{size:4.25in 5.5in;margin:7mm}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:9px;color:#111;background:#fff}
+      .rcpt{width:100%}
+      .hdr{text-align:center;padding-bottom:5px}
+      .biz{font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+      .sub{font-size:8px;color:#555;font-weight:600;letter-spacing:1px;margin-top:1px}
+      hr.d{border:none;border-top:1px dashed #aaa;margin:4px 0}
+      table.meta{width:100%;border-collapse:collapse;font-size:8.5px;margin:3px 0}
+      table.meta td{padding:1.5px 2px}
+      .ml{color:#555;font-weight:600;white-space:nowrap;padding-right:6px;width:52px}
+      .mv{color:#111}
+      table.items{width:100%;border-collapse:collapse;font-size:8px;margin:3px 0}
+      table.items th{padding:2.5px 3px;text-align:left;font-weight:700;border-bottom:1px solid #ccc;font-size:8px}
+      table.items td{padding:2px 3px;border-bottom:1px solid #eee}
+      .c{text-align:center}.r{text-align:right}
+      table.totals{width:100%;border-collapse:collapse;font-size:8.5px;margin:2px 0}
+      table.totals td{padding:1.5px 3px}
+      .tl{color:#555;text-align:left}.tr_{text-align:right}
+      .grand td{font-size:10px;font-weight:700;padding:3px;border-top:1px solid #333;border-bottom:1px solid #333}
+      .status{font-size:8px;margin-top:4px;text-align:center}
+      .ftr{font-size:7.5px;color:#999;text-align:center;margin-top:3px;padding-top:3px;border-top:1px dashed #ccc}
+      .pb{page-break-after:always}
+      @media print{.pb{page-break-after:always}}
+    </style></head><body>${allCopies}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+};
+
+// ─── Batch Print Helper (4 receipts per short bond paper, 2 per row) ─────────
+const printBatchReceipts = (orders, bizName = 'KJP Ricemill') => {
+  const win = window.open('', '_blank', 'width=800,height=1100');
+  if (!win) return;
+
+  const generateReceiptHTML = (order) => {
+    const payStatus = order.payment_status === 'not_paid' ? 'UNPAID' : 'PAID';
+    const payColor  = order.payment_status === 'not_paid' ? '#dc2626' : '#16a34a';
+
+    const itemRows = (order.items || []).map(item => `
+      <tr>
+        <td>${(item.product_name || item.name || '')}${item.weight_formatted ? ` (${item.weight_formatted})` : ''}</td>
+        <td class="c">${item.quantity}</td>
+        <td class="r">&#8369;${(item.unit_price || item.price || 0).toLocaleString()}</td>
+        <td class="r">&#8369;${(item.subtotal || 0).toLocaleString()}</td>
+      </tr>`).join('');
+
+    return `
+    <div class="rcpt">
+      <div class="hdr">
+        <div class="biz">${bizName}</div>
+        <div class="sub">OFFICIAL RECEIPT</div>
+      </div>
+      <hr class="d"/>
+      <table class="meta">
+        <tr><td class="ml">TXN ID:</td><td class="mv">${order.order_id}</td></tr>
+        <tr><td class="ml">Date:</td><td class="mv">${order.date_formatted || ''}</td></tr>
+        <tr><td class="ml">Customer:</td><td class="mv">${order.customer}</td></tr>
+        <tr><td class="ml">Type:</td><td class="mv">${order.is_delivery ? 'Delivery' : 'Pick Up'}</td></tr>
+        ${order.delivery_address ? `<tr><td class="ml">Address:</td><td class="mv">${order.delivery_address}</td></tr>` : ''}
+        <tr><td class="ml">Payment:</td><td class="mv">${order.payment_method} &mdash; <span style="color:${payColor};font-weight:700">${payStatus}</span></td></tr>
+        ${order.driver_name ? `<tr><td class="ml">Driver:</td><td class="mv">${order.driver_name}</td></tr>` : ''}
+      </table>
+      <hr class="d"/>
+      <table class="items">
+        <thead><tr><th>Product</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Subtotal</th></tr></thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+      <hr class="d"/>
+      <table class="totals">
+        ${(order.delivery_fee > 0) ? `<tr><td class="tl">Delivery Fee</td><td class="tr_">&#8369;${Number(order.delivery_fee).toLocaleString()}</td></tr>` : ''}
+        ${(order.discount > 0) ? `<tr><td class="tl">Discount</td><td class="tr_" style="color:#dc2626">-&#8369;${Number(order.discount).toLocaleString()}</td></tr>` : ''}
+        <tr class="grand"><td>TOTAL</td><td class="tr_">&#8369;${Number(order.total).toLocaleString()}</td></tr>
+        ${(order.amount_tendered > 0) ? `<tr><td class="tl">Tendered</td><td class="tr_">&#8369;${Number(order.amount_tendered).toLocaleString()}</td></tr>` : ''}
+        ${(order.change_amount > 0) ? `<tr><td class="tl">Change</td><td class="tr_">&#8369;${Number(order.change_amount).toLocaleString()}</td></tr>` : ''}
+      </table>
+      <hr class="d"/>
+      <div class="status">Status: <strong>${order.status}</strong></div>
+      <div class="ftr">Thank you! &mdash; System-generated</div>
+    </div>`;
+  };
+
+  // Group receipts into pages (4 per page, 2 per row)
+  const pages = [];
+  for (let i = 0; i < orders.length; i += 4) {
+    const pageOrders = orders.slice(i, i + 4);
+    const rows = [];
+    
+    // Create 2 rows per page
+    for (let j = 0; j < pageOrders.length; j += 2) {
+      const leftReceipt = generateReceiptHTML(pageOrders[j]);
+      const rightReceipt = pageOrders[j + 1] ? generateReceiptHTML(pageOrders[j + 1]) : '<div class="rcpt empty"></div>';
+      rows.push(`
+        <div class="receipt-row">
+          <div class="receipt-cell">${leftReceipt}</div>
+          <div class="receipt-cell">${rightReceipt}</div>
+        </div>
+      `);
+    }
+    
+    pages.push(`<div class="page">${rows.join('')}</div>`);
+  }
+
+  win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+    <title>Batch Receipts (${orders.length} orders)</title>
+    <style>
+      @page{size:8.5in 11in;margin:0.35in 0.4in}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#fff}
+      .page{width:100%;display:flex;flex-direction:column;gap:0.25in;page-break-after:always}
+      .page:last-child{page-break-after:auto}
+      .receipt-row{display:flex;gap:0.25in;flex:1;min-height:0}
+      .receipt-cell{flex:1;min-width:0;display:flex}
+      .rcpt{width:100%;font-size:8.5px;color:#111;border:1.5px solid #ccc;padding:10px;background:#fff;display:flex;flex-direction:column}
+      .rcpt.empty{border:none;background:transparent}
+      .hdr{text-align:center;padding-bottom:5px}
+      .biz{font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+      .sub{font-size:8px;color:#555;font-weight:600;letter-spacing:1px;margin-top:1px}
+      hr.d{border:none;border-top:1px dashed #aaa;margin:4px 0}
+      table.meta{width:100%;border-collapse:collapse;font-size:8px;margin:3px 0}
+      table.meta td{padding:1.5px 2px}
+      .ml{color:#555;font-weight:600;white-space:nowrap;padding-right:5px;width:50px}
+      .mv{color:#111;word-break:break-word}
+      table.items{width:100%;border-collapse:collapse;font-size:7.5px;margin:3px 0}
+      table.items th{padding:2.5px 2px;text-align:left;font-weight:700;border-bottom:1px solid #ccc;font-size:7.5px}
+      table.items td{padding:2px 2px;border-bottom:1px solid #eee}
+      .c{text-align:center}.r{text-align:right}
+      table.totals{width:100%;border-collapse:collapse;font-size:8px;margin:3px 0}
+      table.totals td{padding:1.5px 2px}
+      .tl{color:#555;text-align:left}.tr_{text-align:right}
+      .grand td{font-size:9.5px;font-weight:700;padding:2.5px;border-top:1px solid #333;border-bottom:1px solid #333}
+      .status{font-size:7.5px;margin-top:4px;text-align:center}
+      .ftr{font-size:7px;color:#999;text-align:center;margin-top:3px;padding-top:3px;border-top:1px dashed #ccc}
+      @media print{.page{page-break-after:always}.page:last-child{page-break-after:auto}}
+    </style></head><body>${pages.join('')}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+};
 
 const AdminOrders = () => {
   const toast = useToast();
@@ -94,6 +291,8 @@ const AdminOrders = () => {
   const [restockOrder, setRestockOrder] = useState(null);
   // { [itemId]: quantity } — only contains items to be restocked
   const [restockQuantities, setRestockQuantities] = useState({});
+  // Multi-select for batch printing
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
 
   // Sync active tab to URL
   useEffect(() => {
@@ -199,6 +398,14 @@ const AdminOrders = () => {
   const handleView = useCallback((order) => {
     setSelectedOrder(order);
     setIsViewModalOpen(true);
+  }, []);
+
+  const [printReceiptOrder, setPrintReceiptOrder] = useState(null);
+  const [printReceiptCopies, setPrintReceiptCopies] = useState(1);
+
+  const handlePrintReceipt = useCallback((order) => {
+    setPrintReceiptCopies(1);
+    setPrintReceiptOrder(order);
   }, []);
 
   const handleCancel = useCallback((order) => {
@@ -639,6 +846,29 @@ const AdminOrders = () => {
       setSaving(false);
     }
   }, [saving, restockOrder, restockQuantities, refetch, toast]);
+
+  // ─── Batch Print Selected Orders ─────────────────────────
+
+  const handleBatchPrint = useCallback(() => {
+    if (selectedOrderIds.length === 0) {
+      toast.error('No Orders Selected', 'Please select at least one order to print.');
+      return;
+    }
+    
+    // Get the full order objects for selected IDs
+    const selectedOrders = mappedOrders.filter(o => selectedOrderIds.includes(o.id));
+    
+    if (selectedOrders.length === 0) {
+      toast.error('Orders Not Found', 'Selected orders could not be found.');
+      return;
+    }
+
+    const bizName = bizSettings?.business_name || 'KJP Ricemill';
+    printBatchReceipts(selectedOrders, bizName);
+    
+    // Clear selection after printing
+    setSelectedOrderIds([]);
+  }, [selectedOrderIds, mappedOrders, bizSettings, toast]);
 
   // ─── Mark as Paid ────────────────────────────────────────
 
@@ -1125,12 +1355,19 @@ const AdminOrders = () => {
               <CircleSlash size={15} />
             </button>
           )}
+          <button
+            onClick={() => handlePrintReceipt(row)}
+            className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:text-gray-400 transition-colors"
+            title="Print Receipt"
+          >
+            <Printer size={15} />
+          </button>
         </div>
       );
     },
   };
 
-  const columns = showActions ? [...baseColumns, actionsColumn] : baseColumns;
+  const columns = [...baseColumns, actionsColumn];
 
   return (
     <div>
@@ -1282,8 +1519,20 @@ const AdminOrders = () => {
             searchPlaceholder="Search orders..."
             dateFilterField="date"
             onRowDoubleClick={handleView}
+            selectable={true}
+            selectedRows={selectedOrderIds}
+            onSelectionChange={setSelectedOrderIds}
             headerRight={
               <div className="flex items-center gap-2 flex-wrap">
+                {selectedOrderIds.length > 0 && (
+                  <button
+                    onClick={handleBatchPrint}
+                    className="flex items-center gap-2 px-3 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors text-sm font-medium shadow-md"
+                  >
+                    <Printer size={16} />
+                    Print Selected ({selectedOrderIds.length})
+                  </button>
+                )}
                 {activeStatusTab === 'Delivered & Completed' && (
                   <select
                     value={statusSubFilter}
@@ -1352,6 +1601,12 @@ const AdminOrders = () => {
                 <Package size={16} /> Restock Items
               </button>
             )}
+            <button
+              onClick={() => handlePrintReceipt(selectedOrder)}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+              <Printer size={16} /> Print Receipt
+            </button>
             <button
               onClick={() => setIsViewModalOpen(false)}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
@@ -2794,6 +3049,67 @@ const AdminOrders = () => {
           </div>
         </div>
       )}
+      {/* Print Receipt — Copies Modal */}
+      <Modal
+        isOpen={!!printReceiptOrder}
+        onClose={() => setPrintReceiptOrder(null)}
+        title={`Print Receipt — ${printReceiptOrder?.order_id || ''}`}
+        size="sm"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setPrintReceiptOrder(null)}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 text-gray-700 dark:text-gray-200 rounded-lg transition-colors text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                printOrderReceipt(printReceiptOrder, bizSettings?.business_name || 'KJP Ricemill', printReceiptCopies);
+                setPrintReceiptOrder(null);
+              }}
+              className="px-4 py-2 bg-button-600 hover:bg-button-700 text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+            >
+              <Printer size={15} /> Print {printReceiptCopies} {printReceiptCopies === 1 ? 'Copy' : 'Copies'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Each copy prints on <strong>1/4 of a short bond paper</strong> (4.25″ × 5.5″).
+          </p>
+          <div>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Number of Copies</p>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4].map(n => (
+                <button
+                  key={n}
+                  onClick={() => setPrintReceiptCopies(n)}
+                  className={`w-12 h-12 rounded-xl text-lg font-bold border-2 transition-colors ${
+                    printReceiptCopies === n
+                      ? 'border-button-600 bg-button-50 dark:bg-button-900/30 text-button-700 dark:text-button-300'
+                      : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:border-button-400'
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={printReceiptCopies}
+                onChange={e => setPrintReceiptCopies(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                className="w-16 h-12 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-center text-base font-bold focus:border-button-500 focus:outline-none"
+                title="Custom number (1–10)"
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">Quick pick: 1–4, or type a custom number (max 10)</p>
+          </div>
+        </div>
+      </Modal>
+
     </div>
   );
 };
