@@ -68,8 +68,15 @@ const Dashboard = () => {
         dashboardApi.getStats(selectedPeriod, selectedChartParams),
         dashboardApi.getRecentActivity(15),
       ]);
-      setStats(statsRes?.data || statsRes);
-      setActivity(activityRes?.data || activityRes || []);
+      // Only update if we got real data (success=true or has recognisable shape)
+      const statsData = statsRes?.data || statsRes;
+      const activityData = activityRes?.data || activityRes || [];
+      if (statsData && typeof statsData === 'object' && !statsData.error) {
+        setStats(statsData);
+      }
+      if (Array.isArray(activityData)) {
+        setActivity(activityData);
+      }
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
     } finally {
@@ -208,6 +215,14 @@ const Dashboard = () => {
         description="Overview of your business performance"
         icon={LayoutDashboard}
       />
+
+      {/* Offline + no data notice */}
+      {!loading && !stats && !navigator.onLine && (
+        <div className="mb-6 flex items-start gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+          <span>You are offline and no cached dashboard data is available. Stats will appear once you connect to the internet and visit this page.</span>
+        </div>
+      )}
 
       {/* Refresh Button */}
       <div className="flex justify-end mb-4 -mt-2">

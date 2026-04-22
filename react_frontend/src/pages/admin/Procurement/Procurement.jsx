@@ -287,7 +287,7 @@ const Procurement = () => {
   const batchOptions = useMemo(() => {
     const opts = batches.map(b => ({
       value: String(b.id),
-      label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks}/${b.total_sacks} sacks left)`,
+      label: `${b.batch_number || '(Pending Sync)'} — ${b.variety_name || '?'} (${b.remaining_sacks ?? 0}/${b.total_sacks ?? 0} sacks left)`,
     }));
     return [{ value: '', label: 'All Batches' }, { value: 'no-batch', label: 'No Batch (Standalone)' }, ...opts];
   }, [batches]);
@@ -298,7 +298,7 @@ const Procurement = () => {
       .filter(b => b.status === 'Open')
       .map(b => ({
         value: String(b.id),
-        label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks)`,
+        label: `${b.batch_number || '(Pending Sync)'} — ${b.variety_name || '?'} (${b.remaining_sacks ?? 0} sacks)`,
       }));
     return [{ value: '', label: 'None (standalone)' }, ...opts];
   }, [batches]);
@@ -319,7 +319,7 @@ const Procurement = () => {
       .filter(b => b.status === 'Open' && b.remaining_sacks > 0)
       .map(b => ({
         value: String(b.id),
-        label: `${b.batch_number} — ${b.variety_name || '?'} (${b.remaining_sacks} sacks remaining)`,
+        label: `${b.batch_number || '(Pending Sync)'} — ${b.variety_name || '?'} (${b.remaining_sacks ?? 0} sacks remaining)`,
       }));
     return [{ value: '', label: 'Select batch...' }, ...opts];
   }, [batches]);
@@ -2063,15 +2063,21 @@ const Procurement = () => {
                       if (!formData.variety_id) return;
                       setCreatingBatchLoading(true);
                       try {
+                        const varietyName = varieties.find(v => String(v.id) === String(formData.variety_id))?.name || '';
                         const res = await apiClient.post('/procurement-batches', {
                           variety_id: parseInt(formData.variety_id),
                           notes: newBatchNotes || null,
+                          // Offline display fields — server sets proper values on sync,
+                          // but these ensure the batch is usable immediately offline:
+                          status: 'Open',
+                          variety_name: varietyName,
+                          remaining_sacks: 0,
+                          total_sacks: 0,
                         });
                         if (res.success && res.data) {
                           const newBatch = res.data;
                           // Optimistically add the new batch immediately so the dropdown updates right away
                           // (works even when offline from internet since Laragon is local)
-                          const varietyName = varieties.find(v => String(v.id) === String(formData.variety_id))?.name || '';
                           optimisticUpdateBatches(prev => [{
                             ...newBatch,
                             variety_name: newBatch.variety_name || varietyName,

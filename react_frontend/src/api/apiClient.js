@@ -257,25 +257,28 @@ const apiClient = {
     }
     
     // Skip network if API is known to be unavailable or browser is offline
-    // Always try IndexedDB first (has fresh offline mutations), then memory cache
+    // Always try IndexedDB first (has fresh offline mutations), then memory/localStorage cache
     if (apiAvailable === false || !navigator.onLine) {
       const offlineData = await offlineGet(endpoint, params);
       if (offlineData?.success) return offlineData;
-      // Fall back to memory cache only if IndexedDB has nothing
+      // Fall back to memory cache if IndexedDB has nothing
       if (useCache) {
         const cached = cache.get(effectiveCacheKey);
         if (cached?.data) return { success: true, data: cached.data, fromCache: true };
       }
+      // Last resort: use stale/expired localStorage cache when truly offline
+      // This keeps Dashboard and other pages working even after cache TTL expires
+      const staleKey = `${CACHE_CONFIG.PREFIX}${effectiveCacheKey}`;
+      const staleRaw = localStorage.getItem(staleKey);
+      if (staleRaw) {
+        try {
+          const { data: staleData } = JSON.parse(staleRaw);
+          if (staleData) return { success: true, data: staleData, fromCache: true, isStale: true };
+        } catch { /* ignore corrupt cache */ }
+      }
       if (!navigator.onLine) {
         return { success: false, error: 'You are offline and no cached data is available.' };
       }
-    }
-
-    // If clearly offline (confirmed by browser), don't even try network
-    if (!navigator.onLine) {
-      const offlineData = await offlineGet(endpoint, params);
-      if (offlineData) return offlineData;
-      return { success: false, error: 'You are offline and no cached data is available.' };
     }
     
     try {
@@ -324,6 +327,16 @@ const apiClient = {
         if (cached?.data) {
           return { success: true, data: cached.data, fromCache: true, error: error.message };
         }
+      }
+
+      // Last resort: use stale/expired localStorage cache on network error
+      const staleKey = `${CACHE_CONFIG.PREFIX}${effectiveCacheKey}`;
+      const staleRaw = localStorage.getItem(staleKey);
+      if (staleRaw) {
+        try {
+          const { data: staleData } = JSON.parse(staleRaw);
+          if (staleData) return { success: true, data: staleData, fromCache: true, isStale: true };
+        } catch { /* ignore corrupt cache */ }
       }
 
       return { success: false, error: error.message };
