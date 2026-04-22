@@ -49,7 +49,7 @@ class CustomerResource extends JsonResource
             'address' => $this->address,
             'address_landmark' => $this->address_landmark,
             'status' => $this->status,
-            'orders' => $this->orders,
+            'orders' => $this->orders_count ?? $this->orders,
             'has_account' => $userAccount !== null,
             'user_id' => $userAccount['id'] ?? null,
             'email_verified_at' => $userAccount['email_verified_at'] ?? null,

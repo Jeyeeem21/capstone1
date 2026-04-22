@@ -1039,18 +1039,7 @@ class AuthController extends Controller
         // Set throttle for 60 seconds
         Cache::put($throttleKey, true, now()->addSeconds(60));
 
-        try {
-            $emailService = $this->emailService;
-            $userName = $user->name;
-            dispatch(function () use ($emailService, $email, $code, $userName) {
-                $emailService->sendPasswordResetCode($email, $code, $userName);
-            })->afterResponse();
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to send reset email. Please try again.',
-            ], 500);
-        }
+        $this->emailService->sendPasswordResetCode($email, $code, $user->name);
 
         \App\Models\AuditTrail::create([
             'user_id' => $user->id,

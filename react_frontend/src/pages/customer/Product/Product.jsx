@@ -3,7 +3,7 @@ import {
   Search, Plus, Minus, Package,
   ShoppingCart, X, ChevronUp, ChevronDown, Grid, List,
   Trash2, Smartphone, Receipt, CheckCircle, Clock,
-  Truck, MapPin, Loader2, Navigation, Camera, Upload
+  Truck, MapPin, Loader2, Navigation, Camera, ImageIcon
 } from 'lucide-react';
 import { useTheme } from '../../../context/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -238,13 +238,17 @@ const Shop = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [gcashReference, setGcashReference] = useState('');
+  const [gcashRefError, setGcashRefError] = useState('');
+  const gcashRefCheckTimeout = useRef(null);
   const [lastOrder, setLastOrder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [paymentProofFiles, setPaymentProofFiles] = useState([]);
   const [paymentProofPreviews, setPaymentProofPreviews] = useState([]);
   const [paymentProofError, setPaymentProofError] = useState('');
+  const [payShowCamera, setPayShowCamera] = useState(false);
   const proofFileRef = useRef(null);
-  const proofCameraRef = useRef(null);
+  const payVideoRef = useRef(null);
+  const payStreamRef = useRef(null);
 
   const clearOrder = () => setCurrentOrder([]);
 
@@ -252,18 +256,52 @@ const Shop = () => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setPaymentProofFiles(prev => [...prev, ...files]);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPaymentProofPreviews(prev => [...prev, ev.target.result]);
-      reader.readAsDataURL(file);
-    });
+    setPaymentProofPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
     e.target.value = '';
   };
 
   const removeProofFile = (idx) => {
     setPaymentProofFiles(prev => prev.filter((_, i) => i !== idx));
-    setPaymentProofPreviews(prev => prev.filter((_, i) => i !== idx));
+    setPaymentProofPreviews(prev => {
+      URL.revokeObjectURL(prev[idx]);
+      return prev.filter((_, i) => i !== idx);
+    });
   };
+
+  const stopPaymentCamera = useCallback(() => {
+    if (payStreamRef.current) {
+      payStreamRef.current.getTracks().forEach(t => t.stop());
+      payStreamRef.current = null;
+    }
+    setPayShowCamera(false);
+  }, []);
+
+  const startPaymentCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      payStreamRef.current = stream;
+      setPayShowCamera(true);
+      setTimeout(() => { if (payVideoRef.current) payVideoRef.current.srcObject = stream; }, 100);
+    } catch {
+      toast.error('Camera Error', 'Could not access camera.');
+    }
+  }, [toast]);
+
+  const capturePaymentPhoto = useCallback(() => {
+    if (!payVideoRef.current) return;
+    const video = payVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `pay_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setPaymentProofFiles(prev => [...prev, file]);
+      setPaymentProofPreviews(prev => [...prev, URL.createObjectURL(blob)]);
+      stopPaymentCamera();
+    }, 'image/jpeg', 0.85);
+  }, [stopPaymentCamera]);
   const orderSubtotal = currentOrder.reduce((sum, item) => sum + item.price * (parseInt(item.quantity) || 0), 0);
   const orderTotal = orderSubtotal + deliveryFee;
 
@@ -279,15 +317,33 @@ const Shop = () => {
       return;
     }
     setGcashReference('');
+    setGcashRefError('');
     setPaymentProofFiles([]);
     setPaymentProofPreviews([]);
     setPaymentProofError('');
+    setPayShowCamera(false);
     setShowPaymentModal(true);
   };
 
+  const checkGcashReference = useCallback((ref) => {
+    const digits = ref.replace(/\s/g, '');
+    if (digits.length !== 13) return;
+    if (gcashRefCheckTimeout.current) clearTimeout(gcashRefCheckTimeout.current);
+    gcashRefCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/sales/check-reference', { reference_number: digits });
+        if (response.data && !response.data.available) {
+          setGcashRefError('This reference number has already been used.');
+        } else {
+          setGcashRefError('');
+        }
+      } catch { /* silent */ }
+    }, 500);
+  }, []);
+
   const confirmPayment = async () => {
     if (paymentMethod === 'gcash') {
-      if (!gcashReference.trim()) return;
+      if (!gcashReference.trim() || gcashReference.replace(/\s/g, '').length !== 13 || gcashRefError) return;
       if (paymentProofFiles.length === 0) {
         setPaymentProofError('Payment proof is required.');
         return;
@@ -332,6 +388,7 @@ const Shop = () => {
         deliveryAddress: forDelivery ? deliveryAddress : null,
         deliveryFee: forDelivery ? deliveryFee : 0,
       });
+      stopPaymentCamera();
       setShowPaymentModal(false);
       setShowOrderModal(true);
       clearOrder();
@@ -709,32 +766,31 @@ const Shop = () => {
       </div>
 
       {/* Payment Modal */}
-      {showPaymentModal && (() => {
-        const pm = paymentMethods.find(m => m.value === paymentMethod);
-        const headerColor = pm?.color || theme.button_primary;
-        return (
+      {showPaymentModal && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowPaymentModal(false)} />
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => { stopPaymentCamera(); setShowPaymentModal(false); }} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] border-2 border-primary-300 dark:border-primary-700">
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${paymentMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
               {/* Header */}
-              <div className="p-5 text-white shrink-0" style={{ background: `linear-gradient(135deg, ${headerColor}, ${headerColor}cc)` }}>
+              <div className={`p-5 text-white shrink-0 ${paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-purple-500 to-purple-600'}`}>
                 <h3 className="text-lg font-bold flex items-center gap-2">
-                  {pm && <pm.icon size={20} />}
-                  {pm?.label} Payment
+                  {paymentMethod === 'gcash' ? <Smartphone size={20} /> : <Clock size={20} />}
+                  {paymentMethod === 'gcash' ? 'GCash Payment' : 'Pay Later'}
                 </h3>
                 <p className="text-sm text-white/80 mt-1">
-                  {paymentMethod === 'gcash' ? 'Enter GCash reference number'
-                    : 'You can pay later via GCash'}
+                  {paymentMethod === 'gcash' ? 'Enter GCash reference number' : 'Order will be placed with payment pending'}
                 </p>
               </div>
 
-              <div className="p-5 overflow-y-auto flex-1">
+              <div className={`${paymentMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'flex' : ''}`}>
+              {/* Left side: form content */}
+              <div className="flex-1 min-w-0">
+              <div className="p-5 space-y-4">
                 {/* Order Summary */}
-                <div className="rounded-lg p-3 mb-4 bg-primary-50/50 dark:bg-primary-900/10">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
                   <div className="flex justify-between text-sm mb-1">
-                    <span style={{ color: 'var(--color-text-secondary)' }}>Items</span>
-                    <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{currentOrder.length} items</span>
+                    <span className="text-gray-500 dark:text-gray-400">Items</span>
+                    <span className="font-medium text-gray-800 dark:text-gray-100">{currentOrder.length} items</span>
                   </div>
                   {forDelivery && deliveryFee > 0 && (
                     <div className="flex justify-between text-sm mb-1">
@@ -742,47 +798,104 @@ const Shop = () => {
                       <span className="font-medium text-orange-600">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 mt-2 border-t border-primary-200/20 dark:border-primary-700/20">
-                    <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>Total Due</span>
-                    <span className="text-xl font-bold" style={{ color: 'var(--color-button-500)' }}>₱{orderTotal.toLocaleString()}</span>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                    <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
+                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{orderTotal.toLocaleString()}</span>
                   </div>
                 </div>
 
                 {paymentMethod === 'gcash' ? (
                   <>
-                    <div className="mb-3">
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>GCash Reference Number <span className="text-red-500">*</span></label>
-                      <input type="text" value={gcashReference} onChange={(e) => setGcashReference(e.target.value)}
+                    {/* GCash Reference */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
+                      <input
+                        type="text"
+                        value={gcashReference}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^\d\s]/g, '').slice(0, 15);
+                          setGcashReference(val);
+                          setGcashRefError('');
+                          checkGcashReference(val);
+                        }}
                         placeholder="Enter 13-digit reference number"
-                        className="w-full px-4 py-3 text-lg font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wider border-2 border-primary-300 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100"
-                        autoFocus />
+                        className={`w-full px-4 py-3 text-lg font-bold border-2 rounded-lg focus:outline-none focus:ring-2 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${
+                          gcashRefError
+                            ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                            : gcashReference.replace(/\s/g, '').length > 0 && gcashReference.replace(/\s/g, '').length !== 13
+                              ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                              : gcashReference.replace(/\s/g, '').length === 13 && !gcashRefError
+                                ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
+                                : 'border-primary-200 dark:border-primary-700 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
+                        autoFocus
+                      />
+                      {gcashRefError && (
+                        <p className="mt-1 text-xs text-red-500">{gcashRefError}</p>
+                      )}
+                      {!gcashRefError && gcashReference.replace(/\s/g, '').length > 0 && gcashReference.replace(/\s/g, '').length !== 13 && (
+                        <p className="mt-1 text-xs text-red-500">Reference number must be exactly 13 digits (currently {gcashReference.replace(/\s/g, '').length}).</p>
+                      )}
                     </div>
-                    <div className="mb-4">
-                      <label className="block text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Payment Proof <span className="text-red-500">*</span></label>
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <button type="button" onClick={() => proofFileRef.current?.click()}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <Upload size={14} /> Upload Image
-                        </button>
-                        <button type="button" onClick={() => proofCameraRef.current?.click()}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-medium border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
-                          <Camera size={14} /> Open Camera
-                        </button>
-                      </div>
-                      <input ref={proofFileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleProofFileChange} />
-                      <input ref={proofCameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleProofFileChange} />
+
+                    {/* Payment Proof */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">
+                        Payment Proof <span className="text-red-500">*</span>
+                      </label>
+
+                      {payShowCamera && (
+                        <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-blue-300 dark:border-blue-700">
+                          <video ref={payVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
+                          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                            <button onClick={capturePaymentPhoto} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-blue-600 flex items-center gap-1.5">
+                              <Camera size={14} /> Capture
+                            </button>
+                            <button onClick={stopPaymentCamera} className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5">
+                              <X size={14} /> Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {paymentProofPreviews.length > 0 && (
-                        <div className="flex gap-2 flex-wrap mb-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           {paymentProofPreviews.map((src, i) => (
-                            <div key={i} className="relative">
-                              <img src={src} alt={`proof-${i}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
-                              <button onClick={() => removeProofFile(i)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold">×</button>
+                            <div key={i} className="relative group">
+                              <img src={src} alt={`Proof ${i + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 dark:border-blue-700" />
+                              <button onClick={() => removeProofFile(i)} className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                <X size={12} />
+                              </button>
                             </div>
                           ))}
                         </div>
                       )}
-                      {paymentProofError && <p className="text-red-500 text-xs mt-1">{paymentProofError}</p>}
+
+                      {!payShowCamera && (
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => proofFileRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                            paymentProofFiles.length === 0
+                              ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                              : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                          }`}>
+                            <ImageIcon size={14} /> Upload Image
+                          </button>
+                          <button type="button" onClick={startPaymentCamera} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                            paymentProofFiles.length === 0
+                              ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                              : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
+                          }`}>
+                            <Camera size={14} /> Open Camera
+                          </button>
+                          <input ref={proofFileRef} type="file" accept="image/*" multiple onChange={handleProofFileChange} className="hidden" />
+                        </div>
+                      )}
+                      {paymentProofFiles.length === 0 && (
+                        <p className="mt-1 text-xs text-red-500">Payment proof is required.</p>
+                      )}
                     </div>
+
+                    {/* GCash Info */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg p-3">
                       <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1 uppercase tracking-wide">Payment Verification</p>
                       <p className="text-xs text-blue-600 dark:text-blue-400">Enter the exact 13-digit GCash reference number and upload a screenshot or capture the payment confirmation as proof.</p>
@@ -791,34 +904,62 @@ const Shop = () => {
                 ) : (
                   <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
                     <Clock size={32} className="mx-auto mb-2 text-purple-500" />
-                    <p className="text-sm font-bold text-purple-700 dark:text-purple-300">Pay Later</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Your order will be placed now. When you're ready to pay, only <span className="font-bold">GCash</span> is accepted for online payment.</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">For cash payments, please visit the store directly.</p>
+                    <p className="text-sm font-bold text-purple-700 dark:text-purple-300 mb-1">Pay Later</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">The order will be placed with payment pending. You can pay via GCash when you're ready, or visit the store for cash payment.</p>
                   </div>
                 )}
               </div>
+              </div>{/* end left-side flex-1 */}
 
-              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-200/20 dark:border-primary-700/20">
+              {/* Right side: GCash QR Code & Info Panel */}
+              {paymentMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) && (
+                <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4">
+                  <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide text-center">Send Payment Here</h4>
+                  {bizSettings.gcash_qr && (
+                    <div className="w-48 h-48 bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden shadow-lg">
+                      <img src={bizSettings.gcash_qr} alt="GCash QR Code" className="w-full h-full object-contain p-2" />
+                    </div>
+                  )}
+                  {bizSettings.gcash_name && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">Account Name</p>
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{bizSettings.gcash_name}</p>
+                    </div>
+                  )}
+                  {bizSettings.gcash_number && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-blue-500 dark:text-blue-400 uppercase tracking-wider font-semibold">GCash Number</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wider">{bizSettings.gcash_number}</p>
+                    </div>
+                  )}
+                  <div className="mt-auto pt-2">
+                    <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center">Scan the QR code or send to the number above, then enter the reference number.</p>
+                  </div>
+                </div>
+              )}
+              </div>{/* end flex wrapper */}
+
+              {/* Footer */}
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-all border-2 border-primary-300 dark:border-primary-700 text-gray-500 dark:text-gray-400"
+                  onClick={() => { stopPaymentCamera(); setShowPaymentModal(false); }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
                 >
-                  Cancel
+                  ← Cancel
                 </button>
                 <button
                   onClick={confirmPayment}
-                  disabled={submitting || (paymentMethod === 'gcash' ? (!gcashReference.trim() || paymentProofFiles.length === 0) : false)}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  style={{ backgroundColor: paymentMethods.find(m => m.value === paymentMethod)?.color || theme.button_primary }}
+                  disabled={submitting || (paymentMethod === 'gcash' ? (!gcashReference.trim() || gcashReference.replace(/\s/g, '').length !== 13 || !!gcashRefError || paymentProofFiles.length === 0) : false)}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${paymentMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-purple-500 hover:bg-purple-600'}`}
                 >
-                  <Receipt size={14} /> {submitting ? 'Processing...' : 'Place Order'}
+                  {submitting ? <Loader2 size={14} className="animate-spin" /> : <Receipt size={14} />}
+                  {submitting ? 'Processing...' : 'Place Order'}
                 </button>
               </div>
             </div>
           </div>
         </>
-        );
-      })()}
+      )}
 
       {/* Order Placed Success Modal */}
       {showOrderModal && lastOrder && (

@@ -46,6 +46,8 @@ const AdminOrders = () => {
   const [payMethod, setPayMethod] = useState('cash');
   const [payCashTendered, setPayCashTendered] = useState('');
   const [payGcashRef, setPayGcashRef] = useState('');
+  const [payGcashRefError, setPayGcashRefError] = useState('');
+  const payGcashRefCheckTimeout = useRef(null);
   const [payProofFiles, setPayProofFiles] = useState([]);
   const [payProofPreviews, setPayProofPreviews] = useState([]);
   const [payShowCamera, setPayShowCamera] = useState(false);
@@ -338,6 +340,7 @@ const AdminOrders = () => {
     setPayMethod('cash');
     setPayCashTendered('');
     setPayGcashRef('');
+    setPayGcashRefError('');
     setPayProofFiles([]);
     setPayProofPreviews([]);
     setPayShowCamera(false);
@@ -690,10 +693,26 @@ const AdminOrders = () => {
     });
   }, []);
 
+  const checkPayGcashReference = useCallback((ref) => {
+    const digits = ref.replace(/\s/g, '');
+    if (digits.length !== 13) return;
+    if (payGcashRefCheckTimeout.current) clearTimeout(payGcashRefCheckTimeout.current);
+    payGcashRefCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/sales/check-reference', { reference_number: digits });
+        if (response.data && !response.data.available) {
+          setPayGcashRefError('This reference number has already been used.');
+        } else {
+          setPayGcashRefError('');
+        }
+      } catch { /* silent */ }
+    }, 500);
+  }, []);
+
   const handleConfirmPay = useCallback(async () => {
     if (saving || !payOrder) return;
     if (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < payOrder.total)) return;
-    if (payMethod === 'gcash' && !payGcashRef.trim()) return;
+    if (payMethod === 'gcash' && (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || payGcashRefError)) return;
 
     setSaving(true);
     try {
@@ -2543,11 +2562,30 @@ const AdminOrders = () => {
                   <input
                     type="text"
                     value={payGcashRef}
-                    onChange={(e) => setPayGcashRef(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^\d\s]/g, '').slice(0, 15);
+                      setPayGcashRef(val);
+                      setPayGcashRefError('');
+                      checkPayGcashReference(val);
+                    }}
                     placeholder="Enter 13-digit reference number"
-                    className="w-full px-4 py-3 text-lg font-bold border-2 border-primary-200 dark:border-primary-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100"
+                    className={`w-full px-4 py-3 text-lg font-bold border-2 rounded-lg focus:outline-none focus:ring-2 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${
+                      payGcashRefError
+                        ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                        : payGcashRef.replace(/\s/g, '').length > 0 && payGcashRef.replace(/\s/g, '').length !== 13
+                          ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                          : payGcashRef.replace(/\s/g, '').length === 13 && !payGcashRefError
+                            ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
+                            : 'border-primary-200 dark:border-primary-700 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                     autoFocus
                   />
+                  {payGcashRefError && (
+                    <p className="mt-1 text-xs text-red-500">{payGcashRefError}</p>
+                  )}
+                  {!payGcashRefError && payGcashRef.replace(/\s/g, '').length > 0 && payGcashRef.replace(/\s/g, '').length !== 13 && (
+                    <p className="mt-1 text-xs text-red-500">Reference number must be exactly 13 digits (currently {payGcashRef.replace(/\s/g, '').length}).</p>
+                  )}
                 </div>
 
                 {/* Payment Proof */}
@@ -2648,7 +2686,7 @@ const AdminOrders = () => {
                 </button>
                 <button
                   onClick={handleConfirmPay}
-                  disabled={saving || (payMethod === 'cash' ? (!payCashTendered || parseFloat(payCashTendered) < (payOrder?.total || 0)) : !payGcashRef.trim())}
+                  disabled={saving || (payMethod === 'cash' ? (!payCashTendered || parseFloat(payCashTendered) < (payOrder?.total || 0)) : (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || !!payGcashRefError))}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${payMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'}`}
                 >
                   <CheckCircle size={14} /> {saving ? 'Processing...' : 'Confirm Payment'}

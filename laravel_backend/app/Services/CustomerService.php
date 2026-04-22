@@ -22,7 +22,9 @@ class CustomerService
     public function getAllCustomers(): Collection
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Customer::orderBy('created_at', 'desc')->get();
+            return Customer::withCount(['sales as orders_count' => function ($query) {
+                $query->whereNotIn('status', ['cancelled', 'voided']);
+            }])->orderBy('created_at', 'desc')->get();
         });
     }
 

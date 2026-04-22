@@ -68,7 +68,8 @@ const Orders = () => {
   const [payProofPreviews, setPayProofPreviews] = useState([]);
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [payRefError, setPayRefError] = useState('');
-  const payProofCameraRef = useRef(null);
+  const payRefCheckTimeout = useRef(null);
+  const payProofInputRef = useRef(null);
   const [payShowCamera, setPayShowCamera] = useState(false);
   const payVideoRef = useRef(null);
   const payStreamRef = useRef(null);
@@ -269,20 +270,32 @@ const Orders = () => {
     setPayShowCamera(false);
   };
 
+  const checkPayReference = (ref) => {
+    const digits = ref.replace(/\s/g, '');
+    if (digits.length !== 13) return;
+    if (payRefCheckTimeout.current) clearTimeout(payRefCheckTimeout.current);
+    payRefCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/sales/check-reference', { reference_number: digits });
+        if (response.data && !response.data.available) {
+          setPayRefError('This reference number has already been used.');
+        } else {
+          setPayRefError('');
+        }
+      } catch { /* silent */ }
+    }, 500);
+  };
+
   const handlePayProofChange = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setPayProofFiles(prev => [...prev, ...files]);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPayProofPreviews(prev => [...prev, ev.target.result]);
-      reader.readAsDataURL(file);
-    });
+    setPayProofPreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
     e.target.value = '';
   };
 
   const handlePaySubmit = async () => {
-    if (payMethod === 'gcash' && (!payReference.trim() || payProofFiles.length === 0)) return;
+    if (payMethod === 'gcash' && (!payReference.trim() || payReference.replace(/\s/g, '').length !== 13 || payProofFiles.length === 0 || payRefError)) return;
     setPayRefError('');
     setPaySubmitting(true);
     try {
@@ -1003,11 +1016,27 @@ const Orders = () => {
                 {/* GCash Reference */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
-                  <input type="text" value={payReference} onChange={(e) => { setPayReference(e.target.value); setPayRefError(''); }}
+                  <input type="text" value={payReference} onChange={(e) => {
+                    const val = e.target.value.replace(/[^\d\s]/g, '').slice(0, 15);
+                    setPayReference(val);
+                    setPayRefError('');
+                    checkPayReference(val);
+                  }}
                     placeholder="Enter 13-digit reference number"
-                    className={`w-full px-4 py-3 text-lg font-bold border-2 rounded-lg focus:outline-none focus:ring-2 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${payRefError ? 'border-red-400 focus:ring-red-500 focus:border-red-500' : 'border-primary-200 dark:border-primary-700 focus:ring-blue-500 focus:border-blue-500'}`}
+                    className={`w-full px-4 py-3 text-lg font-bold border-2 rounded-lg focus:outline-none focus:ring-2 tracking-wider bg-white dark:bg-gray-700 dark:text-gray-100 ${
+                      payRefError
+                        ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                        : payReference.replace(/\s/g, '').length > 0 && payReference.replace(/\s/g, '').length !== 13
+                          ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                          : payReference.replace(/\s/g, '').length === 13 && !payRefError
+                            ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
+                            : 'border-primary-200 dark:border-primary-700 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
                     autoFocus />
                   {payRefError && <p className="text-xs text-red-500 font-medium mt-1">{payRefError}</p>}
+                  {!payRefError && payReference.replace(/\s/g, '').length > 0 && payReference.replace(/\s/g, '').length !== 13 && (
+                    <p className="mt-1 text-xs text-red-500">Reference number must be exactly 13 digits (currently {payReference.replace(/\s/g, '').length}).</p>
+                  )}
                 </div>
 
                 {/* Payment Proof */}
@@ -1040,14 +1069,13 @@ const Orders = () => {
 
                   {!payShowCamera && (
                     <div className="flex gap-2">
-                      <label className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold cursor-pointer transition-all ${
+                      <button type="button" onClick={() => payProofInputRef.current?.click()} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
                         payProofFiles.length === 0
                           ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
                           : 'border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-400'
                       }`}>
                         <ImageIcon size={14} /> Upload Image
-                        <input type="file" accept="image/*" multiple className="hidden" onChange={handlePayProofChange} />
-                      </label>
+                      </button>
                       <button type="button" onClick={startPayCamera}
                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
                           payProofFiles.length === 0
@@ -1061,6 +1089,7 @@ const Orders = () => {
                   {payProofFiles.length === 0 && (
                     <p className="mt-1 text-xs text-red-500">Payment proof is required.</p>
                   )}
+                  <input ref={payProofInputRef} type="file" accept="image/*" multiple onChange={handlePayProofChange} className="hidden" />
                 </div>
 
                 {/* GCash Info */}
@@ -1109,7 +1138,7 @@ const Orders = () => {
                 </button>
                 <button
                   onClick={handlePaySubmit}
-                  disabled={paySubmitting || !payReference.trim() || payProofFiles.length === 0}
+                  disabled={paySubmitting || !payReference.trim() || payReference.replace(/\s/g, '').length !== 13 || !!payRefError || payProofFiles.length === 0}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <CheckCircle size={14} /> {paySubmitting ? 'Processing...' : 'Confirm Payment'}

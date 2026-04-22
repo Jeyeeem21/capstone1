@@ -94,10 +94,10 @@ class SendEmail implements ShouldQueue
 
             if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
                 // Windows: start /B runs a detached background process
-                pclose(popen("start /B \"\" \"{$php}\" \"{$artisan}\" queue:work --queue=emails --once --tries=2 --timeout=30 > NUL 2>&1", 'r'));
+                pclose(popen("start /B \"\" \"{$php}\" \"{$artisan}\" queue:work --queue=emails --stop-when-empty --tries=2 --timeout=30 > NUL 2>&1", 'r'));
             } else {
                 // Linux/Mac: & runs in background, nohup keeps it alive
-                exec("nohup \"{$php}\" \"{$artisan}\" queue:work --queue=emails --once --tries=2 --timeout=30 > /dev/null 2>&1 &");
+                exec("nohup \"{$php}\" \"{$artisan}\" queue:work --queue=emails --stop-when-empty --tries=2 --timeout=30 > /dev/null 2>&1 &");
             }
         } catch (\Exception $e) {
             Log::warning('Failed to spawn queue worker: ' . $e->getMessage());

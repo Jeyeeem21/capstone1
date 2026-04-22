@@ -663,7 +663,7 @@ label {
 }
 
 .animate-skeleton-pulse {
-  animation: skeleton-shimmer 0.6s linear infinite;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
 
 .animate-fadeIn {

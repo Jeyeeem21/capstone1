@@ -282,12 +282,12 @@ const CustomerDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="lg:col-span-2 bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-6 h-[340px] animate-pulse">
             <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/3 mb-2" />
-            <div className="h-3 bg-gray-100 dark:bg-gray-500 rounded w-1/4 mb-6" />
-            <div className="h-[240px] bg-gray-100 dark:bg-gray-500 rounded" />
+            <div className="h-3 bg-gray-200 dark:bg-gray-500 rounded w-1/4 mb-6" />
+            <div className="h-[240px] bg-gray-200 dark:bg-gray-500 rounded" />
           </div>
           <div className="bg-white dark:bg-gray-700 rounded-xl border border-primary-200 dark:border-primary-700 p-4 h-[340px] animate-pulse">
             <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-2" />
-            <div className="h-[200px] bg-gray-100 dark:bg-gray-500 rounded-full mx-auto w-[200px] mt-4" />
+            <div className="h-[200px] bg-gray-200 dark:bg-gray-500 rounded-full mx-auto w-[200px] mt-4" />
           </div>
         </div>
       ) : (

@@ -2069,12 +2069,23 @@ const Procurement = () => {
                         });
                         if (res.success && res.data) {
                           const newBatch = res.data;
-                          invalidateCache(BATCHES_CACHE_KEY);
-                          await refetchBatches();
+                          // Optimistically add the new batch immediately so the dropdown updates right away
+                          // (works even when offline from internet since Laragon is local)
+                          const varietyName = varieties.find(v => String(v.id) === String(formData.variety_id))?.name || '';
+                          optimisticUpdateBatches(prev => [{
+                            ...newBatch,
+                            variety_name: newBatch.variety_name || varietyName,
+                            remaining_sacks: newBatch.remaining_sacks ?? 0,
+                            total_sacks: newBatch.total_sacks ?? 0,
+                            status: newBatch.status || 'Open',
+                          }, ...prev]);
                           setFormData(prev => ({ ...prev, batch_id: String(newBatch.id) }));
                           setIsCreatingBatch(false);
                           setNewBatchNotes('');
                           toast.success('Batch Created', `Batch ${newBatch.batch_number} created successfully.`);
+                          // Background sync
+                          invalidateCache(BATCHES_CACHE_KEY);
+                          refetchBatches();
                         }
                       } catch (err) {
                         toast.error('Error', err.response?.data?.message || 'Failed to create batch');

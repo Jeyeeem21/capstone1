@@ -12,7 +12,7 @@ const Skeleton = ({
   circle = false,
   rounded = 'lg',
 }) => {
-  const baseStyles = 'animate-skeleton-pulse bg-gradient-to-r from-gray-300 via-gray-200 to-gray-300 dark:from-gray-600 dark:via-gray-700 dark:to-gray-600 bg-[length:200%_100%]';
+  const baseStyles = 'animate-skeleton-pulse bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 dark:from-gray-600 dark:via-gray-500 dark:to-gray-600 bg-[length:200%_100%]';
   
   const roundedStyles = {
     none: 'rounded-none',

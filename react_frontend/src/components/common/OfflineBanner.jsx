@@ -7,7 +7,8 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { WifiOff, Wifi, RefreshCw, CheckCircle, AlertTriangle, X, ClipboardList, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { WifiOff, Wifi, RefreshCw, CheckCircle, AlertTriangle, X, ClipboardList, Clock, LogIn } from 'lucide-react';
 import { useOffline } from '../../pwa/OfflineContext';
 import { getPendingSyncActions } from '../../pwa/offlineDb';
 
@@ -149,11 +150,16 @@ export default function OfflineBanner() {
     dismissConflict,
   } = useOffline();
 
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [backOnline, setBackOnline] = useState(false);
   const wasOfflineRef = useRef(false);
   const openModal = useCallback(() => setShowModal(true), []);
   const closeModal = useCallback(() => setShowModal(false), []);
+
+  // Check if we have a real auth token (not offline placeholder)
+  const hasRealToken = !!localStorage.getItem('auth_token') &&
+    localStorage.getItem('auth_token') !== 'offline_session';
 
   // Track offline→online transition to show "Back Online" toast
   useEffect(() => {
@@ -258,12 +264,22 @@ export default function OfflineBanner() {
                 {pendingCount} changes pending sync
               </button>
             </div>
-            <button
-              onClick={triggerSync}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1 rounded transition-colors"
-            >
-              Sync Now
-            </button>
+            {hasRealToken ? (
+              <button
+                onClick={triggerSync}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1 rounded transition-colors"
+              >
+                Sync Now
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/login')}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1 rounded transition-colors flex items-center gap-1.5"
+              >
+                <LogIn size={13} />
+                Login to Sync
+              </button>
+            )}
           </div>
         )}
 
