@@ -10,3 +10,7 @@ export {
   invalidateCache,
   clearAllCache,
 } from './useDataFetch';
+
+export { 
+  default as useReportsData,
+} from './useReportsData';

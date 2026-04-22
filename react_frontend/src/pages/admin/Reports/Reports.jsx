@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FileText, TrendingUp, ShoppingCart, Sun, Settings2,
   Package, Printer, RefreshCw,
@@ -6,16 +6,17 @@ import {
   Loader2, AlertCircle,
 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
-import { StatsCard, useToast } from '../../../components/ui';
-import reportsApi from '../../../api/reportsApi';
+import { StatsCard, SkeletonTable, useToast } from '../../../components/ui';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
+import { useReportsData } from '../../../hooks/useReportsData';
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Helpers
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
-const fmt  = (n, d = 2) => Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d });
-const peso = (n) => `\u20B1${fmt(n)}`;
+const fmt     = (n, d = 2) => Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: d, maximumFractionDigits: d });
+const peso    = (n) => `\u20B1${fmt(n)}`;
+const fmtDate = (d) => d ? new Date(d + (d.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '\u2014';
 const pctClass = (v) => v >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
 
 const today        = () => new Date().toISOString().slice(0, 10);
@@ -23,25 +24,25 @@ const firstOfMonth = () => { const d = new Date(); return `${d.getFullYear()}-${
 
 const PAY_LABELS = { cash: 'Cash', gcash: 'GCash', cod: 'COD', pay_later: 'Pay Later' };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Print helper
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 const printReport = (title, htmlContent, bizName = 'KJP Ricemill') => {
   const win = window.open('', '_blank', 'width=940,height=700');
   if (!win) return;
   win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
-    <title>${title} â€” ${bizName}</title>
+    <title>${title} \u2014 ${bizName}</title>
     <style>
       *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}
+      body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}
       h1{font-size:19px;font-weight:700;margin-bottom:3px}
       h2{font-size:13px;font-weight:700;margin:18px 0 7px;border-bottom:1px solid #ccc;padding-bottom:3px}
       .meta{font-size:10px;color:#777;margin-bottom:16px}
       .stmt{width:100%;margin-bottom:20px;border-collapse:collapse}
       .stmt td{padding:4px 8px;font-size:12px}
       .stmt .label{width:65%;color:#333}
-      .stmt .value{width:35%;text-align:right;font-family:monospace}
+      .stmt .value{width:35%;text-align:right}
       .stmt .section{font-weight:700;background:#f3f4f6;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#555}
       .stmt .subtotal td{border-top:1px solid #ddd;font-weight:600}
       .stmt .total td{border-top:2px solid #333;border-bottom:2px solid #333;font-weight:700;font-size:13px}
@@ -68,9 +69,9 @@ const printReport = (title, htmlContent, bizName = 'KJP Ricemill') => {
   setTimeout(() => win.print(), 350);
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Sub-components
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 const SectionCard = ({ icon: Icon, title, children, onPrint, loading }) => (
   <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 p-5 mb-6"
@@ -91,19 +92,107 @@ const SectionCard = ({ icon: Icon, title, children, onPrint, loading }) => (
   </div>
 );
 
-const EmptyState = ({ message = 'No data for this period.', loading: isLoading }) => {
-  if (isLoading) return (
-    <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
-      <Loader2 size={28} className="animate-spin" />
-      <p className="text-sm">Loadingâ€¦</p>
-    </div>
-  );
-  return (
-    <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
-      <AlertCircle size={28} />
-      <p className="text-sm">{message}</p>
-    </div>
-  );
+const EmptyState = ({ message = 'No data for this period.' }) => (
+  <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
+    <AlertCircle size={28} />
+    <p className="text-sm">{message}</p>
+  </div>
+);
+
+// --- Per-tab skeleton loading --------------------------------------------------
+const skBase = 'animate-pulse rounded bg-gray-200 dark:bg-gray-700';
+const SkBox = ({ w = 'w-full', h = 'h-4', className = '' }) => (
+  <div className={`${skBase} ${w} ${h} ${className}`} />
+);
+
+const SkReportStats = ({ count = 3 }) => (
+  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="p-4 rounded-xl border-2 border-primary-100 dark:border-primary-700"
+        style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+        <div className="flex items-center justify-between mb-3">
+          <SkBox w="w-20" h="h-3" />
+          <div className={`${skBase} w-9 h-9 rounded-lg`} />
+        </div>
+        <SkBox w="w-16" h="h-6" className="mb-1" />
+        <SkBox w="w-24" h="h-3" />
+      </div>
+    ))}
+  </div>
+);
+
+const ReportSkeleton = ({ tab }) => {
+  switch (tab) {
+    case 'pl':
+      return (
+        <div className="space-y-5">
+          <div className="border-2 border-primary-100 dark:border-primary-700 rounded-xl p-4">
+            <SkBox w="w-32" h="h-3" className="mb-1" />
+            <SkBox w="w-52" h="h-2.5" className="mb-5" />
+            {['w-2/3','w-1/2','w-full','w-2/3','w-1/2','w-full','w-2/3','w-full'].map((w, i) => (
+              <div key={i} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                <SkBox w={w} h="h-3" />
+                <SkBox w="w-20" h="h-3" className="ml-4 flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+          <SkBox w="w-48" h="h-3" />
+          <SkeletonTable rows={3} columns={7} />
+          <SkBox w="w-44" h="h-3" />
+          <SkeletonTable rows={3} columns={6} />
+          <SkBox w="w-36" h="h-3" />
+          <SkeletonTable rows={3} columns={6} />
+        </div>
+      );
+    case 'sales':
+      return (
+        <div className="space-y-4">
+          <SkReportStats count={3} />
+          <SkBox w="w-40" h="h-3" />
+          <SkeletonTable rows={4} columns={3} />
+          <SkBox w="w-48" h="h-3" />
+          <SkeletonTable rows={5} columns={3} />
+        </div>
+      );
+    case 'procurement':
+      return (
+        <div className="space-y-4">
+          <SkReportStats count={3} />
+          <SkBox w="w-32" h="h-3" />
+          <SkeletonTable rows={4} columns={3} />
+          <SkBox w="w-28" h="h-3" />
+          <SkeletonTable rows={5} columns={6} />
+        </div>
+      );
+    case 'drying':
+      return (
+        <div className="space-y-4">
+          <SkReportStats count={3} />
+          <SkeletonTable rows={5} columns={8} />
+        </div>
+      );
+    case 'processing':
+      return (
+        <div className="space-y-4">
+          <SkReportStats count={6} />
+          <SkeletonTable rows={5} columns={7} />
+        </div>
+      );
+    case 'inventory':
+      return (
+        <div className="space-y-4">
+          <SkReportStats count={3} />
+          <SkeletonTable rows={5} columns={6} />
+        </div>
+      );
+    default:
+      return (
+        <div className="space-y-4">
+          <SkReportStats count={3} />
+          <SkeletonTable rows={5} columns={5} />
+        </div>
+      );
+  }
 };
 
 const DataTable = ({ headers, rows, emptyMessage }) => {
@@ -122,7 +211,7 @@ const DataTable = ({ headers, rows, emptyMessage }) => {
           {rows.map((row, ri) => (
             <tr key={ri} className="border-b border-primary-100 dark:border-primary-800 hover:bg-primary-50 dark:hover:bg-primary-900/20">
               {row.map((cell, ci) => (
-                <td key={ci} className={`py-2 px-3 ${headers[ci]?.right ? 'text-right font-mono' : ''}`}
+                <td key={ci} className={`py-2 px-3 ${headers[ci]?.right ? 'text-right' : ''}`}
                   style={{ color: 'var(--color-text-content)' }}>{cell}</td>
               ))}
             </tr>
@@ -133,9 +222,9 @@ const DataTable = ({ headers, rows, emptyMessage }) => {
   );
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // P&L Income Statement (accounting format)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PLRow = ({ label, value, bold, indent, highlight, separator }) => {
   if (separator) return (
@@ -145,7 +234,7 @@ const PLRow = ({ label, value, bold, indent, highlight, separator }) => {
     <tr className={highlight ? 'bg-primary-50 dark:bg-primary-900/20' : ''}>
       <td className={`py-1.5 px-3 text-sm ${indent ? 'pl-8' : ''} ${bold ? 'font-semibold' : ''}`}
         style={{ color: 'var(--color-text-content)' }}>{label}</td>
-      <td className={`py-1.5 px-3 text-right text-sm font-mono ${bold ? 'font-bold' : ''}`}
+      <td className={`py-1.5 px-3 text-right text-sm ${bold ? 'font-bold' : ''}`}
         style={{ color: 'var(--color-text-content)' }}>{value}</td>
     </tr>
   );
@@ -157,7 +246,7 @@ const ProfitLossStatement = ({ data }) => {
     <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-hidden mb-5">
       <div className="bg-primary-100 dark:bg-primary-900/30 px-3 py-2 border-b border-primary-200 dark:border-primary-700">
         <p className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Income Statement</p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Period: {data.period?.from} â†’ {data.period?.to}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Period: {fmtDate(data.period?.from)} → {fmtDate(data.period?.to)}</p>
       </div>
       <table className="w-full">
         <tbody>
@@ -179,13 +268,13 @@ const ProfitLossStatement = ({ data }) => {
               style={{ color: isP ? '#16a34a' : '#dc2626' }}>
               {isP ? 'GROSS PROFIT' : 'GROSS LOSS'}
             </td>
-            <td className={`py-3 px-3 text-right text-sm font-bold font-mono border-t-2 border-gray-400 dark:border-gray-500 ${isP ? 'text-green-600' : 'text-red-500'}`}>
+            <td className={`py-3 px-3 text-right text-sm font-bold border-t-2 border-gray-400 dark:border-gray-500 ${isP ? 'text-green-600' : 'text-red-500'}`}>
               {isP ? peso(data.gross_profit) : `(${peso(Math.abs(data.gross_profit))})`}
             </td>
           </tr>
           <tr>
             <td className="py-1.5 px-3 text-sm text-gray-500 dark:text-gray-400 border-b-2 border-gray-400 dark:border-gray-500">Profit Margin</td>
-            <td className={`py-1.5 px-3 text-right text-sm font-mono border-b-2 border-gray-400 dark:border-gray-500 font-semibold ${pctClass(data.gross_profit)}`}>
+            <td className={`py-1.5 px-3 text-right text-sm border-b-2 border-gray-400 dark:border-gray-500 font-semibold ${pctClass(data.gross_profit)}`}>
               {data.profit_margin}%
             </td>
           </tr>
@@ -204,9 +293,9 @@ const ProfitLossStatement = ({ data }) => {
   );
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Date range picker
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PRESETS = [
   { label: 'This Month', from: firstOfMonth(), to: today() },
@@ -250,14 +339,14 @@ const DateBar = ({ dateFrom, dateTo, onChange, onRefresh, loading }) => (
       style={{ color: 'var(--color-text-content)' }}
       title="Refresh data">
       {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-      {loading ? 'Loadingâ€¦' : 'Refresh'}
+      {loading ? 'Loading\u2026' : 'Refresh'}
     </button>
   </div>
 );
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Tabs definition
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: 'pl',          label: 'P&L Statement',    icon: DollarSign  },
@@ -268,9 +357,9 @@ const TABS = [
   { key: 'inventory',   label: 'Inventory Value',  icon: Package     },
 ];
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 // Main Reports Page
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────────────────
 
 const Reports = () => {
   const toast = useToast();
@@ -279,14 +368,19 @@ const Reports = () => {
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo,   setDateTo]   = useState(today);
   const [activeTab, setActiveTab] = useState('pl');
-  const [loading,   setLoading]   = useState(false);
 
-  const [plData,        setPlData]        = useState(null);
-  const [salesData,     setSalesData]     = useState(null);
-  const [procData,      setProcData]      = useState(null);
-  const [dryData,       setDryData]       = useState(null);
-  const [procYieldData, setProcYieldData] = useState(null);
-  const [invData,       setInvData]       = useState(null);
+  // Use the persistent reports data hook
+  const {
+    plData,
+    salesData,
+    procData,
+    dryData,
+    procYieldData,
+    invData,
+    isRefreshing,
+    hasInitialData,
+    fetchReports,
+  } = useReportsData();
 
   const bizName = bizSettings?.business_name || 'KJP Ricemill';
 
@@ -294,53 +388,28 @@ const Reports = () => {
   const datesRef = useRef({ dateFrom, dateTo });
   datesRef.current = { dateFrom, dateTo };
 
-  const doFetch = useCallback(async (from, to) => {
-    if (!from || !to || from > to) return;
-    setLoading(true);
-    try {
-      const [pl, sales, proc, dry, procYield, inv] = await Promise.allSettled([
-        reportsApi.getProfitLoss(from, to),
-        reportsApi.getSalesSummary(from, to),
-        reportsApi.getProcurementCost(from, to),
-        reportsApi.getDryingCost(from, to),
-        reportsApi.getProcessingYield(from, to),
-        reportsApi.getInventoryValuation(),
-      ]);
-      if (pl.status        === 'fulfilled' && pl.value?.success)         setPlData(pl.value.data);
-      if (sales.status     === 'fulfilled' && sales.value?.success)      setSalesData(sales.value.data);
-      if (proc.status      === 'fulfilled' && proc.value?.success)       setProcData(proc.value.data);
-      if (dry.status       === 'fulfilled' && dry.value?.success)        setDryData(dry.value.data);
-      if (procYield.status === 'fulfilled' && procYield.value?.success)  setProcYieldData(procYield.value.data);
-      if (inv.status       === 'fulfilled' && inv.value?.success)        setInvData(inv.value.data);
-    } catch {
-      toast.error('Load failed', 'Could not load reports. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  // Auto-load on mount
+  // Initial load - fetch data (will show cached data instantly if available)
   useEffect(() => {
-    doFetch(firstOfMonth(), today());
+    fetchReports(firstOfMonth(), today());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced reload on date change (skip first render)
+  // Background reload on date change (no loading state)
   const isFirstDateChange = useRef(true);
   useEffect(() => {
     if (isFirstDateChange.current) { isFirstDateChange.current = false; return; }
     if (!dateFrom || !dateTo || dateFrom > dateTo) return;
-    const t = setTimeout(() => doFetch(dateFrom, dateTo), 800);
+    const t = setTimeout(() => fetchReports(dateFrom, dateTo, false), 800);
     return () => clearTimeout(t);
-  }, [dateFrom, dateTo, doFetch]);
+  }, [dateFrom, dateTo, fetchReports]);
 
   const handleDateChange = useCallback((field, val) => {
     if (field === 'from') setDateFrom(val);
     else setDateTo(val);
   }, []);
 
-  const handleRefresh = useCallback(() => doFetch(datesRef.current.dateFrom, datesRef.current.dateTo), [doFetch]);
+  const handleRefresh = useCallback(() => fetchReports(datesRef.current.dateFrom, datesRef.current.dateTo, true), [fetchReports]);
 
-  // â”€â”€ Print functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Print functions ──────────────────────────────────────────────────────
 
   const printPL = useCallback(() => {
     if (!plData) return;
@@ -362,16 +431,16 @@ const Reports = () => {
       <tr><td class="label">Profit Margin</td><td class="value ${isP ? 'profit' : 'loss'}">${p.profit_margin}%</td></tr>
     `;
     const salesRows = (p.sales_list || []).map(s =>
-      `<tr><td>${s.date}</td><td>${s.transaction_id}</td><td>${s.customer}</td><td>${peso(s.gross_sales)}</td><td>(${peso(s.discount)})</td><td>${peso(s.total)}</td><td>${PAY_LABELS[s.payment_method] || s.payment_method}</td></tr>`
+      `<tr><td>${fmtDate(s.date)}</td><td>${s.transaction_id}</td><td>${s.customer}</td><td>${peso(s.gross_sales)}</td><td>(${peso(s.discount)})</td><td>${peso(s.total)}</td><td>${PAY_LABELS[s.payment_method] || s.payment_method}</td></tr>`
     ).join('');
     const procRows = (p.procurement_list || []).map(r =>
-      `<tr><td>${r.date}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${peso(r.price_per_kg)}/kg</td><td>${peso(r.total_cost)}</td></tr>`
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${peso(r.price_per_kg)}/kg</td><td>${peso(r.total_cost)}</td></tr>`
     ).join('');
     const dryRows = (p.drying_list || []).map(r =>
-      `<tr><td>${r.date}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${r.sacks} sacks</td><td>${r.days}d</td><td>${peso(r.total_price)}</td></tr>`
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${r.sacks} sacks</td><td>${r.days}d</td><td>${peso(r.total_price)}</td></tr>`
     ).join('');
     const html = `
-      <p class="meta">Period: ${p.period?.from} to ${p.period?.to} | Orders: ${p.order_count}</p>
+      <p class="meta">Period: ${fmtDate(p.period?.from)} to ${fmtDate(p.period?.to)} | Orders: ${p.order_count}</p>
       <table class="stmt"><tbody>${stmtRows}</tbody></table>
       <h2>Sales Transactions (${(p.sales_list || []).length})</h2>
       <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Gross</th><th>Disc.</th><th>Total</th><th>Payment</th></tr></thead>
@@ -393,7 +462,7 @@ const Reports = () => {
     const payRows = (salesData.by_payment || []).map(p =>
       `<tr><td>${PAY_LABELS[p.method] || p.method}</td><td>${p.count}</td><td>${peso(p.total)}</td></tr>`).join('');
     const html = `
-      <p class="meta">Period: ${salesData.period?.from} to ${salesData.period?.to}</p>
+      <p class="meta">Period: ${fmtDate(salesData.period?.from)} to ${fmtDate(salesData.period?.to)}</p>
       <div class="stats">
         <div class="stat"><div class="lbl">Orders</div><div class="val">${salesData.order_count}</div></div>
         <div class="stat"><div class="lbl">Revenue</div><div class="val">${peso(salesData.revenue)}</div></div>
@@ -409,9 +478,9 @@ const Reports = () => {
   const printProc = useCallback(() => {
     if (!procData) return;
     const rows = (procData.records || []).map(r =>
-      `<tr><td>${r.date}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${peso(r.price_per_kg)}/kg</td><td>${peso(r.total_cost)}</td></tr>`).join('');
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${peso(r.price_per_kg)}/kg</td><td>${peso(r.total_cost)}</td></tr>`).join('');
     const html = `
-      <p class="meta">Period: ${procData.period?.from} to ${procData.period?.to}</p>
+      <p class="meta">Period: ${fmtDate(procData.period?.from)} to ${fmtDate(procData.period?.to)}</p>
       <div class="stats">
         <div class="stat"><div class="lbl">Total Cost</div><div class="val">${peso(procData.total_cost)}</div></div>
         <div class="stat"><div class="lbl">Total kg</div><div class="val">${fmt(procData.total_kg)} kg</div></div>
@@ -425,9 +494,9 @@ const Reports = () => {
   const printDrying = useCallback(() => {
     if (!dryData) return;
     const rows = (dryData.records || []).map(r =>
-      `<tr><td>${r.date}</td><td>${r.is_batch ? `Batch ${r.batch_number}` : 'Single'}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${fmt(r.quantity_out)} kg</td><td>${r.days}d</td><td>${peso(r.total_price)}</td></tr>`).join('');
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.is_batch ? `Batch ${r.batch_number}` : 'Single'}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${fmt(r.quantity_out)} kg</td><td>${r.days}d</td><td>${peso(r.total_price)}</td></tr>`).join('');
     const html = `
-      <p class="meta">Period: ${dryData.period?.from} to ${dryData.period?.to}</p>
+      <p class="meta">Period: ${fmtDate(dryData.period?.from)} to ${fmtDate(dryData.period?.to)}</p>
       <div class="stats">
         <div class="stat"><div class="lbl">Total Cost</div><div class="val">${peso(dryData.total_cost)}</div></div>
         <div class="stat"><div class="lbl">Input</div><div class="val">${fmt(dryData.total_kg_in)} kg</div></div>
@@ -441,9 +510,9 @@ const Reports = () => {
   const printProcessing = useCallback(() => {
     if (!procYieldData) return;
     const rows = (procYieldData.records || []).map(r =>
-      `<tr><td>${r.date}</td><td>${r.variety}</td><td>${r.operator}</td><td>${fmt(r.input_kg)} kg</td><td>${fmt(r.output_kg)} kg</td><td>${fmt(r.husk_kg)} kg</td><td>${r.yield_percent}%</td></tr>`).join('');
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.variety}</td><td>${r.operator}</td><td>${fmt(r.input_kg)} kg</td><td>${fmt(r.output_kg)} kg</td><td>${fmt(r.husk_kg)} kg</td><td>${r.yield_percent}%</td></tr>`).join('');
     const html = `
-      <p class="meta">Period: ${procYieldData.period?.from} to ${procYieldData.period?.to}</p>
+      <p class="meta">Period: ${fmtDate(procYieldData.period?.from)} to ${fmtDate(procYieldData.period?.to)}</p>
       <div class="stats">
         <div class="stat"><div class="lbl">Input</div><div class="val">${fmt(procYieldData.total_input_kg)} kg</div></div>
         <div class="stat"><div class="lbl">Output</div><div class="val">${fmt(procYieldData.total_output_kg)} kg</div></div>
@@ -457,7 +526,7 @@ const Reports = () => {
   const printInventory = useCallback(() => {
     if (!invData) return;
     const rows = (invData.products || []).map(p =>
-      `<tr><td>${p.is_low_stock ? 'âš  ' : ''}${p.product_name}</td><td>${p.variety}</td><td>${p.stocks} ${p.unit}</td><td>${peso(p.price)}</td><td>${peso(p.stock_value)}</td><td>${p.status}</td></tr>`).join('');
+      `<tr><td>${p.is_low_stock ? '⚠ ' : ''}${p.product_name}</td><td>${p.variety}</td><td>${p.stocks} ${p.unit}</td><td>${peso(p.price)}</td><td>${peso(p.stock_value)}</td><td>${p.status}</td></tr>`).join('');
     const html = `
       <p class="meta">Snapshot: ${new Date(invData.generated_at).toLocaleString('en-PH')}</p>
       <div class="stats">
@@ -470,10 +539,11 @@ const Reports = () => {
     printReport('Inventory Valuation', html, bizName);
   }, [invData, bizName]);
 
-  // â”€â”€ Tab render functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Tab render functions ─────────────────────────────────────────────────
 
   const renderPL = () => {
-    if (!plData) return <EmptyState loading={loading} message="No data returned from server." />;
+    if (!hasInitialData && !plData) return <ReportSkeleton tab="pl" />;
+    if (!plData) return <EmptyState message="No data available. Try adjusting the date range." />;
     return (
       <>
         <ProfitLossStatement data={plData} />
@@ -488,8 +558,8 @@ const Reports = () => {
             { label: 'Total', right: true }, { label: 'Payment' },
           ]}
           rows={(plData.sales_list || []).map(s => [
-            s.date, s.transaction_id, s.customer,
-            peso(s.gross_sales), s.discount > 0 ? `(${peso(s.discount)})` : 'â€”',
+            fmtDate(s.date), s.transaction_id, s.customer,
+            peso(s.gross_sales), s.discount > 0 ? `(${peso(s.discount)})` : '\u2014',
             peso(s.total), PAY_LABELS[s.payment_method] || s.payment_method,
           ])}
           emptyMessage="No completed orders in this period."
@@ -504,7 +574,7 @@ const Reports = () => {
             { label: 'Qty', right: true }, { label: '\u20B1/kg', right: true }, { label: 'Total Cost', right: true },
           ]}
           rows={(plData.procurement_list || []).map(r => [
-            r.date, r.supplier, r.variety,
+            fmtDate(r.date), r.supplier, r.variety,
             `${fmt(r.quantity_kg)} kg`, peso(r.price_per_kg), peso(r.total_cost),
           ])}
           emptyMessage="No procurement records in this period."
@@ -519,7 +589,7 @@ const Reports = () => {
             { label: 'Sacks', right: true }, { label: 'Days', right: true }, { label: 'Cost', right: true },
           ]}
           rows={(plData.drying_list || []).map(r => [
-            r.date, r.supplier, r.variety, r.sacks, r.days, peso(r.total_price),
+            fmtDate(r.date), r.supplier, r.variety, r.sacks, r.days, peso(r.total_price),
           ])}
           emptyMessage="No drying records in this period."
         />
@@ -528,13 +598,13 @@ const Reports = () => {
   };
 
   const renderSales = () => {
-    if (!salesData) return <EmptyState loading={loading} message="No sales data." />;
+    if (!hasInitialData && !salesData) return <ReportSkeleton tab="sales" />;
+    if (!salesData) return <EmptyState message="No data available. Try adjusting the date range." />;
     return (
       <>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <StatsCard label="Total Orders" value={salesData.order_count} icon={FileText} />
           <StatsCard label="Revenue" value={peso(salesData.revenue)} icon={TrendingUp} />
-          <StatsCard label="Discounts Given" value={peso(salesData.total_discounts)} icon={Percent} iconBgColor="bg-orange-500" />
         </div>
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">By Payment Method</h3>
         <DataTable
@@ -551,7 +621,8 @@ const Reports = () => {
   };
 
   const renderProcurement = () => {
-    if (!procData) return <EmptyState loading={loading} message="No procurement data." />;
+    if (!hasInitialData && !procData) return <ReportSkeleton tab="procurement" />;
+    if (!procData) return <EmptyState message="No data available. Try adjusting the date range." />;
     return (
       <>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -571,7 +642,7 @@ const Reports = () => {
             { label: 'Qty', right: true }, { label: '\u20B1/kg', right: true }, { label: 'Total', right: true },
           ]}
           rows={(procData.records || []).map(r => [
-            r.date, r.supplier, r.variety,
+            fmtDate(r.date), r.supplier, r.variety,
             `${fmt(r.quantity_kg)} kg`, peso(r.price_per_kg), peso(r.total_cost),
           ])}
           emptyMessage="No procurement records." />
@@ -580,7 +651,8 @@ const Reports = () => {
   };
 
   const renderDrying = () => {
-    if (!dryData) return <EmptyState loading={loading} message="No drying data." />;
+    if (!hasInitialData && !dryData) return <ReportSkeleton tab="drying" />;
+    if (!dryData) return <EmptyState message="No data available. Try adjusting the date range." />;
     return (
       <>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -595,7 +667,7 @@ const Reports = () => {
             { label: 'Days', right: true }, { label: 'Cost', right: true },
           ]}
           rows={(dryData.records || []).map(r => [
-            r.date,
+            fmtDate(r.date),
             r.is_batch ? `Batch ${r.batch_number}` : 'Single',
             r.supplier, r.variety,
             `${fmt(r.quantity_kg)} kg`, `${fmt(r.quantity_out)} kg`,
@@ -607,7 +679,8 @@ const Reports = () => {
   };
 
   const renderProcessing = () => {
-    if (!procYieldData) return <EmptyState loading={loading} message="No processing data." />;
+    if (!hasInitialData && !procYieldData) return <ReportSkeleton tab="processing" />;
+    if (!procYieldData) return <EmptyState message="No data available. Try adjusting the date range." />;
     return (
       <>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -625,7 +698,7 @@ const Reports = () => {
             { label: 'Husk', right: true }, { label: 'Yield %', right: true },
           ]}
           rows={(procYieldData.records || []).map(r => [
-            r.date, r.variety, r.operator,
+            fmtDate(r.date), r.variety, r.operator,
             `${fmt(r.input_kg)} kg`, `${fmt(r.output_kg)} kg`,
             `${fmt(r.husk_kg)} kg`, `${r.yield_percent}%`,
           ])}
@@ -635,7 +708,8 @@ const Reports = () => {
   };
 
   const renderInventory = () => {
-    if (!invData) return <EmptyState loading={loading} message="No inventory data." />;
+    if (!hasInitialData && !invData) return <ReportSkeleton tab="inventory" />;
+    if (!invData) return <EmptyState message="No data available." />;
     return (
       <>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -691,7 +765,7 @@ const Reports = () => {
         dateTo={dateTo}
         onChange={handleDateChange}
         onRefresh={handleRefresh}
-        loading={loading}
+        loading={isRefreshing}
       />
 
       {/* Tab navigation */}
@@ -711,9 +785,7 @@ const Reports = () => {
 
       {/* Active report */}
       <SectionCard icon={active.icon} title={active.title} onPrint={active.print} loading={false}>
-        {loading && !plData
-          ? <EmptyState loading={true} />
-          : active.render()}
+        {active.render()}
       </SectionCard>
     </div>
   );
