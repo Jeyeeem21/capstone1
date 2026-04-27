@@ -15,6 +15,8 @@ class NewOrderNotification extends Mailable
 
     public function __construct(public Sale $sale)
     {
+        // Load payments with proof for email display
+        $this->sale->load('payments');
     }
 
     public function envelope(): Envelope

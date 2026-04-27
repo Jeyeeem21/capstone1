@@ -220,17 +220,14 @@ const DataTable = ({
   // Check if row is selected
   const isRowSelected = (row) => selectedRows.includes(row.id);
 
-  // Handle row click
+  // Handle row click - just call the external handler
   const handleRowClick = (row, e) => {
-    if (selectable) {
-      handleRowSelect(row, e);
-    }
-    onRowClick?.(row);
+    onRowClick?.(row, e);
   };
 
   // Handle row double click
-  const handleRowDoubleClick = (row) => {
-    onRowDoubleClick?.(row);
+  const handleRowDoubleClick = (row, e) => {
+    onRowDoubleClick?.(row, e);
   };
 
   const getSortIcon = (accessor) => {
@@ -365,7 +362,7 @@ const DataTable = ({
                   onClick={() => col.accessor && handleSort(col.accessor)}
                 >
                   <div className="flex items-center gap-1.5">
-                    {col.header}
+                    {typeof col.header === 'function' ? col.header() : col.header}
                     {col.accessor && getSortIcon(col.accessor)}
                   </div>
                 </th>
@@ -423,7 +420,14 @@ const DataTable = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4">
             {paginatedData.map((row, rowIndex) => {
               // Get first 2 non-action columns for card title/subtitle
-              const displayColumns = columns.filter(col => col.accessor && !col.header?.toLowerCase().includes('action'));
+              const displayColumns = columns.filter(col => {
+                if (!col.accessor) return false;
+                // Check if header is a string and contains 'action'
+                if (typeof col.header === 'string' && col.header.toLowerCase().includes('action')) return false;
+                // Check if header is JSX/React element (skip action columns)
+                if (col.header && typeof col.header === 'object') return false;
+                return true;
+              });
               const titleCol = displayColumns[0];
               const subtitleCol = displayColumns[1];
               const otherCols = displayColumns.slice(2); // Show all remaining fields
@@ -481,9 +485,9 @@ const DataTable = ({
                   </div>
 
                   {/* Card Actions - if there's an action column */}
-                  {columns.find(col => col.header?.toLowerCase().includes('action')) && (
+                  {columns.find(col => typeof col.header === 'string' && col.header.toLowerCase().includes('action')) && (
                     <div className="px-4 pb-4">
-                      {columns.find(col => col.header?.toLowerCase().includes('action'))?.cell?.(row, rowIndex)}
+                      {columns.find(col => typeof col.header === 'string' && col.header.toLowerCase().includes('action'))?.cell?.(row, rowIndex)}
                     </div>
                   )}
                 </div>

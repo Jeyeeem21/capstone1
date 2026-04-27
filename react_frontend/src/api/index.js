@@ -24,3 +24,4 @@ export { default as settingsApi } from './settingsApi';
 export { default as websiteContentApi } from './websiteContentApi';
 export { default as businessSettingsApi } from './businessSettingsApi';
 export { default as reportsApi } from './reportsApi';
+export { default as paymentsApi, paymentsApi as payments, paymentPlansApi, installmentsApi, customerBalancesApi } from './paymentsApi';

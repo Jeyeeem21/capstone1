@@ -6,6 +6,7 @@ use App\Http\Resources\SaleResource;
 use App\Services\SaleService;
 use App\Services\NotificationService;
 use App\Services\EmailService;
+use App\Services\StaggeredPaymentService;
 use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\User;
@@ -19,7 +20,8 @@ class SaleController extends Controller
     public function __construct(
         private SaleService $saleService,
         private NotificationService $notificationService,
-        private EmailService $emailService
+        private EmailService $emailService,
+        private StaggeredPaymentService $staggeredPaymentService
     ) {}
 
     /**
@@ -131,14 +133,25 @@ class SaleController extends Controller
                 'new_customer_landmark' => 'nullable|string|max:500',
                 'discount' => 'nullable|numeric|min:0',
                 'amount_tendered' => 'nullable|numeric|min:0',
-                'payment_method' => 'nullable|string|in:cash,gcash,cod,pay_later',
+                'payment_method' => 'nullable|string|in:cash,gcash,cod,pay_later,pdo',
                 'reference_number' => 'nullable|string',
                 'payment_proof' => 'nullable|array',
                 'payment_proof.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+                'pdo_check_number' => 'nullable|string',
+                'pdo_bank_name' => 'nullable|string',
+                'pdo_check_date' => 'nullable|date',
+                'pdo_amount' => 'nullable|numeric|min:0',
+                'pdo_check_image' => 'nullable|array',
+                'pdo_check_image.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
                 'notes' => 'nullable|string|max:500',
                 'delivery_address' => 'nullable|string|max:500',
                 'delivery_fee' => 'nullable|numeric|min:0',
                 'distance_km' => 'nullable|numeric|min:0',
+                'is_staggered' => 'nullable|boolean',
+                'installments' => 'nullable|array',
+                'installments.*.installment_number' => 'required_with:installments|integer|min:1',
+                'installments.*.amount' => 'required_with:installments|numeric|min:0.01',
+                'installments.*.due_date' => 'nullable|date',
             ]);
 
             // Handle payment proof file uploads (GCash screenshots)
@@ -148,6 +161,15 @@ class SaleController extends Controller
                     $proofPaths[] = $file->store('payment_proofs', 'public');
                 }
                 $validated['payment_proof'] = $proofPaths;
+            }
+
+            // Handle PDO check image uploads
+            if ($request->hasFile('pdo_check_image')) {
+                $checkPaths = [];
+                foreach ($request->file('pdo_check_image') as $file) {
+                    $checkPaths[] = $file->store('pdo_checks', 'public');
+                }
+                $validated['pdo_check_image'] = $checkPaths;
             }
 
             // Auto-resolve customer_id for authenticated customer users
@@ -166,9 +188,44 @@ class SaleController extends Controller
             $newCustomerEmail = $validated['new_customer_email'] ?? null;
             $newCustomerAddress = $validated['new_customer_address'] ?? null;
             $newCustomerLandmark = $validated['new_customer_landmark'] ?? null;
-            unset($validated['new_customer_name'], $validated['new_customer_contact'], $validated['new_customer_email'], $validated['new_customer_address'], $validated['new_customer_landmark']);
+            $installments = $validated['installments'] ?? null;
+            unset($validated['new_customer_name'], $validated['new_customer_contact'], $validated['new_customer_email'], $validated['new_customer_address'], $validated['new_customer_landmark'], $validated['installments']);
 
             $sale = $this->saleService->createOrder($validated, $newCustomerName, $newCustomerContact, $newCustomerEmail, $newCustomerAddress, $newCustomerLandmark);
+
+            // Create installment schedule if staggered
+            if (!empty($validated['is_staggered']) && !empty($installments)) {
+                try {
+                    $result = $this->staggeredPaymentService->createPaymentSchedule($sale, $installments);
+                    
+                    // If amount_tendered > 0, record first payment
+                    if (!empty($validated['amount_tendered']) && $validated['amount_tendered'] > 0) {
+                        $firstInstallment = $result['installments'][0] ?? null;
+                        if ($firstInstallment) {
+                            $paymentData = [
+                                'payment_method' => $validated['payment_method'] ?? 'cash',
+                                'amount' => $validated['amount_tendered'],
+                                'notes' => 'First installment payment from POS',
+                            ];
+                            
+                            // Add reference number for GCash
+                            if (!empty($validated['reference_number'])) {
+                                $paymentData['reference_number'] = $validated['reference_number'];
+                            }
+                            
+                            // Add payment proof for GCash
+                            if (!empty($validated['payment_proof'])) {
+                                $paymentData['payment_proof'] = $validated['payment_proof'];
+                            }
+                            
+                            $this->staggeredPaymentService->recordInstallmentPayment($firstInstallment, $paymentData);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Log but don't fail — order is already created
+                    \Log::warning('Failed to create installment schedule for sale ' . $sale->id . ': ' . $e->getMessage());
+                }
+            }
 
             // Log audit for inline customer creation
             if ($newCustomerName && $sale->customer_id) {

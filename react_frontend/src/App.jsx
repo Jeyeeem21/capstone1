@@ -35,6 +35,7 @@ const Customer = lazy(() => import('./pages/admin/Partners').then(m => ({ defaul
 const StaffManagement = lazy(() => import('./pages/admin/StaffManagement'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
 const Reports = lazy(() => import('./pages/admin/Reports'));
+const PaymentsManagement = lazy(() => import('./pages/admin/Payments/PaymentsManagement'));
 
 // Shared pages
 const PointOfSale = lazy(() => import('./pages/shared/PointOfSale'));
@@ -81,6 +82,7 @@ export const adminPageImports = {
   inventory:  () => import('./pages/admin/Products'),
   sales:      () => import('./pages/admin/Sales'),
   orders:     () => import('./pages/admin/Orders'),
+  payments:   () => import('./pages/admin/Payments/PaymentsManagement'),
   partners:   () => import('./pages/admin/Partners'),
   supplier:   () => import('./pages/admin/Partners'),
   customer:   () => import('./pages/admin/Partners'),
@@ -250,6 +252,7 @@ function AppRoutes() {
         
         <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
         <Route path="orders" element={<ErrorBoundary><AdminOrders /></ErrorBoundary>} />
+        <Route path="payments" element={<ErrorBoundary><PaymentsManagement /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>
 
@@ -281,6 +284,7 @@ function AppRoutes() {
         
         <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
         <Route path="orders" element={<ErrorBoundary><AdminOrders /></ErrorBoundary>} />
+        <Route path="payments" element={<ErrorBoundary><PaymentsManagement /></ErrorBoundary>} />
         <Route path="*" element={<NotFound />} />
       </Route>
       

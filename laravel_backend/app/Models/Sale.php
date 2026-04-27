@@ -35,6 +35,10 @@ class Sale extends Model
         'return_pickup_date',
         'voided_by',
         'authorized_by',
+        'is_staggered',
+        'primary_method',
+        'amount_paid',
+        'balance_remaining',
     ];
 
     protected $casts = [
@@ -50,6 +54,9 @@ class Sale extends Model
         'return_pickup_date' => 'date',
         'payment_proof' => 'array',
         'paid_at' => 'datetime',
+        'amount_paid' => 'decimal:2',
+        'balance_remaining' => 'decimal:2',
+        'is_staggered' => 'boolean',
     ];
 
     /**
@@ -65,6 +72,16 @@ class Sale extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function paymentInstallments()
+    {
+        return $this->hasMany(PaymentInstallment::class);
+    }
+
     /**
      * Scopes
      */
@@ -76,5 +93,34 @@ class Sale extends Model
     public function scopeVoided($query)
     {
         return $query->where('status', 'voided');
+    }
+
+    /**
+     * Payment Helper Methods
+     */
+    public function isFullyPaid()
+    {
+        return $this->balance_remaining <= 0;
+    }
+
+    public function isPartiallyPaid()
+    {
+        return $this->amount_paid > 0 && $this->balance_remaining > 0;
+    }
+
+    public function verifiedPaymentsTotal()
+    {
+        return $this->payments()->verified()->sum('amount');
+    }
+
+    public function calculatePaymentStatus()
+    {
+        if ($this->balance_remaining <= 0) {
+            return 'paid';
+        } elseif ($this->amount_paid > 0) {
+            return 'partial';
+        } else {
+            return 'not_paid';
+        }
     }
 }

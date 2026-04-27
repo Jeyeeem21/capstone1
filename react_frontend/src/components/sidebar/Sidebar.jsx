@@ -21,6 +21,7 @@ import {
   Sun,
   Shield,
   FileBarChart,
+  CreditCard,
 } from 'lucide-react';
 import { Avatar, useToast } from '../ui';
 import { ConfirmModal } from '../ui/Modal';
@@ -255,6 +256,14 @@ const Sidebar = ({ isCollapsed, onToggleCollapse, isMobileOpen, onMobileClose })
             icon={ClipboardList}
             label="Orders"
             to={`${basePath}/orders`}
+            isCollapsed={isCollapsed}
+          />
+
+          {/* Payments */}
+          <SidebarMenuItem
+            icon={CreditCard}
+            label="Payments"
+            to={`${basePath}/payments`}
             isCollapsed={isCollapsed}
           />
 

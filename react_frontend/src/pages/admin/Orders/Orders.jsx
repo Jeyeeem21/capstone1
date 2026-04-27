@@ -97,116 +97,6 @@ const printOrderReceipt = (order, bizName = 'KJP Ricemill', copies = 1) => {
   setTimeout(() => win.print(), 350);
 };
 
-// ─── Batch Print Helper (4 receipts per short bond paper, 2 per row) ─────────
-const printBatchReceipts = (orders, bizName = 'KJP Ricemill') => {
-  const win = window.open('', '_blank', 'width=800,height=1100');
-  if (!win) return;
-
-  const generateReceiptHTML = (order) => {
-    const payStatus = order.payment_status === 'not_paid' ? 'UNPAID' : 'PAID';
-    const payColor  = order.payment_status === 'not_paid' ? '#dc2626' : '#16a34a';
-
-    const itemRows = (order.items || []).map(item => `
-      <tr>
-        <td>${(item.product_name || item.name || '')}${item.weight_formatted ? ` (${item.weight_formatted})` : ''}</td>
-        <td class="c">${item.quantity}</td>
-        <td class="r">&#8369;${(item.unit_price || item.price || 0).toLocaleString()}</td>
-        <td class="r">&#8369;${(item.subtotal || 0).toLocaleString()}</td>
-      </tr>`).join('');
-
-    return `
-    <div class="rcpt">
-      <div class="hdr">
-        <div class="biz">${bizName}</div>
-        <div class="sub">OFFICIAL RECEIPT</div>
-      </div>
-      <hr class="d"/>
-      <table class="meta">
-        <tr><td class="ml">TXN ID:</td><td class="mv">${order.order_id}</td></tr>
-        <tr><td class="ml">Date:</td><td class="mv">${order.date_formatted || ''}</td></tr>
-        <tr><td class="ml">Customer:</td><td class="mv">${order.customer}</td></tr>
-        <tr><td class="ml">Type:</td><td class="mv">${order.is_delivery ? 'Delivery' : 'Pick Up'}</td></tr>
-        ${order.delivery_address ? `<tr><td class="ml">Address:</td><td class="mv">${order.delivery_address}</td></tr>` : ''}
-        <tr><td class="ml">Payment:</td><td class="mv">${order.payment_method} &mdash; <span style="color:${payColor};font-weight:700">${payStatus}</span></td></tr>
-        ${order.driver_name ? `<tr><td class="ml">Driver:</td><td class="mv">${order.driver_name}</td></tr>` : ''}
-      </table>
-      <hr class="d"/>
-      <table class="items">
-        <thead><tr><th>Product</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Subtotal</th></tr></thead>
-        <tbody>${itemRows}</tbody>
-      </table>
-      <hr class="d"/>
-      <table class="totals">
-        ${(order.delivery_fee > 0) ? `<tr><td class="tl">Delivery Fee</td><td class="tr_">&#8369;${Number(order.delivery_fee).toLocaleString()}</td></tr>` : ''}
-        ${(order.discount > 0) ? `<tr><td class="tl">Discount</td><td class="tr_" style="color:#dc2626">-&#8369;${Number(order.discount).toLocaleString()}</td></tr>` : ''}
-        <tr class="grand"><td>TOTAL</td><td class="tr_">&#8369;${Number(order.total).toLocaleString()}</td></tr>
-        ${(order.amount_tendered > 0) ? `<tr><td class="tl">Tendered</td><td class="tr_">&#8369;${Number(order.amount_tendered).toLocaleString()}</td></tr>` : ''}
-        ${(order.change_amount > 0) ? `<tr><td class="tl">Change</td><td class="tr_">&#8369;${Number(order.change_amount).toLocaleString()}</td></tr>` : ''}
-      </table>
-      <hr class="d"/>
-      <div class="status">Status: <strong>${order.status}</strong></div>
-      <div class="ftr">Thank you! &mdash; System-generated</div>
-    </div>`;
-  };
-
-  // Group receipts into pages (4 per page, 2 per row)
-  const pages = [];
-  for (let i = 0; i < orders.length; i += 4) {
-    const pageOrders = orders.slice(i, i + 4);
-    const rows = [];
-    
-    // Create 2 rows per page
-    for (let j = 0; j < pageOrders.length; j += 2) {
-      const leftReceipt = generateReceiptHTML(pageOrders[j]);
-      const rightReceipt = pageOrders[j + 1] ? generateReceiptHTML(pageOrders[j + 1]) : '<div class="rcpt empty"></div>';
-      rows.push(`
-        <div class="receipt-row">
-          <div class="receipt-cell">${leftReceipt}</div>
-          <div class="receipt-cell">${rightReceipt}</div>
-        </div>
-      `);
-    }
-    
-    pages.push(`<div class="page">${rows.join('')}</div>`);
-  }
-
-  win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
-    <title>Batch Receipts (${orders.length} orders)</title>
-    <style>
-      @page{size:8.5in 11in;margin:0.35in 0.4in}
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#fff}
-      .page{width:100%;display:flex;flex-direction:column;gap:0.25in;page-break-after:always}
-      .page:last-child{page-break-after:auto}
-      .receipt-row{display:flex;gap:0.25in;flex:1;min-height:0}
-      .receipt-cell{flex:1;min-width:0;display:flex}
-      .rcpt{width:100%;font-size:8.5px;color:#111;border:1.5px solid #ccc;padding:10px;background:#fff;display:flex;flex-direction:column}
-      .rcpt.empty{border:none;background:transparent}
-      .hdr{text-align:center;padding-bottom:5px}
-      .biz{font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
-      .sub{font-size:8px;color:#555;font-weight:600;letter-spacing:1px;margin-top:1px}
-      hr.d{border:none;border-top:1px dashed #aaa;margin:4px 0}
-      table.meta{width:100%;border-collapse:collapse;font-size:8px;margin:3px 0}
-      table.meta td{padding:1.5px 2px}
-      .ml{color:#555;font-weight:600;white-space:nowrap;padding-right:5px;width:50px}
-      .mv{color:#111;word-break:break-word}
-      table.items{width:100%;border-collapse:collapse;font-size:7.5px;margin:3px 0}
-      table.items th{padding:2.5px 2px;text-align:left;font-weight:700;border-bottom:1px solid #ccc;font-size:7.5px}
-      table.items td{padding:2px 2px;border-bottom:1px solid #eee}
-      .c{text-align:center}.r{text-align:right}
-      table.totals{width:100%;border-collapse:collapse;font-size:8px;margin:3px 0}
-      table.totals td{padding:1.5px 2px}
-      .tl{color:#555;text-align:left}.tr_{text-align:right}
-      .grand td{font-size:9.5px;font-weight:700;padding:2.5px;border-top:1px solid #333;border-bottom:1px solid #333}
-      .status{font-size:7.5px;margin-top:4px;text-align:center}
-      .ftr{font-size:7px;color:#999;text-align:center;margin-top:3px;padding-top:3px;border-top:1px dashed #ccc}
-      @media print{.page{page-break-after:always}.page:last-child{page-break-after:auto}}
-    </style></head><body>${pages.join('')}</body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 350);
-};
-
 const AdminOrders = () => {
   const toast = useToast();
   const { isSuperAdmin, isAdmin, isAdminOrAbove } = useAuth();
@@ -286,13 +176,13 @@ const AdminOrders = () => {
   // Payment filters
   const [payStatusFilter, setPayStatusFilter] = useState(''); // '' | 'paid' | 'not_paid'
   const [payMethodFilter, setPayMethodFilter] = useState(''); // '' | 'cash' | 'gcash' | 'cod' | 'pay_later'
+  // Batch print selection state
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   // Restock state
   const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
   const [restockOrder, setRestockOrder] = useState(null);
   // { [itemId]: quantity } — only contains items to be restocked
   const [restockQuantities, setRestockQuantities] = useState({});
-  // Multi-select for batch printing
-  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
 
   // Sync active tab to URL
   useEffect(() => {
@@ -321,7 +211,7 @@ const AdminOrders = () => {
         items_count: o.items_count || 0,
         total_quantity: o.total_quantity || 0,
         total: o.total || 0,
-        payment_method: o.payment_method === 'cod' ? 'COD' : o.payment_method === 'gcash' ? 'GCash' : o.payment_method === 'pay_later' ? 'Pay Later' : 'Cash',
+        payment_method: o.payment_method === 'cod' ? 'COD' : o.payment_method === 'gcash' ? 'GCash' : o.payment_method === 'pay_later' ? 'Pay Later' : o.payment_method === 'pdo' ? 'PDO' : 'Cash',
         raw_payment_method: o.payment_method,
         payment_status: o.payment_status || 'paid',
         status: formatStatus(o.status),
@@ -847,29 +737,6 @@ const AdminOrders = () => {
     }
   }, [saving, restockOrder, restockQuantities, refetch, toast]);
 
-  // ─── Batch Print Selected Orders ─────────────────────────
-
-  const handleBatchPrint = useCallback(() => {
-    if (selectedOrderIds.length === 0) {
-      toast.error('No Orders Selected', 'Please select at least one order to print.');
-      return;
-    }
-    
-    // Get the full order objects for selected IDs
-    const selectedOrders = mappedOrders.filter(o => selectedOrderIds.includes(o.id));
-    
-    if (selectedOrders.length === 0) {
-      toast.error('Orders Not Found', 'Selected orders could not be found.');
-      return;
-    }
-
-    const bizName = bizSettings?.business_name || 'KJP Ricemill';
-    printBatchReceipts(selectedOrders, bizName);
-    
-    // Clear selection after printing
-    setSelectedOrderIds([]);
-  }, [selectedOrderIds, mappedOrders, bizSettings, toast]);
-
   // ─── Mark as Paid ────────────────────────────────────────
 
   const stopPayCamera = useCallback(() => {
@@ -1202,11 +1069,152 @@ const AdminOrders = () => {
     return null;
   };
 
+  // Batch print handlers
+  const handleBatchPrint = useCallback(() => {
+    if (selectedOrderIds.length === 0) {
+      toast.error('No Orders Selected', 'Please select at least one order to print.');
+      return;
+    }
+    
+    const ordersToPrint = mappedOrders.filter(o => selectedOrderIds.includes(o.id));
+    
+    // Open ONE window for all receipts
+    const win = window.open('', '_blank', 'width=480,height=660');
+    if (!win) {
+      toast.error('Print Failed', 'Could not open print window. Please check your popup blocker.');
+      return;
+    }
+
+    const bizName = bizSettings.business_name || 'KJP Ricemill';
+    
+    // Generate all receipts HTML
+    const allReceiptsHTML = ordersToPrint.map((order, index) => {
+      const payStatus = order.payment_status === 'not_paid' ? 'UNPAID' : 'PAID';
+      const payColor  = order.payment_status === 'not_paid' ? '#dc2626' : '#16a34a';
+
+      const itemRows = (order.items || []).map(item => `
+        <tr>
+          <td>${(item.product_name || item.name || '')}${item.weight_formatted ? ` (${item.weight_formatted})` : ''}</td>
+          <td class="c">${item.quantity}</td>
+          <td class="r">&#8369;${(item.unit_price || item.price || 0).toLocaleString()}</td>
+          <td class="r">&#8369;${(item.subtotal || 0).toLocaleString()}</td>
+        </tr>`).join('');
+
+      const receiptHTML = `
+      <div class="rcpt">
+        <div class="hdr">
+          <div class="biz">${bizName}</div>
+          <div class="sub">OFFICIAL RECEIPT</div>
+        </div>
+        <hr class="d"/>
+        <table class="meta">
+          <tr><td class="ml">TXN ID:</td><td class="mv">${order.order_id}</td></tr>
+          <tr><td class="ml">Date:</td><td class="mv">${order.date_formatted || ''}</td></tr>
+          <tr><td class="ml">Customer:</td><td class="mv">${order.customer}</td></tr>
+          <tr><td class="ml">Type:</td><td class="mv">${order.is_delivery ? 'Delivery' : 'Pick Up'}</td></tr>
+          ${order.delivery_address ? `<tr><td class="ml">Address:</td><td class="mv">${order.delivery_address}</td></tr>` : ''}
+          <tr><td class="ml">Payment:</td><td class="mv">${order.payment_method} &mdash; <span style="color:${payColor};font-weight:700">${payStatus}</span></td></tr>
+          ${order.driver_name ? `<tr><td class="ml">Driver:</td><td class="mv">${order.driver_name}</td></tr>` : ''}
+        </table>
+        <hr class="d"/>
+        <table class="items">
+          <thead><tr><th>Product</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Subtotal</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <hr class="d"/>
+        <table class="totals">
+          ${(order.delivery_fee > 0) ? `<tr><td class="tl">Delivery Fee</td><td class="tr_">&#8369;${Number(order.delivery_fee).toLocaleString()}</td></tr>` : ''}
+          ${(order.discount > 0) ? `<tr><td class="tl">Discount</td><td class="tr_" style="color:#dc2626">-&#8369;${Number(order.discount).toLocaleString()}</td></tr>` : ''}
+          <tr class="grand"><td>TOTAL</td><td class="tr_">&#8369;${Number(order.total).toLocaleString()}</td></tr>
+          ${(order.amount_tendered > 0) ? `<tr><td class="tl">Tendered</td><td class="tr_">&#8369;${Number(order.amount_tendered).toLocaleString()}</td></tr>` : ''}
+          ${(order.change_amount > 0) ? `<tr><td class="tl">Change</td><td class="tr_">&#8369;${Number(order.change_amount).toLocaleString()}</td></tr>` : ''}
+        </table>
+        <hr class="d"/>
+        <div class="status">Status: <strong>${order.status}</strong></div>
+        <div class="ftr">Thank you! &mdash; System-generated</div>
+      </div>`;
+
+      // No page breaks - using flexbox layout
+      return receiptHTML;
+    }).join('');
+
+    win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+      <title>Batch Receipts (${ordersToPrint.length})</title>
+      <style>
+        @page{size:letter;margin:10mm}
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:8px;color:#111;background:#fff;display:flex;flex-wrap:wrap;gap:8mm;padding:5mm}
+        .rcpt{width:calc(50% - 4mm);break-inside:avoid;page-break-inside:avoid;border:1px dashed #ccc;padding:3mm}
+        .hdr{text-align:center;padding-bottom:3px}
+        .biz{font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+        .sub{font-size:7px;color:#555;font-weight:600;letter-spacing:.8px;margin-top:1px}
+        hr.d{border:none;border-top:1px dashed #aaa;margin:3px 0}
+        table.meta{width:100%;border-collapse:collapse;font-size:7.5px;margin:2px 0}
+        table.meta td{padding:1px 1px}
+        .ml{color:#555;font-weight:600;white-space:nowrap;padding-right:4px;width:45px}
+        .mv{color:#111}
+        table.items{width:100%;border-collapse:collapse;font-size:7px;margin:2px 0}
+        table.items th{padding:2px 2px;text-align:left;font-weight:700;border-bottom:1px solid #ccc;font-size:7px}
+        table.items td{padding:1.5px 2px;border-bottom:1px solid #eee}
+        .c{text-align:center}.r{text-align:right}
+        table.totals{width:100%;border-collapse:collapse;font-size:7.5px;margin:2px 0}
+        table.totals td{padding:1px 2px}
+        .tl{color:#555;text-align:left}.tr_{text-align:right}
+        .grand td{font-size:9px;font-weight:700;padding:2px;border-top:1px solid #333;border-bottom:1px solid #333}
+        .status{font-size:7px;margin-top:3px;text-align:center}
+        .ftr{font-size:6.5px;color:#999;text-align:center;margin-top:2px;padding-top:2px;border-top:1px dashed #ccc}
+        @media print{body{display:flex;flex-wrap:wrap}.rcpt{break-inside:avoid;page-break-inside:avoid}}
+      </style></head><body>${allReceiptsHTML}</body></html>`);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 350);
+    
+    toast.success('Printing Receipts', `Printing ${ordersToPrint.length} receipt(s)...`);
+    setSelectedOrderIds([]);
+  }, [selectedOrderIds, mappedOrders, bizSettings.business_name, toast]);
+
+  const handleToggleSelection = useCallback((orderId) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(orderId) 
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedOrderIds.length === chartFilteredOrdersByTab.length) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(chartFilteredOrdersByTab.map(o => o.id));
+    }
+  }, [selectedOrderIds.length, chartFilteredOrdersByTab]);
+
   // Hide Actions column for tabs that have no actions
   const tabsWithNoActions = ['Cancelled', 'Voided'];
   const showActions = !tabsWithNoActions.includes(activeStatusTab);
 
   const baseColumns = [
+    { 
+      header: () => (
+        <input
+          type="checkbox"
+          checked={selectedOrderIds.length === chartFilteredOrdersByTab.length && chartFilteredOrdersByTab.length > 0}
+          onChange={handleSelectAll}
+          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-button-500 focus:ring-button-500"
+        />
+      ),
+      accessor: 'select',
+      sortable: false,
+      cell: (row) => (
+        <input
+          type="checkbox"
+          checked={selectedOrderIds.includes(row.id)}
+          onChange={() => handleToggleSelection(row.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-button-500 focus:ring-button-500"
+        />
+      )
+    },
     { header: 'Order ID', accessor: 'order_id' },
     { header: 'Customer', accessor: 'customer' },
     { header: 'Products', accessor: 'products_summary', cell: (row) => {
@@ -1518,21 +1526,15 @@ const AdminOrders = () => {
             data={chartFilteredOrdersByTab}
             searchPlaceholder="Search orders..."
             dateFilterField="date"
-            onRowDoubleClick={handleView}
-            selectable={true}
-            selectedRows={selectedOrderIds}
-            onSelectionChange={setSelectedOrderIds}
+            onRowClick={(row) => handleToggleSelection(row.id)}
+            onRowDoubleClick={(row) => {
+              // Deselect the row
+              setSelectedOrderIds(prev => prev.filter(id => id !== row.id));
+              // Open view modal
+              handleView(row);
+            }}
             headerRight={
               <div className="flex items-center gap-2 flex-wrap">
-                {selectedOrderIds.length > 0 && (
-                  <button
-                    onClick={handleBatchPrint}
-                    className="flex items-center gap-2 px-3 py-2 bg-button-500 hover:bg-button-600 text-white rounded-lg transition-colors text-sm font-medium shadow-md"
-                  >
-                    <Printer size={16} />
-                    Print Selected ({selectedOrderIds.length})
-                  </button>
-                )}
                 {activeStatusTab === 'Delivered & Completed' && (
                   <select
                     value={statusSubFilter}
@@ -1576,9 +1578,19 @@ const AdminOrders = () => {
                   <option value="">All Payment Methods</option>
                   <option value="cash">Cash</option>
                   <option value="gcash">GCash</option>
+                  <option value="pdo">PDO</option>
                   <option value="cod">COD</option>
                   <option value="pay_later">Pay Later</option>
                 </select>
+                {selectedOrderIds.length > 0 && (
+                  <button
+                    onClick={handleBatchPrint}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-button-500 hover:bg-button-600 text-white text-xs font-semibold transition-colors shadow-sm"
+                  >
+                    <Printer size={14} />
+                    Print Selected ({selectedOrderIds.length})
+                  </button>
+                )}
               </div>
             }
           />
@@ -1677,8 +1689,113 @@ const AdminOrders = () => {
                 </div>
               </div>
 
-              {/* Payment Proof Images */}
-              {selectedOrder.payment_proof?.length > 0 && (
+              {/* Payment History - Shows ALL payments (installment or not) */}
+              {selectedOrder.payments?.length > 0 && (
+                <div className={`rounded-lg p-2.5 border ${
+                  selectedOrder.is_staggered 
+                    ? 'bg-purple-50 dark:bg-gray-700 border-purple-200 dark:border-purple-700' 
+                    : 'bg-button-50 dark:bg-gray-700 border-button-200 dark:border-button-700'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className={`text-[10px] font-bold uppercase tracking-wide ${
+                      selectedOrder.is_staggered 
+                        ? 'text-purple-600 dark:text-purple-400' 
+                        : 'text-button-600 dark:text-button-400'
+                    }`}>
+                      {selectedOrder.is_staggered ? 'Installment Payments' : 'Payment History'}
+                    </p>
+                    {selectedOrder.balance_remaining > 0 && (
+                      <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
+                        Balance: ₱{selectedOrder.balance_remaining.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {selectedOrder.payments.map((payment, idx) => (
+                      <div key={payment.id} className={`bg-white dark:bg-gray-800 rounded-lg p-2 border ${
+                        selectedOrder.is_staggered 
+                          ? 'border-purple-100 dark:border-purple-800' 
+                          : 'border-button-100 dark:border-button-800'
+                      }`}>
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-gray-800 dark:text-gray-100">
+                                {selectedOrder.is_staggered ? `Payment #${idx + 1}` : 'Payment'}
+                              </span>
+                              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                                payment.status === 'verified' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' :
+                                payment.status === 'needs_verification' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400' :
+                                payment.status === 'pending' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' :
+                                'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                              }`}>
+                                {payment.status === 'verified' ? 'Verified' : 
+                                 payment.status === 'needs_verification' ? 'Pending Verification' : 
+                                 payment.status === 'pending' ? 'Pending Approval' : 
+                                 payment.status}
+                              </span>
+                            </div>
+                            <p className={`text-xs font-semibold ${
+                              selectedOrder.is_staggered 
+                                ? 'text-purple-600 dark:text-purple-400' 
+                                : 'text-button-600 dark:text-button-400'
+                            }`}>
+                              ₱{payment.amount.toLocaleString()}
+                            </p>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {payment.payment_method.toUpperCase()} {payment.reference_number && `• ${payment.reference_number}`}
+                            </p>
+                            {payment.paid_at_formatted && (
+                              <p className="text-[9px] text-gray-400">{payment.paid_at_formatted}</p>
+                            )}
+                            {payment.notes && (
+                              <p className="text-[10px] text-gray-600 dark:text-gray-300 italic mt-0.5">{payment.notes}</p>
+                            )}
+                          </div>
+                        </div>
+                        {payment.payment_proof_urls?.length > 0 && (
+                          <div className={`mt-1.5 pt-1.5 border-t ${
+                            selectedOrder.is_staggered 
+                              ? 'border-purple-100 dark:border-purple-800' 
+                              : 'border-button-100 dark:border-button-800'
+                          }`}>
+                            <p className={`text-[9px] font-medium mb-1 ${
+                              selectedOrder.is_staggered 
+                                ? 'text-purple-600 dark:text-purple-400' 
+                                : 'text-button-600 dark:text-button-400'
+                            }`}>
+                              Proof of Payment
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {payment.payment_proof_urls.map((url, proofIdx) => (
+                                <img
+                                  key={proofIdx}
+                                  src={url}
+                                  alt={`Payment ${idx + 1} proof ${proofIdx + 1}`}
+                                  className={`w-[50px] h-[50px] object-cover rounded-lg border cursor-pointer hover:opacity-80 ${
+                                    selectedOrder.is_staggered 
+                                      ? 'border-purple-200 dark:border-purple-700' 
+                                      : 'border-button-200 dark:border-button-700'
+                                  }`}
+                                  onClick={() => setPreviewProofImage(url)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {selectedOrder.balance_remaining === 0 && selectedOrder.is_staggered && (
+                    <div className="mt-2 pt-2 border-t border-purple-200 dark:border-purple-700">
+                      <p className="text-xs font-bold text-green-600 dark:text-green-400 text-center">✓ Fully Paid</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Fallback: Old payment proof from sales table (backward compatibility) */}
+              {!selectedOrder.payments?.length && selectedOrder.payment_proof?.length > 0 && (
                 <div className="bg-button-50 dark:bg-gray-700 rounded-lg p-2 border border-button-200 dark:border-button-700">
                   <p className="text-[10px] font-bold text-button-600 dark:text-button-400 uppercase tracking-wide mb-1.5">Payment Proof</p>
                   <div className="flex flex-wrap gap-1.5">

@@ -503,4 +503,59 @@ class CustomerController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    /**
+     * Get customer balances and payment history
+     */
+    public function balances(string $id): JsonResponse
+    {
+        $customer = Customer::findOrFail($id);
+
+        // Get all orders with outstanding balances
+        $outstandingOrders = Sale::where('customer_id', $id)
+            ->where('balance_remaining', '>', 0)
+            ->with(['paymentInstallments', 'payments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Get payment history
+        $paymentHistory = \App\Models\Payment::whereHas('sale', function ($query) use ($id) {
+                $query->where('customer_id', $id);
+            })
+            ->with(['sale', 'receivedBy', 'verifiedBy'])
+            ->orderBy('paid_at', 'desc')
+            ->limit(50)
+            ->get();
+
+        // Get payment plans
+        $paymentPlans = Sale::where('customer_id', $id)
+            ->where('is_staggered', true)
+            ->with(['paymentInstallments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Get PDO history
+        $pdoHistory = \App\Models\PaymentInstallment::whereHas('sale', function ($query) use ($id) {
+                $query->where('customer_id', $id);
+            })
+            ->where('payment_method', 'pdo')
+            ->with(['sale', 'pdoApprovedBy'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Calculate total outstanding
+        $totalOutstanding = $outstandingOrders->sum('balance_remaining');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'customer' => $customer,
+                'total_outstanding' => (float) $totalOutstanding,
+                'outstanding_orders' => $outstandingOrders,
+                'payment_history' => \App\Http\Resources\PaymentResource::collection($paymentHistory),
+                'payment_plans' => $paymentPlans,
+                'pdo_history' => \App\Http\Resources\PaymentInstallmentResource::collection($pdoHistory),
+            ],
+        ]);
+    }
 }

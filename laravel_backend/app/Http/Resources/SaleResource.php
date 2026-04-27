@@ -95,6 +95,34 @@ class SaleResource extends JsonResource
                 : [],
             'paid_at' => $this->paid_at?->toISOString(),
             'paid_at_formatted' => $this->paid_at?->format('M d, Y h:i A'),
+            
+            // Payment system fields
+            'is_staggered' => (bool) $this->is_staggered,
+            'primary_method' => $this->primary_method,
+            'amount_paid' => (float) ($this->amount_paid ?? 0),
+            'balance_remaining' => (float) ($this->balance_remaining ?? 0),
+            'payments_count' => $this->payments_count ?? $this->payments->count(),
+            'verified_payments_total' => (float) $this->verifiedPaymentsTotal(),
+            'has_pending_payments' => $this->payments()->where('status', 'needs_verification')->exists(),
+            'installments_count' => $this->is_staggered ? ($this->paymentInstallments_count ?? $this->paymentInstallments->count()) : 0,
+            
+            // Include all payments with their proof URLs
+            'payments' => $this->whenLoaded('payments', function () {
+                return $this->payments->map(function ($payment) {
+                    return [
+                        'id' => $payment->id,
+                        'amount' => (float) $payment->amount,
+                        'payment_method' => $payment->payment_method,
+                        'reference_number' => $payment->reference_number,
+                        'status' => $payment->status,
+                        'payment_proof_urls' => $payment->payment_proof_urls ?? [],
+                        'paid_at' => $payment->paid_at?->toISOString(),
+                        'paid_at_formatted' => $payment->paid_at?->format('M d, Y h:i A'),
+                        'notes' => $payment->notes,
+                    ];
+                });
+            }),
+            
             'status' => $this->status,
             'notes' => $this->notes,
             'voided_by' => $this->voided_by,

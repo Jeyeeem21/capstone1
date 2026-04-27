@@ -1,0 +1,144 @@
+# Backend-Frontend Alignment - Complete
+
+## Changes Made to Backend
+
+### 1. SaleController.php - Validation Updated
+**File**: `laravel_backend/app/Http/Controllers/SaleController.php`
+
+**Removed**:
+- `installments.*.payment_method` validation (was required)
+- `installments.*.pay_now` validation (not needed)
+
+**Now Accepts**:
+- `installments.*.installment_number` (required)
+- `installments.*.amount` (required)
+- `installments.*.due_date` (optional)
+
+### 2. StaggeredPaymentService.php - Logic Simplified
+**File**: `laravel_backend/app/Services/StaggeredPaymentService.php`
+
+**Changes**:
+- Sets `payment_method` to `null` when creating installments
+- Removed immediate payment processing (`pay_now` logic)
+- Removed `processImmediatePayment()` method calls
+- Payment method will be set later when recording actual payment
+
+### 3. Migration - Database Schema Updated
+**File**: `laravel_backend/database/migrations/2026_04_24_000001_add_payment_system_support.php`
+
+**Changed**:
+```php
+// Before:
+$table->string('payment_method', 20);
+
+// After:
+$table->string('payment_method', 20)->nullable();
+```
+
+## Frontend Implementation
+
+### InstallmentSetupInline.jsx
+- Only collects: Amount + Due Date
+- Real-time validation
+- Inline error messages
+- Auto-updates parent state
+
+### POS Integration
+- Checkbox in cart section
+- Opens modal for setup
+- Shows summary after configuration
+- Edit button preserves data
+
+## Data Flow
+
+### 1. Order Creation (POS)
+```javascript
+{
+  is_staggered: true,
+  installments: [
+    {
+      installment_number: 1,
+      amount: 1000,
+      due_date: '2026-05-01'
+    },
+    {
+      installment_number: 2,
+      amount: 1200,
+      due_date: '2026-06-01'
+    }
+  ]
+}
+```
+
+### 2. Backend Storage
+```php
+PaymentInstallment::create([
+    'sale_id' => $sale->id,
+    'installment_number' => 1,
+    'amount_expected' => 1000,
+    'payment_method' => null,  // ← Will be set later
+    'due_date' => '2026-05-01',
+    'status' => 'pending',
+]);
+```
+
+### 3. Payment Recording (Later)
+When customer comes to pay:
+```php
+// Admin selects payment method at payment time
+$installment->update([
+    'payment_method' => 'gcash',  // ← Set when paying
+    'amount_paid' => 1000,
+    'status' => 'paid',
+    'paid_date' => now(),
+]);
+```
+
+## Migration Required
+
+If you've already run the migration, you need to update the database:
+
+```sql
+ALTER TABLE payment_installments 
+MODIFY COLUMN payment_method VARCHAR(20) NULL;
+```
+
+Or drop and recreate:
+```bash
+php artisan migrate:rollback --step=1
+php artisan migrate
+```
+
+## Validation Summary
+
+### Frontend Validation:
+- ✅ Amount must be > 0
+- ✅ Due date must be filled
+- ✅ Total must match order amount
+- ✅ Inline error messages
+
+### Backend Validation:
+- ✅ Installment number required
+- ✅ Amount required (min 0.01)
+- ✅ Due date optional
+- ✅ Payment method NOT required
+- ✅ Total must match order amount
+
+## Testing Checklist
+
+- [ ] Create order with installment payment
+- [ ] Check database - payment_method should be NULL
+- [ ] Verify installments created correctly
+- [ ] Edit installment configuration
+- [ ] Record payment for installment (payment method set at this time)
+- [ ] Verify payment_method updated in database
+
+## Summary
+
+Everything is now aligned:
+- ✅ Frontend sends: amount + due_date only
+- ✅ Backend accepts: amount + due_date only
+- ✅ Database allows: payment_method = NULL
+- ✅ Payment method set later when recording payment
+
+The system is ready for testing!

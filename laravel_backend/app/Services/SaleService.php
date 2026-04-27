@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Customer;
 use App\Models\StockLog;
@@ -21,7 +22,7 @@ class SaleService
     public function getAllSales()
     {
         return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Sale::with(['customer:id,name', 'items.product.variety'])
+            return Sale::with(['customer:id,name', 'items.product.variety', 'payments'])
                 ->orderBy('created_at', 'desc')
                 ->get();
         });
@@ -57,6 +58,10 @@ class SaleService
             $padLength = max(3, strlen((string) $count));
             $transactionId = 'ORD-' . $today . '-' . str_pad($count, $padLength, '0', STR_PAD_LEFT);
 
+            $paymentMethod = $data['payment_method'] ?? 'cash';
+            $amountTendered = (float) ($data['amount_tendered'] ?? 0);
+            $isStaggered = !empty($data['is_staggered']);
+
             // Create order header — status = pending, no stock deduction
             $sale = Sale::create([
                 'transaction_id' => $transactionId,
@@ -65,17 +70,23 @@ class SaleService
                 'discount' => (float) ($data['discount'] ?? 0),
                 'delivery_fee' => (float) ($data['delivery_fee'] ?? 0),
                 'total' => 0,
-                'amount_tendered' => (float) ($data['amount_tendered'] ?? 0),
+                'amount_tendered' => $amountTendered,
                 'change_amount' => 0,
-                'payment_method' => $data['payment_method'] ?? 'cash',
-                'payment_status' => in_array($data['payment_method'] ?? 'cash', ['cash', 'gcash']) ? 'paid' : 'not_paid',
+                'payment_method' => $paymentMethod,
+                'payment_status' => 'not_paid', // will be updated after total is calculated
                 'reference_number' => $data['reference_number'] ?? null,
-                'payment_proof' => $data['payment_proof'] ?? null,
-                'paid_at' => in_array($data['payment_method'] ?? 'cash', ['cash', 'gcash']) ? now() : null,
+                // Only save payment_proof to sale if NOT staggered (for backward compatibility)
+                // For staggered orders, proof is saved to payments table
+                'payment_proof' => !$isStaggered ? ($data['payment_proof'] ?? null) : null,
+                'paid_at' => null, // will be set if fully paid
                 'status' => 'pending',
                 'notes' => $data['notes'] ?? null,
                 'delivery_address' => $data['delivery_address'] ?? null,
                 'distance_km' => $data['distance_km'] ?? null,
+                'is_staggered' => $isStaggered,
+                'primary_method' => $paymentMethod,
+                'amount_paid' => 0,
+                'balance_remaining' => 0,
             ]);
 
             $subtotal = 0;
@@ -103,12 +114,47 @@ class SaleService
                 $subtotal += $itemSubtotal;
             }
 
-            // Update totals
+            // Compute final totals
             $discount = (float) ($data['discount'] ?? 0);
             $deliveryFee = (float) ($data['delivery_fee'] ?? 0);
             $total = $subtotal - $discount + $deliveryFee;
-            $amountTendered = (float) ($data['amount_tendered'] ?? 0);
-            $changeAmount = $amountTendered > 0 ? max(0, $amountTendered - $total) : 0;
+            
+            // For staggered payments, change is calculated against first installment, not total
+            // Change will be recalculated after installments are created
+            $changeAmount = 0;
+
+            // Determine payment status and balances
+            // Staggered orders: balance managed per-installment; skip here
+            if ($isStaggered) {
+                $paymentStatus = 'not_paid';
+                $amountPaid = 0;
+                $balanceRemaining = $total;
+                $paidAt = null;
+            } elseif (in_array($paymentMethod, ['cod', 'pay_later', 'credit', 'pdo'])) {
+                // Deferred payment — balance is the full total
+                $paymentStatus = 'not_paid';
+                $amountPaid = 0;
+                $balanceRemaining = $total;
+                $paidAt = null;
+            } elseif ($amountTendered >= $total && $amountTendered > 0) {
+                // Fully paid
+                $paymentStatus = 'paid';
+                $amountPaid = $total;
+                $balanceRemaining = 0;
+                $paidAt = now();
+            } elseif ($amountTendered > 0) {
+                // Partially paid
+                $paymentStatus = 'partial';
+                $amountPaid = $amountTendered;
+                $balanceRemaining = $total - $amountTendered;
+                $paidAt = null;
+            } else {
+                // No payment yet (gcash proof uploaded = needs_verification)
+                $paymentStatus = 'not_paid';
+                $amountPaid = 0;
+                $balanceRemaining = $total;
+                $paidAt = null;
+            }
 
             $sale->update([
                 'subtotal' => $subtotal,
@@ -116,7 +162,44 @@ class SaleService
                 'total' => $total,
                 'amount_tendered' => $amountTendered,
                 'change_amount' => $changeAmount,
+                'payment_status' => $paymentStatus,
+                'amount_paid' => $amountPaid,
+                'balance_remaining' => $balanceRemaining,
+                'paid_at' => $paidAt,
             ]);
+
+            // Create initial Payment record (cash/partial cash only)
+            // GCash payments will be created via the GCash upload flow with proof
+            // PDO payments will be created with check details for admin approval
+            if (!$isStaggered && $amountPaid > 0 && $paymentMethod === 'cash') {
+                Payment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => $amountPaid,
+                    'payment_method' => 'cash',
+                    'status' => 'verified',
+                    'received_by' => auth()->id(),
+                    'verified_by' => auth()->id(),
+                    'verified_at' => now(),
+                    'paid_at' => now(),
+                    'notes' => 'Initial payment at POS',
+                ]);
+            } elseif ($paymentMethod === 'pdo' && !empty($data['pdo_check_number'])) {
+                // Create PDO payment record for admin approval
+                Payment::create([
+                    'sale_id' => $sale->id,
+                    'amount' => (float) ($data['pdo_amount'] ?? $total),
+                    'payment_method' => 'pdo',
+                    'status' => 'pending',
+                    'pdo_check_number' => $data['pdo_check_number'],
+                    'pdo_check_bank' => $data['pdo_bank_name'] ?? null,
+                    'pdo_check_date' => $data['pdo_check_date'] ?? null,
+                    'pdo_check_image' => $data['pdo_check_image'] ?? null,
+                    'pdo_approval_status' => 'pending',
+                    'received_by' => auth()->id(),
+                    'paid_at' => now(),
+                    'notes' => 'PDO payment from POS - awaiting admin approval',
+                ]);
+            }
 
             $this->clearCache();
 

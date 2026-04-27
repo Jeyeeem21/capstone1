@@ -1,0 +1,196 @@
+# POS Installment Payment - SIMPLIFIED VERSION
+
+## What Changed
+
+Nag-simplify kami ng installment setup. Ang payment method ay hindi na kailangan sa setup phase.
+
+## Old vs New
+
+### OLD (Before):
+```
+Installment #1
+Amount: ₱1,000
+Method: [Cash ▼]  ← Kailangan piliin agad
+Due Date: May 1, 2026
+☑ Pay Now
+```
+
+### NEW (Now):
+```
+Installment #1
+Amount: ₱1,000
+Due Date: May 1, 2026
+```
+
+## Why This is Better
+
+### More Practical:
+- Hindi pa alam ng customer kung paano sila magbabayad next month
+- Baka may cash next month, baka GCash
+- Flexible ang customer
+
+### Simpler Setup:
+- Less fields to fill
+- Faster transaction
+- Less confusion
+
+### Real-World Scenario:
+```
+Customer: "Gusto ko installment, 3 months"
+Staff: "Okay, magkano per month?"
+Customer: "₱1,000, ₱1,500, ₱2,000"
+Staff: "Sige, kelan due dates?"
+Customer: "May 1, June 1, July 1"
+Staff: "Done!"
+
+(Hindi na kailangan tanungin kung Cash, GCash, etc.)
+```
+
+## How It Works Now
+
+### 1. Setup Phase (POS):
+- Amount per installment
+- Due date per installment
+- That's it!
+
+### 2. Payment Phase (Later):
+Kapag dumating na ang due date:
+- Customer pumunta sa store o nag-online
+- Piliin kung paano magbabayad (Cash, GCash, PDO, Credit)
+- Record payment with actual method used
+
+## UI Now
+
+```
+┌─────────────────────────────────────────┐
+│ Order Total: ₱5,000 | Remaining: ₱0   │
+├─────────────────────────────────────────┤
+│ ℹ Payment method will be selected when │
+│   the customer pays each installment.  │
+├─────────────────────────────────────────┤
+│ Installment #1                          │
+│ Amount: [2000] Due Date: [May 1, 2026] │
+├─────────────────────────────────────────┤
+│ Installment #2                          │
+│ Amount: [1500] Due Date: [Jun 1, 2026] │
+├─────────────────────────────────────────┤
+│ Installment #3                          │
+│ Amount: [1500] Due Date: [Jul 1, 2026] │
+├─────────────────────────────────────────┤
+│ [+ Add Installment]                     │
+├─────────────────────────────────────────┤
+│ ✓ Payment schedule is valid!           │
+└─────────────────────────────────────────┘
+```
+
+## Data Structure
+
+### Sent to Backend:
+```javascript
+{
+  is_staggered: true,
+  installments: [
+    {
+      installment_number: 1,
+      amount: 2000,
+      due_date: '2026-05-01'
+    },
+    {
+      installment_number: 2,
+      amount: 1500,
+      due_date: '2026-06-01'
+    },
+    {
+      installment_number: 3,
+      amount: 1500,
+      due_date: '2026-07-01'
+    }
+  ]
+}
+```
+
+### When Customer Pays (Later):
+Admin/Staff records payment:
+```javascript
+{
+  installment_id: 123,
+  payment_method: 'gcash',  // ← Dito lang pipiliin
+  amount: 2000,
+  reference_number: 'GC1234567890',
+  payment_date: '2026-05-01'
+}
+```
+
+## Benefits
+
+### For Staff:
+- Faster transaction
+- Less questions to ask
+- Simpler process
+
+### For Customer:
+- More flexible
+- Can decide payment method later
+- No pressure to commit now
+
+### For Business:
+- Better customer experience
+- More likely to accept installment
+- Easier to manage
+
+## Payment Management Page
+
+Sa Payment Management page, makikita:
+- Pending installments
+- Due dates
+- Amounts
+- Customer info
+
+Kapag mag-record ng payment:
+- Select payment method (Cash, GCash, PDO, Credit)
+- Enter details (reference number, check number, etc.)
+- Confirm payment
+
+## Example Flow
+
+### Day 1 (POS):
+```
+Customer buys ₱5,000 worth of rice
+Chooses installment payment
+Setup: 3 payments of ₱2000, ₱1500, ₱1500
+Due: May 1, June 1, July 1
+```
+
+### May 1 (Payment Day):
+```
+Customer comes back
+Staff: "₱2,000 due today"
+Customer: "GCash ko na lang"
+Staff records: GCash payment, ref# GC123...
+```
+
+### June 1 (Payment Day):
+```
+Customer comes back
+Staff: "₱1,500 due today"
+Customer: "Cash ko"
+Staff records: Cash payment
+```
+
+### July 1 (Payment Day):
+```
+Customer comes back
+Staff: "₱1,500 due today"
+Customer: "PDO, check ko"
+Staff records: PDO payment, check# 12345, BDO
+```
+
+## Summary
+
+Mas simple na ang installment setup:
+- Amount + Due Date lang
+- Payment method sa actual payment day na
+- More flexible for customers
+- Faster POS transactions
+
+Perfect for real-world use!

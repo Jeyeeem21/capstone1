@@ -1479,36 +1479,40 @@ const Inventory = () => {
       {activeTab === 'inout' && (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <StatsCard
-              label="Stock In"
-              value={inOutStats.totalIn.toLocaleString()}
-              unit={`${inOutStats.inCount} movement${inOutStats.inCount !== 1 ? 's' : ''}`}
-              icon={ArrowUpRight}
-              iconBgColor="bg-gradient-to-br from-green-400 to-green-600"
-            />
-            <StatsCard
-              label="Stock Out"
-              value={inOutStats.totalOut.toLocaleString()}
-              unit={`${inOutStats.outCount} movement${inOutStats.outCount !== 1 ? 's' : ''}`}
-              icon={ArrowDownRight}
-              iconBgColor="bg-gradient-to-br from-red-400 to-red-600"
-            />
-            <StatsCard
-              label="Net Change"
-              value={`${inOutStats.netChange >= 0 ? '+' : ''}${inOutStats.netChange.toLocaleString()}`}
-              unit="units net"
-              icon={ArrowDownUp}
-              iconBgColor={inOutStats.netChange >= 0 ? "bg-gradient-to-br from-blue-400 to-blue-600" : "bg-gradient-to-br from-orange-400 to-orange-600"}
-            />
-            <StatsCard
-              label="Total Movements"
-              value={stockLogs.length}
-              unit="all time"
-              icon={TrendingUp}
-              iconBgColor="bg-gradient-to-br from-purple-400 to-purple-600"
-            />
-          </div>
+          {loading ? (
+            <SkeletonStats count={4} className="mb-6" />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatsCard
+                label="Stock In"
+                value={inOutStats.totalIn.toLocaleString()}
+                unit={`${inOutStats.inCount} movement${inOutStats.inCount !== 1 ? 's' : ''}`}
+                icon={ArrowUpRight}
+                iconBgColor="bg-gradient-to-br from-green-400 to-green-600"
+              />
+              <StatsCard
+                label="Stock Out"
+                value={inOutStats.totalOut.toLocaleString()}
+                unit={`${inOutStats.outCount} movement${inOutStats.outCount !== 1 ? 's' : ''}`}
+                icon={ArrowDownRight}
+                iconBgColor="bg-gradient-to-br from-red-400 to-red-600"
+              />
+              <StatsCard
+                label="Net Change"
+                value={`${inOutStats.netChange >= 0 ? '+' : ''}${inOutStats.netChange.toLocaleString()}`}
+                unit="units net"
+                icon={ArrowDownUp}
+                iconBgColor={inOutStats.netChange >= 0 ? "bg-gradient-to-br from-blue-400 to-blue-600" : "bg-gradient-to-br from-orange-400 to-orange-600"}
+              />
+              <StatsCard
+                label="Total Movements"
+                value={stockLogs.length}
+                unit="all time"
+                icon={TrendingUp}
+                iconBgColor="bg-gradient-to-br from-purple-400 to-purple-600"
+              />
+            </div>
+          )}
 
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -1724,12 +1728,16 @@ const Inventory = () => {
       {activeTab === 'growth' && (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatsCard label="Total Sales" value={`₱${Number(growthStats.totalRevenue).toLocaleString()}`} unit="revenue" icon={DollarSign} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-            <StatsCard label="Transactions" value={growthStats.totalTransactions} unit="completed" icon={ShoppingCart} iconBgColor="bg-gradient-to-br from-green-400 to-green-600" />
-            <StatsCard label="Units Sold" value={growthStats.totalUnitsSold.toLocaleString()} unit="items" icon={Package} iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600" />
-            <StatsCard label="Avg. Transaction" value={`₱${Number(growthStats.avgTransaction).toLocaleString()}`} unit="per sale" icon={TrendingUp} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
-          </div>
+          {loading ? (
+            <SkeletonStats count={4} className="mb-6" />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatsCard label="Total Sales" value={`₱${Number(growthStats.totalRevenue).toLocaleString()}`} unit="revenue" icon={DollarSign} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
+              <StatsCard label="Transactions" value={growthStats.totalTransactions} unit="completed" icon={ShoppingCart} iconBgColor="bg-gradient-to-br from-green-400 to-green-600" />
+              <StatsCard label="Units Sold" value={growthStats.totalUnitsSold.toLocaleString()} unit="items" icon={Package} iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600" />
+              <StatsCard label="Avg. Transaction" value={`₱${Number(growthStats.avgTransaction).toLocaleString()}`} unit="per sale" icon={TrendingUp} iconBgColor="bg-gradient-to-br from-button-500 to-button-700" />
+            </div>
+          )}
 
           {/* Sales Trends Chart (full width) */}
           <div className="mb-6">
@@ -2016,36 +2024,40 @@ const Inventory = () => {
       {activeTab === 'costs' && (
         <>
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <StatsCard
-              label="Total Production Cost"
-              value={`₱${Number(costStats.totalCost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              unit={`${costRecords.length} distributions`}
-              icon={Receipt}
-              iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
-            />
-            <StatsCard
-              label="Avg. Cost / Unit"
-              value={`₱${Number(costStats.avgCostPerUnit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              unit={`${costStats.totalUnits.toLocaleString()} total units`}
-              icon={DollarSign}
-              iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
-            />
-            <StatsCard
-              label="Avg. Profit / Unit"
-              value={`₱${Number(costStats.avgProfitPerUnit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              unit={costStats.avgProfitPerUnit >= 0 ? 'profit' : 'loss'}
-              icon={TrendingUp}
-              iconBgColor={costStats.avgProfitPerUnit >= 0 ? "bg-gradient-to-br from-green-400 to-green-600" : "bg-gradient-to-br from-red-400 to-red-600"}
-            />
-            <StatsCard
-              label="Avg. Profit Margin"
-              value={`${Number(costStats.avgMargin).toFixed(1)}%`}
-              unit={`₱${Number(costStats.totalProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total profit`}
-              icon={Percent}
-              iconBgColor={costStats.avgMargin >= 20 ? "bg-gradient-to-br from-green-400 to-green-600" : costStats.avgMargin >= 0 ? "bg-gradient-to-br from-amber-400 to-amber-600" : "bg-gradient-to-br from-red-400 to-red-600"}
-            />
-          </div>
+          {loading ? (
+            <SkeletonStats count={4} className="mb-6" />
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatsCard
+                label="Total Production Cost"
+                value={`₱${Number(costStats.totalCost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                unit={`${costRecords.length} distributions`}
+                icon={Receipt}
+                iconBgColor="bg-gradient-to-br from-button-400 to-button-600"
+              />
+              <StatsCard
+                label="Avg. Cost / Unit"
+                value={`₱${Number(costStats.avgCostPerUnit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                unit={`${costStats.totalUnits.toLocaleString()} total units`}
+                icon={DollarSign}
+                iconBgColor="bg-gradient-to-br from-blue-400 to-blue-600"
+              />
+              <StatsCard
+                label="Avg. Profit / Unit"
+                value={`₱${Number(costStats.avgProfitPerUnit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                unit={costStats.avgProfitPerUnit >= 0 ? 'profit' : 'loss'}
+                icon={TrendingUp}
+                iconBgColor={costStats.avgProfitPerUnit >= 0 ? "bg-gradient-to-br from-green-400 to-green-600" : "bg-gradient-to-br from-red-400 to-red-600"}
+              />
+              <StatsCard
+                label="Avg. Profit Margin"
+                value={`${Number(costStats.avgMargin).toFixed(1)}%`}
+                unit={`₱${Number(costStats.totalProfit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total profit`}
+                icon={Percent}
+                iconBgColor={costStats.avgMargin >= 20 ? "bg-gradient-to-br from-green-400 to-green-600" : costStats.avgMargin >= 0 ? "bg-gradient-to-br from-amber-400 to-amber-600" : "bg-gradient-to-br from-red-400 to-red-600"}
+              />
+            </div>
+          )}
 
           {/* Cost Records Table */}
           <DataTable

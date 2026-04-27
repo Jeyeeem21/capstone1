@@ -1,0 +1,109 @@
+================================================================================
+  PAYMENT SYSTEM - FINAL CORRECTIONS & TERMINOLOGY
+================================================================================
+  Date: April 24, 2026
+  Corrections: Role terminology + Payment method access
+================================================================================
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    ROLE CORRECTIONS                                      ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+INCORRECT TERMINOLOGY:
+  ❌ "Staff" - too generic
+
+CORRECT TERMINOLOGY:
+  ✅ "Secretary" - the role that handles POS/orders
+
+USER ROLES IN SYSTEM:
+-----------------------------------------------------------------------
+1. Super Admin - Full system access
+2. Admin - Management access
+3. Secretary - POS/Order handling (NOT "Staff")
+4. Driver - Delivery only
+5. Customer - Customer portal
+
+SECRETARY ROLE CLARIFICATION:
+-----------------------------------------------------------------------
+Secretary is the role that:
+  ✅ Handles Point of Sale (POS)
+  ✅ Creates orders
+  ✅ Records payments
+  ✅ Manages customer transactions
+  ✅ Does NOT choose payment methods (customer chooses!)
+
+IMPORTANT: Secretary does NOT select payment method!
+  - Customer tells secretary how they want to pay
+  - Secretary only records what customer chose
+  - Secretary can only choose: Staggered or Not Staggered
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    PAYMENT METHOD ACCESS BY ROLE                         ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+SECRETARY (POS):
+-----------------------------------------------------------------------
+What Secretary CAN choose:
+  ✅ Staggered Payment: Yes or No (checkbox)
+  ✅ If staggered: Setup payment schedule
+
+What Secretary CANNOT choose:
+  ❌ Payment Method (Cash, GCash, PDO, Credit)
+  ❌ Customer decides payment method!
+
+Secretary's Role:
+  1. Customer says: "I'll pay via GCash"
+  2. Secretary records: Payment Method = GCash
+  3. Secretary asks: "Full payment or installments?"
+  4. Customer says: "Installments"
+  5. Secretary enables: ☑ Staggered Payment
+  6. Secretary and customer setup schedule together
+
+ADMIN/SUPER ADMIN:
+-----------------------------------------------------------------------
+What Admin CAN do:
+  ✅ View all payment methods
+  ✅ Approve/reject staggered payments
+  ✅ Verify GCash payments
+  ✅ Approve PDO payments
+  ✅ Modify payment schedules
+  ✅ Record payments for existing orders
+
+CUSTOMER (Portal):
+-----------------------------------------------------------------------
+What Customer CAN choose:
+  ✅ Payment Method (Cash/GCash/PDO/Credit)
+  ✅ Staggered Payment: Yes or No
+  ✅ Setup their own payment schedule
+  ✅ Submit for approval (if needed)
+
+CORRECTED WORKFLOW:
+-----------------------------------------------------------------------
+
+At POS (Secretary):
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Point of Sale - Order Checkout                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Order Total: ₱100,000                                      │
+  │                                                             │
+  │  Customer Payment Choice:                                   │
+  │  (Customer tells secretary how they want to pay)            │
+  │                                                             │
+  │  Payment Method: [Customer Chooses]                         │
+  │  ( ) Cash                                                   │
+  │  ( ) GCash                                                  │
+  │  ( ) PDO (Post-Dated Order)                                 │
+  │  ( ) Credit (Pay Later)                                     │
+  │                                                             │
+  │  ─────────────────────────────────────────────────────────  │
+  │                                                             │
+  │  Secretary's Choice:                                        │
+  │  ☐ Enable Staggered Payment (Pay in Installments)          │
+  │                                                             │
+  │  [Continue]                                                 │
+  └─────────────────────────────────────────────────────────────┘
+
+Key Points:
+  - Payment Method = Customer's choice
+  - Staggered Option = Secretary's choice (based on customer request)
+  - Secretary facilitates, doesn't decide

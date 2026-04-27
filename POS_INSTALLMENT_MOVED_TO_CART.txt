@@ -1,0 +1,209 @@
+# POS Installment Option - Moved to Cart Section
+
+## What Changed
+
+Moved the "Enable Installment Payment" toggle from the payment modal to the cart section, right after the Order Type (Pick Up / Delivery) option.
+
+## Why This is Better
+
+### 1. More Logical Flow
+```
+Cart Section:
+1. Add items to cart
+2. Choose Order Type (Pick Up / Delivery)
+3. Enable Installment Payment (if needed)  ← NEW LOCATION
+4. Choose Payment Method
+5. View Total
+6. Place Order
+```
+
+### 2. Earlier Decision
+- Customer decides on installment BEFORE going to payment modal
+- Staff can set up installment plan while still in cart
+- Payment modal is cleaner and focused on payment details only
+
+### 3. Better UX
+- All order configuration in one place (cart)
+- Payment modal only handles payment-specific details
+- Less back-and-forth between screens
+
+## New Layout
+
+### Desktop Cart (Right Sidebar):
+```
+┌─────────────────────────────────┐
+│ Current Order                   │
+├─────────────────────────────────┤
+│ [Cart Items]                    │
+├─────────────────────────────────┤
+│ Order Type                      │
+│ [Pick Up] [Delivery]            │
+├─────────────────────────────────┤
+│ ☐ Enable Installment Payment   │  ← NEW
+│   Allow customer to pay in      │
+│   multiple installments         │
+│                                 │
+│   [Installment Setup Form]      │  ← Shows when checked
+├─────────────────────────────────┤
+│ Payment Method                  │
+│ [Cash] [GCash] [Credit]         │
+│ [COD] [Pay Later]               │
+├─────────────────────────────────┤
+│ Subtotal: ₱5,000                │
+│ Shipping: ₱200                  │
+│ Total: ₱5,200                   │
+├─────────────────────────────────┤
+│ [Complete Sale]                 │
+└─────────────────────────────────┘
+```
+
+### Mobile Cart (Bottom Sheet):
+```
+┌─────────────────────────────────┐
+│ Current Order (3 items)         │
+├─────────────────────────────────┤
+│ [Cart Items]                    │
+├─────────────────────────────────┤
+│ Order Type                      │
+│ [Pick Up] [Delivery]            │
+├─────────────────────────────────┤
+│ ☐ Enable Installment Payment   │  ← NEW
+├─────────────────────────────────┤
+│ Payment Method                  │
+│ [Cash] [GCash] [Credit]         │
+│ [COD] [Pay Later]               │
+├─────────────────────────────────┤
+│ Total: ₱5,200                   │
+├─────────────────────────────────┤
+│ [Place Order]                   │
+└─────────────────────────────────┘
+```
+
+## User Flow Now
+
+### Step 1: Add Items to Cart
+Staff adds products to cart
+
+### Step 2: Choose Order Type
+Staff selects Pick Up or Delivery
+
+### Step 3: Enable Installment (Optional)
+Staff checks "Enable Installment Payment"
+- Installment setup form appears inline
+- Staff fills in amounts and due dates
+- Real-time validation
+
+### Step 4: Choose Payment Method
+Staff selects payment method (Cash, GCash, Credit, COD, Pay Later)
+
+### Step 5: Complete Sale
+Staff clicks "Complete Sale"
+- Customer modal appears (if needed)
+- Payment modal appears
+- Payment modal is now cleaner - no installment setup
+
+### Step 6: Confirm Payment
+Staff enters payment details (if needed)
+- Cash: amount tendered
+- GCash: reference number + proof
+- Credit/Pay Later: no additional fields
+Staff clicks "Place Order"
+
+## What Was Removed from Payment Modal
+
+### Before (Payment Modal):
+```
+┌─────────────────────────────────┐
+│ Credit Payment                  │
+├─────────────────────────────────┤
+│ ☐ Enable Installment Payment   │  ← REMOVED
+│   [Installment Setup Form]      │  ← REMOVED
+├─────────────────────────────────┤
+│ [Payment Details]               │
+├─────────────────────────────────┤
+│ [Place Order]                   │
+└─────────────────────────────────┘
+```
+
+### After (Payment Modal):
+```
+┌─────────────────────────────────┐
+│ Credit Payment                  │
+├─────────────────────────────────┤
+│ [Payment Details Only]          │
+├─────────────────────────────────┤
+│ [Place Order]                   │
+└─────────────────────────────────┘
+```
+
+## Benefits
+
+### 1. Cleaner Payment Modal
+- Focused on payment details only
+- No nested forms
+- Faster to complete
+
+### 2. Better Organization
+- All order setup in cart
+- All payment details in payment modal
+- Clear separation of concerns
+
+### 3. Consistent Across Payment Methods
+- Installment option available regardless of payment method
+- No conditional showing/hiding in payment modal
+- Simpler logic
+
+### 4. Easier to Understand
+- Staff sees installment option early
+- Can plan payment schedule before payment
+- Less confusion
+
+## Technical Changes
+
+### Files Modified:
+- `react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx`
+
+### Changes Made:
+1. Added installment toggle to desktop cart (after Order Type)
+2. Added installment toggle to mobile cart (after Order Type)
+3. Removed installment toggle from payment modal
+4. Removed installment setup form from payment modal
+
+### Code Structure:
+```javascript
+// In Cart Section (Desktop & Mobile)
+<div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-4 shrink-0">
+  <label className="flex items-center gap-2 cursor-pointer">
+    <input
+      type="checkbox"
+      checked={isStaggered}
+      onChange={(e) => {
+        setIsStaggered(e.target.checked);
+        if (!e.target.checked) setInstallmentPlan(null);
+      }}
+    />
+    <div>
+      <span>Enable Installment Payment</span>
+      <span>Allow customer to pay in multiple installments</span>
+    </div>
+  </label>
+
+  {isStaggered && (
+    <InstallmentSetupInline
+      totalAmount={total}
+      onChange={(installments) => setInstallmentPlan(installments)}
+    />
+  )}
+</div>
+```
+
+## Summary
+
+The installment payment option is now in the cart section where it belongs:
+- ✅ More logical placement
+- ✅ Earlier in the workflow
+- ✅ Cleaner payment modal
+- ✅ Better user experience
+- ✅ Consistent across desktop and mobile
+
+This makes the POS flow more intuitive and easier to use!

@@ -85,6 +85,18 @@ Route::post('/contact/send', [ContactController::class, 'send']);
 // ========================================
 Route::middleware('auth:sanctum')->group(function () {
 
+    // ========================================
+    // Customer Portal Routes (customer role only)
+    // ========================================
+    Route::middleware('role:customer')->prefix('customer')->group(function () {
+        Route::get('/orders', [\App\Http\Controllers\CustomerPaymentController::class, 'getOrders']);
+        Route::get('/orders/{id}', [\App\Http\Controllers\CustomerPaymentController::class, 'getOrderDetails']);
+        Route::post('/installments/{id}/pay-gcash', [\App\Http\Controllers\CustomerPaymentController::class, 'submitGCashPayment'])
+            ->middleware('throttle:10,1'); // Rate limit: 10 requests per minute
+        Route::post('/installments/{id}/pay-pdo', [\App\Http\Controllers\CustomerPaymentController::class, 'submitPDOPayment'])
+            ->middleware('throttle:10,1'); // Rate limit: 10 requests per minute
+    });
+
     // Offline Sync Routes (PWA)
     Route::prefix('offline')->group(function () {
         Route::post('/process-email', [\App\Http\Controllers\OfflineSyncController::class, 'processEmail']);
@@ -160,6 +172,39 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/return/complete', [SaleController::class, 'markReturned']);
         Route::post('/{id}/restock', [SaleController::class, 'restockItems']);
         Route::post('/{id}/pay', [SaleController::class, 'markPaid']);
+        
+        // Payment system routes
+        Route::post('/{id}/payment', [\App\Http\Controllers\PaymentController::class, 'recordPayment']);
+        Route::get('/{id}/payments', [\App\Http\Controllers\PaymentController::class, 'paymentHistory']);
+        Route::post('/{id}/payment-schedule', [\App\Http\Controllers\StaggeredPaymentController::class, 'store']);
+    });
+
+    // Payment Management Routes
+    Route::prefix('payments')->group(function () {
+        Route::get('/', [\App\Http\Controllers\PaymentController::class, 'index']);
+        Route::get('/{payment}', [\App\Http\Controllers\PaymentController::class, 'show']);
+        Route::post('/{payment}/verify', [\App\Http\Controllers\PaymentController::class, 'verify']);
+        Route::post('/{payment}/hold', [\App\Http\Controllers\PaymentController::class, 'hold']);
+        Route::post('/{payment}/cancel', [\App\Http\Controllers\PaymentController::class, 'cancel']);
+        Route::post('/{payment}/approve-pdo', [\App\Http\Controllers\PaymentController::class, 'approvePDO']);
+        Route::post('/{payment}/reject-pdo', [\App\Http\Controllers\PaymentController::class, 'rejectPDO']);
+    });
+
+    // Payment Plans / Staggered Payments Routes
+    Route::prefix('payment-plans')->group(function () {
+        Route::get('/', [\App\Http\Controllers\StaggeredPaymentController::class, 'index']);
+        Route::get('/{sale}', [\App\Http\Controllers\StaggeredPaymentController::class, 'show']);
+        Route::post('/{sale}/approve', [\App\Http\Controllers\StaggeredPaymentController::class, 'approve']);
+    });
+
+    // Installment Routes
+    Route::prefix('installments')->group(function () {
+        Route::get('/pending-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'getPendingPDOs']);
+        Route::get('/awaiting-payment', [\App\Http\Controllers\StaggeredPaymentController::class, 'getAwaitingPayment']);
+        Route::post('/{installment}/pay', [\App\Http\Controllers\StaggeredPaymentController::class, 'recordInstallmentPayment']);
+        Route::post('/{installment}/approve-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'approvePDO']);
+        Route::post('/{installment}/reject-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'rejectPDO']);
+        Route::post('/{installment}/mark-paid', [\App\Http\Controllers\StaggeredPaymentController::class, 'markPDOAsPaid']);
     });
 
     // Sales Predictive Analysis Routes
@@ -240,6 +285,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [CustomerController::class, 'update']);
         Route::delete('/{id}', [CustomerController::class, 'destroy']);
         Route::get('/{id}/orders', [CustomerController::class, 'orders']);
+        Route::get('/{id}/balances', [CustomerController::class, 'balances']);
         Route::post('/{id}/send-verification', [CustomerController::class, 'sendVerificationCode']);
         Route::post('/{id}/verify-code', [CustomerController::class, 'verifyCode']);
         Route::post('/{id}/create-account', [CustomerController::class, 'createAccount']);

@@ -1,4 +1,4 @@
-import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X } from 'lucide-react';
+import { Monitor, Search, Plus, Minus, ShoppingCart, Trash2, DollarSign, Receipt, Package, Smartphone, XCircle, Tag, Clock, RotateCcw, CheckCircle, ChevronUp, ChevronDown, Banknote, PlusCircle, Check, AlertCircle, User, Phone, Mail, Lock, MapPin, Truck, Loader2, Navigation, Camera, ImageIcon, X, CreditCard, FileText, Upload } from 'lucide-react';
 import { useState, useMemo, memo, useCallback, useRef, useEffect } from 'react';
 import { PageHeader } from '../../../components/common';
 import { Button, useToast } from '../../../components/ui';
@@ -7,6 +7,8 @@ import apiClient from '../../../api/apiClient';
 import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { debouncedSearchAddress, calculateDistance, geocodeAddress } from '../../../api/openRouteService';
+import InstallmentSetupInline from '../../../components/payments/InstallmentSetupInline';
+import { suppressNotifToasts } from '../../../utils/notifToastGuard';
 
 // ─── Auto Print Receipt Helper ───────────────────────────────────────────────
 const autoPrintReceipt = (orderData, bizName = 'KJP Ricemill', copies = 1) => {
@@ -95,8 +97,9 @@ const autoPrintReceipt = (orderData, bizName = 'KJP Ricemill', copies = 1) => {
 const posPaymentMethods = [
   { value: 'cash', label: 'Cash', icon: DollarSign, color: '#22c55e' },
   { value: 'gcash', label: 'GCash', icon: Smartphone, color: '#3b82f6' },
+  { value: 'pdo', label: 'PDO', icon: FileText, color: '#8b5cf6' },
   { value: 'cod', label: 'COD', icon: Banknote, color: '#f59e0b' },
-  { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#8b5cf6' },
+  { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#6b7280' },
 ];
 
 // customer combobox component - select existing or add new (requires name + contact or email)
@@ -261,6 +264,11 @@ const PointOfSale = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVariety, setSelectedVariety] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [isStaggered, setIsStaggered] = useState(false);
+  const [installmentPlan, setInstallmentPlan] = useState([]);
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+  const [shakeInstallmentModal, setShakeInstallmentModal] = useState(false);
+  const installmentSetupRef = useRef(null);
   const [showVoidModal, setShowVoidModal] = useState(false);
   const [showSaleCompleteModal, setShowSaleCompleteModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -271,6 +279,18 @@ const PointOfSale = () => {
   const gcashRefCheckTimeout = useRef(null);
   const [gcashProofFiles, setGcashProofFiles] = useState([]);
   const [gcashProofPreviews, setGcashProofPreviews] = useState([]);
+  
+  // PDO states
+  const [pdoCheckFiles, setPdoCheckFiles] = useState([]);
+  const [pdoCheckNumber, setPdoCheckNumber] = useState('');
+  const [pdoCheckNumberError, setPdoCheckNumberError] = useState('');
+  const [pdoCheckDate, setPdoCheckDate] = useState('');
+  const [pdoBankName, setPdoBankName] = useState('');
+  const [pdoAmount, setPdoAmount] = useState('');
+  const [pdoShowCamera, setPdoShowCamera] = useState(false);
+  const pdoCameraVideoRef = useRef(null);
+  const pdoCameraStreamRef = useRef(null);
+  
   const [showCamera, setShowCamera] = useState(false);
   const cameraVideoRef = useRef(null);
   const cameraStreamRef = useRef(null);
@@ -771,7 +791,16 @@ const PointOfSale = () => {
     setGcashProofPreviews([]);
     setShowCamera(false);
     stopCamera();
-    setShowPaymentModal(true);
+    // Reset PDO fields
+    setPdoCheckFiles([]);
+    setPdoCheckNumber('');
+    setPdoCheckNumberError('');
+    setPdoCheckDate('');
+    setPdoBankName('');
+    setPdoAmount('');
+    setPdoShowCamera(false);
+    stopPdoCamera();
+    // Don't open payment modal yet - let the blue installment enable modal show first
   };
 
   // Camera helpers
@@ -828,16 +857,68 @@ const PointOfSale = () => {
     });
   };
 
+  // PDO Camera helpers
+  const startPdoCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      pdoCameraStreamRef.current = stream;
+      setPdoShowCamera(true);
+      setTimeout(() => {
+        if (pdoCameraVideoRef.current) pdoCameraVideoRef.current.srcObject = stream;
+      }, 100);
+    } catch {
+      toast.error('Camera Error', 'Could not access camera. Please check permissions.');
+    }
+  };
+
+  const stopPdoCamera = () => {
+    if (pdoCameraStreamRef.current) {
+      pdoCameraStreamRef.current.getTracks().forEach(t => t.stop());
+      pdoCameraStreamRef.current = null;
+    }
+    setPdoShowCamera(false);
+  };
+
+  const capturePdoPhoto = () => {
+    if (!pdoCameraVideoRef.current) return;
+    const video = pdoCameraVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `pdo_check_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setPdoCheckFiles(prev => [...prev, file]);
+      stopPdoCamera();
+    }, 'image/jpeg', 0.85);
+  };
+
   const confirmPayment = async () => {
     if (saving) return;
     
+    // Determine the amount to validate against (first installment or total)
+    const amountDue = isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total;
+    
     if (paymentMethod === 'cash') {
       const tendered = parseFloat(cashTendered);
-      if (isNaN(tendered) || tendered < total) return;
+      if (isNaN(tendered) || tendered < amountDue) return;
     } else if (paymentMethod === 'gcash') {
       if (!gcashReference.trim() || gcashReference.replace(/\s/g, '').length !== 13) return;
       if (gcashProofFiles.length === 0) return;
       if (gcashRefError) return;
+    } else if (paymentMethod === 'pdo') {
+      // PDO requires a customer to be selected
+      if (!selectedCustomerId && !newCustomerName) {
+        toast.error('Customer Required', 'Please select or add a customer for credit payments');
+        return;
+      }
+    }
+    
+    // Validate installment plan if staggered
+    if (isStaggered && (!installmentPlan || installmentPlan.length === 0)) {
+      toast.error('Installment Plan Required', 'Please set up the payment schedule');
+      return;
     }
     // COD and Pay Later require no additional fields
 
@@ -845,8 +926,8 @@ const PointOfSale = () => {
     try {
       let response;
 
-      if (paymentMethod === 'gcash' && gcashProofFiles.length > 0) {
-        // Use FormData when there are proof files
+      if ((paymentMethod === 'gcash' && gcashProofFiles.length > 0) || (paymentMethod === 'pdo' && pdoCheckFiles.length > 0)) {
+        // Use FormData when there are proof/check files
         const formData = new FormData();
         cart.forEach((item, i) => {
           formData.append(`items[${i}][product_id]`, item.id);
@@ -860,8 +941,19 @@ const PointOfSale = () => {
         if (newCustomerAddress) formData.append('new_customer_address', newCustomerAddress);
         if (newCustomerLandmark) formData.append('new_customer_landmark', newCustomerLandmark);
         formData.append('payment_method', paymentMethod);
-        formData.append('amount_tendered', total);
-        formData.append('reference_number', gcashReference);
+        formData.append('amount_tendered', isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : (paymentMethod === 'pdo' ? parseFloat(pdoAmount) : total));
+        
+        if (paymentMethod === 'gcash') {
+          formData.append('reference_number', gcashReference);
+          gcashProofFiles.forEach(file => formData.append('payment_proof[]', file));
+        } else if (paymentMethod === 'pdo') {
+          formData.append('pdo_check_number', pdoCheckNumber);
+          formData.append('pdo_check_date', pdoCheckDate);
+          formData.append('pdo_bank_name', pdoBankName);
+          formData.append('pdo_amount', parseFloat(pdoAmount));
+          pdoCheckFiles.forEach(file => formData.append('pdo_check_image[]', file));
+        }
+        
         if (forDelivery) {
           formData.append('delivery_fee', deliveryFee);
           if (distanceKm) formData.append('distance_km', parseFloat(distanceKm));
@@ -869,7 +961,15 @@ const PointOfSale = () => {
         } else {
           formData.append('delivery_fee', 0);
         }
-        gcashProofFiles.forEach(file => formData.append('payment_proof[]', file));
+        // Add installment data
+        if (isStaggered && installmentPlan && installmentPlan.length > 0) {
+          formData.append('is_staggered', '1');
+          installmentPlan.forEach((inst, i) => {
+            formData.append(`installments[${i}][installment_number]`, inst.installment_number);
+            formData.append(`installments[${i}][amount]`, inst.amount);
+            formData.append(`installments[${i}][due_date]`, inst.due_date);
+          });
+        }
         response = await apiClient.post('/sales/order', formData);
       } else {
         const payload = {
@@ -885,16 +985,25 @@ const PointOfSale = () => {
           new_customer_address: newCustomerAddress || null,
           new_customer_landmark: newCustomerLandmark || null,
           payment_method: paymentMethod,
-          amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : total),
+          amount_tendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : (paymentMethod === 'cod' || paymentMethod === 'pay_later' ? 0 : (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)),
           reference_number: paymentMethod === 'gcash' ? gcashReference : null,
           delivery_fee: forDelivery ? deliveryFee : 0,
           distance_km: forDelivery && distanceKm ? parseFloat(distanceKm) : null,
           delivery_address: forDelivery ? deliveryAddress : null,
+          // Staggered payment data
+          is_staggered: isStaggered,
+          installments: isStaggered ? installmentPlan : null,
         };
         response = await apiClient.post('/sales/order', payload);
       }
       
       if (response.success && response.data) {
+        // Suppress backend notification toasts to prevent duplicates
+        suppressNotifToasts();
+        
+        // Show success toast
+        toast.success('Order Placed Successfully', `Order ${response.data.transaction_id} has been created.`);
+        
         // Fire-and-forget: send order emails to admin + customer
         const saleId = response.sale_id || response.data?.id;
         if (saleId) {
@@ -909,7 +1018,7 @@ const PointOfSale = () => {
           totalItems,
           customerName,
           customerEmail,
-          paymentMethod: paymentMethod === 'cash' ? 'CASH' : paymentMethod === 'gcash' ? 'GCASH' : paymentMethod === 'pay_later' ? 'PAY LATER' : 'COD',
+          paymentMethod: paymentMethod === 'cash' ? 'CASH' : paymentMethod === 'gcash' ? 'GCASH' : paymentMethod === 'pdo' ? 'PDO' : paymentMethod === 'pay_later' ? 'PAY LATER' : 'COD',
           transactionId: response.data.transaction_id,
           time: response.data.date_formatted || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' }),
           cashTendered: paymentMethod === 'cash' ? parseFloat(cashTendered) : null,
@@ -944,6 +1053,8 @@ const PointOfSale = () => {
         setSelectedCoords(null);
         setEstimatedDuration(null);
         setAddressSuggestions([]);
+        setIsStaggered(false);
+        setInstallmentPlan([]);
 
         // Refresh data
         invalidateCache('/sales');
@@ -987,6 +1098,24 @@ const PointOfSale = () => {
   }, [forDelivery, distanceKm, totalSacks, businessSettings.shipping_base_km, businessSettings.shipping_rate_per_sack, businessSettings.shipping_rate_per_km]);
 
   const total = subtotal + deliveryFee;
+
+  // Calculate first installment amount (today's payment) if installments are enabled
+  const firstInstallmentAmount = useMemo(() => {
+    if (!isStaggered || !installmentPlan || installmentPlan.length === 0) {
+      return total;
+    }
+    
+    // Find today's installment (first one with today's date or earliest date)
+    const today = new Date().toISOString().split('T')[0];
+    const todayInstallment = installmentPlan.find(inst => inst.due_date === today);
+    
+    if (todayInstallment) {
+      return parseFloat(todayInstallment.amount) || 0;
+    }
+    
+    // If no installment for today, return the first installment amount
+    return parseFloat(installmentPlan[0]?.amount) || 0;
+  }, [isStaggered, installmentPlan, total]);
 
   return (
     <div>
@@ -1087,9 +1216,10 @@ const PointOfSale = () => {
               </h3>
             </div>
 
-            <div className="flex-1 flex flex-col min-h-0 p-3">
-              {/* Cart Items - scrollable */}
-              <div className="flex-1 overflow-y-auto min-h-[120px] mb-4">
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {/* Cart Items */}
+              <div className="mb-4">
                 {cart.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 flex flex-col items-center justify-center h-full">
                     <ShoppingCart size={40} className="mx-auto mb-2 opacity-30" />
@@ -1199,7 +1329,7 @@ const PointOfSale = () => {
               {/* Payment Method - always visible */}
               <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 mb-4 shrink-0">
                 <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {posPaymentMethods.map(method => {
                     const Icon = method.icon;
                     const isSelected = paymentMethod === method.value;
@@ -1248,6 +1378,7 @@ const PointOfSale = () => {
                 </div>
               </div>
             </div>
+            {/* End Scrollable Content */}
           </div>
         </div>
       </div>
@@ -1654,26 +1785,308 @@ const PointOfSale = () => {
         </>
       )}
 
-      {/* Payment Modal - Cash / GCash */}
-      {showPaymentModal && (
+      {/* Payment Modal - Cash / GCash - Only show if installment decision has been made */}
+      {showPaymentModal && (isStaggered === false || (isStaggered && installmentPlan && installmentPlan.length > 0)) && (
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => setShowPaymentModal(false)} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${
+              paymentMethod === 'pdo' ? 'max-w-5xl' : (paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number)) ? 'max-w-3xl' : 'max-w-md'
+            }`}>
               {/* Header */}
-              <div className={`p-5 text-white shrink-0 ${paymentMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : paymentMethod === 'pay_later' ? 'bg-gradient-to-r from-purple-500 to-purple-600' : 'bg-gradient-to-r from-amber-500 to-amber-600'}`}>
+              <div className={`p-5 text-white shrink-0 ${
+                paymentMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 
+                paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 
+                paymentMethod === 'pdo' ? 'bg-gradient-to-r from-purple-500 to-purple-600' :
+                paymentMethod === 'pay_later' ? 'bg-gradient-to-r from-indigo-500 to-indigo-600' : 
+                paymentMethod === 'cod' ? 'bg-gradient-to-r from-amber-500 to-amber-600' :
+                'bg-gradient-to-r from-gray-500 to-gray-600'
+              }`}>
                 <h3 className="text-lg font-bold flex items-center gap-2">
-                  {paymentMethod === 'cash' ? <DollarSign size={20} /> : paymentMethod === 'gcash' ? <Smartphone size={20} /> : paymentMethod === 'pay_later' ? <Clock size={20} /> : <Banknote size={20} />}
-                  {paymentMethod === 'cash' ? 'Cash Payment' : paymentMethod === 'gcash' ? 'GCash Payment' : paymentMethod === 'pay_later' ? 'Pay Later' : 'Cash on Delivery'}
+                  {paymentMethod === 'cash' ? <DollarSign size={20} /> : 
+                   paymentMethod === 'gcash' ? <Smartphone size={20} /> : 
+                   paymentMethod === 'pdo' ? <FileText size={20} /> :
+                   paymentMethod === 'pay_later' ? <Clock size={20} /> : 
+                   paymentMethod === 'cod' ? <Banknote size={20} /> :
+                   <DollarSign size={20} />}
+                  {paymentMethod === 'cash' ? 'Cash Payment' : 
+                   paymentMethod === 'gcash' ? 'GCash Payment' : 
+                   paymentMethod === 'pdo' ? 'PDO Payment' :
+                   paymentMethod === 'pay_later' ? 'Pay Later' : 
+                   paymentMethod === 'cod' ? 'Cash on Delivery' :
+                   'Payment'}
                 </h3>
                 <p className="text-sm text-white/80 mt-1">
-                  {paymentMethod === 'cash' ? 'Enter amount tendered by customer' : paymentMethod === 'gcash' ? 'Enter GCash reference number' : paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 'Order will be paid upon delivery'}
+                  {paymentMethod === 'cash' ? 'Enter amount tendered by customer' : 
+                   paymentMethod === 'gcash' ? 'Enter GCash reference number' : 
+                   paymentMethod === 'pdo' ? 'Upload check image and enter details' :
+                   paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 
+                   paymentMethod === 'cod' ? 'Order will be paid upon delivery' :
+                   'Complete payment details'}
                 </p>
               </div>
 
-              <div className={`${paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number) ? 'flex' : ''}`}>
-              {/* Left side: form content */}
-              <div className="flex-1 min-w-0">
+              <div className={`${(paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number)) || paymentMethod === 'pdo' ? 'flex' : ''}`}>
+              {/* Left side: Order Summary (for PDO) or form content */}
+              {paymentMethod === 'pdo' ? (
+                <>
+                  {/* Left Column: Order Summary */}
+                  <div className="w-80 shrink-0 bg-gray-50 dark:bg-gray-700/50 p-5 border-r-2 border-primary-200 dark:border-primary-700 overflow-y-auto">
+                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 uppercase tracking-wide">Order Summary</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500 dark:text-gray-400">Items</span>
+                        <span className="font-medium text-gray-800 dark:text-gray-100">{totalItems} items</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
+                        <span className="font-medium text-gray-800 dark:text-gray-100">₱{subtotal.toLocaleString()}</span>
+                      </div>
+                      {forDelivery && deliveryFee > 0 && (() => {
+                        const distance = parseFloat(distanceKm) || 0;
+                        const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
+                        const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
+                        const ratePerKm = parseFloat(businessSettings.shipping_rate_per_km) || 0;
+                        const trips = Math.ceil(distance / baseKm);
+                        const sackFee = trips * ratePerSack * totalSacks;
+                        const kmFee = ratePerKm * distance;
+                        return (
+                          <div className="bg-orange-50 dark:bg-orange-900/20 rounded-md p-2 space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping</span>
+                              <span className="font-medium text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5">
+                              {ratePerSack > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Sack fee: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
+                                  <span className="text-gray-700 dark:text-gray-200">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                </div>
+                              )}
+                              {ratePerKm > 0 && (
+                                <div className="flex justify-between">
+                                  <span>Distance fee: ₱{ratePerKm}/km × {distance} km</span>
+                                  <span className="text-gray-700 dark:text-gray-200">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                </div>
+                              )}
+                              <p className="text-[9px] text-gray-400 mt-0.5">Distance: {distanceKm} km from warehouse</p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <div className="flex justify-between border-t-2 border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                        <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
+                        <span className="text-xl font-bold text-purple-600 dark:text-purple-400">
+                          ₱{(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toLocaleString()}
+                        </span>
+                      </div>
+                      {isStaggered && installmentPlan && installmentPlan.length > 0 && (
+                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                          <span>Total Order Amount:</span>
+                          <span>₱{total.toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: PDO Form */}
+                  <div className="flex-1 min-w-0 overflow-y-auto">
+                    <div className="p-5 space-y-4">
+                      {/* Check Image Upload */}
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">
+                          Check Image <span className="text-red-500">*</span>
+                        </label>
+
+                        {/* Camera View */}
+                        {pdoShowCamera && (
+                          <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-purple-300 dark:border-purple-700">
+                            <video ref={pdoCameraVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
+                            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                              <button type="button" onClick={capturePdoPhoto} className="px-4 py-2 bg-purple-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-purple-600 flex items-center gap-1.5">
+                                <Camera size={14} /> Capture
+                              </button>
+                              <button type="button" onClick={stopPdoCamera} className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5">
+                                <X size={14} /> Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Check Previews */}
+                        {pdoCheckFiles.length > 0 && (
+                          <div className="mb-3 flex flex-wrap gap-2">
+                            {pdoCheckFiles.map((file, idx) => (
+                              <div key={idx} className="relative group">
+                                <img src={URL.createObjectURL(file)} alt={`Check ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-purple-300 dark:border-purple-600" />
+                                <button
+                                  type="button"
+                                  onClick={() => setPdoCheckFiles(pdoCheckFiles.filter((_, i) => i !== idx))}
+                                  className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Upload + Camera Buttons */}
+                        {!pdoShowCamera && (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => document.getElementById('pdoCheckInput').click()}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                                pdoCheckFiles.length === 0
+                                  ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                                  : 'border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-400'
+                              }`}
+                            >
+                              <Upload size={14} /> Upload Check Photo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={startPdoCamera}
+                              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${
+                                pdoCheckFiles.length === 0
+                                  ? 'border-red-300 dark:border-red-600 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400'
+                                  : 'border-purple-300 dark:border-purple-600 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-400'
+                              }`}
+                            >
+                              <Camera size={14} /> Open Camera
+                            </button>
+                            <input
+                              id="pdoCheckInput"
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                setPdoCheckFiles(prev => [...prev, ...files]);
+                                e.target.value = '';
+                              }}
+                              className="hidden"
+                            />
+                          </div>
+                        )}
+
+                        {pdoCheckFiles.length === 0 && (
+                          <p className="mt-1 text-xs text-red-500">Check image is required.</p>
+                        )}
+                      </div>
+
+                      {/* Check Number */}
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">
+                          Check Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={pdoCheckNumber}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setPdoCheckNumber(val);
+                            if (val.length > 0 && val.length < 6) {
+                              setPdoCheckNumberError('Check number must be at least 6 digits');
+                            } else {
+                              setPdoCheckNumberError('');
+                            }
+                          }}
+                          placeholder="Enter 6-10 digit check number"
+                          className={`w-full px-4 py-2.5 border-2 rounded-lg focus:outline-none focus:ring-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                            pdoCheckNumberError
+                              ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                              : pdoCheckNumber.length >= 6 && pdoCheckNumber.length <= 10
+                                ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
+                                : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500 focus:border-purple-500'
+                          }`}
+                        />
+                        {pdoCheckNumberError && (
+                          <p className="mt-1 text-xs text-red-500">{pdoCheckNumberError}</p>
+                        )}
+                        {!pdoCheckNumberError && pdoCheckNumber.length > 0 && pdoCheckNumber.length < 6 && (
+                          <p className="mt-1 text-xs text-red-500">Check number must be 6-10 digits (currently {pdoCheckNumber.length}).</p>
+                        )}
+                        {pdoCheckNumber.length >= 6 && pdoCheckNumber.length <= 10 && (
+                          <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Valid check number</p>
+                        )}
+                      </div>
+
+                      {/* Check Date */}
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">
+                          Check Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={pdoCheckDate}
+                          onChange={(e) => setPdoCheckDate(e.target.value)}
+                          className="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          The date written on the check
+                        </p>
+                      </div>
+
+                      {/* Bank Name */}
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">
+                          Bank Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={pdoBankName}
+                          onChange={(e) => setPdoBankName(e.target.value)}
+                          placeholder="Enter bank name"
+                          className="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+
+                      {/* Check Amount */}
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">
+                          Check Amount <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">₱</span>
+                          <input
+                            type="number"
+                            value={pdoAmount}
+                            onChange={(e) => setPdoAmount(e.target.value)}
+                            placeholder="0.00"
+                            step="0.01"
+                            min={(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toFixed(2)}
+                            className={`w-full pl-8 pr-4 py-2.5 border-2 rounded-lg focus:outline-none focus:ring-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                              pdoAmount && parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)
+                                ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
+                                : pdoAmount && parseFloat(pdoAmount) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)
+                                  ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
+                                  : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500 focus:border-purple-500'
+                            }`}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Total due: ₱{(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </p>
+                        {pdoAmount && parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) && (
+                          <p className="mt-1 text-xs text-red-500">Amount must be at least ₱{(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                        )}
+                        {pdoAmount && parseFloat(pdoAmount) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) && (
+                          <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Valid amount</p>
+                        )}
+                      </div>
+
+                      {/* Info Box */}
+                      <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-3">
+                        <p className="text-xs font-bold text-purple-700 dark:text-purple-300 mb-1 uppercase tracking-wide">Post-Dated Check Verification</p>
+                        <p className="text-xs text-purple-600 dark:text-purple-400">Upload a clear photo of the check. The check will be reviewed by admin before approval. Payment will be processed on the check date.</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 min-w-0 overflow-y-auto">
               <div className="p-5">
                 {/* Order Summary */}
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
@@ -1720,9 +2133,19 @@ const PointOfSale = () => {
                     );
                   })()}
                   <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
-                    <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
-                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{total.toLocaleString()}</span>
+                    <span className="font-bold text-gray-800 dark:text-gray-100">
+                      {isStaggered && installmentPlan && installmentPlan.length > 0 ? 'First Payment (Today)' : 'Total Due'}
+                    </span>
+                    <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                      ₱{(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toLocaleString()}
+                    </span>
                   </div>
+                  {isStaggered && installmentPlan && installmentPlan.length > 0 && (
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      <span>Total Order Amount:</span>
+                      <span>₱{total.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
 
                 {paymentMethod === 'cash' ? (
@@ -1746,7 +2169,12 @@ const PointOfSale = () => {
 
                     {/* Quick Amount Buttons */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                      {[total, Math.ceil(total / 100) * 100, Math.ceil(total / 500) * 500, Math.ceil(total / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
+                      {[
+                        isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total,
+                        Math.ceil((isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) / 100) * 100,
+                        Math.ceil((isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) / 500) * 500,
+                        Math.ceil((isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) / 1000) * 1000
+                      ].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
                         <button
                           key={amount}
                           onClick={() => setCashTendered(String(amount))}
@@ -1759,12 +2187,12 @@ const PointOfSale = () => {
 
                     {/* Change Display */}
                     {cashTendered && (
-                      <div className={`rounded-lg p-3 text-center ${parseFloat(cashTendered) >= total ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
-                        <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(cashTendered) >= total ? '#16a34a' : '#dc2626' }}>
-                          {parseFloat(cashTendered) >= total ? 'Change' : 'Insufficient'}
+                      <div className={`rounded-lg p-3 text-center ${parseFloat(cashTendered) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
+                        <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(cashTendered) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) ? '#16a34a' : '#dc2626' }}>
+                          {parseFloat(cashTendered) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) ? 'Change' : 'Insufficient'}
                         </p>
-                        <p className={`text-2xl font-bold ${parseFloat(cashTendered) >= total ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          ₱{Math.abs((parseFloat(cashTendered) || 0) - total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <p className={`text-2xl font-bold ${parseFloat(cashTendered) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          ₱{Math.abs((parseFloat(cashTendered) || 0) - (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
                     )}
@@ -1896,7 +2324,16 @@ const PointOfSale = () => {
                       <p className="text-xs text-purple-600 dark:text-purple-400">The order will be placed with payment pending. Customer can pay at a later time.</p>
                     </div>
                   </>
-                ) : (
+                ) : paymentMethod === 'credit' ? (
+                  <>
+                    {/* Credit Info */}
+                    <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
+                      <CreditCard size={32} className="mx-auto mb-2 text-purple-500" />
+                      <p className="text-sm font-bold text-purple-700 dark:text-purple-300 mb-1">Credit Payment</p>
+                      <p className="text-xs text-purple-600 dark:text-purple-400">Order will be charged to customer's credit account. Payment will be tracked separately.</p>
+                    </div>
+                  </>
+                ) : paymentMethod === 'cod' ? (
                   <>
                     {/* COD Info */}
                     <div className="bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700 rounded-lg p-4 text-center">
@@ -1905,9 +2342,20 @@ const PointOfSale = () => {
                       <p className="text-xs text-amber-600 dark:text-amber-400">Payment will be collected upon delivery. The order will be placed as pending.</p>
                     </div>
                   </>
+                ) : (
+                  <>
+                    {/* Default/Unknown Payment Method */}
+                    <div className="bg-gray-50 dark:bg-gray-900/20 border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 text-center">
+                      <Banknote size={32} className="mx-auto mb-2 text-gray-500" />
+                      <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">Payment Pending</p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">The order will be placed with payment pending.</p>
+                    </div>
+                  </>
                 )}
               </div>
-              </div>{/* end left-side flex-1 */}
+              </div>
+              )}
+              {/* end left-side flex-1 or PDO two-column layout */}
 
               {/* Right side: GCash QR Code & Info Panel */}
               {paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number) && (
@@ -1940,16 +2388,33 @@ const PointOfSale = () => {
               {/* Footer */}
               <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => { setShowPaymentModal(false); setShowCustomerModal(true); }}
+                  onClick={() => { 
+                    setShowPaymentModal(false); 
+                    if (isStaggered) {
+                      setShowInstallmentSetup(true);
+                    } else {
+                      setShowCustomerModal(true);
+                    }
+                  }}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
                 >
                   ← Back
                 </button>
                 <button
                   onClick={confirmPayment}
-                  disabled={saving || (paymentMethod === 'cash' ? (!cashTendered || parseFloat(cashTendered) < total) : paymentMethod === 'gcash' ? (gcashReference.replace(/\s/g, '').length !== 13 || gcashProofFiles.length === 0 || !!gcashRefError) : false)}
+                  disabled={saving || (
+                    paymentMethod === 'cash' ? (!cashTendered || parseFloat(cashTendered) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)) : 
+                    paymentMethod === 'gcash' ? (gcashReference.replace(/\s/g, '').length !== 13 || gcashProofFiles.length === 0 || !!gcashRefError) : 
+                    paymentMethod === 'pdo' ? (pdoCheckFiles.length === 0 || !pdoCheckNumber.trim() || pdoCheckNumber.length < 6 || pdoCheckNumber.length > 10 || !pdoCheckDate || !pdoBankName.trim() || !pdoAmount || parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)) :
+                    false
+                  )}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
-                    paymentMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : paymentMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : paymentMethod === 'pay_later' ? 'bg-purple-500 hover:bg-purple-600' : 'bg-amber-500 hover:bg-amber-600'
+                    paymentMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : 
+                    paymentMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : 
+                    paymentMethod === 'pdo' ? 'bg-purple-500 hover:bg-purple-600' :
+                    paymentMethod === 'pay_later' ? 'bg-indigo-500 hover:bg-indigo-600' : 
+                    paymentMethod === 'cod' ? 'bg-amber-500 hover:bg-amber-600' :
+                    'bg-gray-500 hover:bg-gray-600'
                   }`}
                 >
                   <Receipt size={14} /> {saving ? 'Placing...' : 'Place Order'}
@@ -2201,6 +2666,150 @@ const PointOfSale = () => {
                   className="w-full py-2.5 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 transition-all"
                 >
                   Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Installment Setup Modal */}
+      {showInstallmentModal && (
+        <>
+          <style>{`
+            @keyframes shake {
+              0%, 100% { transform: translateX(0); }
+              10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+              20%, 40%, 60%, 80% { transform: translateX(10px); }
+            }
+            .shake-modal {
+              animation: shake 0.5s;
+            }
+          `}</style>
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => {
+            if (!installmentPlan || installmentPlan.length === 0) {
+              setIsStaggered(false);
+            }
+            setShowInstallmentModal(false);
+          }}>
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl border-2 border-primary-200 dark:border-primary-700 max-h-[90vh] overflow-hidden flex flex-col ${shakeInstallmentModal ? 'shake-modal' : ''}`} onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white shrink-0">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <FileText size={20} />
+                  Setup Installment Payment
+                </h3>
+                <p className="text-sm text-white/80 mt-1">Configure payment schedule for this order</p>
+              </div>
+
+              {/* Content - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-5">
+                <InstallmentSetupInline
+                  ref={installmentSetupRef}
+                  totalAmount={total}
+                  initialInstallments={installmentPlan}
+                  onChange={(installments) => setInstallmentPlan(installments)}
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
+                <button
+                  onClick={() => {
+                    // Go back to Enable Installment Modal
+                    setShowInstallmentModal(false);
+                    setIsStaggered(false);
+                    setInstallmentPlan([]);
+                  }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={() => {
+                    // Trigger validation
+                    if (installmentSetupRef.current) {
+                      const isValid = installmentSetupRef.current.validate();
+                      if (!isValid) {
+                        // Shake modal on validation error
+                        setShakeInstallmentModal(true);
+                        setTimeout(() => setShakeInstallmentModal(false), 500);
+                        return;
+                      }
+                    }
+                    
+                    // Check if installment plan is set
+                    if (!installmentPlan || installmentPlan.length === 0) {
+                      setShakeInstallmentModal(true);
+                      setTimeout(() => setShakeInstallmentModal(false), 500);
+                      return;
+                    }
+                    
+                    setShowInstallmentModal(false);
+                    // Open payment modal after saving installment schedule
+                    setShowPaymentModal(true);
+                  }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                >
+                  Save Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Installment Enable Modal - Shows after customer modal closes */}
+      {!showCustomerModal && !showInstallmentModal && !showPaymentModal && (selectedCustomerId || newCustomerName) && !isStaggered && (!installmentPlan || installmentPlan.length === 0) && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => {}} />
+          <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md border-2 border-blue-500 dark:border-blue-600">
+              {/* Header */}
+              <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-t-2xl">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <FileText size={20} />
+                  Installment Payment
+                </h3>
+                <p className="text-sm text-white/80 mt-1">Would you like to enable installment payment for this order?</p>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700 mb-4">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                    Installment payment allows the customer to pay the total amount in multiple scheduled payments.
+                  </p>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">Order Total:</span>
+                    <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                      ₱{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 flex gap-3 border-t-2 border-gray-100 dark:border-gray-700 rounded-b-2xl">
+                <button
+                  onClick={() => {
+                    setIsStaggered(false);
+                    setInstallmentPlan([]);
+                    // Open payment modal after skipping installment
+                    setShowPaymentModal(true);
+                  }}
+                  className="flex-1 py-3 rounded-lg text-sm font-semibold border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >
+                  No, Skip
+                </button>
+                <button
+                  onClick={() => {
+                    setIsStaggered(true);
+                    setShowInstallmentModal(true);
+                  }}
+                  className="flex-1 py-3 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-all"
+                >
+                  Yes, Enable Installments
                 </button>
               </div>
             </div>

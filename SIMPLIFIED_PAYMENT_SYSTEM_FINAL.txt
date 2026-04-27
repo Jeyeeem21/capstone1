@@ -1,0 +1,1268 @@
+================================================================================
+  SIMPLIFIED PAYMENT SYSTEM - FINAL DESIGN
+================================================================================
+  Date: April 24, 2026
+  Approach: Keep it simple, traditional payment methods + staggered option
+================================================================================
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    YOUR PREFERRED APPROACH (SIMPLER!)                    ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+KEY REQUIREMENTS:
+-----------------------------------------------------------------------
+1. ✅ Keep traditional payment methods: Cash, GCash, PDO, Pay Later
+2. ✅ Add OPTION: "Enable Staggered Payment?" (Yes/No checkbox)
+3. ✅ If NOT staggered → must pay full amount
+4. ✅ If staggered → can pay in parts with schedule
+5. ✅ GCash needs verification: "Paid - Needs Verification" → "Verified & Paid"
+6. ✅ Same options for both Admin and Customer side
+
+PAYMENT FLOW:
+-----------------------------------------------------------------------
+
+Step 1: Choose Payment Method
+  [ ] Cash
+  [ ] GCash  
+  [ ] PDO (Post-Dated Order)
+  [ ] Pay Later (better term: "Credit" or "On Account")
+
+Step 2: Choose Payment Structure
+  [ ] Full Payment (pay all now)
+  [ ] Staggered Payment (pay in installments)
+
+If Full Payment:
+  → Must pay complete amount
+  → Order completed immediately
+  → If GCash: needs verification first
+
+If Staggered Payment:
+  → Setup payment schedule
+  → Each installment can use different method
+  → Order completed when all paid
+
+================================================================================
+  PAYMENT METHODS EXPLAINED
+================================================================================
+
+1. CASH
+-----------------------------------------------------------------------
+Description: Physical cash payment
+Status Flow: Paid immediately (no verification needed)
+Use Case: Walk-in customers, immediate payment
+Admin/Customer: Both can use
+
+Example:
+  Order: ₱100,000
+  Payment: ₱100,000 Cash
+  Status: ✅ Paid (immediately)
+
+2. GCASH
+-----------------------------------------------------------------------
+Description: GCash mobile payment with proof
+Status Flow: Paid → Needs Verification → Verified & Paid
+Use Case: Digital payment, requires screenshot proof
+Admin/Customer: Both can use
+
+Example:
+  Order: ₱100,000
+  Payment: ₱100,000 GCash
+  Status: ⏳ Paid - Needs Verification
+  
+  After admin verifies:
+  Status: ✅ Verified & Paid
+
+Verification Process:
+  1. Customer pays via GCash
+  2. Customer uploads proof (screenshot)
+  3. System marks as "Paid - Needs Verification"
+  4. Admin checks GCash account
+  5. Admin clicks "Verify Payment"
+  6. Status changes to "Verified & Paid"
+
+3. PDO (POST-DATED ORDER)
+-----------------------------------------------------------------------
+Description: Payment via post-dated check or bank commitment
+Status Flow: Pending Approval → Approved → Awaiting Payment → Paid
+Use Case: Corporate clients, large orders, credit terms
+Admin/Customer: Both can use (with approval)
+
+Example:
+  Order: ₱100,000
+  Payment: PDO Check #12345 (due May 15, 2026)
+  Status: 🏦 Pending Approval
+  
+  After admin approves:
+  Status: 🏦 Approved - Awaiting Payment (Due May 15)
+  
+  On May 15 when check clears:
+  Status: ✅ Paid
+
+4. PAY LATER (Better terms: "Credit" or "On Account")
+-----------------------------------------------------------------------
+Description: Customer will pay later, no specific date
+Status Flow: Not Paid → Paid (when customer returns)
+Use Case: Trusted customers, regular clients
+Admin/Customer: Both can use
+
+Better Term Options:
+  - "Credit" (most common in business)
+  - "On Account" (accounting term)
+  - "Charge to Account"
+  - "Bill Later"
+
+Recommended: "Credit" or "On Account"
+
+Example:
+  Order: ₱100,000
+  Payment: Credit (Pay Later)
+  Status: ⚠️ Not Paid - On Account
+  
+  When customer returns and pays:
+  Status: ✅ Paid
+
+================================================================================
+  STAGGERED PAYMENT OPTION
+================================================================================
+
+HOW IT WORKS:
+-----------------------------------------------------------------------
+
+At POS/Checkout, there's a checkbox:
+  ☐ Enable Staggered Payment (Pay in Installments)
+
+If UNCHECKED (Default - Full Payment):
+  → Customer must pay full amount now
+  → Choose ONE payment method
+  → Order completed immediately (after verification if GCash)
+
+If CHECKED (Staggered Payment):
+  → Customer can pay in parts
+  → Setup payment schedule
+  → Each installment can use different method
+  → Order completed when all installments paid
+
+STAGGERED PAYMENT SETUP:
+-----------------------------------------------------------------------
+
+When "Enable Staggered Payment" is checked:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Staggered Payment Setup                                    │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Order Total: ₱100,000                                      │
+  │                                                             │
+  │  Down Payment (Optional):                                   │
+  │  Amount: [₱20,000____]                                      │
+  │  Method: [Cash ▼]                                           │
+  │  [ ] Pay Now                                                │
+  │                                                             │
+  │  Remaining Balance: ₱80,000                                 │
+  │                                                             │
+  │  Payment Schedule:                                          │
+  │  ┌───────────────────────────────────────────────────────┐ │
+  │  │ Installment 1:                                        │ │
+  │  │ Amount: [₱20,000____]                                 │ │
+  │  │ Method: [GCash ▼]                                     │ │
+  │  │ Due Date: [May 15, 2026____] (Optional)              │ │
+  │  │ [ ] Pay Now                                           │ │
+  │  └───────────────────────────────────────────────────────┘ │
+  │                                                             │
+  │  ┌───────────────────────────────────────────────────────┐ │
+  │  │ Installment 2:                                        │ │
+  │  │ Amount: [₱30,000____]                                 │ │
+  │  │ Method: [PDO ▼]                                       │ │
+  │  │ Due Date: [Jun 15, 2026____]                         │ │
+  │  │ Check #: [12345____] Bank: [BDO____]                 │ │
+  │  └───────────────────────────────────────────────────────┘ │
+  │                                                             │
+  │  ┌───────────────────────────────────────────────────────┐ │
+  │  │ Installment 3:                                        │ │
+  │  │ Amount: [₱30,000____]                                 │ │
+  │  │ Method: [Cash ▼]                                      │ │
+  │  │ Due Date: [____] (Pay anytime)                       │ │
+  │  └───────────────────────────────────────────────────────┘ │
+  │                                                             │
+  │  [+ Add Installment] [Remove Last]                         │
+  │                                                             │
+  │  Total Allocated: ₱100,000 ✓                               │
+  │                                                             │
+  │  [Cancel] [Save Payment Schedule]                          │
+  └─────────────────────────────────────────────────────────────┘
+
+Key Features:
+  - Each installment has its own method
+  - Each installment can have optional due date
+  - Can pay some installments immediately ("Pay Now" checkbox)
+  - System validates: total = order amount
+  - Flexible: mix Cash, GCash, PDO, Credit in one schedule
+
+================================================================================
+  YOUR SCENARIOS - HOW THEY WORK
+================================================================================
+
+SCENARIO 1: ₱20k PDO → ₱20k Cash → ₱10k GCash → ₱30k PDO → ₱20k Cash
+-----------------------------------------------------------------------
+
+At Checkout:
+  1. Order Total: ₱100,000
+  2. ☑ Enable Staggered Payment
+  3. Setup schedule:
+     - Installment 1: ₱20,000 PDO (due May 15)
+     - Installment 2: ₱20,000 Cash [✓ Pay Now]
+     - Installment 3: ₱10,000 GCash [✓ Pay Now]
+     - Installment 4: ₱30,000 PDO (due Jun 15)
+     - Installment 5: ₱20,000 Cash (pay later)
+  4. Save schedule
+
+Result:
+  - Installment 2: ✅ Paid (Cash)
+  - Installment 3: ⏳ Paid - Needs Verification (GCash)
+  - Installment 1: 🏦 Pending Approval (PDO)
+  - Installment 4: 🏦 Pending Approval (PDO)
+  - Installment 5: ⚠️ Not Paid (Cash later)
+  
+  Order Status: Partial Payment (₱30,000 paid, ₱70,000 remaining)
+
+SCENARIO 2: ₱10k GCash → ₱30k Cash → ₱20k GCash → ₱40k PDO
+-----------------------------------------------------------------------
+
+At Checkout:
+  1. Order Total: ₱100,000
+  2. ☑ Enable Staggered Payment
+  3. Setup schedule:
+     - Installment 1: ₱10,000 GCash [✓ Pay Now]
+     - Installment 2: ₱30,000 Cash [✓ Pay Now]
+     - Installment 3: ₱20,000 GCash (pay later)
+     - Installment 4: ₱40,000 PDO (due May 15)
+  4. Save schedule
+
+Result:
+  - Installment 1: ⏳ Paid - Needs Verification (GCash)
+  - Installment 2: ✅ Paid (Cash)
+  - Installment 3: ⚠️ Not Paid (GCash later)
+  - Installment 4: 🏦 Pending Approval (PDO)
+  
+  Order Status: Partial Payment (₱40,000 paid, ₱60,000 remaining)
+
+SCENARIO 3: ₱40k Cash → ₱20k GCash → ₱40k PDO
+-----------------------------------------------------------------------
+
+At Checkout:
+  1. Order Total: ₱100,000
+  2. ☑ Enable Staggered Payment
+  3. Setup schedule:
+     - Installment 1: ₱40,000 Cash [✓ Pay Now]
+     - Installment 2: ₱20,000 GCash [✓ Pay Now]
+     - Installment 3: ₱40,000 PDO (due May 15)
+  4. Save schedule
+
+Result:
+  - Installment 1: ✅ Paid (Cash)
+  - Installment 2: ⏳ Paid - Needs Verification (GCash)
+  - Installment 3: 🏦 Pending Approval (PDO)
+  
+  Order Status: Partial Payment (₱60,000 paid, ₱40,000 remaining)
+
+================================================================================
+  FULL PAYMENT (NOT STAGGERED)
+================================================================================
+
+When "Enable Staggered Payment" is UNCHECKED:
+-----------------------------------------------------------------------
+
+Simple checkout flow:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Payment                                                    │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Order Total: ₱100,000                                      │
+  │                                                             │
+  │  ☐ Enable Staggered Payment                                │
+  │                                                             │
+  │  Payment Method:                                            │
+  │  ( ) Cash                                                   │
+  │  ( ) GCash                                                  │
+  │  ( ) PDO (Post-Dated Order)                                 │
+  │  (•) Credit (Pay Later)                                     │
+  │                                                             │
+  │  Amount: ₱100,000 (Full Payment Required)                  │
+  │                                                             │
+  │  [Complete Order]                                           │
+  └─────────────────────────────────────────────────────────────┘
+
+Rules:
+  - Must pay FULL amount
+  - Choose ONE payment method
+  - Cannot mix methods (unless staggered)
+  - If GCash: needs verification
+  - If PDO: needs approval
+  - If Credit: marked as "Not Paid"
+
+Examples:
+
+  Full Payment - Cash:
+    Order: ₱100,000
+    Payment: ₱100,000 Cash
+    Status: ✅ Paid (immediately)
+  
+  Full Payment - GCash:
+    Order: ₱100,000
+    Payment: ₱100,000 GCash
+    Status: ⏳ Paid - Needs Verification
+    → After verification: ✅ Verified & Paid
+  
+  Full Payment - PDO:
+    Order: ₱100,000
+    Payment: ₱100,000 PDO (due May 15)
+    Status: 🏦 Pending Approval
+    → After approval: 🏦 Approved - Awaiting Payment
+    → On May 15: ✅ Paid
+  
+  Full Payment - Credit:
+    Order: ₱100,000
+    Payment: ₱100,000 Credit
+    Status: ⚠️ Not Paid - On Account
+    → When customer returns: ✅ Paid
+
+================================================================================
+  PARTIAL PAYMENT (WITHOUT STAGGERED)
+================================================================================
+
+What if customer wants to pay PART now, rest later, but NO schedule?
+-----------------------------------------------------------------------
+
+Option 1: Use Staggered with 2 installments
+  - Installment 1: ₱50,000 Cash [✓ Pay Now]
+  - Installment 2: ₱50,000 Credit (pay anytime)
+
+Option 2: Pay partial now, record rest later
+  - Pay ₱50,000 Cash now
+  - System creates automatic 2nd installment: ₱50,000 Credit
+  - Customer pays remaining when they return
+
+Recommended: Option 1 (explicit staggered)
+  - Clearer for tracking
+  - Customer knows they have balance
+  - Admin can see payment structure
+
+Example:
+  Customer: "I'll pay ₱50k now, rest later"
+  
+  Staff:
+    1. ☑ Enable Staggered Payment
+    2. Add 2 installments:
+       - Installment 1: ₱50,000 Cash [✓ Pay Now]
+       - Installment 2: ₱50,000 Credit (no due date)
+    3. Save schedule
+  
+  Result:
+    - Order Status: Partial Payment
+    - Paid: ₱50,000
+    - Balance: ₱50,000
+    - Customer can pay balance anytime
+
+================================================================================
+  DATABASE STRUCTURE (SIMPLIFIED)
+================================================================================
+
+SALES TABLE:
+-----------------------------------------------------------------------
+| Column                | Type             | Notes                     |
+|-----------------------|------------------|---------------------------|
+| id                    | bigint PK        |                           |
+| transaction_id        | varchar          | ORD-2026-04-24-001        |
+| customer_id           | bigint FK        |                           |
+| total                 | decimal(12,2)    | Order total               |
+| amount_paid           | decimal(12,2)    | Total verified payments   |
+| balance_remaining     | decimal(12,2)    | total - amount_paid       |
+| payment_status        | varchar(20)      | 'paid', 'partial',        |
+|                       |                  | 'not_paid'                |
+| is_staggered          | boolean          | Has payment schedule?     |
+|                       |   default false  |                           |
+| primary_method        | varchar(20)      | 'cash', 'gcash', 'pdo',   |
+|                       |                  | 'credit' (for display)    |
+| ... other columns ... |                  |                           |
+
+PAYMENT_INSTALLMENTS TABLE (for staggered payments):
+-----------------------------------------------------------------------
+| Column                | Type             | Notes                     |
+|-----------------------|------------------|---------------------------|
+| id                    | bigint PK        |                           |
+| sale_id               | bigint FK        | → sales.id                |
+| installment_number    | int              | 1, 2, 3, etc.             |
+| amount_expected       | decimal(12,2)    | Expected amount           |
+| amount_paid           | decimal(12,2)    | Actual paid               |
+|                       |   default 0      |                           |
+| payment_method        | varchar(20)      | 'cash', 'gcash', 'pdo',   |
+|                       |                  | 'credit'                  |
+| due_date              | date nullable    | When due (optional)       |
+| paid_date             | date nullable    | When actually paid        |
+| status                | varchar(20)      | 'pending', 'paid',        |
+|                       |                  | 'needs_verification',     |
+|                       |                  | 'verified', 'overdue'     |
+| pdo_check_number      | varchar nullable | If method = 'pdo'         |
+| pdo_check_bank        | varchar nullable | If method = 'pdo'         |
+| pdo_check_image       | json nullable    | If method = 'pdo'         |
+| pdo_approval_status   | varchar nullable | 'pending', 'approved',    |
+|                       |                  | 'rejected'                |
+| pdo_approved_by       | bigint FK null   | → users.id                |
+| payment_id            | bigint FK null   | → payments.id (link)      |
+| notes                 | text nullable    |                           |
+| created_at            | timestamp        |                           |
+| updated_at            | timestamp        |                           |
+
+PAYMENTS TABLE (actual payment records):
+-----------------------------------------------------------------------
+| Column                | Type             | Notes                     |
+|-----------------------|------------------|---------------------------|
+| id                    | bigint PK        |                           |
+| sale_id               | bigint FK        | → sales.id                |
+| installment_id        | bigint FK null   | → payment_installments.id |
+| amount                | decimal(12,2)    | Amount paid               |
+| payment_method        | varchar(20)      | 'cash', 'gcash'           |
+| reference_number      | varchar nullable | For GCash                 |
+| payment_proof         | json nullable    | Proof images              |
+| status                | varchar(20)      | 'verified',               |
+|                       |                  | 'needs_verification',     |
+|                       |                  | 'on_hold', 'cancelled'    |
+| verified_by           | bigint FK null   | → users.id                |
+| verified_at           | timestamp null   |                           |
+| paid_at               | timestamp        |                           |
+| created_at            | timestamp        |                           |
+| updated_at            | timestamp        |                           |
+
+KEY RELATIONSHIPS:
+-----------------------------------------------------------------------
+sales
+  ├─ has many → payment_installments (if is_staggered = true)
+  └─ has many → payments (actual payment records)
+
+payment_installments
+  └─ has one → payment (links to actual payment record)
+
+payments
+  ├─ belongs to → sale
+  └─ belongs to → payment_installment (optional)
+
+================================================================================
+  PAYMENT STATUS FLOW
+================================================================================
+
+CASH PAYMENT:
+-----------------------------------------------------------------------
+Status Flow: Paid ✅ (immediately verified)
+
+Example:
+  Customer pays ₱100,000 Cash
+  → Status: ✅ Paid
+  → No verification needed
+  → Order can be fulfilled immediately
+
+GCASH PAYMENT:
+-----------------------------------------------------------------------
+Status Flow: Paid - Needs Verification ⏳ → Verified & Paid ✅
+
+Example:
+  Customer pays ₱100,000 GCash
+  → Status: ⏳ Paid - Needs Verification
+  → Admin checks GCash account
+  → Admin clicks "Verify Payment"
+  → Status: ✅ Verified & Paid
+  → Order can be fulfilled
+
+Database:
+  payment_installments.status = 'needs_verification'
+  payments.status = 'needs_verification'
+  
+  After verification:
+  payment_installments.status = 'verified'
+  payments.status = 'verified'
+  sales.amount_paid += amount
+  sales.balance_remaining -= amount
+
+PDO PAYMENT:
+-----------------------------------------------------------------------
+Status Flow: Pending Approval 🏦 → Approved 🏦 → Awaiting Payment 🏦 → Paid ✅
+
+Example:
+  Customer provides PDO check ₱100,000 (due May 15)
+  → Status: 🏦 Pending Approval
+  → Admin reviews check + customer credit
+  → Admin clicks "Approve PDO"
+  → Status: 🏦 Approved - Awaiting Payment (Due May 15)
+  → On May 15, check clears
+  → Admin clicks "Mark as Paid"
+  → Status: ✅ Paid
+  → Order fulfilled
+
+Database:
+  payment_installments.status = 'pending'
+  payment_installments.pdo_approval_status = 'pending'
+  
+  After approval:
+  payment_installments.pdo_approval_status = 'approved'
+  
+  After payment received:
+  payment_installments.status = 'paid'
+  Create payment record
+  sales.amount_paid += amount
+  sales.balance_remaining -= amount
+
+CREDIT (PAY LATER) PAYMENT:
+-----------------------------------------------------------------------
+Status Flow: Not Paid ⚠️ → Paid ✅ (when customer returns)
+
+Example:
+  Customer orders ₱100,000 on Credit
+  → Status: ⚠️ Not Paid - On Account
+  → Customer returns later
+  → Customer pays (Cash or GCash)
+  → Status: ✅ Paid
+
+Database:
+  payment_installments.status = 'pending'
+  payment_installments.payment_method = 'credit'
+  
+  When customer pays:
+  Create payment record (actual method used)
+  payment_installments.status = 'paid'
+  sales.amount_paid += amount
+  sales.balance_remaining -= amount
+
+================================================================================
+  ADMIN INTERFACE
+================================================================================
+
+ORDERS/SALES PAGE:
+-----------------------------------------------------------------------
+
+Order List View:
+  ┌────────┬──────────┬────────┬────────┬──────────────────────┐
+  │Order   │Customer  │Total   │Status  │Payment               │
+  ├────────┼──────────┼────────┼────────┼──────────────────────┤
+  │ORD-045 │Juan Cruz │₱100,000│Partial │Mixed (Staggered)     │
+  │        │          │        │₱50k/   │[View Schedule]       │
+  │        │          │        │₱100k   │                      │
+  ├────────┼──────────┼────────┼────────┼──────────────────────┤
+  │ORD-044 │Maria S.  │₱50,000 │⏳ Needs│GCash                 │
+  │        │          │        │Verify  │[Verify Payment]      │
+  ├────────┼──────────┼────────┼────────┼──────────────────────┤
+  │ORD-043 │Pedro R.  │₱80,000 │🏦 PDO  │PDO (Due May 15)      │
+  │        │          │        │Pending │[Approve]             │
+  └────────┴──────────┴────────┴────────┴──────────────────────┘
+
+View Order Details:
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Order #ORD-045                                             │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Customer: Juan Cruz                                        │
+  │  Total: ₱100,000                                            │
+  │  Paid: ₱50,000 | Balance: ₱50,000                          │
+  │  Status: Partial Payment                                    │
+  │  Payment Type: Staggered (Mixed Methods)                    │
+  │                                                             │
+  │  Payment Schedule:                                          │
+  │  ┌────┬────────┬────────┬──────────┬──────────────────┐   │
+  │  │#   │Method  │Amount  │Due Date  │Status            │   │
+  │  ├────┼────────┼────────┼──────────┼──────────────────┤   │
+  │  │1   │Cash    │₱20,000 │-         │✅ Paid           │   │
+  │  ├────┼────────┼────────┼──────────┼──────────────────┤   │
+  │  │2   │GCash   │₱30,000 │-         │⏳ Needs Verify   │   │
+  │  │    │        │        │          │[Verify]          │   │
+  │  ├────┼────────┼────────┼──────────┼──────────────────┤   │
+  │  │3   │PDO     │₱30,000 │May 15    │🏦 Pending        │   │
+  │  │    │#12345  │        │          │[Approve]         │   │
+  │  ├────┼────────┼────────┼──────────┼──────────────────┤   │
+  │  │4   │Credit  │₱20,000 │-         │⚠️ Not Paid       │   │
+  │  │    │        │        │          │[Record Payment]  │   │
+  │  └────┴────────┴────────┴──────────┴──────────────────┘   │
+  │                                                             │
+  │  [View Full Details] [Print] [Close]                       │
+  └─────────────────────────────────────────────────────────────┘
+
+PAYMENTS MANAGEMENT PAGE:
+-----------------------------------------------------------------------
+
+Tab 1: Payment Transactions
+  - All actual payment records
+  - Filter by status: Needs Verification, Verified, On Hold
+  - Actions: Verify, Hold, Cancel
+
+Tab 2: Staggered Payments
+  - All orders with staggered payment schedules
+  - Filter by status: Active, Overdue, Completed
+  - View payment schedule per order
+  - Actions: Record Payment, Approve PDO, Verify GCash
+
+Tab 3: PDO Approvals
+  - All PDO installments pending approval
+  - View check images
+  - Customer credit history
+  - Actions: Approve, Reject
+
+================================================================================
+  CUSTOMER INTERFACE (CUSTOMER PORTAL)
+================================================================================
+
+CHECKOUT PAGE:
+-----------------------------------------------------------------------
+
+Same options as admin:
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Checkout                                                   │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Order Total: ₱100,000                                      │
+  │                                                             │
+  │  Payment Options:                                           │
+  │                                                             │
+  │  ☐ Pay in Installments (Staggered Payment)                 │
+  │                                                             │
+  │  Payment Method:                                            │
+  │  ( ) Cash on Delivery (COD)                                 │
+  │  ( ) GCash                                                  │
+  │  ( ) Post-Dated Order (PDO) - Requires Approval             │
+  │  (•) Credit (Pay Later) - For Approved Customers            │
+  │                                                             │
+  │  [Continue to Payment]                                      │
+  └─────────────────────────────────────────────────────────────┘
+
+If "Pay in Installments" checked:
+  → Opens installment setup (similar to admin)
+  → Customer can setup their own payment schedule
+  → Each installment can use different method
+  → Submit for approval
+
+MY ORDERS PAGE:
+-----------------------------------------------------------------------
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  My Orders                                                  │
+  ├─────────────────────────────────────────────────────────────┤
+  │  ┌────────┬────────┬────────┬──────────────────────────┐   │
+  │  │Order   │Total   │Status  │Payment                   │   │
+  │  ├────────┼────────┼────────┼──────────────────────────┤   │
+  │  │ORD-045 │₱100,000│Partial │Staggered (3/5 paid)      │   │
+  │  │        │        │₱60k/   │Next: ₱20k due May 15     │   │
+  │  │        │        │₱100k   │[View Schedule] [Pay Now] │   │
+  │  ├────────┼────────┼────────┼──────────────────────────┤   │
+  │  │ORD-044 │₱50,000 │⏳ Needs│GCash - Awaiting          │   │
+  │  │        │        │Verify  │Verification              │   │
+  │  └────────┴────────┴────────┴──────────────────────────┘   │
+  └─────────────────────────────────────────────────────────────┘
+
+View Payment Schedule:
+  - See all installments
+  - See which are paid/pending
+  - Pay pending installments
+  - Upload GCash proof
+  - Track payment history
+
+================================================================================
+  TERMINOLOGY RECOMMENDATIONS
+================================================================================
+
+BETTER TERMS FOR "PAY LATER":
+-----------------------------------------------------------------------
+
+Option 1: "Credit" ⭐ RECOMMENDED
+  - Most common in business
+  - Clear meaning
+  - Professional
+  - Example: "Payment Method: Credit"
+
+Option 2: "On Account"
+  - Accounting term
+  - Professional
+  - Clear for B2B
+  - Example: "Payment Method: On Account"
+
+Option 3: "Charge to Account"
+  - Very clear
+  - Common in retail
+  - Example: "Payment Method: Charge to Account"
+
+Option 4: "Bill Later"
+  - Simple
+  - Easy to understand
+  - Example: "Payment Method: Bill Later"
+
+Option 5: "Terms" or "Net Terms"
+  - B2B standard
+  - Professional
+  - Example: "Payment Method: Net 30" or "Payment Terms"
+
+RECOMMENDED: Use "Credit" for simplicity and clarity
+
+PAYMENT METHOD LABELS:
+-----------------------------------------------------------------------
+
+Admin Side:
+  - Cash
+  - GCash
+  - PDO (Post-Dated Order)
+  - Credit
+
+Customer Side:
+  - COD (Cash on Delivery) - same as Cash but delivered first
+  - GCash
+  - PDO (Post-Dated Order)
+  - Credit (or "Pay Later" if simpler for customers)
+
+Note: COD and Cash are essentially the same, just different timing.
+You can keep "COD" label for customer-facing to be clearer.
+
+================================================================================
+  SUMMARY: YOUR REQUIREMENTS MET
+================================================================================
+
+✅ REQUIREMENT 1: Keep traditional payment methods
+-----------------------------------------------------------------------
+Payment Methods:
+  - Cash ✅
+  - GCash ✅
+  - PDO ✅
+  - Credit (Pay Later) ✅
+
+✅ REQUIREMENT 2: Option to enable staggered payment
+-----------------------------------------------------------------------
+Checkbox: ☐ Enable Staggered Payment
+  - If unchecked: Full payment required
+  - If checked: Setup payment schedule
+
+✅ REQUIREMENT 3: Full payment if not staggered
+-----------------------------------------------------------------------
+When staggered is disabled:
+  - Must pay complete amount
+  - Choose ONE payment method
+  - Order completed immediately (after verification)
+
+✅ REQUIREMENT 4: GCash verification flow
+-----------------------------------------------------------------------
+GCash Status Flow:
+  1. Paid - Needs Verification ⏳
+  2. Admin verifies
+  3. Verified & Paid ✅
+
+✅ REQUIREMENT 5: Same options for Admin and Customer
+-----------------------------------------------------------------------
+Both have:
+  - Same payment methods (Cash/GCash/PDO/Credit)
+  - Same staggered payment option
+  - Same checkout flow
+  - Customer side uses "COD" label instead of "Cash"
+
+✅ REQUIREMENT 6: Staggered with mixed methods
+-----------------------------------------------------------------------
+Each installment can use:
+  - Different payment method
+  - Different due date
+  - Pay now or pay later
+  - Mix Cash, GCash, PDO, Credit freely
+
+================================================================================
+  IMPLEMENTATION CHECKLIST
+================================================================================
+
+DATABASE:
+  ☐ Add is_staggered column to sales table
+  ☐ Add primary_method column to sales table
+  ☐ Create payment_installments table
+  ☐ Modify payments table (add installment_id)
+
+BACKEND:
+  ☐ Create PaymentInstallment model
+  ☐ Update Sale model (add relationships)
+  ☐ Create InstallmentService
+  ☐ Update SaleController (add staggered logic)
+  ☐ Create InstallmentController
+  ☐ Add verification workflow for GCash
+  ☐ Add approval workflow for PDO
+
+FRONTEND - ADMIN:
+  ☐ Update POS checkout page
+  ☐ Add "Enable Staggered Payment" checkbox
+  ☐ Create installment setup modal
+  ☐ Update Orders/Sales page
+  ☐ Add payment schedule viewer
+  ☐ Add verification buttons for GCash
+  ☐ Add approval buttons for PDO
+  ☐ Update Payments Management page
+
+FRONTEND - CUSTOMER:
+  ☐ Update customer checkout page
+  ☐ Add "Pay in Installments" option
+  ☐ Create installment setup for customers
+  ☐ Update My Orders page
+  ☐ Add payment schedule viewer
+  ☐ Add "Pay Now" functionality
+  ☐ Add GCash proof upload
+
+TESTING:
+  ☐ Test full payment (all methods)
+  ☐ Test staggered payment (mixed methods)
+  ☐ Test GCash verification flow
+  ☐ Test PDO approval flow
+  ☐ Test partial payments
+  ☐ Test payment recording
+  ☐ Test customer portal
+
+================================================================================
+  FINAL NOTES
+================================================================================
+
+This design is SIMPLER and more TRADITIONAL than the previous redesign.
+
+Key Advantages:
+  ✅ Familiar payment methods (Cash, GCash, PDO, Credit)
+  ✅ Simple checkbox for staggered option
+  ✅ Clear full payment vs staggered distinction
+  ✅ Easy to understand for users
+  ✅ Flexible enough for your scenarios
+  ✅ Same experience for admin and customer
+
+This approach:
+  - Keeps the familiar payment method concept
+  - Adds flexibility through staggered option
+  - Handles all your mixed payment scenarios
+  - Simpler to implement than complete redesign
+  - Easier for users to understand
+
+Perfect balance of simplicity and flexibility! 🎯
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
+
+================================================================================
+  ADDITIONAL CLARIFICATIONS
+================================================================================
+
+QUESTION 1: Does staggered payment need admin/superadmin confirmation?
+-----------------------------------------------------------------------
+
+OPTION A: No Confirmation Needed (RECOMMENDED) ⭐
+  - Staff can create staggered payment immediately
+  - Order is created right away
+  - Faster checkout process
+  - Better customer experience
+  
+  When to use:
+    ✅ Trusted staff
+    ✅ Regular customers
+    ✅ Small to medium orders
+    ✅ Fast-paced business
+  
+  Example:
+    Staff: Creates staggered payment for ₱100k order
+    System: Order created immediately
+    Customer: Gets order confirmation
+    Admin: Can review later in reports
+
+OPTION B: Requires Confirmation (More Control)
+  - Staff creates staggered payment request
+  - Admin/Superadmin must approve first
+  - Order created only after approval
+  - Slower but more controlled
+  
+  When to use:
+    ✅ Large orders (₱50k+)
+    ✅ New customers
+    ✅ High-risk scenarios
+    ✅ Strict financial control needed
+  
+  Example:
+    Staff: Creates staggered payment request
+    System: Order status = "Pending Approval"
+    Admin: Reviews and approves
+    System: Order created, customer notified
+
+OPTION C: Hybrid Approach (BEST BALANCE) ⭐⭐⭐
+  - Small amounts: Auto-approved
+  - Large amounts: Needs approval
+  - Configurable threshold
+  
+  Rules:
+    - Order < ₱50,000: Auto-approved
+    - Order ≥ ₱50,000: Needs admin approval
+    - PDO installments: Always need approval
+    - Credit installments: Need approval if > ₱20,000
+  
+  Example:
+    Order ₱30,000 staggered: ✅ Auto-approved
+    Order ₱80,000 staggered: ⏳ Needs approval
+    Order ₱100,000 with PDO: ⏳ Needs approval
+
+RECOMMENDATION: Use Option C (Hybrid)
+  - Best balance of speed and control
+  - Protects business from large risks
+  - Fast checkout for small orders
+  - Admin oversight for large orders
+
+Implementation:
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Settings > Payment Configuration                           │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Staggered Payment Approval Rules:                          │
+  │                                                             │
+  │  Auto-approve if:                                           │
+  │  • Order total < [₱50,000____]                             │
+  │  • Customer has good payment history                        │
+  │  • No PDO installments                                      │
+  │                                                             │
+  │  Require approval if:                                       │
+  │  • Order total ≥ [₱50,000____]                             │
+  │  • Contains PDO installments                                │
+  │  • Credit installment > [₱20,000____]                      │
+  │  • New customer (< 3 orders)                                │
+  │                                                             │
+  │  [Save Settings]                                            │
+  └─────────────────────────────────────────────────────────────┘
+
+QUESTION 2: Can use any payment method for full payment (not just Credit)?
+-----------------------------------------------------------------------
+
+ANSWER: ✅ YES! Any payment method can be used for full payment!
+
+CLARIFICATION:
+  - "Credit" is just ONE option for full payment
+  - You can use Cash, GCash, PDO, or Credit
+  - ALL methods support full payment
+  - "Credit" means "pay later" (deferred payment)
+
+FULL PAYMENT OPTIONS:
+-----------------------------------------------------------------------
+
+Option 1: Full Payment - CASH
+  Order: ₱100,000
+  Payment: ₱100,000 Cash (pay now)
+  Status: ✅ Paid immediately
+  
+  Use case: Customer has cash, wants to pay now
+
+Option 2: Full Payment - GCASH
+  Order: ₱100,000
+  Payment: ₱100,000 GCash (pay now)
+  Status: ⏳ Paid - Needs Verification
+  → After verification: ✅ Verified & Paid
+  
+  Use case: Customer prefers digital payment
+
+Option 3: Full Payment - PDO
+  Order: ₱100,000
+  Payment: ₱100,000 PDO (check due May 15)
+  Status: 🏦 Pending Approval
+  → After approval: 🏦 Approved - Awaiting Payment
+  → On May 15: ✅ Paid
+  
+  Use case: Corporate client, large order, credit terms
+
+Option 4: Full Payment - CREDIT (Pay Later)
+  Order: ₱100,000
+  Payment: ₱100,000 Credit (pay later)
+  Status: ⚠️ Not Paid - On Account
+  → When customer returns: ✅ Paid
+  
+  Use case: Trusted customer, will pay later
+
+ALL FOUR OPTIONS ARE VALID FOR FULL PAYMENT! ✅
+
+UPDATED CHECKOUT FLOW:
+-----------------------------------------------------------------------
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Payment                                                    │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Order Total: ₱100,000                                      │
+  │                                                             │
+  │  Payment Structure:                                         │
+  │  ( ) Full Payment - Pay complete amount now/later          │
+  │  ( ) Staggered Payment - Pay in installments               │
+  │                                                             │
+  │  ─────────────────────────────────────────────────────────  │
+  │                                                             │
+  │  If FULL PAYMENT selected:                                  │
+  │                                                             │
+  │  Choose Payment Method:                                     │
+  │  ( ) Cash - Pay ₱100,000 now                               │
+  │  ( ) GCash - Pay ₱100,000 now (needs verification)         │
+  │  ( ) PDO - Post-dated check for ₱100,000                   │
+  │  ( ) Credit - Pay ₱100,000 later                           │
+  │                                                             │
+  │  Amount: ₱100,000 (Full Payment)                           │
+  │                                                             │
+  │  [Complete Order]                                           │
+  └─────────────────────────────────────────────────────────────┘
+
+KEY POINT:
+  "Credit" (Pay Later) is NOT required for full payment!
+  It's just ONE of FOUR options for full payment.
+  
+  Customer can choose:
+    - Cash (pay now)
+    - GCash (pay now, verify later)
+    - PDO (pay on specific future date)
+    - Credit (pay whenever, no specific date)
+
+COMPARISON:
+-----------------------------------------------------------------------
+
+Full Payment - Cash:
+  ✅ Immediate payment
+  ✅ No verification needed
+  ✅ Order fulfilled right away
+  ❌ Customer needs cash on hand
+
+Full Payment - GCash:
+  ✅ Digital payment
+  ✅ Convenient for customer
+  ⚠️ Needs verification (takes time)
+  ✅ Order fulfilled after verification
+
+Full Payment - PDO:
+  ✅ Deferred payment with specific date
+  ✅ Backed by check (more secure)
+  ⚠️ Needs approval
+  ✅ Good for B2B, large orders
+
+Full Payment - Credit:
+  ✅ Deferred payment, no specific date
+  ✅ Flexible for customer
+  ⚠️ Higher risk for business
+  ✅ Good for trusted customers
+
+All are valid! Choose based on:
+  - Customer preference
+  - Business relationship
+  - Order amount
+  - Risk tolerance
+
+================================================================================
+  DECISION MATRIX: WHICH APPROACH TO USE?
+================================================================================
+
+FOR STAGGERED PAYMENT APPROVAL:
+-----------------------------------------------------------------------
+
+Choose NO APPROVAL if:
+  ✅ You trust your staff completely
+  ✅ Most orders are small (< ₱50k)
+  ✅ You have regular, trusted customers
+  ✅ You want fast checkout
+  ✅ You review reports daily anyway
+
+Choose APPROVAL REQUIRED if:
+  ✅ You have new/untrained staff
+  ✅ Many large orders (> ₱50k)
+  ✅ Many new customers
+  ✅ You want tight financial control
+  ✅ You've had payment issues before
+
+Choose HYBRID (RECOMMENDED) if:
+  ✅ Mix of small and large orders
+  ✅ Mix of new and regular customers
+  ✅ Want balance of speed and control
+  ✅ Want to protect against large risks
+  ✅ Most businesses (this is the sweet spot!)
+
+IMPLEMENTATION EXAMPLES:
+-----------------------------------------------------------------------
+
+Example 1: Small Retail Store
+  - Most orders: ₱5,000 - ₱20,000
+  - Regular customers
+  - Trusted staff
+  
+  Recommendation: NO APPROVAL
+  - Fast checkout
+  - Staff can handle it
+  - Review reports weekly
+
+Example 2: B2B Supplier
+  - Most orders: ₱50,000 - ₱500,000
+  - Mix of new and regular clients
+  - Large amounts at risk
+  
+  Recommendation: APPROVAL REQUIRED
+  - Protect business
+  - Review each large order
+  - Verify customer credit
+
+Example 3: General Store (Your Case)
+  - Orders range: ₱1,000 - ₱100,000
+  - Mix of walk-in and regular customers
+  - Some staff experienced, some new
+  
+  Recommendation: HYBRID ⭐
+  - Small orders (< ₱50k): Auto-approve
+  - Large orders (≥ ₱50k): Need approval
+  - PDO always needs approval
+  - Best balance!
+
+CONFIGURATION EXAMPLE:
+-----------------------------------------------------------------------
+
+  Settings for Hybrid Approach:
+  
+  Auto-Approve Staggered Payment if:
+    ✓ Order total < ₱50,000
+    ✓ Customer has 3+ completed orders
+    ✓ Customer has no overdue payments
+    ✓ No PDO installments in schedule
+    ✓ Total credit installments < ₱20,000
+  
+  Require Approval if:
+    ✓ Order total ≥ ₱50,000
+    ✓ New customer (< 3 orders)
+    ✓ Customer has overdue payments
+    ✓ Contains PDO installments
+    ✓ Total credit installments ≥ ₱20,000
+    ✓ Staff manually requests approval
+  
+  Notification:
+    ✓ Email admin when approval needed
+    ✓ SMS for urgent approvals (> ₱100k)
+    ✓ Dashboard notification badge
+
+WORKFLOW WITH HYBRID APPROACH:
+-----------------------------------------------------------------------
+
+Scenario 1: Small Order (Auto-Approved)
+  1. Customer orders ₱30,000
+  2. Staff creates staggered payment
+  3. System checks rules: ✅ Auto-approve
+  4. Order created immediately
+  5. Customer gets confirmation
+  6. Admin sees in reports (no action needed)
+
+Scenario 2: Large Order (Needs Approval)
+  1. Customer orders ₱80,000
+  2. Staff creates staggered payment
+  3. System checks rules: ⚠️ Needs approval
+  4. Order status: "Pending Approval"
+  5. Admin gets notification
+  6. Admin reviews and approves
+  7. Order created, customer notified
+
+Scenario 3: PDO Installment (Always Needs Approval)
+  1. Customer orders ₱40,000
+  2. Staff creates staggered with PDO installment
+  3. System checks rules: ⚠️ Needs approval (has PDO)
+  4. Order status: "Pending Approval"
+  5. Admin reviews PDO check + customer credit
+  6. Admin approves
+  7. Order created
+
+FINAL RECOMMENDATION:
+-----------------------------------------------------------------------
+
+🎯 USE HYBRID APPROACH with these settings:
+
+Auto-Approve:
+  • Orders < ₱50,000
+  • No PDO installments
+  • Regular customers only
+
+Require Approval:
+  • Orders ≥ ₱50,000
+  • Any PDO installments
+  • New customers
+  • Credit installments > ₱20,000
+
+This gives you:
+  ✅ Fast checkout for 80% of orders
+  ✅ Protection for high-risk orders
+  ✅ Control over PDO and large credits
+  ✅ Happy customers (no delays for small orders)
+  ✅ Peace of mind (large orders reviewed)
+
+Perfect balance! 🎯
+
+================================================================================
+  UPDATED SUMMARY WITH CLARIFICATIONS
+================================================================================
+
+PAYMENT METHODS (All support full payment!):
+-----------------------------------------------------------------------
+1. Cash - Pay now, immediate
+2. GCash - Pay now, needs verification
+3. PDO - Pay on specific future date (with check)
+4. Credit - Pay later, no specific date
+
+ALL FOUR can be used for:
+  ✅ Full payment (pay complete amount)
+  ✅ Staggered payment (as installment method)
+
+PAYMENT STRUCTURE:
+-----------------------------------------------------------------------
+1. Full Payment
+   - Pay complete amount
+   - Choose ONE method (Cash, GCash, PDO, or Credit)
+   - Order completed based on method chosen
+
+2. Staggered Payment
+   - Pay in installments
+   - Each installment can use different method
+   - Mix Cash, GCash, PDO, Credit freely
+
+STAGGERED PAYMENT APPROVAL:
+-----------------------------------------------------------------------
+RECOMMENDED: Hybrid Approach
+
+Auto-Approve if:
+  • Order < ₱50,000
+  • No PDO installments
+  • Regular customer
+
+Require Approval if:
+  • Order ≥ ₱50,000
+  • Has PDO installments
+  • New customer
+  • Large credit amounts
+
+EXAMPLES:
+-----------------------------------------------------------------------
+
+Example 1: Full Payment with Cash
+  Order: ₱100,000
+  Payment: Cash (full amount)
+  Status: ✅ Paid immediately
+
+Example 2: Full Payment with Credit
+  Order: ₱100,000
+  Payment: Credit (pay later)
+  Status: ⚠️ Not Paid - On Account
+
+Example 3: Staggered with Mixed Methods
+  Order: ₱100,000
+  ☑ Enable Staggered Payment
+  - Installment 1: ₱40,000 Cash (pay now)
+  - Installment 2: ₱30,000 GCash (pay later)
+  - Installment 3: ₱30,000 Credit (pay anytime)
+  
+  If order < ₱50k: ✅ Auto-approved
+  If order ≥ ₱50k: ⏳ Needs approval
+
+KEY TAKEAWAYS:
+-----------------------------------------------------------------------
+✅ Any payment method works for full payment
+✅ Credit is just one option, not required
+✅ Staggered payment is optional (checkbox)
+✅ Use hybrid approval for best balance
+✅ Same options for admin and customer
+✅ GCash always needs verification
+✅ PDO always needs approval
+
+This design is:
+  • Simple to understand
+  • Flexible for all scenarios
+  • Secure with approval rules
+  • Fast for small orders
+  • Controlled for large orders
+
+Perfect! 🎉
+
+================================================================================
+  END OF CLARIFICATIONS
+================================================================================

@@ -1,10 +1,330 @@
 ================================================================================
-  PARTIAL PAYMENT & PAYMENT MANAGEMENT — IMPLEMENTATION INSIGHTS (v2)
+  PARTIAL PAYMENT & PAYMENT MANAGEMENT — IMPLEMENTATION INSIGHTS (v3)
 ================================================================================
-  Date: April 20, 2026 (Revised)
+  Date: April 24, 2026 (Updated with Staggered & PDO)
   System: KJ Price Mill POS + Order Management
 ================================================================================
 
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    QUICK REFERENCE: ALL CHANGES SUMMARY                  ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+PAYMENT SYSTEM FEATURES:
+  1. ✓ Partial Payments (ad-hoc, any payment method)
+  2. ✓ Payment Verification & Management (verify/hold/cancel)
+  3. ✓ Staggered Payment Plans (scheduled installments with late fees)
+  4. ✓ PDO - Post-Dated Orders (bank payments, post-dated checks)
+  5. ✓ Integration scenarios (combine different payment types)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DATABASE CHANGES (4 MIGRATIONS TOTAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MIGRATION 1: Partial Payment Support
+  File: 2026_04_21_000001_add_partial_payment_support.php
+  
+  NEW TABLE: payments
+    - Tracks every individual payment transaction
+    - Columns: id, sale_id, amount, payment_method, reference_number,
+               payment_proof, status, hold_reason, cancel_reason, notes,
+               received_by, verified_by, verified_at, paid_at
+    - Status: pending, verified, on_hold, cancelled
+  
+  MODIFY TABLE: sales
+    - Add: amount_paid (decimal 12,2 default 0)
+    - Add: balance_remaining (decimal 12,2 default 0)
+    - Update payment_status values: 'paid', 'not_paid', 'partial' (NEW)
+
+MIGRATION 2: Staggered Payment Plans
+  File: 2026_04_22_000001_create_payment_plans_tables.php
+  
+  NEW TABLE: payment_plans
+    - Stores payment plan structure
+    - Columns: id, sale_id, plan_type, total_amount, down_payment,
+               installment_count, installment_amount, frequency,
+               start_date, end_date, late_fee_enabled, late_fee_amount,
+               late_fee_percentage, grace_period_days, status, notes,
+               created_by
+    - Status: active, completed, cancelled, defaulted
+  
+  NEW TABLE: payment_plan_installments
+    - Individual installment records
+    - Columns: id, payment_plan_id, installment_number, amount_due,
+               amount_paid, due_date, paid_date, status, days_overdue,
+               late_fee_charged, notes
+    - Status: pending, paid, overdue, partial
+  
+  MODIFY TABLE: sales
+    - Add: has_payment_plan (boolean default false)
+    - Add: payment_plan_type (varchar nullable: 'staggered', 'pdo')
+
+MIGRATION 3: Post-Dated Orders (PDO)
+  File: 2026_04_23_000001_create_post_dated_orders_table.php
+  
+  NEW TABLE: post_dated_orders
+    - PDO records with check/bank details
+    - Columns: id, sale_id, payment_type, promised_amount, promised_date,
+               check_number, check_bank, check_image, bank_reference,
+               credit_terms, status, approval_required, approved_by,
+               approved_at, fulfilled_date, fulfillment_method,
+               fulfillment_reference, bounce_reason, extension_count,
+               original_date, notes, created_by
+    - Status: pending, approved, fulfilled, overdue, bounced, cancelled
+  
+  MODIFY TABLE: sales
+    - Add: is_pdo (boolean default false)
+    - Add: pdo_status (varchar nullable)
+    - Add: fulfillment_status (varchar: 'pending', 'ready', 'fulfilled')
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKEND CHANGES (Laravel)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NEW MODELS (5):
+  ☐ app/Models/Payment.php
+  ☐ app/Models/PaymentPlan.php
+  ☐ app/Models/PaymentPlanInstallment.php
+  ☐ app/Models/PostDatedOrder.php
+
+NEW SERVICES (2):
+  ☐ app/Services/PaymentPlanService.php
+  ☐ app/Services/PostDatedOrderService.php
+
+NEW CONTROLLERS (3):
+  ☐ app/Http/Controllers/PaymentController.php
+  ☐ app/Http/Controllers/PaymentPlanController.php
+  ☐ app/Http/Controllers/PostDatedOrderController.php
+
+NEW RESOURCES (5):
+  ☐ app/Http/Resources/PaymentResource.php
+  ☐ app/Http/Resources/PaymentPlanResource.php
+  ☐ app/Http/Resources/PaymentPlanInstallmentResource.php
+  ☐ app/Http/Resources/PostDatedOrderResource.php
+
+MODIFIED FILES (6):
+  ☐ app/Models/Sale.php
+      → Add: amount_paid, balance_remaining, has_payment_plan,
+             payment_plan_type, is_pdo, pdo_status, fulfillment_status
+      → Add relationships: payments(), paymentPlan(), postDatedOrder()
+      → Add methods: isFullyPaid(), isPartiallyPaid(), isPDO(), canFulfill()
+  
+  ☐ app/Services/SaleService.php
+      → Modify: createOrder() for partial payment support
+      → Add: recordPayment(), verifyPayment(), holdPayment(),
+             cancelPayment(), getPaymentHistory(), getCustomerBalances(),
+             getAllOutstandingBalances()
+  
+  ☐ app/Http/Controllers/SaleController.php
+      → Modify: storeOrder() for partial amounts
+      → Add: recordPayment(), paymentHistory()
+  
+  ☐ app/Http/Controllers/CustomerController.php
+      → Add: balances() method
+  
+  ☐ app/Http/Resources/SaleResource.php
+      → Add: amount_paid, balance_remaining, payments_count,
+             verified_payments_total, has_pending_payments
+  
+  ☐ routes/api.php
+      → Add /sales/{id}/payment, /sales/{id}/payments
+      → Add /payments/* routes (index, verify, hold, cancel, show)
+      → Add /payment-plans/* routes
+      → Add /pdo/* routes
+      → Add /customers/{id}/balances
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FRONTEND CHANGES (React)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NEW PAGES (1):
+  ☐ src/pages/admin/Payments/PaymentsManagement.jsx
+      → UNIFIED payment management hub with 3 main tabs:
+      
+      TAB 1: Payment Transactions
+        • All individual payment records (partial payments)
+        • Stats: Total Payments, Pending, On Hold, Verified, Cancelled
+        • Filters: status, method, date range, customer
+        • Actions: verify, hold, cancel payments
+        • View proof images, payment details
+      
+      TAB 2: Payment Plans (Staggered)
+        • All staggered payment plans with installments
+        • Stats: Active Plans, Overdue Payments, Completed, Total Receivable
+        • Filters: status, customer, due date range
+        • View installment schedules, record payments
+        • Late fee tracking, overdue alerts
+      
+      TAB 3: Post-Dated Orders (PDO)
+        • All PDO records (checks, bank transfers, credit terms)
+        • Stats: Pending Approval, Approved, Overdue, Total PDO Value
+        • Filters: status, payment type, date range, customer
+        • Actions: approve, fulfill, extend, bounce, cancel
+        • Check image viewer, credit history
+
+NEW COMPONENTS (6):
+  ☐ src/components/payments/PaymentTransactionsTab.jsx
+  ☐ src/components/payments/PaymentPlansTab.jsx
+  ☐ src/components/payments/PDOTab.jsx
+  ☐ src/components/payments/PaymentPlanSetupModal.jsx
+  ☐ src/components/payments/PDOSetupModal.jsx
+  ☐ src/components/payments/CheckImageViewer.jsx
+
+MODIFIED FILES (7):
+  ☐ src/pages/shared/PointOfSale/PointOfSale.jsx
+      → Cash: allow amount < total (partial payment)
+      → GCash: add amount field, allow partial
+      → COD: add optional down payment
+      → Add: Payment Plan Setup option (checkbox/toggle)
+      → Add: PDO payment method option
+      → Require customer for partial/plan/PDO payments
+      → Receipt: show balance info, payment plan details
+  
+  ☐ src/pages/admin/Sales/Sales.jsx
+      → Add 'partial' payment status filter
+      → Show balance info in DataTable (₱500 / ₱1,000)
+      → Show payment plan badge (📅)
+      → Show PDO badge (🏦) with status colors
+      → Update Record Payment modal
+      → Show payment history in view modal
+      → Link to Payments/PaymentPlans/PDO pages
+  
+  ☐ src/pages/admin/Partners/Customer.jsx
+      → Add "Balances" action button (💰)
+      → Add Customer Balance Modal with tabs:
+         • Outstanding Orders
+         • Payment History
+         • Payment Plans
+         • PDO History
+      → Add receivables stats cards
+      → Add PDO credit score/rating display
+      → Add PDO eligibility badge
+  
+  ☐ src/pages/admin/Dashboard/Dashboard.jsx
+      → Add "Total Receivables" stat card
+      → Add "PDOs Pending Approval" widget
+      → Add "Overdue PDO Payments" widget
+      → Add "PDO Payment Calendar" widget
+  
+  ☐ src/components/layout/Sidebar.jsx
+      → Add "Payments" menu item (single entry)
+      → Badge: shows total of (pending payments + pending approvals)
+      → Route: /admin/payments (opens with appropriate tab)
+  
+  ☐ src/router.jsx
+      → Add /admin/payments route (single route)
+      → Optional query params: ?tab=transactions|plans|pdo
+  
+  ☐ src/api/index.js
+      → Add: recordPayment(), getPayments(), verifyPayment(),
+             holdPayment(), cancelPayment(), getCustomerBalances()
+      → Add: createPaymentPlan(), getPaymentPlans(), recordInstallmentPayment()
+      → Add: createPDO(), approvePDO(), fulfillPDO(), extendPDO(),
+             bouncePDO(), cancelPDO()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY FEATURES BY PAYMENT TYPE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. PARTIAL PAYMENTS (Ad-hoc)
+   ✓ All 4 payment methods support partial (cash, gcash, cod, pay_later)
+   ✓ Customer pays any amount, anytime
+   ✓ Multiple payments with different methods
+   ✓ Payment verification workflow (pending → verified)
+   ✓ Hold/cancel suspicious payments
+   ✓ Balance tracking per order
+
+2. STAGGERED PAYMENT PLANS (Scheduled Installments)
+   ✓ Fixed payment schedule with due dates
+   ✓ Down payment + equal/custom installments
+   ✓ Frequency: weekly, bi-weekly, monthly
+   ✓ Late fee calculation (fixed or percentage)
+   ✓ Grace period before late fees
+   ✓ Overdue tracking and reminders
+   ✓ Partial installment payments allowed
+   ✓ Early payment option
+
+3. PDO - POST-DATED ORDERS (Bank Payments)
+   ✓ Three types: post-dated check, bank transfer, credit terms
+   ✓ Approval workflow (pending → approved → fulfilled)
+   ✓ Check image upload and viewing
+   ✓ Order fulfillment before payment (credit terms)
+   ✓ Date extension (max 2 times)
+   ✓ Check bounce handling
+   ✓ Customer credit rating system
+   ✓ Risk assessment and auto-approval rules
+   ✓ Overdue tracking and reminders
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPLEMENTATION PHASES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PHASE 1: Core Partial Payments (MVP)
+  ✦ Migration 1 + Payment model
+  ✦ Modify Sale model + SaleService
+  ✦ POS: allow partial amounts for all methods
+  ✦ Basic payment recording
+
+PHASE 2: Payments Management Page
+  ✦ PaymentController + PaymentResource
+  ✦ NEW PAGE: Payments.jsx (verification hub)
+  ✦ Sales page: partial filter + balance display
+  ✦ Customer page: balances view
+
+PHASE 3: Staggered Payment Plans
+  ✦ Migration 2 + PaymentPlan models
+  ✦ PaymentPlanService + PaymentPlanController
+  ✦ POS: Payment Plan Setup modal
+  ✦ NEW PAGE: PaymentPlans.jsx
+  ✦ Late fee calculation + overdue tracking
+
+PHASE 4: PDO (Post-Dated Orders)
+  ✦ Migration 3 + PostDatedOrder model
+  ✦ PostDatedOrderService + PostDatedOrderController
+  ✦ POS: PDO payment option
+  ✦ NEW PAGE: PDOManagement.jsx
+  ✦ Approval workflow + check bounce handling
+
+PHASE 5: Integration & Polish
+  ✦ Combined scenarios (PDO + down payment, etc.)
+  ✦ Customer credit rating system
+  ✦ Comprehensive reports
+  ✦ Automated reminders
+  ✦ Dashboard widgets
+  ✦ Customer portal updates
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BUSINESS RULES SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PARTIAL PAYMENTS:
+  • Require customer for partial payments (track balance)
+  • Cash payments: auto-verified
+  • GCash payments: pending → admin verifies
+  • Payment amount must be > 0 and ≤ balance_remaining
+  • Can mix payment methods (cash + gcash + cash)
+
+STAGGERED PLANS:
+  • Require customer (cannot be anonymous)
+  • Minimum down payment: 10% (configurable)
+  • Maximum installments: 12 (configurable)
+  • Late fees after grace period (3 days default)
+  • Can pay installments early (no penalty)
+  • Partial installment payments allowed
+
+PDO:
+  • Require customer + admin approval
+  • Minimum order: ₱5,000 (configurable)
+  • Maximum period: 90 days (configurable)
+  • Check must be dated 1+ days in future
+  • Maximum 2 date extensions
+  • After 3 bounced checks: customer blocked
+  • Credit limits based on payment history
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                         END OF QUICK REFERENCE                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+================================================================================
 TABLE OF CONTENTS
   1. REVISED CONCEPT OVERVIEW
   2. DATABASE CHANGES (New Tables & Migrations)
@@ -15,6 +335,9 @@ TABLE OF CONTENTS
   7. RECOMMENDED UI/UX PLACEMENT
   8. BUSINESS RULES & EDGE CASES
   9. IMPLEMENTATION PRIORITY / PHASES
+  10. STAGGERED PAYMENT IMPLEMENTATION
+  11. PDO (POST-DATED ORDER) IMPLEMENTATION
+  12. INTEGRATION: STAGGERED + PDO + PARTIAL PAYMENTS
 
 ================================================================================
   1. REVISED CONCEPT OVERVIEW
@@ -397,70 +720,148 @@ TABLE OF CONTENTS
      - Walk-in full payment = OK without customer
      - Walk-in partial payment = MUST select/create customer (to track balance)
 
-  B. ★★★ NEW PAGE: PAYMENTS PAGE (Payment Verification & Management)
+  B. ★★★ NEW PAGE: UNIFIED PAYMENTS MANAGEMENT (Single Page with Tabs)
   -----------------------------------------------------------------------
-  File: react_frontend/src/pages/admin/Payments/Payments.jsx (NEW)
+  File: react_frontend/src/pages/admin/Payments/PaymentsManagement.jsx (NEW)
 
-  This is the CENTRAL HUB for managing all payment transactions.
-
+  This is the CENTRAL HUB for ALL payment-related management.
+  
   PURPOSE:
+    - Manage all payment types in one place
     - Verify GCash payments (check if money actually arrived)
-    - Hold suspicious payments for review
-    - Cancel/reject fake or incorrect payments
-    - See all payment activity across all orders
+    - Manage staggered payment plans and installments
+    - Approve and track post-dated orders (PDO)
+    - Unified view of all receivables and payment activity
 
-  PAGE LAYOUT:
+  PAGE STRUCTURE:
 
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  📊 Stats Cards                                                    │
+  │  � Payments Management                                            │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  📊 Overall Stats (All Payment Types Combined)                     │
   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐│
-  │  │Total     │ │Pending   │ │On Hold   │ │Verified  │ │Cancelled ││
-  │  │Payments  │ │Payments  │ │Payments  │ │Today     │ │This Month││
-  │  │₱125,000  │ │12        │ │3         │ │45        │ │2         ││
+  │  │Total     │ │Pending   │ │Active    │ │Overdue   │ │This Month││
+  │  │Receivable│ │Actions   │ │Plans     │ │Items     │ │Collected ││
+  │  │₱450,000  │ │15        │ │12        │ │8         │ │₱125,000  ││
   │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘│
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  TABS: [Payment Transactions] [Payment Plans] [Post-Dated Orders] │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │                                                                     │
+  │  [Tab content renders here based on active tab]                    │
+  │                                                                     │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  ═══════════════════════════════════════════════════════════════════════
+  TAB 1: PAYMENT TRANSACTIONS (Partial Payments)
+  ═══════════════════════════════════════════════════════════════════════
+  
+  Component: src/components/payments/PaymentTransactionsTab.jsx
+  
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  📊 Payment Transactions Stats                                     │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+  │  │Pending   │ │On Hold   │ │Verified  │ │Cancelled │             │
+  │  │Payments  │ │Payments  │ │Today     │ │This Month│             │
+  │  │12        │ │3         │ │45        │ │2         │             │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │
   ├─────────────────────────────────────────────────────────────────────┤
   │  Filters: [Status ▼] [Method ▼] [Date Range] [Customer Search]   │
   ├─────────────────────────────────────────────────────────────────────┤
-  │  Tabs: All | Pending | On Hold | Verified | Cancelled             │
+  │  Sub-tabs: All | Pending | On Hold | Verified | Cancelled         │
   ├─────────────────────────────────────────────────────────────────────┤
-  │                                                                    │
-  │  DataTable:                                                        │
+  │  DataTable:                                                         │
   │  ┌────────┬────────────┬──────────┬────────┬────────┬───────────┐ │
   │  │Date    │Order       │Customer  │Amount  │Method  │Status     │ │
   │  ├────────┼────────────┼──────────┼────────┼────────┼───────────┤ │
-  │  │Apr 20  │ORD-...-045 │Juan Cruz │₱500    │GCash   │⏳ Pending │ │
+  │  │Apr 24  │ORD-...-045 │Juan Cruz │₱500    │GCash   │⏳ Pending │ │
   │  │        │            │          │        │        │[✓][⏸][✕] │ │
   │  ├────────┼────────────┼──────────┼────────┼────────┼───────────┤ │
-  │  │Apr 20  │ORD-...-044 │Maria S.  │₱1,000  │Cash    │✅ Verified│ │
-  │  ├────────┼────────────┼──────────┼────────┼────────┼───────────┤ │
-  │  │Apr 19  │ORD-...-043 │Pedro R.  │₱300    │GCash   │⚠️ On Hold│ │
-  │  │        │            │          │        │        │[✓][✕]    │ │
+  │  │Apr 24  │ORD-...-044 │Maria S.  │₱1,000  │Cash    │✅ Verified│ │
   │  └────────┴────────────┴──────────┴────────┴────────┴───────────┘ │
-  │                                                                    │
-  │  Action buttons per row:                                           │
-  │    [✓] Verify  — confirm payment is legit                         │
-  │    [⏸] Hold    — flag for review (enter reason)                   │
-  │    [✕] Cancel  — reject payment (enter reason, reverses balance)  │
-  │    [👁] View   — see proof images, reference, details             │
-  │                                                                    │
+  │                                                                     │
+  │  Actions: [✓] Verify  [⏸] Hold  [✕] Cancel  [👁] View            │
   └─────────────────────────────────────────────────────────────────────┘
 
-  View Payment Modal:
-    - Payment details: amount, method, date, who recorded it
-    - If GCash: reference number, proof image(s) with zoom
-    - Order info: transaction_id, customer, order total, current balance
-    - Payment status timeline
-    - Action buttons: Verify / Hold / Cancel
+  ═══════════════════════════════════════════════════════════════════════
+  TAB 2: PAYMENT PLANS (Staggered Installments)
+  ═══════════════════════════════════════════════════════════════════════
+  
+  Component: src/components/payments/PaymentPlansTab.jsx
+  
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  📅 Payment Plans Stats                                            │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+  │  │Active    │ │Overdue   │ │Completed │ │Total     │             │
+  │  │Plans     │ │Payments  │ │This Month│ │Receivable│             │
+  │  │15        │ │8         │ │5         │ │₱125,000  │             │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Filters: [Status ▼] [Customer Search] [Due Date Range]           │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Sub-tabs: All | Active | Overdue | Completed                      │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  DataTable:                                                         │
+  │  ┌────────┬──────────┬──────────┬────────┬────────┬──────────┐   │
+  │  │Order   │Customer  │Total     │Paid    │Balance │Next Due  │   │
+  │  ├────────┼──────────┼──────────┼────────┼────────┼──────────┤   │
+  │  │ORD-045 │Juan Cruz │₱10,000   │₱4,000  │₱6,000  │May 20    │   │
+  │  │        │          │4/8 paid  │        │        │[Record]  │   │
+  │  ├────────┼──────────┼──────────┼────────┼────────┼──────────┤   │
+  │  │ORD-043 │Maria S.  │₱8,000    │₱2,000  │₱6,000  │⚠️ Apr 15│   │
+  │  │        │          │1/4 paid  │        │        │OVERDUE   │   │
+  │  └────────┴──────────┴──────────┴────────┴────────┴──────────┘   │
+  │                                                                     │
+  │  Actions: [Record Payment] [View Schedule] [Cancel Plan]           │
+  └─────────────────────────────────────────────────────────────────────┘
 
-  Hold Modal:
-    - Reason input (required): "Reference not matching", "No GCash received",
-      "Suspicious proof image", custom text
-    - Confirm button
+  ═══════════════════════════════════════════════════════════════════════
+  TAB 3: POST-DATED ORDERS (PDO)
+  ═══════════════════════════════════════════════════════════════════════
+  
+  Component: src/components/payments/PDOTab.jsx
+  
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  🏦 Post-Dated Orders Stats                                        │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+  │  │Pending   │ │Approved  │ │Overdue   │ │Total PDO │             │
+  │  │Approval  │ │Orders    │ │Payments  │ │Value     │             │
+  │  │5         │ │12        │ │3         │ │₱450,000  │             │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘             │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Filters: [Status ▼] [Payment Type ▼] [Date Range] [Customer]     │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Sub-tabs: All | Pending Approval | Approved | Overdue | Fulfilled │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  DataTable:                                                         │
+  │  ┌────────┬──────────┬────────┬──────────┬────────┬──────────┐   │
+  │  │Order   │Customer  │Amount  │Type      │Due Date│Status    │   │
+  │  ├────────┼──────────┼────────┼──────────┼────────┼──────────┤   │
+  │  │ORD-050 │ABC Corp  │₱50,000 │PDC       │May 15  │⏳ Pending│   │
+  │  │        │          │        │Check#123 │        │[✓][✕]   │   │
+  │  ├────────┼──────────┼────────┼──────────┼────────┼──────────┤   │
+  │  │ORD-048 │Juan Cruz │₱20,000 │Bank      │May 10  │✅ Approved│   │
+  │  │        │          │        │Transfer  │        │[Fulfill] │   │
+  │  └────────┴──────────┴────────┴──────────┴────────┴──────────┘   │
+  │                                                                     │
+  │  Actions: [✓] Approve [Fulfill] [Extend] [Bounce] [✕] Cancel      │
+  └─────────────────────────────────────────────────────────────────────┘
 
-  Cancel Modal:
-    - Reason input (required)
-    - Warning: "This will add ₱500 back to the order's balance"
-    - Confirm button
+  ═══════════════════════════════════════════════════════════════════════
+  SHARED MODALS (Used across all tabs)
+  ═══════════════════════════════════════════════════════════════════════
+  
+  1. View Payment Details Modal
+  2. Verify Payment Modal
+  3. Hold Payment Modal
+  4. Cancel Payment Modal
+  5. View Payment Plan Schedule Modal
+  6. Record Installment Payment Modal
+  7. PDO Approval Modal
+  8. PDO Fulfill Modal
+  9. PDO Extend Date Modal
+  10. PDO Bounce Check Modal
+  11. Check Image Viewer Modal
 
   C. SALES PAGE — Updated for Partial Payments
   -----------------------------------------------------------------------
@@ -538,18 +939,25 @@ TABLE OF CONTENTS
   File: react_frontend/src/components/layout/Sidebar.jsx (or similar)
 
   Changes:
-    - Add "Payments" menu item under Sales section
+    - Add single "Payments" menu item under Sales section
     - Icon: CreditCard or Banknote
     - Route: /admin/payments
-    - Badge: number of pending payments needing verification
+    - Badge: combined count (pending payments + pending PDO approvals + overdue items)
+    - Clicking opens the unified Payments Management page
+    - Default tab can be set based on badge priority (e.g., if PDO approvals pending, open PDO tab)
 
   G. ROUTER
   -----------------------------------------------------------------------
   File: react_frontend/src/router.jsx (or App.jsx / routes config)
 
   Changes:
-    - Add route: /admin/payments → Payments component
+    - Add single route: /admin/payments → PaymentsManagement component
+    - Optional query parameter: ?tab=transactions|plans|pdo
     - Accessible by: super_admin, admin, staff
+    - Examples:
+      • /admin/payments (default: opens first tab)
+      • /admin/payments?tab=plans (opens Payment Plans tab)
+      • /admin/payments?tab=pdo (opens PDO tab)
 
 ================================================================================
   5. ROLE-BASED ACCESS & PERMISSIONS
@@ -802,4 +1210,1208 @@ TABLE OF CONTENTS
 
 ================================================================================
   END OF DOCUMENT
+================================================================================
+
+================================================================================
+  10. STAGGERED PAYMENT IMPLEMENTATION
+================================================================================
+
+  CONCEPT OVERVIEW:
+  -----------------------------------------------------------------------
+  Staggered payment is a structured payment plan where the customer and
+  business agree on a FIXED SCHEDULE of payments over time. Unlike regular
+  partial payments (which are ad-hoc), staggered payments have:
+  
+  - Predetermined payment amounts per installment
+  - Fixed due dates for each installment
+  - Optional down payment requirement
+  - Late payment tracking and penalties (optional)
+  - Automatic reminders before due dates
+
+  Example Staggered Payment Plan:
+    Order Total: ₱10,000
+    Down Payment: ₱2,000 (20%)
+    Remaining: ₱8,000 in 4 monthly installments of ₱2,000 each
+    
+    Schedule:
+    • Down Payment: ₱2,000 — Due: Apr 20, 2026 (order date)
+    • Installment 1: ₱2,000 — Due: May 20, 2026
+    • Installment 2: ₱2,000 — Due: Jun 20, 2026
+    • Installment 3: ₱2,000 — Due: Jul 20, 2026
+    • Installment 4: ₱2,000 — Due: Aug 20, 2026
+
+  KEY DIFFERENCES FROM REGULAR PARTIAL PAYMENTS:
+  -----------------------------------------------------------------------
+  Regular Partial:
+    - Customer pays whenever they want
+    - No fixed schedule
+    - No due dates
+    - No late fees
+    - Amount per payment varies
+
+  Staggered Payment:
+    - Fixed schedule agreed upfront
+    - Each installment has a due date
+    - Late payment tracking
+    - Optional late fees/penalties
+    - Fixed amount per installment (or custom per installment)
+
+  DATABASE CHANGES FOR STAGGERED PAYMENTS:
+  -----------------------------------------------------------------------
+  
+  A. NEW TABLE: `payment_plans` (stores the payment plan structure)
+  -----------------------------------------------------------------------
+  | Column                | Type             | Notes                     |
+  |-----------------------|------------------|---------------------------|
+  | id                    | bigint PK        | Auto increment            |
+  | sale_id               | bigint FK        | → sales.id (one-to-one)   |
+  | plan_type             | varchar(20)      | 'staggered', 'custom'     |
+  | total_amount          | decimal(12,2)    | Order total               |
+  | down_payment          | decimal(12,2)    | Initial payment required  |
+  | installment_count     | int              | Number of installments    |
+  | installment_amount    | decimal(12,2)    | Amount per installment    |
+  |                       |                  | (if equal installments)   |
+  | frequency             | varchar(20)      | 'weekly', 'biweekly',     |
+  |                       |                  | 'monthly', 'custom'       |
+  | start_date            | date             | First installment due     |
+  | end_date              | date             | Last installment due      |
+  | late_fee_enabled      | boolean          | Charge late fees?         |
+  | late_fee_amount       | decimal(10,2)    | Fixed late fee per day    |
+  | late_fee_percentage   | decimal(5,2)     | Or % of installment       |
+  | grace_period_days     | int default 0    | Days before late fee      |
+  | status                | varchar(20)      | 'active', 'completed',    |
+  |                       |   default        | 'cancelled', 'defaulted'  |
+  |                       |   'active'       |                           |
+  | notes                 | text nullable    | Plan notes/terms          |
+  | created_by            | bigint FK        | → users.id                |
+  | created_at            | timestamp        |                           |
+  | updated_at            | timestamp        |                           |
+  -----------------------------------------------------------------------
+
+  B. NEW TABLE: `payment_plan_installments` (individual installments)
+  -----------------------------------------------------------------------
+  | Column                | Type             | Notes                     |
+  |-----------------------|------------------|---------------------------|
+  | id                    | bigint PK        | Auto increment            |
+  | payment_plan_id       | bigint FK        | → payment_plans.id        |
+  | installment_number    | int              | 1, 2, 3, etc.             |
+  | amount_due            | decimal(12,2)    | Expected payment amount   |
+  | amount_paid           | decimal(12,2)    | Actual amount paid        |
+  |                       |   default 0      |                           |
+  | due_date              | date             | When payment is due       |
+  | paid_date             | date nullable    | When actually paid        |
+  | status                | varchar(20)      | 'pending', 'paid',        |
+  |                       |   default        | 'overdue', 'partial'      |
+  |                       |   'pending'      |                           |
+  | days_overdue          | int default 0    | Calculated field          |
+  | late_fee_charged      | decimal(10,2)    | Late fee for this         |
+  |                       |   default 0      | installment               |
+  | notes                 | text nullable    | Installment notes         |
+  | created_at            | timestamp        |                           |
+  | updated_at            | timestamp        |                           |
+  -----------------------------------------------------------------------
+
+  C. MODIFY `sales` TABLE:
+  -----------------------------------------------------------------------
+  Add column:
+    - has_payment_plan (boolean default false)
+    - payment_plan_type (varchar nullable: 'staggered', 'pdo')
+
+  BACKEND CHANGES FOR STAGGERED PAYMENTS:
+  -----------------------------------------------------------------------
+  
+  A. NEW MODELS:
+  -----------------------------------------------------------------------
+  1. PaymentPlan (app/Models/PaymentPlan.php)
+     Relationships:
+       - belongsTo(Sale::class)
+       - hasMany(PaymentPlanInstallment::class, 'payment_plan_id')
+       - belongsTo(User::class, 'created_by')
+     
+     Methods:
+       - calculateInstallments() — auto-generate installment schedule
+       - getTotalPaid() — sum of all paid installments
+       - getRemainingBalance() — total - down_payment - total_paid
+       - getNextDueInstallment() — next unpaid installment
+       - getOverdueInstallments() — installments past due date
+       - isCompleted() — all installments paid
+       - isDefaulted() — too many overdue installments
+
+  2. PaymentPlanInstallment (app/Models/PaymentPlanInstallment.php)
+     Relationships:
+       - belongsTo(PaymentPlan::class)
+     
+     Methods:
+       - isOverdue() — due_date < today && status != 'paid'
+       - calculateLateFee() — based on days overdue + plan settings
+       - markAsPaid(amount, payment_id) — update status + link payment
+
+  B. MODIFY Sale MODEL:
+  -----------------------------------------------------------------------
+  Add relationship:
+    - paymentPlan() → hasOne(PaymentPlan::class)
+  
+  Add to fillable:
+    - has_payment_plan
+    - payment_plan_type
+
+  C. NEW SERVICE: PaymentPlanService (app/Services/PaymentPlanService.php)
+  -----------------------------------------------------------------------
+  Methods:
+  
+  1. createPaymentPlan(int $saleId, array $data)
+     - Validate: down_payment, installment_count, frequency, start_date
+     - Calculate installment amounts and due dates
+     - Create PaymentPlan record
+     - Generate PaymentPlanInstallment records
+     - Update sale: has_payment_plan = true, payment_plan_type = 'staggered'
+     - If down_payment > 0: create initial Payment record
+     - Return payment plan with installments
+  
+  2. recordInstallmentPayment(int $installmentId, array $paymentData)
+     - Find installment
+     - Validate amount <= (amount_due - amount_paid)
+     - Create Payment record linked to sale
+     - Update installment: amount_paid += amount
+     - If amount_paid >= amount_due: status = 'paid', paid_date = today
+     - Calculate late fee if overdue
+     - Update sale balance
+     - Check if all installments paid → mark plan as 'completed'
+  
+  3. getPaymentPlanSchedule(int $saleId)
+     - Return payment plan with all installments
+     - Include payment history per installment
+     - Calculate overdue amounts and late fees
+  
+  4. getOverdueInstallments()
+     - All installments where due_date < today && status != 'paid'
+     - Group by customer for reminder emails
+  
+  5. calculateLateFees(int $installmentId)
+     - Get installment + payment plan
+     - If late_fee_enabled && overdue
+     - Calculate: days_overdue = today - due_date - grace_period_days
+     - If days_overdue > 0:
+         - Fixed: late_fee = late_fee_amount * days_overdue
+         - Percentage: late_fee = amount_due * (late_fee_percentage/100) * days_overdue
+     - Update installment.late_fee_charged
+  
+  6. cancelPaymentPlan(int $planId, string $reason)
+     - Mark plan as 'cancelled'
+     - Handle remaining balance (convert to regular partial payment?)
+     - Audit log
+
+  D. NEW CONTROLLER: PaymentPlanController
+  -----------------------------------------------------------------------
+  File: app/Http/Controllers/PaymentPlanController.php
+  
+  Methods:
+    - index() — list all payment plans with filters
+    - store(Request $request) — create new payment plan for a sale
+    - show(int $id) — view payment plan details + schedule
+    - recordPayment(Request $request, int $installmentId)
+    - getOverdue() — list all overdue installments
+    - cancel(Request $request, int $id) — cancel payment plan
+  
+  E. ROUTES:
+  -----------------------------------------------------------------------
+  Add to routes/api.php:
+  
+  Route::prefix('payment-plans')->group(function () {
+      Route::get('/', [PaymentPlanController::class, 'index']);
+      Route::post('/', [PaymentPlanController::class, 'store']);
+      Route::get('/overdue', [PaymentPlanController::class, 'getOverdue']);
+      Route::get('/{id}', [PaymentPlanController::class, 'show']);
+      Route::post('/{id}/cancel', [PaymentPlanController::class, 'cancel']);
+      Route::post('/installments/{id}/payment', 
+                  [PaymentPlanController::class, 'recordPayment']);
+  });
+
+  FRONTEND CHANGES FOR STAGGERED PAYMENTS:
+  -----------------------------------------------------------------------
+  
+  A. POS PAGE — Add "Payment Plan" Option
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx
+  
+  Changes:
+  1. Add checkbox/toggle: "Set up payment plan for this order"
+  2. When enabled, show Payment Plan Setup Modal:
+     
+     ┌─────────────────────────────────────────────────────────────┐
+     │  Payment Plan Setup                                         │
+     ├─────────────────────────────────────────────────────────────┤
+     │  Order Total: ₱10,000                                       │
+     │                                                             │
+     │  Down Payment: [₱2,000____] (20%)                          │
+     │                                                             │
+     │  Remaining Balance: ₱8,000                                  │
+     │                                                             │
+     │  Number of Installments: [4_▼]                             │
+     │    Options: 2, 3, 4, 6, 8, 12                              │
+     │                                                             │
+     │  Payment Frequency: [Monthly_▼]                            │
+     │    Options: Weekly, Bi-weekly, Monthly                     │
+     │                                                             │
+     │  First Payment Due: [May 20, 2026_____]                   │
+     │                                                             │
+     │  ─────────────────────────────────────────────────────────  │
+     │  Payment Schedule Preview:                                  │
+     │  • Installment 1: ₱2,000 — Due: May 20, 2026              │
+     │  • Installment 2: ₱2,000 — Due: Jun 20, 2026              │
+     │  • Installment 3: ₱2,000 — Due: Jul 20, 2026              │
+     │  • Installment 4: ₱2,000 — Due: Aug 20, 2026              │
+     │  ─────────────────────────────────────────────────────────  │
+     │                                                             │
+     │  Late Fee Settings (Optional):                              │
+     │  ☑ Enable late fees                                        │
+     │  Grace Period: [3__] days                                  │
+     │  Late Fee: [₱50___] per day OR [2__]% per day             │
+     │                                                             │
+     │  Notes/Terms: [________________________________]            │
+     │                                                             │
+     │  [Cancel]  [Create Payment Plan & Place Order]             │
+     └─────────────────────────────────────────────────────────────┘
+
+  B. NEW PAGE: Payment Plans Management
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/admin/PaymentPlans/PaymentPlans.jsx
+  
+  Page Layout:
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  📅 Payment Plans Management                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Stats Cards:                                                   │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+  │  │Active    │ │Overdue   │ │Completed │ │Total     │          │
+  │  │Plans     │ │Payments  │ │This Month│ │Receivable│          │
+  │  │15        │ │8         │ │5         │ │₱125,000  │          │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Filters: [Status ▼] [Customer Search] [Due Date Range]       │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Tabs: All | Active | Overdue | Completed                      │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  DataTable:                                                     │
+  │  ┌────────┬──────────┬──────────┬────────┬────────┬──────────┐ │
+  │  │Order   │Customer  │Total     │Paid    │Balance │Next Due  │ │
+  │  ├────────┼──────────┼──────────┼────────┼────────┼──────────┤ │
+  │  │ORD-045 │Juan Cruz │₱10,000   │₱4,000  │₱6,000  │May 20    │ │
+  │  │        │          │4/8 paid  │        │        │[Record]  │ │
+  │  ├────────┼──────────┼──────────┼────────┼────────┼──────────┤ │
+  │  │ORD-043 │Maria S.  │₱8,000    │₱2,000  │₱6,000  │⚠️ Apr 15│ │
+  │  │        │          │1/4 paid  │        │        │OVERDUE   │ │
+  │  └────────┴──────────┴──────────┴────────┴────────┴──────────┘ │
+  └─────────────────────────────────────────────────────────────────┘
+  
+  View Payment Plan Modal:
+    - Customer info
+    - Order details
+    - Payment schedule table with status per installment
+    - Payment history
+    - Record payment button per installment
+    - Late fees summary
+    - Cancel plan option
+
+  C. SALES PAGE — Show Payment Plan Badge
+  -----------------------------------------------------------------------
+  Changes:
+    - Orders with payment plans show 📅 badge
+    - Click to view payment schedule
+    - Link to Payment Plans page
+
+  D. CUSTOMER PAGE — Payment Plans Tab
+  -----------------------------------------------------------------------
+  Add tab in Customer Balance Modal:
+    - "Payment Plans" tab
+    - Show all active payment plans for customer
+    - Upcoming due dates
+    - Overdue installments highlighted
+
+  BUSINESS RULES FOR STAGGERED PAYMENTS:
+  -----------------------------------------------------------------------
+  1. Payment plans REQUIRE a customer (cannot be anonymous)
+  2. Down payment must be paid immediately when creating the plan
+  3. Minimum down payment: 10% of order total (configurable)
+  4. Maximum installment count: 12 (configurable)
+  5. Installments can be paid early (no penalty)
+  6. Partial installment payments allowed (e.g., pay ₱1,000 of ₱2,000 due)
+  7. Late fees calculated daily after grace period
+  8. After X overdue installments, plan can be marked as "defaulted"
+  9. Defaulted plans may restrict future payment plan eligibility
+  10. Payment plan can be cancelled by admin (remaining balance becomes
+      regular partial payment or order cancelled)
+  11. Customer can request payment plan modification (admin approval)
+  12. Automated reminders sent 3 days before due date, on due date,
+      and 1 day after due date
+
+================================================================================
+  11. PDO (POST-DATED ORDER) — BANK PAYMENT IMPLEMENTATION
+================================================================================
+
+  CONCEPT OVERVIEW:
+  -----------------------------------------------------------------------
+  PDO (Post-Dated Order) is a payment method where the customer provides
+  post-dated checks or commits to bank transfer on a future date. This is
+  common in B2B transactions or large orders where payment is guaranteed
+  but deferred to a specific future date.
+
+  Key Characteristics:
+  - Payment is PROMISED for a specific future date
+  - Often backed by post-dated checks or bank commitment letter
+  - Order can be fulfilled before payment (based on trust/credit terms)
+  - Payment date is fixed (not a payment plan with multiple dates)
+  - Can be extended/rescheduled if needed
+  - May require approval from admin/manager
+
+  Example PDO Scenarios:
+  1. Corporate client orders ₱50,000 worth of goods
+     - Provides post-dated check dated May 15, 2026
+     - Order fulfilled immediately
+     - Payment expected on May 15, 2026
+  
+  2. Regular customer with good credit history
+     - Orders ₱20,000
+     - Commits to bank transfer by April 30, 2026
+     - No check provided, based on trust
+     - Order fulfilled after admin approval
+  
+  3. Supplier payment terms (Net 30, Net 60)
+     - Order placed today
+     - Payment due in 30 or 60 days
+     - Standard business credit terms
+
+  DATABASE CHANGES FOR PDO:
+  -----------------------------------------------------------------------
+  
+  A. NEW TABLE: `post_dated_orders` (PDO records)
+  -----------------------------------------------------------------------
+  | Column                | Type             | Notes                     |
+  |-----------------------|------------------|---------------------------|
+  | id                    | bigint PK        | Auto increment            |
+  | sale_id               | bigint FK        | → sales.id (one-to-one)   |
+  | payment_type          | varchar(20)      | 'post_dated_check',       |
+  |                       |                  | 'bank_transfer',          |
+  |                       |                  | 'credit_terms'            |
+  | promised_amount       | decimal(12,2)    | Expected payment amount   |
+  | promised_date         | date             | When payment is due       |
+  | check_number          | varchar(50)      | If post-dated check       |
+  |                       |   nullable       |                           |
+  | check_bank            | varchar(100)     | Bank name                 |
+  |                       |   nullable       |                           |
+  | check_image           | json nullable    | Scanned check image       |
+  | bank_reference        | varchar(100)     | Bank commitment ref       |
+  |                       |   nullable       |                           |
+  | credit_terms          | varchar(50)      | 'Net 30', 'Net 60', etc.  |
+  |                       |   nullable       |                           |
+  | status                | varchar(20)      | 'pending', 'approved',    |
+  |                       |   default        | 'fulfilled', 'overdue',   |
+  |                       |   'pending'      | 'bounced', 'cancelled'    |
+  | approval_required     | boolean          | Needs manager approval?   |
+  |                       |   default true   |                           |
+  | approved_by           | bigint FK null   | → users.id                |
+  | approved_at           | timestamp null   | When approved             |
+  | fulfilled_date        | date nullable    | When payment received     |
+  | fulfillment_method    | varchar(20)      | How payment was received  |
+  |                       |   nullable       | (cash, bank_transfer)     |
+  | fulfillment_reference | varchar(100)     | Bank transaction ref      |
+  |                       |   nullable       |                           |
+  | bounce_reason         | text nullable    | Why check bounced         |
+  | extension_count       | int default 0    | Times date was extended   |
+  | original_date         | date nullable    | Original promised date    |
+  | notes                 | text nullable    | PDO notes/terms           |
+  | created_by            | bigint FK        | → users.id                |
+  | created_at            | timestamp        |                           |
+  | updated_at            | timestamp        |                           |
+  -----------------------------------------------------------------------
+
+  PDO Status Flow:
+    pending   → waiting for admin approval
+    approved  → admin approved, order can be fulfilled
+    fulfilled → payment received, order complete
+    overdue   → promised_date passed, no payment yet
+    bounced   → check bounced or payment failed
+    cancelled → PDO cancelled, order cancelled or payment method changed
+
+  B. MODIFY `sales` TABLE:
+  -----------------------------------------------------------------------
+  Add columns:
+    - is_pdo (boolean default false)
+    - pdo_status (varchar nullable: matches post_dated_orders.status)
+    - fulfillment_status (varchar: 'pending', 'ready', 'fulfilled')
+      → Tracks if order can be released before payment
+
+  BACKEND CHANGES FOR PDO:
+  -----------------------------------------------------------------------
+  
+  A. NEW MODEL: PostDatedOrder
+  -----------------------------------------------------------------------
+  File: app/Models/PostDatedOrder.php
+  
+  Relationships:
+    - belongsTo(Sale::class)
+    - belongsTo(User::class, 'created_by')
+    - belongsTo(User::class, 'approved_by')
+  
+  Fillable: sale_id, payment_type, promised_amount, promised_date,
+            check_number, check_bank, check_image, bank_reference,
+            credit_terms, status, approval_required, notes
+  
+  Casts:
+    - promised_amount => decimal:2
+    - promised_date => date
+    - fulfilled_date => date
+    - original_date => date
+    - check_image => array
+    - approval_required => boolean
+  
+  Methods:
+    - isOverdue() → promised_date < today && status not in ['fulfilled', 'cancelled']
+    - daysOverdue() → today - promised_date (if overdue)
+    - canFulfillOrder() → status == 'approved'
+    - markAsFulfilled(array $data) → update status, fulfilled_date, etc.
+    - extendDate(date $newDate, string $reason) → update promised_date, increment extension_count
+    - markAsBounced(string $reason) → update status, bounce_reason
+
+  B. MODIFY Sale MODEL:
+  -----------------------------------------------------------------------
+  Add relationship:
+    - postDatedOrder() → hasOne(PostDatedOrder::class)
+  
+  Add to fillable:
+    - is_pdo
+    - pdo_status
+    - fulfillment_status
+  
+  Add methods:
+    - isPDO() → is_pdo == true
+    - canFulfill() → fulfillment_status == 'ready' || (is_pdo && pdo approved)
+
+  C. NEW SERVICE: PostDatedOrderService
+  -----------------------------------------------------------------------
+  File: app/Services/PostDatedOrderService.php
+  
+  Methods:
+  
+  1. createPDO(int $saleId, array $data)
+     - Validate: payment_type, promised_amount, promised_date
+     - If post_dated_check: require check_number, check_bank
+     - Create PostDatedOrder record
+     - Update sale: is_pdo = true, pdo_status = 'pending',
+                    payment_status = 'not_paid', fulfillment_status = 'pending'
+     - Send notification to admin for approval
+     - Audit log
+     - Return PDO record
+  
+  2. approvePDO(int $pdoId, int $userId)
+     - Find PDO where status = 'pending'
+     - Update: status = 'approved', approved_by = userId, approved_at = now()
+     - Update sale: pdo_status = 'approved', fulfillment_status = 'ready'
+     - Send notification to staff (order can be fulfilled)
+     - Audit log
+  
+  3. fulfillPDO(int $pdoId, array $paymentData)
+     - Find PDO where status = 'approved' or 'overdue'
+     - Validate: fulfillment_method, fulfillment_reference (if bank)
+     - Create Payment record for the full amount
+     - Update PDO: status = 'fulfilled', fulfilled_date = today,
+                   fulfillment_method, fulfillment_reference
+     - Update sale: payment_status = 'paid', pdo_status = 'fulfilled',
+                    amount_paid = promised_amount, balance_remaining = 0
+     - Audit log
+     - Send receipt/confirmation
+  
+  4. extendPDODate(int $pdoId, date $newDate, string $reason)
+     - Find PDO
+     - If extension_count == 0: save original_date = current promised_date
+     - Update: promised_date = newDate, extension_count++, notes += reason
+     - If was 'overdue': change status back to 'approved'
+     - Audit log
+     - Send notification to customer
+  
+  5. markPDOAsBounced(int $pdoId, string $reason)
+     - Find PDO
+     - Update: status = 'bounced', bounce_reason = reason
+     - Update sale: pdo_status = 'bounced'
+     - Send alert to admin + customer
+     - Audit log
+     - (Optional) Block customer from future PDO
+  
+  6. cancelPDO(int $pdoId, string $reason)
+     - Update: status = 'cancelled', notes += reason
+     - Update sale: is_pdo = false, pdo_status = 'cancelled'
+     - Decide: cancel order OR convert to different payment method
+     - Audit log
+  
+  7. getOverduePDOs()
+     - All PDOs where promised_date < today && status in ['approved', 'pending']
+     - Update status to 'overdue'
+     - Send overdue notifications
+     - Return list for admin review
+  
+  8. getPDOsByStatus(string $status)
+     - Filter PDOs by status
+     - Include sale and customer info
+     - For dashboard/reports
+
+  D. NEW CONTROLLER: PostDatedOrderController
+  -----------------------------------------------------------------------
+  File: app/Http/Controllers/PostDatedOrderController.php
+  
+  Methods:
+    - index() — list all PDOs with filters (status, customer, date range)
+    - store(Request $request) — create new PDO for a sale
+    - show(int $id) — view PDO details
+    - approve(int $id) — approve pending PDO
+    - fulfill(Request $request, int $id) — mark PDO as fulfilled (payment received)
+    - extend(Request $request, int $id) — extend promised date
+    - bounce(Request $request, int $id) — mark check as bounced
+    - cancel(Request $request, int $id) — cancel PDO
+    - getOverdue() — list all overdue PDOs
+    - getPending() — list PDOs awaiting approval
+  
+  E. NEW RESOURCE: PostDatedOrderResource
+  -----------------------------------------------------------------------
+  File: app/Http/Resources/PostDatedOrderResource.php
+  
+  Fields: id, sale_id, transaction_id, customer_name, payment_type,
+          promised_amount, promised_date, check_number, check_bank,
+          check_image (URLs), bank_reference, credit_terms, status,
+          approved_by_name, approved_at, fulfilled_date, days_overdue,
+          extension_count, original_date, notes, created_at
+
+  F. ROUTES:
+  -----------------------------------------------------------------------
+  Add to routes/api.php:
+  
+  Route::prefix('pdo')->group(function () {
+      Route::get('/', [PostDatedOrderController::class, 'index']);
+      Route::post('/', [PostDatedOrderController::class, 'store']);
+      Route::get('/pending', [PostDatedOrderController::class, 'getPending']);
+      Route::get('/overdue', [PostDatedOrderController::class, 'getOverdue']);
+      Route::get('/{id}', [PostDatedOrderController::class, 'show']);
+      Route::post('/{id}/approve', [PostDatedOrderController::class, 'approve']);
+      Route::post('/{id}/fulfill', [PostDatedOrderController::class, 'fulfill']);
+      Route::post('/{id}/extend', [PostDatedOrderController::class, 'extend']);
+      Route::post('/{id}/bounce', [PostDatedOrderController::class, 'bounce']);
+      Route::post('/{id}/cancel', [PostDatedOrderController::class, 'cancel']);
+  });
+
+  FRONTEND CHANGES FOR PDO:
+  -----------------------------------------------------------------------
+  
+  A. POS PAGE — Add PDO Payment Option
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx
+  
+  Changes:
+  1. Add new payment method: "Post-Dated Order (PDO)" or "Bank Payment"
+     - Icon: Calendar + Bank
+     - Description: "Payment on future date (check/bank transfer)"
+  
+  2. PDO Payment Modal:
+     ┌─────────────────────────────────────────────────────────────┐
+     │  Post-Dated Order Setup                                     │
+     ├─────────────────────────────────────────────────────────────┤
+     │  Order Total: ₱50,000                                       │
+     │                                                             │
+     │  Payment Type: [Post-Dated Check_▼]                        │
+     │    Options:                                                 │
+     │    • Post-Dated Check                                       │
+     │    • Bank Transfer (Promised)                               │
+     │    • Credit Terms (Net 30/60)                               │
+     │                                                             │
+     │  ─── If Post-Dated Check ───                               │
+     │  Check Number: [____________]                              │
+     │  Bank Name: [____________]                                 │
+     │  Check Image: [Upload Check Photo]                         │
+     │                                                             │
+     │  ─── If Bank Transfer ───                                  │
+     │  Bank Reference/Commitment: [____________]                 │
+     │                                                             │
+     │  ─── If Credit Terms ───                                   │
+     │  Terms: [Net 30_▼] (30, 60, 90 days)                      │
+     │                                                             │
+     │  Promised Payment Date: [May 15, 2026_____]               │
+     │                                                             │
+     │  Amount: [₱50,000____] (default: order total)             │
+     │                                                             │
+     │  Notes/Terms: [________________________________]            │
+     │                                                             │
+     │  ⚠️ This order requires admin approval before fulfillment  │
+     │                                                             │
+     │  [Cancel]  [Submit PDO Order]                              │
+     └─────────────────────────────────────────────────────────────┘
+  
+  3. After submission:
+     - Show success message: "PDO order created, awaiting approval"
+     - Print order slip with "PENDING APPROVAL" watermark
+     - Do NOT fulfill order yet (wait for approval)
+
+  B. NEW PAGE: PDO Management
+  -----------------------------------------------------------------------
+  File: react_frontend/src/pages/admin/PDO/PDOManagement.jsx
+  
+  Page Layout:
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  🏦 Post-Dated Orders (PDO) Management                         │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Stats Cards:                                                   │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+  │  │Pending   │ │Approved  │ │Overdue   │ │Total PDO │          │
+  │  │Approval  │ │Orders    │ │Payments  │ │Value     │          │
+  │  │5         │ │12        │ │3         │ │₱450,000  │          │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Filters: [Status ▼] [Payment Type ▼] [Date Range] [Customer] │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Tabs: All | Pending Approval | Approved | Overdue | Fulfilled │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  DataTable:                                                     │
+  │  ┌────────┬──────────┬────────┬──────────┬────────┬──────────┐ │
+  │  │Order   │Customer  │Amount  │Type      │Due Date│Status    │ │
+  │  ├────────┼──────────┼────────┼──────────┼────────┼──────────┤ │
+  │  │ORD-050 │ABC Corp  │₱50,000 │PDC       │May 15  │⏳ Pending│ │
+  │  │        │          │        │Check#123 │        │[✓][✕]   │ │
+  │  ├────────┼──────────┼────────┼──────────┼────────┼──────────┤ │
+  │  │ORD-048 │Juan Cruz │₱20,000 │Bank      │May 10  │✅ Approved│ │
+  │  │        │          │        │Transfer  │        │[Fulfill] │ │
+  │  ├────────┼──────────┼────────┼──────────┼────────┼──────────┤ │
+  │  │ORD-045 │Maria S.  │₱15,000 │Net 30    │Apr 20  │⚠️ OVERDUE│ │
+  │  │        │          │        │          │5 days  │[Fulfill] │ │
+  │  └────────┴──────────┴────────┴──────────┴────────┴──────────┘ │
+  │                                                                 │
+  │  Action buttons:                                                │
+  │    [✓] Approve  — approve pending PDO (order can be fulfilled) │
+  │    [✕] Reject   — reject/cancel PDO                            │
+  │    [Fulfill]    — mark payment as received                     │
+  │    [Extend]     — extend promised date                         │
+  │    [Bounce]     — mark check as bounced                        │
+  │    [👁] View    — see full details                             │
+  └─────────────────────────────────────────────────────────────────┘
+  
+  View PDO Modal:
+    - Order details (transaction_id, items, total)
+    - Customer info + credit history
+    - PDO details (type, check number, bank, promised date)
+    - Check image viewer (if post-dated check)
+    - Status timeline
+    - Extension history (if any)
+    - Action buttons: Approve / Fulfill / Extend / Bounce / Cancel
+
+  Approve PDO Modal:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Approve Post-Dated Order                                   │
+    ├─────────────────────────────────────────────────────────────┤
+    │  Order: ORD-2026-04-24-050                                  │
+    │  Customer: ABC Corporation                                  │
+    │  Amount: ₱50,000                                            │
+    │  Payment Type: Post-Dated Check #123456                     │
+    │  Promised Date: May 15, 2026                                │
+    │                                                             │
+    │  Customer Credit History:                                   │
+    │  • Previous PDOs: 5 (all fulfilled on time)                │
+    │  • Outstanding Balance: ₱0                                  │
+    │  • Credit Rating: ⭐⭐⭐⭐⭐ Excellent                      │
+    │                                                             │
+    │  ✅ By approving, you authorize order fulfillment          │
+    │     before payment is received.                             │
+    │                                                             │
+    │  Notes (optional): [_________________________]              │
+    │                                                             │
+    │  [Cancel]  [Approve & Allow Fulfillment]                   │
+    └─────────────────────────────────────────────────────────────┘
+  
+  Fulfill PDO Modal:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Record PDO Payment Received                                │
+    ├─────────────────────────────────────────────────────────────┤
+    │  Order: ORD-2026-04-24-050                                  │
+    │  Expected Amount: ₱50,000                                   │
+    │  Promised Date: May 15, 2026                                │
+    │                                                             │
+    │  Payment Received Via: [Bank Transfer_▼]                   │
+    │    Options: Bank Transfer, Cash, Check Cleared             │
+    │                                                             │
+    │  Bank Reference/Transaction ID: [____________]              │
+    │                                                             │
+    │  Amount Received: [₱50,000____]                            │
+    │                                                             │
+    │  Date Received: [May 15, 2026_____]                        │
+    │                                                             │
+    │  Notes: [_________________________]                         │
+    │                                                             │
+    │  [Cancel]  [Confirm Payment Received]                      │
+    └─────────────────────────────────────────────────────────────┘
+  
+  Extend Date Modal:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Extend PDO Payment Date                                    │
+    ├─────────────────────────────────────────────────────────────┤
+    │  Current Promised Date: May 15, 2026                        │
+    │  Extension Count: 0 (first extension)                       │
+    │                                                             │
+    │  New Promised Date: [May 30, 2026_____]                    │
+    │                                                             │
+    │  Reason for Extension: [_________________________]          │
+    │    (Required)                                               │
+    │                                                             │
+    │  [Cancel]  [Extend Date]                                   │
+    └─────────────────────────────────────────────────────────────┘
+  
+  Bounce Check Modal:
+    ┌─────────────────────────────────────────────────────────────┐
+    │  Mark Check as Bounced                                      │
+    ├─────────────────────────────────────────────────────────────┤
+    │  ⚠️ WARNING: This will mark the payment as failed          │
+    │                                                             │
+    │  Check Number: 123456                                       │
+    │  Bank: BDO                                                  │
+    │  Amount: ₱50,000                                            │
+    │                                                             │
+    │  Bounce Reason: [Insufficient Funds_▼]                     │
+    │    Options:                                                 │
+    │    • Insufficient Funds                                     │
+    │    • Account Closed                                         │
+    │    • Signature Mismatch                                     │
+    │    • Stop Payment Order                                     │
+    │    • Other (specify)                                        │
+    │                                                             │
+    │  Additional Notes: [_________________________]              │
+    │                                                             │
+    │  Next Steps:                                                │
+    │  ☐ Contact customer for alternative payment                │
+    │  ☐ Block customer from future PDO                          │
+    │  ☐ Cancel order                                             │
+    │                                                             │
+    │  [Cancel]  [Mark as Bounced]                               │
+    └─────────────────────────────────────────────────────────────┘
+
+  C. SALES PAGE — PDO Integration
+  -----------------------------------------------------------------------
+  Changes:
+  1. Add PDO status badge on orders:
+     - 🏦 PDO Pending (yellow)
+     - 🏦 PDO Approved (blue)
+     - 🏦 PDO Overdue (red)
+     - 🏦 PDO Fulfilled (green)
+  
+  2. Filter options:
+     - Add "PDO Orders" filter
+     - Add "PDO Status" sub-filter
+  
+  3. Order details modal:
+     - Show PDO information section
+     - Link to PDO Management page
+     - Show promised date + days until/overdue
+  
+  4. Fulfillment controls:
+     - If PDO pending: show "Awaiting Approval" message
+     - If PDO approved: allow order fulfillment
+     - If PDO overdue: show warning but still allow fulfillment
+
+  D. CUSTOMER PAGE — PDO History
+  -----------------------------------------------------------------------
+  Add to Customer details:
+  1. PDO Credit Score/Rating:
+     - Based on PDO payment history
+     - On-time payment rate
+     - Number of bounced checks
+     - Average days overdue
+  
+  2. PDO History Tab:
+     - All past PDOs (fulfilled, bounced, cancelled)
+     - Payment reliability metrics
+     - Current active PDOs
+  
+  3. PDO Eligibility Badge:
+     - ✅ Eligible for PDO (good history)
+     - ⚠️ Limited PDO (some issues)
+     - ❌ PDO Blocked (too many bounced checks)
+
+  E. DASHBOARD — PDO Widgets
+  -----------------------------------------------------------------------
+  Add to admin dashboard:
+  1. "PDOs Pending Approval" widget
+     - Count + total value
+     - Quick approve button
+  
+  2. "Overdue PDO Payments" widget
+     - Count + total overdue amount
+     - Days overdue summary
+     - Quick action buttons
+  
+  3. "PDO Payment Calendar"
+     - Visual calendar showing upcoming PDO due dates
+     - Color-coded by amount/risk level
+
+  F. SIDEBAR / NAVIGATION
+  -----------------------------------------------------------------------
+  Add menu item:
+    - "PDO Management" under Sales section
+    - Icon: Bank/Calendar
+    - Badge: pending approval count
+    - Route: /admin/pdo
+
+  BUSINESS RULES FOR PDO:
+  -----------------------------------------------------------------------
+  1. PDO REQUIRES customer (cannot be anonymous)
+  2. PDO requires admin/manager approval before order fulfillment
+  3. Minimum order amount for PDO: ₱5,000 (configurable)
+  4. Maximum PDO amount per customer: based on credit rating
+  5. Customer must have good payment history for PDO eligibility
+  6. Post-dated checks must be dated at least 1 day in future
+  7. Maximum PDO period: 90 days from order date (configurable)
+  8. After 3 bounced checks, customer is blocked from PDO
+  9. PDO can be extended maximum 2 times (configurable)
+  10. Each extension requires admin approval + reason
+  11. Overdue PDOs trigger automatic reminders (daily)
+  12. Orders can be fulfilled after approval but before payment
+      (risk accepted by business)
+  13. If check bounces, order may be recalled or customer billed
+  14. PDO terms can be customized per customer (VIP clients)
+  15. All PDO actions logged in audit trail
+
+  PDO APPROVAL CRITERIA:
+  -----------------------------------------------------------------------
+  Auto-approve if:
+    - Customer has 5+ successful PDOs with 100% on-time payment
+    - Order amount < ₱10,000
+    - Customer credit rating: Excellent
+  
+  Require manual approval if:
+    - New customer (first PDO)
+    - Order amount > ₱50,000
+    - Customer has 1+ late payment in history
+    - Customer has outstanding balance
+    - Check date > 60 days in future
+  
+  Auto-reject if:
+    - Customer has bounced check in last 6 months
+    - Customer has 3+ overdue payments
+    - Customer is on PDO blocklist
+    - Order amount exceeds customer credit limit
+
+  PDO RISK MANAGEMENT:
+  -----------------------------------------------------------------------
+  1. Credit Limit per Customer:
+     - New customer: ₱10,000
+     - Good history (5+ PDOs): ₱50,000
+     - Excellent history (20+ PDOs, 100% on-time): ₱200,000
+     - VIP/Corporate: Custom limit
+  
+  2. Risk Indicators:
+     - 🟢 Low Risk: On-time payment history, low amount
+     - 🟡 Medium Risk: Some late payments, medium amount
+     - 🔴 High Risk: Bounced checks, high amount, new customer
+  
+  3. Mitigation Strategies:
+     - Require down payment for high-risk PDOs
+     - Shorter payment terms for new customers
+     - Hold order fulfillment until payment for risky customers
+     - Require additional documentation (bank statements, etc.)
+
+  NOTIFICATIONS & REMINDERS FOR PDO:
+  -----------------------------------------------------------------------
+  
+  1. PDO Created (to Admin):
+     - "New PDO order awaiting approval: ORD-050, ₱50,000"
+     - Include customer info + risk assessment
+  
+  2. PDO Approved (to Staff + Customer):
+     - Staff: "PDO approved, order can be fulfilled"
+     - Customer: "Your order has been approved, payment due May 15"
+  
+  3. Payment Reminder (to Customer):
+     - 7 days before: "Reminder: PDO payment of ₱50,000 due in 7 days"
+     - 3 days before: "Reminder: PDO payment due in 3 days"
+     - 1 day before: "Reminder: PDO payment due tomorrow"
+     - On due date: "PDO payment of ₱50,000 is due today"
+  
+  4. Overdue Alert (to Admin + Customer):
+     - Day 1: "PDO payment overdue by 1 day"
+     - Day 3: "PDO payment overdue by 3 days - urgent"
+     - Day 7: "PDO payment overdue by 7 days - escalate"
+  
+  5. Payment Received (to Customer):
+     - "Thank you! PDO payment of ₱50,000 received"
+     - Include receipt
+  
+  6. Check Bounced (to Admin + Customer):
+     - Admin: "Check bounced: ORD-050, ₱50,000 - take action"
+     - Customer: "Your check has bounced, please arrange payment"
+  
+  7. Date Extended (to Customer):
+     - "PDO payment date extended to May 30, 2026"
+
+  REPORTS FOR PDO:
+  -----------------------------------------------------------------------
+  1. PDO Aging Report:
+     - List all active PDOs grouped by age
+     - 0-30 days, 31-60 days, 61-90 days, 90+ days
+     - Total value per age bracket
+  
+  2. PDO Collection Report:
+     - Expected collections per day/week/month
+     - Actual vs expected collection rate
+     - Overdue amount summary
+  
+  3. Customer PDO Performance Report:
+     - Per customer: total PDOs, on-time %, average days overdue
+     - Bounced check count
+     - Credit rating
+  
+  4. PDO Risk Report:
+     - High-risk PDOs (amount, customer history, days until due)
+     - Recommended actions
+  
+  5. PDO Cash Flow Forecast:
+     - Expected incoming payments by date
+     - Helps with business cash flow planning
+
+================================================================================
+  12. INTEGRATION: STAGGERED PAYMENTS + PDO + PARTIAL PAYMENTS
+================================================================================
+
+  HOW THEY WORK TOGETHER:
+  -----------------------------------------------------------------------
+  The system now supports THREE payment flexibility options:
+  
+  1. PARTIAL PAYMENTS (Ad-hoc)
+     - Customer pays whenever they want
+     - No schedule, no due dates
+     - Any payment method (cash, gcash, cod, pay_later)
+     - Example: Pay ₱500 today, ₱300 next week, ₱200 whenever
+  
+  2. STAGGERED PAYMENTS (Scheduled Installments)
+     - Fixed payment schedule agreed upfront
+     - Each installment has due date
+     - Late fees for overdue installments
+     - Example: ₱2,000 down, then ₱2,000/month for 4 months
+  
+  3. PDO (Single Future Payment)
+     - One payment on a specific future date
+     - Backed by post-dated check or bank commitment
+     - Order fulfilled before payment (credit terms)
+     - Example: Order today, pay ₱50,000 on May 15
+  
+  DECISION TREE — Which to Use?
+  -----------------------------------------------------------------------
+  
+  Customer wants to pay in parts over time?
+    ├─ No fixed schedule, pay whenever → PARTIAL PAYMENTS
+    │  • Most flexible
+    │  • No commitment to dates
+    │  • No late fees
+    │
+    └─ Fixed schedule with due dates → STAGGERED PAYMENTS
+       • Structured payment plan
+       • Late fees for missed payments
+       • Better for business cash flow planning
+  
+  Customer wants to pay later (full amount)?
+    ├─ Pay within 7-14 days, no commitment → PAY LATER (partial payment)
+    │  • Simple, no paperwork
+    │  • Come back and pay anytime
+    │
+    └─ Pay on specific future date (30-90 days) → PDO
+       • Requires approval
+       • Backed by check or bank commitment
+       • Order fulfilled immediately
+       • Good for B2B / corporate clients
+
+  COMBINED SCENARIOS:
+  -----------------------------------------------------------------------
+  
+  Scenario 1: PDO with Down Payment
+    - Customer orders ₱50,000
+    - Pays ₱10,000 down payment (cash)
+    - Provides post-dated check for ₱40,000 due May 15
+    - Implementation:
+      • Create sale with partial payment (₱10,000 paid)
+      • Create PDO for remaining ₱40,000
+      • Order can be fulfilled after PDO approval
+  
+  Scenario 2: Staggered Payment with Missed Installment
+    - Customer has payment plan: 4 x ₱2,000/month
+    - Misses 2nd installment (now overdue)
+    - Comes in and pays ₱1,000 (partial installment payment)
+    - Implementation:
+      • Record payment against installment #2
+      • Installment status: 'partial' (₱1,000 of ₱2,000 paid)
+      • Late fee still applies to unpaid portion
+      • Customer can pay remaining ₱1,000 later
+  
+  Scenario 3: Convert Partial Payment to Staggered Plan
+    - Customer has ₱10,000 order, paid ₱3,000 (partial)
+    - Balance: ₱7,000
+    - Customer requests payment plan for remaining balance
+    - Implementation:
+      • Create payment plan for ₱7,000 (not full order amount)
+      • Generate installments for remaining balance only
+      • Original ₱3,000 payment stays as-is
+  
+  Scenario 4: PDO Check Bounces, Convert to Staggered
+    - Customer's ₱50,000 PDO check bounces
+    - Customer can't pay full amount now
+    - Negotiate payment plan instead
+    - Implementation:
+      • Mark PDO as 'bounced'
+      • Create staggered payment plan for ₱50,000
+      • Customer pays in installments instead
+      • May add penalty/interest
+  
+  Scenario 5: Early Payment on Staggered Plan
+    - Customer has 4 remaining installments of ₱2,000 each
+    - Wants to pay off entire balance early
+    - Implementation:
+      • Calculate total remaining: ₱8,000
+      • Record single payment for ₱8,000
+      • Mark all remaining installments as 'paid'
+      • Payment plan status: 'completed'
+      • May offer early payment discount
+
+  DATABASE RELATIONSHIPS SUMMARY:
+  -----------------------------------------------------------------------
+  
+  sales (main order table)
+    ├─ has many → payments (individual payment transactions)
+    ├─ has one → payment_plan (if staggered payment)
+    │   └─ has many → payment_plan_installments
+    └─ has one → post_dated_order (if PDO)
+  
+  A single sale can have:
+    - Multiple payments (partial payments over time)
+    - One payment plan with multiple installments (staggered)
+    - One PDO record (post-dated order)
+    - Combination: PDO with down payment (has payments + PDO)
+  
+  Mutual Exclusivity:
+    - A sale CANNOT have both payment_plan AND post_dated_order
+    - It's either: regular partial, OR staggered plan, OR PDO
+    - Exception: PDO can have initial down payment (recorded in payments)
+
+  IMPLEMENTATION PHASES — UPDATED:
+  -----------------------------------------------------------------------
+  
+  PHASE 1: Core Partial Payments (ALREADY DOCUMENTED)
+    ✦ Basic partial payment support for all methods
+    ✦ Payments table + verification workflow
+    ✦ POS updates
+    ✦ Sales page updates
+  
+  PHASE 2: Payments Management Page (ALREADY DOCUMENTED)
+    ✦ Payment verification/hold/cancel
+    ✦ Customer balances
+  
+  PHASE 3: Staggered Payment Plans (NEW)
+    ✦ payment_plans + payment_plan_installments tables
+    ✦ PaymentPlan + PaymentPlanInstallment models
+    ✦ PaymentPlanService + PaymentPlanController
+    ✦ POS: Payment Plan Setup modal
+    ✦ NEW PAGE: Payment Plans Management
+    ✦ Late fee calculation + overdue tracking
+    ✦ Installment payment recording
+  
+  PHASE 4: PDO (Post-Dated Orders) (NEW)
+    ✦ post_dated_orders table
+    ✦ PostDatedOrder model
+    ✦ PostDatedOrderService + PostDatedOrderController
+    ✦ POS: PDO payment option
+    ✦ NEW PAGE: PDO Management
+    ✦ Approval workflow
+    ✦ Check bounce handling
+    ✦ Date extension functionality
+  
+  PHASE 5: Integration & Polish
+    ✦ Combined scenarios (PDO + down payment, etc.)
+    ✦ Convert between payment types
+    ✦ Customer credit rating system
+    ✦ PDO risk assessment
+    ✦ Comprehensive reports
+    ✦ Automated reminders for all payment types
+    ✦ Dashboard widgets
+    ✦ Customer portal updates
+
+  AFFECTED FILES — COMPLETE LIST (UPDATED):
+  -----------------------------------------------------------------------
+  
+  BACKEND (Laravel):
+  ------------------
+  NEW FILES (Phase 1-2):
+    ☐ database/migrations/2026_04_21_000001_add_partial_payment_support.php
+    ☐ app/Models/Payment.php
+    ☐ app/Http/Controllers/PaymentController.php
+    ☐ app/Http/Resources/PaymentResource.php
+  
+  NEW FILES (Phase 3 - Staggered):
+    ☐ database/migrations/2026_04_22_000001_create_payment_plans_tables.php
+    ☐ app/Models/PaymentPlan.php
+    ☐ app/Models/PaymentPlanInstallment.php
+    ☐ app/Services/PaymentPlanService.php
+    ☐ app/Http/Controllers/PaymentPlanController.php
+    ☐ app/Http/Resources/PaymentPlanResource.php
+    ☐ app/Http/Resources/PaymentPlanInstallmentResource.php
+  
+  NEW FILES (Phase 4 - PDO):
+    ☐ database/migrations/2026_04_23_000001_create_post_dated_orders_table.php
+    ☐ app/Models/PostDatedOrder.php
+    ☐ app/Services/PostDatedOrderService.php
+    ☐ app/Http/Controllers/PostDatedOrderController.php
+    ☐ app/Http/Resources/PostDatedOrderResource.php
+  
+  MODIFIED FILES (All Phases):
+    ☐ app/Models/Sale.php
+    ☐ app/Services/SaleService.php
+    ☐ app/Http/Controllers/SaleController.php
+    ☐ app/Http/Controllers/CustomerController.php
+    ☐ app/Http/Resources/SaleResource.php
+    ☐ routes/api.php
+  
+  FRONTEND (React):
+  -----------------
+  NEW FILES (Phase 1-2):
+    ☐ src/pages/admin/Payments/PaymentsManagement.jsx (UNIFIED PAGE)
+    ☐ src/components/payments/PaymentTransactionsTab.jsx
+  
+  NEW FILES (Phase 3 - Staggered):
+    ☐ src/components/payments/PaymentPlansTab.jsx
+    ☐ src/components/payments/PaymentPlanSetupModal.jsx
+    ☐ src/components/payments/InstallmentSchedule.jsx
+  
+  NEW FILES (Phase 4 - PDO):
+    ☐ src/components/payments/PDOTab.jsx
+    ☐ src/components/payments/PDOSetupModal.jsx
+    ☐ src/components/payments/PDOApprovalModal.jsx
+    ☐ src/components/payments/CheckImageViewer.jsx
+  
+  MODIFIED FILES (All Phases):
+    ☐ src/pages/shared/PointOfSale/PointOfSale.jsx
+    ☐ src/pages/admin/Sales/Sales.jsx
+    ☐ src/pages/admin/Partners/Customer.jsx
+    ☐ src/pages/admin/Dashboard/Dashboard.jsx
+    ☐ src/components/layout/Sidebar.jsx
+    ☐ src/router.jsx
+    ☐ src/api/index.js
+
+================================================================================
+  END OF DOCUMENT — COMPREHENSIVE PAYMENT SYSTEM IMPLEMENTATION
+================================================================================
+  
+  This document now covers:
+  ✓ Partial Payments (all payment methods)
+  ✓ Payment Verification & Management
+  ✓ Staggered Payment Plans (scheduled installments)
+  ✓ PDO - Post-Dated Orders (bank payments, post-dated checks)
+  ✓ Integration scenarios
+  ✓ Complete implementation guide
+  
+  Total Payment Flexibility Options:
+  1. Full payment (immediate)
+  2. Partial payments (ad-hoc, pay whenever)
+  3. Staggered payments (fixed schedule with installments)
+  4. PDO (single future payment with check/bank commitment)
+  5. Pay Later (simple deferred payment)
+  
+  All methods support proper tracking, verification, and management!
 ================================================================================

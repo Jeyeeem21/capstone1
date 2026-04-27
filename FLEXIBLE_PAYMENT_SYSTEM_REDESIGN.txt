@@ -1,0 +1,846 @@
+================================================================================
+  FLEXIBLE PAYMENT SYSTEM - COMPLETE REDESIGN
+================================================================================
+  Date: April 24, 2026
+  Problem: Current system too rigid for real-world payment scenarios
+  Solution: Unified flexible payment system
+================================================================================
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    THE PROBLEM YOU DISCOVERED                            ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+YOUR REAL-WORLD SCENARIOS:
+-----------------------------------------------------------------------
+
+Scenario 1: Mixed PDO + Cash + GCash
+  Order: ₱100,000
+  Payment sequence:
+    1. ₱20,000 PDO (check dated May 15)
+    2. ₱20,000 Cash (paid now)
+    3. ₱10,000 GCash (paid now)
+    4. ₱30,000 PDO (check dated June 15)
+    5. ₱20,000 Cash (paid later)
+
+Scenario 2: GCash → Cash → GCash → PDO
+  Order: ₱100,000
+  Payment sequence:
+    1. ₱10,000 GCash (paid now)
+    2. ₱30,000 Cash (paid now)
+    3. ₱20,000 GCash (paid later)
+    4. ₱40,000 PDO (check dated May 15)
+
+Scenario 3: Cash → GCash → PDO
+  Order: ₱100,000
+  Payment sequence:
+    1. ₱40,000 Cash (paid now)
+    2. ₱20,000 GCash (paid now)
+    3. ₱40,000 PDO (check dated May 15)
+
+CURRENT SYSTEM PROBLEM:
+  ❌ Cannot handle these scenarios!
+  ❌ System forces you to choose ONE payment structure:
+     - Either: Partial payments (ad-hoc)
+     - Or: Staggered (scheduled)
+     - Or: PDO (single future payment)
+  ❌ Cannot mix PDO with other methods freely
+  ❌ Too rigid for real business needs!
+
+THE REAL QUESTION:
+  "What is the PAYMENT METHOD of the order?"
+  
+  Answer: THERE IS NO SINGLE PAYMENT METHOD!
+  The order uses MULTIPLE payment methods over time.
+  
+  Current system tries to assign ONE method → WRONG APPROACH!
+
+================================================================================
+  THE SOLUTION: UNIFIED FLEXIBLE PAYMENT SYSTEM
+================================================================================
+
+NEW CONCEPT: "PAYMENT SCHEDULE" (Not "Payment Method")
+-----------------------------------------------------------------------
+
+Key Insight:
+  - Don't ask "What's the payment method?"
+  - Ask "What's the payment schedule?"
+  
+  Payment Schedule = Timeline of all planned payments
+  Each payment in the schedule can use ANY method
+
+REDESIGNED APPROACH:
+-----------------------------------------------------------------------
+
+At POS, instead of selecting ONE payment method, you create a
+PAYMENT SCHEDULE with multiple payment entries.
+
+Example:
+  Order: ₱100,000
+  
+  Payment Schedule:
+    Entry 1: ₱20,000 - PDO (check #123, due May 15)
+    Entry 2: ₱20,000 - Cash (pay now)
+    Entry 3: ₱10,000 - GCash (pay now)
+    Entry 4: ₱30,000 - PDO (check #456, due June 15)
+    Entry 5: ₱20,000 - Cash (pay later, no due date)
+  
+  Total: ₱100,000 ✓
+
+This is essentially a FLEXIBLE STAGGERED PLAN where:
+  - Each entry can use different method
+  - Some entries have due dates (PDO)
+  - Some entries are immediate (Cash/GCash now)
+  - Some entries are flexible (Cash/GCash later)
+
+NEW TERMINOLOGY:
+-----------------------------------------------------------------------
+
+OLD (Confusing):
+  - Payment Method: cash, gcash, cod, pay_later
+  - Payment Type: partial, staggered, pdo
+  
+NEW (Clear):
+  - Payment Entry Method: cash, gcash, pdo
+  - Payment Schedule Type: 
+    • simple (one payment, full amount)
+    • flexible (multiple payments, any method, any timing)
+    • structured (multiple payments, fixed schedule)
+
+REMOVE THESE CONCEPTS:
+  ❌ "Payment Method" at order level (too limiting)
+  ❌ "COD" as payment method (it's just cash paid later)
+  ❌ "Pay Later" as payment method (it's just deferred payment)
+  ❌ Mutual exclusivity between partial/staggered/pdo
+
+KEEP THESE CONCEPTS:
+  ✅ Payment Schedule (list of all planned payments)
+  ✅ Payment Entry (individual payment with method + amount + timing)
+  ✅ Payment Status (paid, partial, not_paid)
+
+================================================================================
+  DATABASE REDESIGN
+================================================================================
+
+SIMPLIFIED STRUCTURE:
+-----------------------------------------------------------------------
+
+1. SALES TABLE (minimal changes)
+   -----------------------------------------------------------------------
+   Keep:
+     - amount_paid (total verified payments)
+     - balance_remaining (total - amount_paid)
+     - payment_status ('paid', 'partial', 'not_paid')
+   
+   Remove:
+     - payment_method (no longer needed at order level)
+     - has_payment_plan (redundant)
+     - payment_plan_type (redundant)
+     - is_pdo (redundant)
+     - pdo_status (redundant)
+   
+   Add:
+     - payment_schedule_type (varchar: 'simple', 'flexible', 'structured')
+
+2. PAYMENT_SCHEDULE TABLE (NEW - replaces payment_plans)
+   -----------------------------------------------------------------------
+   | Column                | Type             | Notes                     |
+   |-----------------------|------------------|---------------------------|
+   | id                    | bigint PK        | Auto increment            |
+   | sale_id               | bigint FK        | → sales.id                |
+   | schedule_type         | varchar(20)      | 'simple', 'flexible',     |
+   |                       |                  | 'structured'              |
+   | total_amount          | decimal(12,2)    | Order total               |
+   | total_entries         | int              | Number of payment entries |
+   | status                | varchar(20)      | 'active', 'completed',    |
+   |                       |                  | 'cancelled'               |
+   | notes                 | text nullable    | Schedule notes            |
+   | created_by            | bigint FK        | → users.id                |
+   | created_at            | timestamp        |                           |
+   | updated_at            | timestamp        |                           |
+
+3. PAYMENT_SCHEDULE_ENTRIES TABLE (NEW - replaces installments + pdo)
+   -----------------------------------------------------------------------
+   | Column                | Type             | Notes                     |
+   |-----------------------|------------------|---------------------------|
+   | id                    | bigint PK        | Auto increment            |
+   | payment_schedule_id   | bigint FK        | → payment_schedules.id    |
+   | entry_number          | int              | 1, 2, 3, etc.             |
+   | amount_expected       | decimal(12,2)    | Expected payment amount   |
+   | amount_paid           | decimal(12,2)    | Actual amount paid        |
+   |                       |   default 0      |                           |
+   | payment_method        | varchar(20)      | 'cash', 'gcash', 'pdo'    |
+   | due_date              | date nullable    | When payment is due       |
+   |                       |                  | (null = pay anytime)      |
+   | paid_date             | date nullable    | When actually paid        |
+   | status                | varchar(20)      | 'pending', 'paid',        |
+   |                       |   default        | 'overdue', 'partial'      |
+   |                       |   'pending'      |                           |
+   | pdo_check_number      | varchar(50)      | If method = 'pdo'         |
+   |                       |   nullable       |                           |
+   | pdo_check_bank        | varchar(100)     | If method = 'pdo'         |
+   |                       |   nullable       |                           |
+   | pdo_check_image       | json nullable    | If method = 'pdo'         |
+   | pdo_approval_status   | varchar(20)      | 'pending', 'approved',    |
+   |                       |   nullable       | 'rejected'                |
+   | pdo_approved_by       | bigint FK null   | → users.id                |
+   | pdo_approved_at       | timestamp null   |                           |
+   | payment_id            | bigint FK null   | → payments.id             |
+   |                       |                  | (links to actual payment) |
+   | notes                 | text nullable    |                           |
+   | created_at            | timestamp        |                           |
+   | updated_at            | timestamp        |                           |
+
+4. PAYMENTS TABLE (unchanged - still tracks actual payments)
+   -----------------------------------------------------------------------
+   Same as before - records ACTUAL payment transactions
+   Links to payment_schedule_entries via payment_id
+
+================================================================================
+  HOW IT WORKS: YOUR SCENARIOS SOLVED
+================================================================================
+
+SCENARIO 1: ₱20k PDO → ₱20k Cash → ₱10k GCash → ₱30k PDO → ₱20k Cash
+-----------------------------------------------------------------------
+
+At POS:
+  1. Staff creates order: ₱100,000
+  2. Staff clicks "Setup Payment Schedule"
+  3. Staff adds payment entries:
+  
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Payment Schedule Builder                                   │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Order Total: ₱100,000                                      │
+  │  Remaining: ₱0 (all allocated)                              │
+  │                                                             │
+  │  Entry 1: [PDO ▼] ₱20,000 Due: [May 15, 2026]             │
+  │           Check #: [12345] Bank: [BDO]                     │
+  │           [Upload Check Image]                              │
+  │                                                             │
+  │  Entry 2: [Cash ▼] ₱20,000 [Pay Now ✓]                    │
+  │                                                             │
+  │  Entry 3: [GCash ▼] ₱10,000 [Pay Now ✓]                   │
+  │           Ref: [9876543210]                                 │
+  │                                                             │
+  │  Entry 4: [PDO ▼] ₱30,000 Due: [Jun 15, 2026]             │
+  │           Check #: [67890] Bank: [BPI]                     │
+  │           [Upload Check Image]                              │
+  │                                                             │
+  │  Entry 5: [Cash ▼] ₱20,000 [Pay Later]                    │
+  │                                                             │
+  │  [Add Entry] [Remove Last] [Save Schedule]                 │
+  └─────────────────────────────────────────────────────────────┘
+
+Database records created:
+  
+  payment_schedules:
+    - sale_id: 123
+    - schedule_type: 'flexible'
+    - total_amount: 100000
+    - total_entries: 5
+    - status: 'active'
+  
+  payment_schedule_entries:
+    Entry 1: amount_expected=20000, method='pdo', due_date='2026-05-15',
+             status='pending', pdo_approval_status='pending'
+    Entry 2: amount_expected=20000, method='cash', due_date=null,
+             status='paid' (paid now)
+    Entry 3: amount_expected=10000, method='gcash', due_date=null,
+             status='pending' (needs verification)
+    Entry 4: amount_expected=30000, method='pdo', due_date='2026-06-15',
+             status='pending', pdo_approval_status='pending'
+    Entry 5: amount_expected=20000, method='cash', due_date=null,
+             status='pending'
+  
+  payments:
+    Payment 1: sale_id=123, amount=20000, method='cash', status='verified'
+               (links to Entry 2)
+    Payment 2: sale_id=123, amount=10000, method='gcash', status='pending'
+               (links to Entry 3)
+  
+  sales:
+    - amount_paid: 20000 (only cash verified)
+    - balance_remaining: 80000
+    - payment_status: 'partial'
+    - payment_schedule_type: 'flexible'
+
+SCENARIO 2: ₱10k GCash → ₱30k Cash → ₱20k GCash → ₱40k PDO
+-----------------------------------------------------------------------
+
+Same process, different entries:
+
+  Entry 1: [GCash ▼] ₱10,000 [Pay Now ✓]
+  Entry 2: [Cash ▼] ₱30,000 [Pay Now ✓]
+  Entry 3: [GCash ▼] ₱20,000 [Pay Later]
+  Entry 4: [PDO ▼] ₱40,000 Due: [May 15, 2026]
+
+Result:
+  - Immediate payments: ₱40,000 (₱10k GCash + ₱30k Cash)
+  - Pending: ₱20,000 (GCash later)
+  - PDO: ₱40,000 (check due May 15)
+
+SCENARIO 3: ₱40k Cash → ₱20k GCash → ₱40k PDO
+-----------------------------------------------------------------------
+
+  Entry 1: [Cash ▼] ₱40,000 [Pay Now ✓]
+  Entry 2: [GCash ▼] ₱20,000 [Pay Now ✓]
+  Entry 3: [PDO ▼] ₱40,000 Due: [May 15, 2026]
+
+Result:
+  - Immediate payments: ₱60,000 (₱40k Cash + ₱20k GCash)
+  - PDO: ₱40,000 (check due May 15)
+
+================================================================================
+  ANSWERING YOUR SPECIFIC QUESTIONS
+================================================================================
+
+Q1: "What will be the payment method sa customer products?"
+-----------------------------------------------------------------------
+A: There is NO SINGLE payment method anymore!
+
+Instead, the order has a PAYMENT SCHEDULE with multiple entries.
+
+In the system:
+  - sales.payment_schedule_type = 'flexible'
+  - View payment schedule to see all methods used
+
+For reporting/display:
+  - Show: "Mixed Payment" or "Flexible Schedule"
+  - Or list all methods: "Cash + GCash + PDO"
+
+Q2: "Kung magkano lang yung amount na ibigay nila kahit sa COD, cash yung 
+     pinammbayad na 50k lang sa 100k, edi sa sunod na yung iba like pwede 
+     na sya na PDO or GCash nalang the rest?"
+-----------------------------------------------------------------------
+A: ✅ YES! Exactly! That's what this system enables!
+
+Example:
+  Order: ₱100,000
+  Customer pays ₱50,000 Cash now
+  
+  Staff creates schedule:
+    Entry 1: [Cash ▼] ₱50,000 [Pay Now ✓]
+    Entry 2: [GCash ▼] ₱20,000 [Pay Later]
+    Entry 3: [PDO ▼] ₱30,000 Due: [May 15, 2026]
+  
+  Later, customer comes back:
+    - Pays Entry 2 via GCash
+    - Entry 3 PDO check clears on May 15
+    - Order fully paid!
+
+Q3: "Sa admins, are the cash/pdo/gcash/paylater?"
+-----------------------------------------------------------------------
+A: Admins see the PAYMENT SCHEDULE, not a single method.
+
+Admin view shows:
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Order #ORD-2026-04-24-123                                  │
+  │  Total: ₱100,000                                            │
+  │  Paid: ₱50,000 | Balance: ₱50,000                          │
+  │  Status: Partial Payment                                    │
+  │                                                             │
+  │  Payment Schedule (Flexible):                               │
+  │  ✅ Entry 1: ₱50,000 Cash (Paid Apr 24)                    │
+  │  ⏳ Entry 2: ₱20,000 GCash (Pending)                       │
+  │  🏦 Entry 3: ₱30,000 PDO (Due May 15, Pending Approval)   │
+  │                                                             │
+  │  [Record Payment] [View Full Schedule] [Modify Schedule]   │
+  └─────────────────────────────────────────────────────────────┘
+
+Q4: "So basically if the payment is not complete it will be staggered? 
+     Or iba pa yung staggered na option for it?"
+-----------------------------------------------------------------------
+A: Great question! Let me clarify:
+
+STAGGERED is now just ONE TYPE of payment schedule!
+
+Payment Schedule Types:
+  
+  1. SIMPLE (one payment, full amount)
+     - Customer pays full ₱100,000 now
+     - One entry, one method
+     - Example: ₱100,000 Cash (pay now)
+  
+  2. FLEXIBLE (multiple payments, any method, any timing)
+     - Your scenarios! Mix of cash/gcash/pdo
+     - No fixed schedule, customer decides when
+     - Example: ₱50k now, ₱30k later, ₱20k PDO
+  
+  3. STRUCTURED (traditional staggered - fixed schedule)
+     - Fixed installments with due dates
+     - Equal amounts, regular intervals
+     - Example: ₱20k down + 4 x ₱20k/month
+     - Can still use different methods per installment!
+
+So:
+  - Incomplete payment ≠ automatically staggered
+  - Incomplete payment = flexible schedule
+  - Staggered = structured schedule with fixed dates
+
+Example Comparison:
+
+  FLEXIBLE Schedule:
+    Entry 1: ₱50,000 Cash (pay now)
+    Entry 2: ₱30,000 GCash (pay whenever)
+    Entry 3: ₱20,000 PDO (due May 15)
+    → No fixed pattern, customer flexibility
+  
+  STRUCTURED Schedule (Traditional Staggered):
+    Entry 1: ₱20,000 Cash (down payment, pay now)
+    Entry 2: ₱20,000 Any method (due May 15)
+    Entry 3: ₱20,000 Any method (due Jun 15)
+    Entry 4: ₱20,000 Any method (due Jul 15)
+    Entry 5: ₱20,000 Any method (due Aug 15)
+    → Fixed pattern, scheduled dates, late fees apply
+
+Both use the SAME database structure!
+Just different schedule_type and due_date patterns.
+
+================================================================================
+  POS WORKFLOW: HOW STAFF USES THIS
+================================================================================
+
+OPTION 1: Quick Payment (Simple Schedule)
+-----------------------------------------------------------------------
+  1. Add items to cart: ₱100,000
+  2. Click "Quick Payment"
+  3. Select method: [Cash ▼]
+  4. Enter amount: ₱100,000
+  5. Click "Complete Order"
+  
+  Result: Simple schedule, one entry, fully paid
+
+OPTION 2: Partial Payment (Flexible Schedule)
+-----------------------------------------------------------------------
+  1. Add items to cart: ₱100,000
+  2. Click "Partial Payment"
+  3. Enter amount: ₱50,000
+  4. Select method: [Cash ▼]
+  5. Click "Record Payment"
+  6. System asks: "How will customer pay remaining ₱50,000?"
+     - Option A: "Pay later (flexible)" → creates one pending entry
+     - Option B: "Setup payment plan" → opens schedule builder
+  
+  Result: Flexible schedule, multiple entries
+
+OPTION 3: Payment Schedule (Flexible or Structured)
+-----------------------------------------------------------------------
+  1. Add items to cart: ₱100,000
+  2. Click "Setup Payment Schedule"
+  3. Choose type:
+     - [Flexible] - Customer decides timing
+     - [Structured] - Fixed installments with dates
+  4. Add payment entries one by one
+  5. System validates: total = order amount
+  6. Click "Save Schedule & Create Order"
+  
+  Result: Custom payment schedule
+
+================================================================================
+  REMOVING COD AND PAY_LATER AS "PAYMENT METHODS"
+================================================================================
+
+CURRENT PROBLEM:
+  - COD (Cash on Delivery) is confusing
+  - Pay Later is redundant
+  - They're not really "methods", they're "timing"
+
+NEW APPROACH:
+-----------------------------------------------------------------------
+
+Remove these as payment methods:
+  ❌ COD
+  ❌ Pay Later
+
+Keep only ACTUAL payment methods:
+  ✅ Cash
+  ✅ GCash
+  ✅ PDO (Post-Dated Order)
+
+How to handle COD and Pay Later:
+
+  OLD: "Payment Method: COD"
+  NEW: "Payment Schedule: Flexible"
+       Entry 1: Cash, amount=₱100,000, due_date=null, status='pending'
+       → This IS "pay later" - cash payment with no due date
+
+  OLD: "Payment Method: Pay Later"
+  NEW: Same as above - just a pending cash payment
+
+  OLD: "Payment Method: COD" (cash on delivery)
+  NEW: "Payment Schedule: Flexible"
+       Entry 1: Cash, amount=₱100,000, due_date=[delivery_date]
+       → Cash payment due on delivery date
+
+Benefits:
+  - Simpler system (3 methods instead of 5)
+  - More flexible (can mix timing with any method)
+  - Clearer meaning (method = how you pay, not when)
+
+Example Conversions:
+
+  OLD System:
+    Order 1: Payment Method = "COD"
+    Order 2: Payment Method = "Pay Later"
+    Order 3: Payment Method = "Cash"
+  
+  NEW System:
+    Order 1: Schedule Type = "Flexible"
+             Entry 1: Cash, ₱100k, due_date=[delivery], status='pending'
+    
+    Order 2: Schedule Type = "Flexible"
+             Entry 1: Cash, ₱100k, due_date=null, status='pending'
+    
+    Order 3: Schedule Type = "Simple"
+             Entry 1: Cash, ₱100k, due_date=null, status='paid'
+
+All three use "Cash" as method, but different timing/status!
+
+================================================================================
+  MIGRATION STRATEGY: OLD SYSTEM → NEW SYSTEM
+================================================================================
+
+For existing orders in old system:
+-----------------------------------------------------------------------
+
+1. Orders with payment_method = 'cash' and payment_status = 'paid':
+   → Create simple schedule
+   → One entry: cash, full amount, status='paid'
+
+2. Orders with payment_method = 'gcash' and payment_status = 'paid':
+   → Create simple schedule
+   → One entry: gcash, full amount, status='paid'
+
+3. Orders with payment_method = 'cod' and payment_status = 'not_paid':
+   → Create flexible schedule
+   → One entry: cash, full amount, due_date=[delivery], status='pending'
+
+4. Orders with payment_method = 'pay_later' and payment_status = 'not_paid':
+   → Create flexible schedule
+   → One entry: cash, full amount, due_date=null, status='pending'
+
+5. Orders with existing payment_plan (staggered):
+   → Create structured schedule
+   → Convert each installment to schedule entry
+   → Preserve due dates and amounts
+
+6. Orders with existing post_dated_order (PDO):
+   → Create flexible schedule
+   → Entry 1: down payment (if any)
+   → Entry 2: pdo, remaining amount, due_date=[pdo_date]
+
+================================================================================
+  ADMIN PAYMENTS MANAGEMENT PAGE - UPDATED
+================================================================================
+
+With this new system, the Payments Management page becomes even simpler!
+
+TAB 1: Payment Transactions (unchanged)
+-----------------------------------------------------------------------
+  - Shows all actual payment records
+  - Verify/hold/cancel GCash payments
+  - Same as before
+
+TAB 2: Payment Schedules (replaces Payment Plans + PDO tabs)
+-----------------------------------------------------------------------
+  Shows ALL orders with payment schedules (flexible or structured)
+  
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  📅 Payment Schedules                                          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Stats:                                                         │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+  │  │Active    │ │Pending   │ │Overdue   │ │Total     │          │
+  │  │Schedules │ │Entries   │ │Entries   │ │Receivable│          │
+  │  │45        │ │23        │ │8         │ │₱450,000  │          │
+  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  Filters: [Type ▼] [Status ▼] [Customer] [Date Range]         │
+  │  Type: All | Simple | Flexible | Structured                    │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  DataTable:                                                     │
+  │  ┌────────┬──────────┬──────────┬────────┬────────┬──────────┐ │
+  │  │Order   │Customer  │Total     │Paid    │Balance │Type      │ │
+  │  ├────────┼──────────┼──────────┼────────┼────────┼──────────┤ │
+  │  │ORD-045 │Juan Cruz │₱100,000  │₱50,000 │₱50,000 │Flexible  │ │
+  │  │        │          │3 entries │        │        │[View]    │ │
+  │  ├────────┼──────────┼──────────┼────────┼────────┼──────────┤ │
+  │  │ORD-043 │Maria S.  │₱80,000   │₱20,000 │₱60,000 │Structured│ │
+  │  │        │          │5 entries │        │        │[View]    │ │
+  │  └────────┴──────────┴──────────┴────────┴────────┴──────────┘ │
+  └─────────────────────────────────────────────────────────────────┘
+
+View Schedule Modal:
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Payment Schedule - Order #ORD-045                          │
+  ├─────────────────────────────────────────────────────────────┤
+  │  Customer: Juan Cruz                                        │
+  │  Total: ₱100,000 | Paid: ₱50,000 | Balance: ₱50,000       │
+  │  Type: Flexible Schedule                                    │
+  │                                                             │
+  │  Entries:                                                   │
+  │  ┌────┬────────┬────────┬──────────┬────────┬──────────┐  │
+  │  │#   │Method  │Amount  │Due Date  │Status  │Action    │  │
+  │  ├────┼────────┼────────┼──────────┼────────┼──────────┤  │
+  │  │1   │Cash    │₱50,000 │-         │✅ Paid │[View]    │  │
+  │  │    │        │        │          │Apr 24  │          │  │
+  │  ├────┼────────┼────────┼──────────┼────────┼──────────┤  │
+  │  │2   │GCash   │₱20,000 │-         │⏳ Pend │[Verify]  │  │
+  │  │    │        │        │          │        │          │  │
+  │  ├────┼────────┼────────┼──────────┼────────┼──────────┤  │
+  │  │3   │PDO     │₱30,000 │May 15    │🏦 Pend │[Approve] │  │
+  │  │    │Check   │        │          │Approval│          │  │
+  │  │    │#12345  │        │          │        │          │  │
+  │  └────┴────────┴────────┴──────────┴────────┴──────────┘  │
+  │                                                             │
+  │  [Record New Payment] [Modify Schedule] [Close]            │
+  └─────────────────────────────────────────────────────────────┘
+
+Benefits:
+  - One unified view for all payment schedules
+  - No need for separate PDO tab
+  - Clearer overview of payment structure
+  - Easier to manage mixed payment scenarios
+
+================================================================================
+  COMPARISON: OLD SYSTEM vs NEW SYSTEM
+================================================================================
+
+SCENARIO: ₱100k order, ₱50k cash now, ₱30k GCash later, ₱20k PDO
+
+OLD SYSTEM (Current):
+-----------------------------------------------------------------------
+❌ Cannot handle this scenario!
+
+Workarounds (all problematic):
+  1. Choose "Partial Payment" method
+     - Record ₱50k cash
+     - Record ₱30k GCash later
+     - ❌ Cannot add PDO for remaining ₱20k
+  
+  2. Choose "PDO" method
+     - ❌ Cannot record ₱50k cash + ₱30k GCash first
+     - PDO must be for full amount or with down payment only
+  
+  3. Choose "Staggered" method
+     - Create 3 installments
+     - ❌ Cannot specify PDO for one installment
+     - All installments treated the same
+
+Result: IMPOSSIBLE to implement your scenario correctly!
+
+NEW SYSTEM (Redesigned):
+-----------------------------------------------------------------------
+✅ Handles this perfectly!
+
+Steps:
+  1. Create order: ₱100,000
+  2. Setup payment schedule (flexible)
+  3. Add entries:
+     - Entry 1: Cash, ₱50,000, pay now
+     - Entry 2: GCash, ₱30,000, pay later
+     - Entry 3: PDO, ₱20,000, due May 15
+  4. Save schedule
+  5. Record Entry 1 payment immediately
+  6. Entry 2 and 3 remain pending
+
+Result: EXACTLY what you need!
+
+DATABASE COMPARISON:
+-----------------------------------------------------------------------
+
+OLD System (3 separate tables):
+  - payment_plans (for staggered)
+  - payment_plan_installments (for each installment)
+  - post_dated_orders (for PDO)
+  - payments (for actual payments)
+  → Cannot mix, mutual exclusivity
+
+NEW System (2 unified tables):
+  - payment_schedules (for any payment structure)
+  - payment_schedule_entries (for any payment entry)
+  - payments (for actual payments)
+  → Can mix freely, no restrictions
+
+CODE COMPLEXITY:
+-----------------------------------------------------------------------
+
+OLD System:
+  - 3 different services (SaleService, PaymentPlanService, PDOService)
+  - 3 different controllers
+  - Complex logic to determine which system to use
+  - Many edge cases and conversions
+
+NEW System:
+  - 1 unified service (PaymentScheduleService)
+  - 1 controller (PaymentScheduleController)
+  - Simple logic: everything is a schedule entry
+  - Fewer edge cases, easier to maintain
+
+================================================================================
+  IMPLEMENTATION RECOMMENDATION
+================================================================================
+
+OPTION A: Implement New System from Scratch
+-----------------------------------------------------------------------
+Pros:
+  ✅ Cleaner architecture
+  ✅ More flexible for future needs
+  ✅ Easier to maintain
+  ✅ Handles all your scenarios perfectly
+
+Cons:
+  ❌ More initial work
+  ❌ Need to migrate existing data
+  ❌ Need to update all related code
+
+Recommendation: DO THIS if starting fresh or early in development
+
+OPTION B: Extend Current System
+-----------------------------------------------------------------------
+Keep current system but add "Flexible Schedule" as new option:
+  - Keep: Partial, Staggered, PDO (for simple cases)
+  - Add: Flexible Schedule (for complex mixed scenarios)
+
+Pros:
+  ✅ Less disruption to existing code
+  ✅ Backward compatible
+  ✅ Can implement gradually
+
+Cons:
+  ❌ More complex codebase (4 systems instead of 1)
+  ❌ Still have mutual exclusivity issues
+  ❌ Harder to maintain long-term
+
+Recommendation: DO THIS if already in production with many orders
+
+OPTION C: Hybrid Approach (RECOMMENDED)
+-----------------------------------------------------------------------
+Implement new system but keep old system for existing orders:
+  1. Create new payment_schedules tables
+  2. New orders use new system
+  3. Old orders keep old system
+  4. Gradually migrate old orders to new system
+  5. Eventually deprecate old system
+
+Pros:
+  ✅ Best of both worlds
+  ✅ No disruption to existing orders
+  ✅ Clean architecture for new orders
+  ✅ Migration path is clear
+
+Cons:
+  ⚠️ Need to maintain both systems temporarily
+  ⚠️ More testing needed
+
+Recommendation: BEST APPROACH for most situations
+
+================================================================================
+  FINAL RECOMMENDATION
+================================================================================
+
+Based on your scenarios and requirements, I STRONGLY RECOMMEND:
+
+🎯 IMPLEMENT THE NEW UNIFIED FLEXIBLE PAYMENT SYSTEM
+
+Why:
+  1. Your business needs are complex (mixed payment methods)
+  2. Current system cannot handle your scenarios
+  3. New system is simpler and more maintainable
+  4. Future-proof for any payment scenario
+  5. Better user experience for staff and customers
+
+Implementation Plan:
+  
+  Phase 1: Database & Backend (2-3 weeks)
+    - Create payment_schedules tables
+    - Create PaymentSchedule models
+    - Create PaymentScheduleService
+    - Create PaymentScheduleController
+    - Write tests
+  
+  Phase 2: POS Integration (2 weeks)
+    - Update POS to use payment schedule builder
+    - Add quick payment options
+    - Add schedule type selector
+    - Test all scenarios
+  
+  Phase 3: Admin Interface (2 weeks)
+    - Update Payments Management page
+    - Add schedule viewer/editor
+    - Add approval workflows for PDO entries
+    - Test admin workflows
+  
+  Phase 4: Migration & Cleanup (1 week)
+    - Migrate existing orders to new system
+    - Deprecate old payment_plans and post_dated_orders tables
+    - Update reports and analytics
+    - Final testing
+  
+  Total: 7-8 weeks for complete implementation
+
+This will solve ALL your payment scenarios and make the system
+much more flexible for future needs!
+
+================================================================================
+  QUICK REFERENCE: KEY CHANGES SUMMARY
+================================================================================
+
+REMOVE:
+  ❌ payment_method column from sales table
+  ❌ COD as payment method
+  ❌ Pay Later as payment method
+  ❌ payment_plans table (replaced)
+  ❌ payment_plan_installments table (replaced)
+  ❌ post_dated_orders table (replaced)
+  ❌ Mutual exclusivity between payment types
+
+ADD:
+  ✅ payment_schedule_type column to sales table
+  ✅ payment_schedules table (unified)
+  ✅ payment_schedule_entries table (unified)
+  ✅ Flexible payment schedule support
+  ✅ Mixed payment method support
+
+KEEP:
+  ✅ payments table (actual payment records)
+  ✅ amount_paid, balance_remaining in sales
+  ✅ payment_status (paid, partial, not_paid)
+  ✅ Payment verification workflow
+  ✅ GCash verification process
+
+PAYMENT METHODS (simplified to 3):
+  1. Cash - immediate or deferred
+  2. GCash - with verification
+  3. PDO - with approval workflow
+
+PAYMENT SCHEDULE TYPES:
+  1. Simple - one payment, full amount
+  2. Flexible - multiple payments, any method, any timing
+  3. Structured - fixed installments with due dates
+
+================================================================================
+  CONCLUSION
+================================================================================
+
+Your questions revealed a CRITICAL GAP in the original design!
+
+The original system was too rigid:
+  - Forced you to choose ONE payment structure
+  - Couldn't mix payment methods freely
+  - Couldn't handle real-world complex scenarios
+
+The NEW UNIFIED FLEXIBLE PAYMENT SYSTEM:
+  ✅ Handles ALL your scenarios perfectly
+  ✅ Simpler database structure
+  ✅ More flexible for any payment arrangement
+  ✅ Easier to maintain and extend
+  ✅ Better user experience
+
+This is a MAJOR improvement over the original design!
+
+Thank you for asking these questions - they led to a much better solution! 🎉
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
