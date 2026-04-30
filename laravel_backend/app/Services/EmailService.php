@@ -7,6 +7,8 @@ use App\Mail\CustomerLoginNotification;
 use App\Mail\DailyUnpaidOrdersReport;
 use App\Mail\DeliveryAssigned;
 use App\Mail\DeliveryAssignmentNotification;
+use App\Mail\InstallmentDueAdminAlert;
+use App\Mail\InstallmentDueReminder;
 use App\Mail\LoginNotification;
 use App\Mail\NewOrderNotification;
 use App\Mail\OrderPlacedCustomer;
@@ -18,11 +20,11 @@ use App\Mail\WelcomeAccount;
 use App\Jobs\SendEmail;
 use App\Models\BusinessSetting;
 use App\Models\DeliveryAssignment;
+use App\Models\PaymentInstallment;
 use App\Models\Procurement;
 use App\Models\Sale;
-use App\Models\Supplier;
 use App\Models\User;
-use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
 
 class EmailService
@@ -265,6 +267,50 @@ class EmailService
 
         $totalUnpaid = $unpaidOrders->sum('total');
         $this->sendSafely($adminEmail, new DailyUnpaidOrdersReport($unpaidOrders, $totalUnpaid));
+    }
+
+    /**
+     * Send installment due reminders.
+     * - Admin gets one consolidated digest email.
+     * - Each customer gets an individual email per installment.
+     * Skips installments that are already fully paid or cancelled.
+     */
+    public function sendInstallmentReminders(): void
+    {
+        $today = Carbon::today();
+        $threeDaysLater = Carbon::today()->addDays(3);
+
+        // Load all pending/partial installments with sale + customer
+        $installments = PaymentInstallment::whereIn('status', ['pending', 'partial'])
+            ->whereNotNull('due_date')
+            ->with(['sale.customer'])
+            ->get();
+
+        $overdue  = $installments->filter(fn($i) => Carbon::parse($i->due_date)->lt($today));
+        $dueToday = $installments->filter(fn($i) => Carbon::parse($i->due_date)->isSameDay($today));
+        $upcoming = $installments->filter(fn($i) => Carbon::parse($i->due_date)->isSameDay($threeDaysLater));
+
+        // ---- Admin digest ----
+        if ($overdue->count() + $dueToday->count() + $upcoming->count() > 0) {
+            $adminEmail = $this->getAdminEmail();
+            if ($adminEmail) {
+                $this->sendSafely($adminEmail, new InstallmentDueAdminAlert($dueToday, $overdue, $upcoming));
+            }
+        }
+
+        // ---- Per-customer reminders ----
+        $toNotify = collect()
+            ->merge($overdue->map(fn($i) => ['installment' => $i, 'type' => 'overdue']))
+            ->merge($dueToday->map(fn($i) => ['installment' => $i, 'type' => 'due_today']))
+            ->merge($upcoming->map(fn($i) => ['installment' => $i, 'type' => 'reminder']));
+
+        foreach ($toNotify as $item) {
+            $installment = $item['installment'];
+            $customerEmail = $installment->sale?->customer?->email;
+            if ($customerEmail) {
+                $this->sendSafely($customerEmail, new InstallmentDueReminder($installment, $item['type']));
+            }
+        }
     }
 
     /**

@@ -54,7 +54,7 @@ const PaymentsManagement = () => {
             className={`px-6 py-3 text-sm font-semibold transition-all relative
               ${activeTab === tab.key
                 ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-500 -mb-[2px] bg-primary-50 dark:bg-primary-900/20'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50'
               }
             `}
           >

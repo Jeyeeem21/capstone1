@@ -1,5 +1,5 @@
-import { Clock, X, AlertCircle, CheckCircle } from 'lucide-react';
-import { Button } from '../ui';
+import { AlertCircle, CheckCircle } from 'lucide-react';
+import { Button, Modal } from '../ui';
 
 const CreditPaymentModal = ({ amount, customerName, onSubmit, onCancel }) => {
   const handleSubmit = () => {
@@ -10,28 +10,19 @@ const CreditPaymentModal = ({ amount, customerName, onSubmit, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-t-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-lg">
-                <Clock size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Credit Payment</h3>
-                <p className="text-purple-100 text-sm">Pay Later / On Account</p>
-              </div>
-            </div>
-            <button onClick={onCancel} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
-              <X size={20} />
-            </button>
-          </div>
+    <Modal
+      isOpen={true}
+      onClose={onCancel}
+      title="Credit Payment"
+      size="md"
+      footer={
+        <div className="flex gap-3">
+          <Button onClick={onCancel} variant="outline" className="flex-1">Cancel</Button>
+          <Button onClick={handleSubmit} className="flex-1">Confirm Credit</Button>
         </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-4">
+      }
+    >
+      <div className="space-y-4">
           {/* Amount Display */}
           <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">Amount to Credit</p>
@@ -72,19 +63,8 @@ const CreditPaymentModal = ({ amount, customerName, onSubmit, onCancel }) => {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl flex gap-3">
-          <Button onClick={onCancel} variant="outline" className="flex-1">
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} className="flex-1 bg-purple-600 hover:bg-purple-700">
-            Confirm Credit
-          </Button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

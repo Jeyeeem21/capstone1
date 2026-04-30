@@ -4,11 +4,12 @@ namespace App\Services;
 
 use App\Models\Sale;
 use App\Models\PaymentInstallment;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class StaggeredPaymentService
 {
-    protected $paymentService;
+    protected PaymentService $paymentService;
 
     public function __construct(PaymentService $paymentService)
     {
@@ -157,7 +158,7 @@ class StaggeredPaymentService
             ->where('pdo_approval_status', 'pending')
             ->update([
                 'pdo_approval_status' => 'approved',
-                'pdo_approved_by' => auth()->id(),
+                'pdo_approved_by' => Auth::id(),
             ]);
 
         return $sale->fresh();

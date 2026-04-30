@@ -354,9 +354,16 @@ class ProductController extends Controller
                 'sources' => 'required|array|min:1',
                 'sources.*.processing_id' => 'required|integer|exists:processings,id',
                 'sources.*.kg_to_take' => 'required|numeric|min:0.01',
+                'sack_price_per_unit'      => 'nullable|numeric|min:0',
+                'packaging_twines_price'   => 'nullable|numeric|min:0',
             ]);
 
-            $result = $this->productService->distributeStockFromProcessing($id, $validated['sources']);
+            $result = $this->productService->distributeStockFromProcessing(
+                $id,
+                $validated['sources'],
+                (float) ($validated['sack_price_per_unit'] ?? 0),
+                (float) ($validated['packaging_twines_price'] ?? 0)
+            );
 
             $this->logAudit('UPDATE', 'Products', "Distributed stock to product #{$id}", [
                 'product_id' => $id,

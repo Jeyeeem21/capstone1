@@ -10,9 +10,8 @@ use App\Models\Supplier;
 use App\Models\Procurement;
 use App\Models\Processing;
 use App\Models\DryingProcess;
-use App\Models\StockLog;
+use App\Models\PaymentInstallment;
 use App\Models\AuditTrail;
-use App\Models\DeliveryAssignment;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
 
@@ -57,6 +56,7 @@ class DashboardService
                 'pipeline' => $pointRange
                     ? $this->getPipelineSummaryForRange($pointRange['start'], $pointRange['end'])
                     : $this->getPipelineSummary($period, $chartParams),
+                'installment_dues' => $this->getInstallmentDueSummary(),
                 'period' => $period,
                 'point' => $point,
                 'point_label' => $pointRange['label'] ?? null,
@@ -886,6 +886,35 @@ class DashboardService
             'out_of_stock' => $outOfStock,
             'healthy' => $healthy,
             'total_products' => $products->count(),
+        ];
+    }
+
+    /**
+     * Installment due summary for dashboard card.
+     */
+    private function getInstallmentDueSummary(): array
+    {
+        $today = Carbon::today();
+
+        $overdue = PaymentInstallment::whereIn('status', ['pending', 'partial'])
+            ->whereNotNull('due_date')
+            ->whereDate('due_date', '<', $today)
+            ->count();
+
+        $dueToday = PaymentInstallment::whereIn('status', ['pending', 'partial'])
+            ->whereNotNull('due_date')
+            ->whereDate('due_date', $today)
+            ->count();
+
+        $upcoming = PaymentInstallment::whereIn('status', ['pending', 'partial'])
+            ->whereNotNull('due_date')
+            ->whereBetween('due_date', [$today->copy()->addDay(), $today->copy()->addDays(3)])
+            ->count();
+
+        return [
+            'overdue'   => $overdue,
+            'due_today' => $dueToday,
+            'upcoming'  => $upcoming,
         ];
     }
 

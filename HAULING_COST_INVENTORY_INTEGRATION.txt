@@ -1,0 +1,653 @@
+================================================================================
+HAULING, TWINES & MILLING COST — INVENTORY INTEGRATION (OWN LINE ITEMS)
+================================================================================
+Date: April 30, 2026
+Purpose: Connect hauling, twines/tali, AND milling (processing) costs all the
+         way into product cost analysis and StockLog records. Each tracked as
+         a separate cost bucket alongside procurement_cost and drying_cost.
+================================================================================
+
+
+PART 1 — MIGRATIONS (all ran ✓)
+================================================================================
+
+2026_04_30_000001 → procurements:  hauling_price_per_sack  DECIMAL(12,2) NULL
+2026_04_30_000002 → procurements:  hauling_sacks           UNSIGNED INT NULL
+2026_04_30_000003 → stock_logs:    hauling_cost            DECIMAL(10,2) NULL
+2026_04_30_000004 → procurements:  twines_price_per_sack   DECIMAL(12,2) NULL  (later renamed)
+2026_04_30_000005 → stock_logs:    twines_cost             DECIMAL(10,2) NULL
+2026_04_30_000006 → procurements:  RENAME twines_price_per_sack → twines_price
+2026_04_30_000007 → processings:   milling_cost_per_kg     DECIMAL(10,2) NULL  ← NEW
+2026_04_30_000008 → stock_logs:    milling_cost            DECIMAL(10,2) NULL  ← NEW
+
+stock_logs cost columns (full set, in order):
+  procurement_cost  ← raw rice cost (₱/kg × kg)
+  hauling_cost      ← transport cost (proportional share)
+  twines_cost       ← tali/twines cost (flat total, proportional)
+  milling_cost      ← milling fee (₱/output_kg × kg taken)  ← NEW
+  drying_cost       ← drying cost (sacks × ₱/sack × days)
+  total_cost        ← sum of all five
+
+
+PART 2 — FILES CHANGED
+================================================================================
+
+A. Procurement Fields (hauling + twines)
+────────────────────────────────────────────────────────────────────────────────
+Files: Models/Procurement.php, Controllers/ProcurementController.php,
+       Resources/ProcurementResource.php
+
+Fields on procurements table:
+  hauling_price_per_sack  DECIMAL(12,2) — cost per sack to transport
+  hauling_sacks           INT NULL      — override sack count (defaults to sacks)
+  twines_price            DECIMAL(12,2) — flat total twines/tali cost (NOT per sack)
+
+total_cost formula (boot()):
+  (kg × price_per_kg) + (hauling_sacks × hauling_price_per_sack) + twines_price
+
+Validation (store + update):
+  'hauling_price_per_sack' => 'nullable|numeric|min:0'
+  'hauling_sacks'          => 'nullable|integer|min:0'
+  'twines_price'           => 'nullable|numeric|min:0'
+
+API response (ProcurementResource):
+  hauling_price_per_sack, hauling_sacks, hauling_cost (computed)
+  twines_price, twines_cost = twines_price (flat, same value)
+
+Note — Hauling vs Twines sacks:
+  Hauling has hauling_sacks override (may haul fewer sacks than procured).
+  Twines has NO override — always the flat total the user enters directly.
+
+
+B. Processing Field (milling cost)
+────────────────────────────────────────────────────────────────────────────────
+Files: Models/Processing.php, Controllers/ProcessingController.php,
+       Services/ProcessingService.php, Resources/ProcessingResource.php
+
+Field on processings table:
+  milling_cost_per_kg  DECIMAL(10,2) NULL — cost per kg of OUTPUT (milling fee)
+  Entered when the user clicks "Complete Processing".
+
+Validation (complete endpoint):
+  'milling_cost_per_kg' => 'nullable|numeric|min:0'
+
+ProcessingService.completeProcessing($processing, $outputKg, $millingCostPerKg = 0):
+  Saves milling_cost_per_kg = null when 0, else the entered value.
+
+ProcessingResource:
+  Exposes 'milling_cost_per_kg' => float or null
+
+Total milling cost for a processing = milling_cost_per_kg × output_kg
+(proportionally allocated when only part of the output is distributed)
+
+
+C. StockLog MODEL
+────────────────────────────────────────────────────────────────────────────────
+File: Models/StockLog.php
+  $fillable + $casts: hauling_cost, twines_cost, milling_cost, drying_cost, total_cost
+
+
+D. ProductService — computeProcessingCost()
+────────────────────────────────────────────────────────────────────────────────
+File: Services/ProductService.php
+
+Traces: Processing → DryingSources → Procurement
+Computes per-kg cost breakdown.
+
+Milling added:
+  $millingCost = milling_cost_per_kg × output_kg
+  Included in totalCost and returned as 'milling_cost' key.
+
+Return keys:
+  procurement_cost, hauling_cost, twines_cost, drying_cost, milling_cost,
+  total_cost, cost_per_kg
+
+Hauling (individual drying path):
+  haulingSacks   = hauling_sacks ?? sacks ?? 0
+  haulingRate    = hauling_price_per_sack ?? 0
+  procKgFraction = dryingTotalKg / proc.quantity_kg
+  haulingShare   = fraction × procKgFraction × (haulingSacks × haulingRate)
+
+Twines (individual drying path):
+  twinesTotal    = proc.twines_price ?? 0   (flat total)
+  twinesShare    = fraction × procKgFraction × twinesTotal
+
+Batch drying paths: same logic per bp with bpProcFraction = bp.kg / bpProc.kg
+
+
+E. ProductService — distributeStockFromProcessing()
+────────────────────────────────────────────────────────────────────────────────
+  Accumulators: totalProcurementCost, totalHaulingCost, totalTwinesCost,
+                totalDryingCost, totalMillingCost
+  totalCost = sum of all five
+  StockLog::create() writes all five cost columns.
+
+
+F. ProductService — getProductCostAnalysis()
+────────────────────────────────────────────────────────────────────────────────
+  Primary path (StockLog): sums all 5 cost columns from stock_logs
+  Fallback path:           computes from processings via computeProcessingCost()
+  Empty path:              returns 0 for all
+
+  Response now includes: total_milling_cost (NEW) alongside hauling, twines,
+  procurement, drying totals.
+
+
+G. Procurement.jsx (FRONTEND)
+────────────────────────────────────────────────────────────────────────────────
+File: react_frontend/src/pages/admin/Procurement/Procurement.jsx
+
+  Scissor icon added (lucide-react).
+  formData: hauling_price_per_sack, hauling_sacks, twines_price
+  calculatedTotal: (qty×price) + (haulingSacks×haulingPrice) + twinesPrice
+  performSubmit(): sends all three fields (null when blank)
+  Table: sub-lines for hauling (orange) + twines (teal)
+  View modal: orange Truck card (hauling) + teal Scissors card (twines)
+  Add/Edit modal: 2-col grid for hauling + full-width twines field
+  Cost breakdown: Procurement / Hauling / Twines / Total
+
+
+H. Processing.jsx — Complete Processing Modal (FRONTEND)
+────────────────────────────────────────────────────────────────────────────────
+File: react_frontend/src/pages/admin/Processing/Processing.jsx
+
+  completeFormData state: added milling_cost_per_kg: ''
+  Reset on open: milling_cost_per_kg: ''
+  handleCompleteFormChange: handles milling_cost_per_kg (no auto-calc, simple field)
+  handleCompleteSubmit: sends milling_cost_per_kg (null when blank)
+
+  Modal UI: new "Milling / Processing Cost (₱/kg)" input field
+    Below output_kg input, above the auto-calc husk/yield grid
+    Hint shows: "Total milling cost: ₱X" when both fields are filled
+
+
+PART 3 — COST FLOW DIAGRAM
+================================================================================
+
+[Procurement]
+  quantity_kg × price_per_kg  → procurement_cost
+  hauling_sacks × hauling_price_per_sack  → hauling_cost
+  twines_price (flat)         → twines_cost
+  total_cost stored on record
+        ↓
+[DryingProcess]
+  sacks × price × days → drying cost
+        ↓
+[Processing]
+  milling_cost_per_kg × output_kg → milling_cost   ← NEW
+        ↓
+[computeProcessingCost()]
+  proportionally allocates all 5 costs to the kg taken
+        ↓
+[StockLog]
+  procurement_cost | hauling_cost | twines_cost | milling_cost | drying_cost
+  total_cost = sum of all five
+        ↓
+[getProductCostAnalysis()]
+  total_procurement_cost | total_hauling_cost | total_twines_cost
+  total_milling_cost (NEW) | total_drying_cost | total_production_cost
+  avg_cost_per_unit, profit_margin
+
+
+PART 4 — WHAT IS NOT YET DONE (FRONTEND — INVENTORY)
+================================================================================
+
+Inventory.jsx "costs" tab has NOT yet been updated to display milling_cost
+(or hauling/twines that were already added earlier).
+
+When ready, the breakdown should show:
+  Procurement Cost:  ₱X
+  Hauling Cost:      ₱X
+  Twines Cost:       ₱X
+  Milling Cost:      ₱X   ← new
+  Drying Cost:       ₱X
+  ─────────────────────
+  Total Cost:        ₱X
+
+
+================================================================================
+END OF DOCUMENT — Last updated: April 30, 2026
+================================================================================
+Date: April 30, 2026
+Purpose: Connect hauling AND twines/tali costs from procurement all the way
+         into product cost analysis. Both tracked as separate cost buckets
+         alongside the existing procurement_cost and drying_cost.
+================================================================================
+
+
+PART 1 — WHAT WAS CHANGED
+================================================================================
+
+1. MIGRATIONS (4 total — all ran ✓)
+────────────────────────────────────────────────────────────────────────────────
+2026_04_30_000001 → procurements: hauling_price_per_sack DECIMAL(12,2) NULL
+2026_04_30_000002 → procurements: hauling_sacks UNSIGNED INT NULL
+2026_04_30_000003 → stock_logs:   hauling_cost DECIMAL(10,2) NULL
+2026_04_30_000004 → procurements: twines_price_per_sack DECIMAL(12,2) NULL
+2026_04_30_000005 → stock_logs:   twines_cost DECIMAL(10,2) NULL
+
+  stock_logs cost columns (full set):
+    procurement_cost  ← raw rice cost (₱/kg × kg)
+    hauling_cost      ← transport cost (₱/sack × hauling_sacks)
+    twines_cost       ← tali/twines cost (₱/sack × sacks)
+    drying_cost       ← drying cost (sacks × ₱/sack × days)
+    total_cost        ← sum of all four
+
+
+2. Procurement MODEL
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Models/Procurement.php
+
+  $fillable: added 'twines_price_per_sack'
+  $casts:    added 'twines_price_per_sack' => 'decimal:2'
+
+  boot() total_cost formula:
+    OLD: (kg × price/kg) + hauling_cost
+    NEW: (kg × price/kg) + hauling_cost + twines_cost
+    where:
+      hauling_cost = (hauling_sacks ?? sacks ?? 0) × (hauling_price_per_sack ?? 0)
+      twines_cost  = (sacks ?? 0) × (twines_price_per_sack ?? 0)
+
+  Note: Twines always uses procurement sacks — no override field needed.
+  Every sack gets tied with twines at procurement.
+
+
+3. ProcurementController
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Http/Controllers/ProcurementController.php
+
+  store() and update() validation — added:
+    'twines_price_per_sack' => 'nullable|numeric|min:0'
+
+
+4. ProcurementResource
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Http/Resources/ProcurementResource.php
+
+  New fields in API response:
+    'twines_price_per_sack' → float or null
+    'twines_cost'           → computed: sacks × twines_price_per_sack
+
+
+5. StockLog MODEL
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Models/StockLog.php
+
+  $fillable: added 'twines_cost'
+  $casts:    added 'twines_cost' => 'decimal:2'
+
+
+6. ProductService — computeProcessingCost()
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Services/ProductService.php
+
+  Added $totalTwinesCost = 0 accumulator.
+  Updated lazy-load to include twines_price_per_sack on procurement.
+
+  Individual drying path — twines calculation:
+    twinesRate     = proc.twines_price_per_sack ?? 0
+    procSacks      = proc.sacks ?? 0
+    procKgFraction = dryingTotalKg / proc.quantity_kg
+    twinesShare    = fraction × procKgFraction × (procSacks × twinesRate)
+
+  Batch drying path — per batch procurement entry:
+    bpTwinesRate   = bpProc.twines_price_per_sack ?? 0
+    bpSacks        = bpProc.sacks ?? 0
+    bpProcFraction = bp.quantity_kg / bpProc.quantity_kg
+    twinesForEntry = bpProcFraction × (bpSacks × bpTwinesRate)
+    (then scaled by the overall fraction of drying kg taken)
+
+  totalCost = procurement + hauling + twines + drying
+  Return now includes 'twines_cost' key.
+
+
+7. ProductService — distributeStockFromProcessing()
+────────────────────────────────────────────────────────────────────────────────
+  $totalTwinesCost accumulator added.
+  Aggregates cost['twines_cost'] × fraction.
+  totalCost = procurement + hauling + twines + drying.
+  StockLog::create() writes 'twines_cost' => round($totalTwinesCost, 2).
+
+
+8. ProductService — getProductCostAnalysis()
+────────────────────────────────────────────────────────────────────────────────
+  Primary path (StockLog): returns 'total_twines_cost' => stockLogs->sum('twines_cost')
+  Fallback path:           accumulates twines, returns 'total_twines_cost'
+  Empty-data return:       'total_twines_cost' => 0
+
+
+9. ProductService — getCompletedProcessingsByVariety()
+────────────────────────────────────────────────────────────────────────────────
+  All procurement eager-load select lists updated to include twines_price_per_sack.
+
+
+10. Procurement.jsx (FRONTEND)
+────────────────────────────────────────────────────────────────────────────────
+File: react_frontend/src/pages/admin/Procurement/Procurement.jsx
+
+  a) Import: added Scissors icon from lucide-react (for twines card in view modal)
+
+  b) formData state: added 'twines_price_per_sack': ''
+
+  c) handleAdd() reset: added twines_price_per_sack: ''
+
+  d) handleEdit(): populates twines_price_per_sack from item data (null → '')
+
+  e) calculatedTotal useMemo:
+       const twinesPrice = parseFloat(formData.twines_price_per_sack) || 0;
+       const sacks       = parseInt(formData.sacks) || 0;
+       return (qty × price) + (haulingSacks × haulingPrice) + (sacks × twinesPrice)
+
+  f) performSubmit(): sends twines_price_per_sack: parseFloat(...) or null
+
+  g) TABLE columns:
+     - Price/kg cell: shows "+₱X/sack twines" sub-line in teal when set
+     - Total Cost cell: shows "incl. ₱X twines" sub-line in teal when set
+
+  h) VIEW MODAL: teal card with Scissors icon, shows:
+       sacks × ₱rate = ₱total_twines_cost
+
+  i) ADD MODAL:
+       "Twines / Tali Price per Sack (₱)" input field (full width, below hauling grid)
+       Cost breakdown updated: Procurement / Hauling / Twines / Total
+
+  j) EDIT MODAL (full edit):
+       Same twines input field before the drying info banner
+       Cost breakdown updated: same as add modal
+
+
+================================================================================
+PART 2 — COST FLOW DIAGRAM (AFTER ALL CHANGES)
+================================================================================
+
+[Procurement]
+  quantity_kg, price_per_kg, sacks
+  hauling_price_per_sack, hauling_sacks
+  twines_price_per_sack                          ← NEW
+  total_cost = (kg × ₱/kg)
+             + (hauling_sacks × hauling_rate)
+             + (sacks × twines_rate)             ← NEW
+        |
+        ↓
+[DryingProcess]
+  sacks, price, days → total_price = sacks × price × days
+        |
+        ↓
+[Processing → computeProcessingCost()]
+  procurement_cost  ✓
+  hauling_cost      ✓
+  twines_cost       ✓ NEW
+  drying_cost       ✓
+        |
+        ↓
+[StockLog]
+  procurement_cost, hauling_cost, twines_cost, drying_cost, total_cost  ✓
+        |
+        ↓
+[getProductCostAnalysis()]
+  total_procurement_cost, total_hauling_cost,
+  total_twines_cost (NEW), total_drying_cost,
+  total_production_cost, avg_cost_per_unit, profit_margin  ✓
+
+
+================================================================================
+PART 3 — KEY DESIGN DECISIONS
+================================================================================
+
+Hauling vs Twines sacks:
+  - Hauling has a separate hauling_sacks override field because you may haul
+    fewer sacks than you procured (e.g., split delivery).
+  - Twines has NO separate sacks field — you always tie every sack at
+    procurement time. Uses procurement.sacks directly.
+
+Both are NULL-safe:
+  - Old records (NULL fields) → ₱0 contribution — no errors, no wrong costs.
+
+Both are their own cost buckets in StockLog:
+  - Allows granular reporting: how much did hauling cost this batch? twines?
+  - Frontend Inventory costs tab can show all four lines separately when ready.
+
+
+================================================================================
+PART 4 — WHAT IS NOT YET DONE (FRONTEND — INVENTORY)
+================================================================================
+
+The costAnalysis response from the API now includes total_twines_cost, but the
+Inventory.jsx "costs" tab frontend has NOT yet been updated to display it.
+
+When that work is done, the breakdown display should show:
+  Procurement Cost:  ₱X
+  Hauling Cost:      ₱X
+  Twines Cost:       ₱X   ← add this row
+  Drying Cost:       ₱X
+  ─────────────────────
+  Total Cost:        ₱X
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+Date: April 30, 2026
+Purpose: Connect hauling cost from procurement all the way into product
+         cost analysis, with hauling tracked as its own separate cost bucket
+         (like drying_cost is already separate from procurement_cost).
+================================================================================
+
+
+PART 1 — WHAT WAS CHANGED
+================================================================================
+
+1. MIGRATION
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/database/migrations/2026_04_30_000003_add_hauling_cost_to_stock_logs.php
+  → Adds column: hauling_cost DECIMAL(10,2) NULLABLE DEFAULT NULL
+  → Table: stock_logs
+  → Position: after procurement_cost
+  → Status: MIGRATED ✓
+
+  stock_logs cost columns now read:
+    procurement_cost  ← raw rice cost (₱/kg × kg)
+    hauling_cost      ← NEW: transport cost (₱/sack × sacks, proportional)
+    drying_cost       ← existing: drying cost (sacks × ₱/sack × days)
+    total_cost        ← sum of all three
+
+
+2. StockLog MODEL
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Models/StockLog.php
+
+  $fillable — added:
+    'hauling_cost'
+
+  $casts — added:
+    'hauling_cost' => 'decimal:2'
+
+
+3. ProductService — computeProcessingCost()
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Services/ProductService.php
+
+  This function traces: Processing → DryingProcess → Procurement
+  and computes the cost breakdown for the kg taken.
+
+  BEFORE: returned procurement_cost + drying_cost (hauling was missing)
+  AFTER:  returns procurement_cost + hauling_cost + drying_cost
+
+  Changes:
+  a) Added $totalHaulingCost = 0 variable
+  b) Updated lazy-load to include hauling fields on procurement:
+       :id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks
+     (both individual and batch paths)
+  c) Individual drying path — hauling calculation:
+       haulingSacks   = hauling_sacks ?? sacks ?? 0
+       haulingRate    = hauling_price_per_sack ?? 0
+       procKgFraction = dryingTotalKg / procurement.quantity_kg
+       haulingShare   = fraction × procKgFraction × (haulingSacks × haulingRate)
+       (fraction = kgTaken / dryingTotalKg)
+  d) Batch drying path — per batch procurement entry:
+       bpHaulingSacks  = bp.procurement.hauling_sacks ?? bp.procurement.sacks ?? 0
+       bpHaulingRate   = bp.procurement.hauling_price_per_sack ?? 0
+       bpProcFraction  = bp.quantity_kg / bp.procurement.quantity_kg
+       haulingForEntry = bpProcFraction × (bpHaulingSacks × bpHaulingRate)
+       (then scaled by the overall fraction of drying kg taken)
+  e) totalCost = procurement + hauling + drying
+  f) Return now includes 'hauling_cost' key
+
+  IMPORTANT — null safety:
+  If a procurement has no hauling fields set (older records), hauling_cost = 0.
+  No data loss or errors on historical data.
+
+
+4. ProductService — distributeStockFromProcessing()
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Services/ProductService.php
+
+  This is called when admin distributes processing kg into product stock.
+  It computes cost breakdown and writes a StockLog record.
+
+  Changes:
+  a) The proc->load() inside the cost loop now includes hauling fields on
+     procurement (both individual and batch paths)
+  b) Added $totalHaulingCost = 0 accumulator
+  c) Aggregates cost['hauling_cost'] × fraction for each source
+  d) totalCost = procurement + hauling + drying
+  e) StockLog::create() now writes 'hauling_cost' => round($totalHaulingCost, 2)
+
+
+5. ProductService — getProductCostAnalysis()
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Services/ProductService.php
+
+  This is called by the Inventory page costs tab and view/edit modals.
+
+  Primary path (reads StockLog):
+  - Return now includes: 'total_hauling_cost' => stockLogs->sum('hauling_cost')
+
+  Fallback path (computes from processings when no stock logs exist):
+  - Fallback load now includes hauling fields on procurement
+  - Added $totalHaulingCost = 0 accumulator in loop
+  - Aggregates cost['hauling_cost'] × distributedFraction
+  - totalCost = procurement + hauling + drying
+  - Empty-data return now includes: 'total_hauling_cost' => 0
+  - Data return now includes: 'total_hauling_cost' => round($totalHaulingCost, 2)
+
+
+6. ProductService — getCompletedProcessingsByVariety()
+────────────────────────────────────────────────────────────────────────────────
+File: laravel_backend/app/Services/ProductService.php
+
+  This loads processings for the "Add Stock" modal in Inventory page.
+  computeProcessingCost() is called on each result to show cost breakdown.
+
+  Change: The eager-loaded procurement field list now includes hauling fields:
+    dryingSources.procurement:...,sacks,hauling_price_per_sack,hauling_sacks
+    dryingSources.batchProcurements.procurement:...,sacks,hauling_price_per_sack,hauling_sacks
+
+  Without this, computeProcessingCost() would find dryingSources already loaded
+  (skipping its own lazy-load) but would have null hauling fields → ₱0 hauling.
+
+
+================================================================================
+PART 2 — COST FLOW DIAGRAM (AFTER CHANGES)
+================================================================================
+
+[Procurement]
+  quantity_kg, price_per_kg, sacks
+  hauling_price_per_sack, hauling_sacks
+  total_cost = (kg × ₱/kg) + (hauling_sacks × hauling_rate)  ✓
+        |
+        ↓  (procurement_id or batch_id)
+[DryingProcess]
+  sacks, price, days
+  total_price = sacks × price × days  (drying cost only)
+        |
+        ↓  (dryingSources pivot: quantity_kg)
+[Processing]
+  input_kg, output_kg, stock_out
+        |
+        ↓  distributeStockFromProcessing()
+[computeProcessingCost()]  — NOW INCLUDES HAULING
+  procurement_cost  = kg_fraction × (dryingKg × price_per_kg)        ✓
+  hauling_cost      = kg_fraction × procKgFraction × hauling_total    ✓ NEW
+  drying_cost       = kg_fraction × drying.total_price                ✓
+        |
+        ↓
+[StockLog]
+  procurement_cost  ✓
+  hauling_cost      ✓ NEW
+  drying_cost       ✓
+  total_cost        ✓ (sum of all three)
+  cost_per_unit     ✓ (total_cost / units)
+        |
+        ↓  getProductCostAnalysis()
+[Cost Analysis Response]
+  total_procurement_cost   ✓
+  total_hauling_cost       ✓ NEW
+  total_drying_cost        ✓
+  total_production_cost    ✓
+  avg_cost_per_unit        ✓ (now correct — includes hauling)
+  profit_margin            ✓ (now correct — hauling reduces margin)
+
+
+================================================================================
+PART 3 — WHAT IS NOT YET DONE (FRONTEND)
+================================================================================
+
+The Inventory.jsx "costs" tab and the cost analysis response data are now
+richer (hauling_cost is available), but the FRONTEND has not yet been updated
+to display hauling_cost as its own line item.
+
+When the Inventory costs tab work is done, it will read:
+  costAnalysis.total_hauling_cost      ← new field
+  costAnalysis.total_procurement_cost  ← existing
+  costAnalysis.total_drying_cost       ← existing
+
+The cost breakdown display should mirror the procurement page:
+  Procurement Cost:  ₱X
+  Hauling Cost:      ₱X   ← add this row
+  Drying Cost:       ₱X
+  ─────────────────────
+  Total Cost:        ₱X
+
+
+================================================================================
+PART 4 — NOTES ON PROPORTIONAL ALLOCATION LOGIC
+================================================================================
+
+Hauling cost is a flat amount per-procurement (sacks × rate), not per-kg.
+But cost analysis needs to allocate it proportionally to the kg that flows
+through drying → processing → product. The allocation logic used:
+
+  Individual drying:
+    procKgFraction = dryingProcess.quantity_kg / procurement.quantity_kg
+    → fraction of the procurement that went into this drying batch
+    → then further scaled by (kgTakenByProcessing / dryingTotalKg)
+    Net: kgTakenByProcessing / procurement.quantity_kg = fraction of total procurement
+
+  Batch drying (multiple procurements):
+    Each batch entry: bpFraction = batchEntry.quantity_kg / procurement.quantity_kg
+    → fraction of that procurement's total kg contributed to the batch
+    → then scaled by (kgTakenByProcessing / totalDryingKg)
+
+  This means: hauling cost tracks proportionally with how much of each
+  procurement's rice physically moved through each stage.
+
+
+================================================================================
+PART 5 — HISTORICAL DATA
+================================================================================
+
+Old stock_logs rows (before this migration):
+  hauling_cost = NULL (no data was stored)
+
+Old procurements (before hauling fields were added):
+  hauling_price_per_sack = NULL → treated as ₱0
+  hauling_sacks          = NULL → falls back to sacks → falls back to 0
+
+Result: No errors, no wrong costs. Historical cost analysis simply shows
+₱0 hauling, which is correct for records that predate the feature.
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

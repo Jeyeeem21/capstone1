@@ -36,7 +36,8 @@ const Processing = () => {
   const [completeFormData, setCompleteFormData] = useState({
     output_kg: '',
     husk_kg: 0,
-    yield_percent: 0
+    yield_percent: 0,
+    milling_cost_per_kg: ''
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -274,7 +275,8 @@ const Processing = () => {
     setCompleteFormData({
       output_kg: '',
       husk_kg: 0,
-      yield_percent: 0
+      yield_percent: 0,
+      milling_cost_per_kg: ''
     });
     setIsCompleteModalOpen(true);
   }, [toast]);
@@ -331,11 +333,14 @@ const Processing = () => {
       const huskKg = Math.max(0, inputKg - outputKg);
       const yieldPercent = inputKg > 0 ? ((outputKg / inputKg) * 100).toFixed(2) : 0;
       
-      setCompleteFormData({
+      setCompleteFormData(prev => ({
+        ...prev,
         output_kg: value,
         husk_kg: huskKg,
         yield_percent: yieldPercent
-      });
+      }));
+    } else {
+      setCompleteFormData(prev => ({ ...prev, [name]: value }));
     }
   }, [selectedItem]);
 
@@ -480,7 +485,8 @@ const Processing = () => {
     setSaving(true);
     try {
       const response = await apiClient.post(`/processings/${selectedItem.id}/complete`, {
-        output_kg: outputKg
+        output_kg: outputKg,
+        milling_cost_per_kg: parseFloat(completeFormData.milling_cost_per_kg) || null,
       });
       
       if (response.success && response.data) {
@@ -1335,9 +1341,20 @@ const Processing = () => {
               <p className="text-xs text-red-500 -mt-2">Output cannot exceed input ({parseFloat(selectedItem.input_kg).toLocaleString()} kg)</p>
             )}
 
+            {/* Milling cost */}
+            <FormInput
+              label="Milling / Processing Cost (₱/kg)"
+              name="milling_cost_per_kg"
+              type="number"
+              value={completeFormData.milling_cost_per_kg}
+              onChange={handleCompleteFormChange}
+              placeholder="e.g. 2.50 — leave blank if none"
+              step="0.01"
+            />
+
             {/* Auto-calculated fields */}
             {completeFormData.output_kg && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className={`grid gap-4 ${parseFloat(completeFormData.milling_cost_per_kg) > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-700">
                   <p className="text-xs text-orange-600 dark:text-orange-400 uppercase font-medium">Husk (Auto-calculated)</p>
                   <p className="text-lg font-bold text-orange-700 dark:text-orange-300">{completeFormData.husk_kg.toLocaleString()} kg</p>
@@ -1346,6 +1363,12 @@ const Processing = () => {
                   <p className="text-xs text-purple-600 dark:text-purple-400 uppercase font-medium">Yield (Auto-calculated)</p>
                   <p className="text-lg font-bold text-purple-700 dark:text-purple-300">{completeFormData.yield_percent}%</p>
                 </div>
+                {parseFloat(completeFormData.milling_cost_per_kg) > 0 && (
+                  <div className="p-4 bg-teal-50 dark:bg-teal-900/20 rounded-xl border border-teal-200 dark:border-teal-700">
+                    <p className="text-xs text-teal-600 dark:text-teal-400 uppercase font-medium">Total Milling Cost</p>
+                    <p className="text-lg font-bold text-teal-700 dark:text-teal-300">₱{(parseFloat(completeFormData.output_kg) * parseFloat(completeFormData.milling_cost_per_kg)).toLocaleString()}</p>
+                  </div>
+                )}
               </div>
             )}
 

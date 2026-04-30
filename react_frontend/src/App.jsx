@@ -51,6 +51,7 @@ const Orders = lazy(() => import('./pages/customer/Orders'));
 const Cart = lazy(() => import('./pages/customer/Cart'));
 const Profile = lazy(() => import('./pages/customer/Profile'));
 const CustomerSettings = lazy(() => import('./pages/customer/Settings'));
+const Shop = lazy(() => import('./pages/customer/Shop/Shop'));
 
 // Driver pages
 const DriverDashboard = lazy(() => import('./pages/driver/Dashboard'));
@@ -168,8 +169,15 @@ const PosRedirect = () => {
   if (user?.role === 'super_admin') return <Navigate to="/superadmin/pos" replace />;
   if (user?.role === 'admin') return <Navigate to="/admin/pos" replace />;
   if (user?.role === 'staff') return <Navigate to="/secretary/pos" replace />;
-  if (user?.role === 'customer') return <Navigate to="/customer/pos" replace />;
+  if (user?.role === 'customer') return <Navigate to="/customer/shop" replace />;
   return <Navigate to="/admin/pos" replace />;
+};
+
+// Guard for customer POS route - redirect customers to shop
+const CustomerPosGuard = () => {
+  const { user } = useAuth();
+  if (user?.role === 'customer') return <Navigate to="/customer/shop" replace />;
+  return <ErrorBoundary><PointOfSale /></ErrorBoundary>;
 };
 
 function AppRoutes() {
@@ -314,7 +322,8 @@ function AppRoutes() {
         <Route path="cart" element={<ErrorBoundary><Cart /></ErrorBoundary>} />
         <Route path="profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
         <Route path="settings" element={<ErrorBoundary><CustomerSettings /></ErrorBoundary>} />
-        <Route path="pos" element={<ErrorBoundary><PointOfSale /></ErrorBoundary>} />
+        <Route path="shop" element={<ErrorBoundary><Shop /></ErrorBoundary>} />
+        <Route path="pos" element={<CustomerPosGuard />} />
         <Route path="*" element={<NotFound />} />
       </Route>
 

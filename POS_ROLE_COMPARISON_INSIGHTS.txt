@@ -1,0 +1,251 @@
+================================================================================
+  POS ROLE COMPARISON INSIGHTS
+  Scanned: April 30, 2026
+  File: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx (2732 lines)
+         react_frontend/src/pages/customer/Shop/Shop.jsx (902 lines)
+         react_frontend/src/App.jsx (routes)
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ARCHITECTURE OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+There are TWO completely separate POS implementations:
+
+  1. STAFF/ADMIN/SECRETARY POS → pages/shared/PointOfSale/PointOfSale.jsx
+     - Route: /superadmin/pos, /admin/pos, /secretary/pos, /customer/pos
+     - All use the SAME component. Role-based differences are MINIMAL.
+     - Secretary is the primary operator (homepage redirects to /secretary/pos)
+
+  2. CUSTOMER SHOP → pages/customer/Shop/Shop.jsx
+     - Route: /customer/shop (NOT the /customer/pos route)
+     - Separate, simpler, self-service ordering UI
+     - Customers CAN also access /customer/pos (shared POS) but also have Shop.jsx
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SECTION A: ADMIN / SECRETARY POS (PointOfSale.jsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PAYMENT METHODS AVAILABLE:
+  - Cash        (change calculator, quick amount buttons)
+  - GCash       (13-digit reference, proof photo upload / camera capture)
+  - PDO         (Post-Dated Check: photo + check number + date + bank + amount)
+  - COD         (Cash on Delivery — no upfront input)
+  - Pay Later   (0 collected now, deferred)
+
+INSTALLMENT / STAGGERED PAYMENT:
+  - Full installment setup modal (InstallmentSetupInline component)
+  - Can schedule multiple tranches with due dates
+  - If first payment is in the future → auto-submits as "pay_later" with installment
+    schedule (confirmFutureInstallment function)
+  - If first payment is today → shows payment modal for that tranche only
+
+ORDER FLOW:
+  1. Add products to cart (product grid, search, variety filter)
+  2. Pick Up or Delivery toggle in cart
+  3. Click "Place Order"
+  4. If Pick Up → confirmation modal ("Yes, Pick Up")
+  5. Customer Information modal (select existing or create new customer)
+     - Existing customer: select from dropdown
+     - New customer: name + email (required) + contact + address + landmark
+     - New customer email is checked for uniqueness via /customers/check-email
+  6. If Delivery → delivery address with OpenRouteService autocomplete +
+     auto-calculated distance + estimated drive time + shipping fee breakdown
+  7. Installment decision intercept (blue modal asking if staggered)
+  8. Payment modal
+
+VOID TRANSACTION:
+  - "Void Transaction" button always visible in cart
+  - Shows today's completed transactions, searchable
+  - Expanding a transaction shows line items
+  - Requires: (1) void reason text, (2) password
+  - Secretary/staff: must enter ADMIN or SUPER ADMIN password
+  - Admin/SuperAdmin (isAdminOrAbove()): confirm with OWN password
+  - On success: optimistic UI update + cache invalidation
+
+CUSTOMER MANAGEMENT AT POS:
+  - Can register a brand new customer mid-transaction
+  - Email uniqueness validation (debounced API check)
+  - If existing customer selected and they have no contact/email on file
+    → blocked with "please update their info" message
+
+AUTO-PRINT RECEIPT:
+  - Automatically prints after every successful order (popup window)
+  - Configurable copy count via Settings (businessSettings.receipt_copies)
+  - Prints: TXN ID, date, customer, order type, payment method, pay status,
+    all line items, subtotal, delivery fee, total, cash tendered, change
+  - Pay status on receipt: PAY LATER / COD → "UNPAID" (red), all others → "PAID"
+
+EMAIL NOTIFICATION:
+  - Fires /sales/{id}/notify after every order (fire-and-forget, non-blocking)
+  - Sends to both admin and customer
+
+PRODUCT DISPLAY:
+  - Products without price show "No price set" in red + are non-clickable
+  - Variety filter, search by name
+  - Stock count shown ("X in stock" or "No stock" in amber)
+  - 0-stock products still shown (just labeled)
+
+DELIVERY FEE FORMULA:
+  - ⌈distance ÷ base_km⌉ × rate_per_sack × total_sacks + (rate_per_km × distance)
+  - All rates from businessSettings (configured in admin Settings page)
+  - Distance auto-calculated via OpenRouteService geocoding
+  - Manual override of distance field always available
+
+GCash REFERENCE VALIDATION:
+  - Must be exactly 13 digits (spaces stripped before counting)
+  - Debounced API check (/sales/check-reference) for duplicate reference numbers
+
+DIFFERENCE BETWEEN ADMIN AND SECRETARY IN THIS POS:
+  - They use the EXACT SAME component with the EXACT SAME features
+  - The ONLY code difference: Void modal password label changes
+      - Admin/SuperAdmin: "Confirm Your Password"
+      - Secretary:        "Admin / Super Admin Password Required"
+  - Admin/SuperAdmin self-authorizes void; Secretary needs someone else's password
+  - No other feature is hidden or restricted between admin and secretary
+  - Both can use all 5 payment methods, installments, PDO, create customers, etc.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SECTION B: CUSTOMER SHOP (Shop.jsx)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PAYMENT METHODS AVAILABLE:
+  - GCash     (reference number + proof photo upload/camera — REQUIRED)
+  - Pay Later (no upfront payment)
+  NOTE: Cash, COD, PDO, and Installments are NOT available to customers
+
+ORDER FLOW:
+  1. Browse products (grid or list view) with search, variety filter, sort
+  2. Click product card to add to order (capped at stock qty)
+  3. Pick Up or Delivery toggle
+  4. If Delivery → enter address (autocomplete) + auto-distance calc
+     - If address not found in PH → blocked with "Address not found" error
+  5. Click "Place Order" → opens payment modal directly (no customer modal)
+     - Customer identity comes from the logged-in user session (no customer form)
+  6. Payment modal → GCash or Pay Later
+     - GCash: reference number + proof photo required
+     - Pay Later: no extra fields
+  7. Order Confirmation modal (success screen)
+
+PRODUCT DISPLAY:
+  - Shows product IMAGE (from product record or business logo as fallback)
+  - Grid view and List view toggle
+  - Sort options: Newest / Price Low-High / Price High-Low
+  - Variety filter with color badges
+  - Out of stock: product card dimmed (opacity-60), cursor-not-allowed
+  - No "No price set" handling — all prices shown as-is
+  - Stock count NOT shown to customers (unlike admin POS)
+
+NO CUSTOMER FORM:
+  - Customer is identified by logged-in session automatically
+  - No dropdown, no new customer creation
+  - The /sales/order API call does NOT send customer_id or new_customer_*
+    fields explicitly from Shop.jsx — backend derives from auth token
+
+NO VOID:
+  - No void/refund capability in customer Shop
+  - Customers manage returns through the Orders page
+
+NO PDO / NO CASH / NO COD / NO INSTALLMENTS:
+  - Only GCash and Pay Later
+  - Keeps it simple for self-service
+
+DELIVERY ADDRESS VALIDATION (STRICTER THAN ADMIN):
+  - selectedCoords must be set (geocode must succeed)
+  - If geocode fails: order is BLOCKED with "Address not found" error
+  - Admin POS allows manual distance entry even if geocoding fails
+
+EMAIL NOTIFICATION: Same fire-and-forget /sales/{id}/notify
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SECTION C: FEATURE COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Feature                         Super Admin   Admin   Secretary   Customer (Shop)
+  ─────────────────────────────────────────────────────────────────────────────
+  Pay with Cash                      YES          YES      YES         NO
+  Pay with GCash                     YES          YES      YES         YES
+  Pay with PDO (check)               YES          YES      YES         NO
+  Pay with COD                       YES          YES      YES         NO
+  Pay with Pay Later                 YES          YES      YES         YES
+  Installment / Staggered            YES          YES      YES         NO
+  Void Transaction (self-auth)       YES          YES      NO          NO
+  Void Transaction (admin pw)        NO           NO       YES         NO
+  Create new customer at POS         YES          YES      YES         NO
+  Delivery with distance calc        YES          YES      YES         YES
+  Manual distance override           YES          YES      YES         NO (blocked)
+  Auto-print receipt                 YES          YES      YES         NO
+  Variety / search filter            YES          YES      YES         YES
+  Grid/List view toggle              NO           NO       NO          YES (Shop only)
+  Sort products                      NO           NO       NO          YES (Shop only)
+  Product images shown               NO           NO       NO          YES (Shop only)
+  Stock shown to user                YES          YES      YES         NO
+  Shipping fee formula breakdown     YES          YES      YES         NO
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SECTION D: ISSUES / GAPS FOUND
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ISSUE 1 — Customer has access to shared POS (/customer/pos):
+  The route /customer/pos loads the FULL PointOfSale.jsx with Cash, PDO, COD,
+  void, installments, etc. This is a SECURITY GAP. A logged-in customer can
+  navigate to /customer/pos and use payment methods they shouldn't have access to.
+  The App.jsx explicitly registers this route for customers.
+  RECOMMENDATION: Remove /customer/pos route for customers, or wrap all admin-only  
+  payment methods in an isAdminOrAbove() / isStaffOrAbove() guard.
+
+ISSUE 2 — No role guard on PDO / COD in shared POS:
+  The posPaymentMethods array (Cash, GCash, PDO, COD, Pay Later) is hardcoded with
+  no role filtering. Any user on the shared POS sees all 5 methods.
+  RECOMMENDATION: Filter posPaymentMethods by role before rendering the payment
+  method buttons.
+
+ISSUE 3 — Void is available to all roles in shared POS:
+  The "Void Transaction" button renders for all users. Secretary staff requires
+  admin password (correct), but admin/superadmin can self-void with own password.
+  Customer on /customer/pos could click Void and attempt to void transactions.
+  RECOMMENDATION: Gate "Void Transaction" button with isStaffOrAbove() or similar.
+
+ISSUE 4 — Customer Shop (Shop.jsx) does NOT send customer_id:
+  The formData posted to /sales/order does not include customer_id. The backend
+  must derive the customer from the auth token. If a guest or staff user accidentally
+  lands on the customer shop route, orders may be created without customer linkage.
+  RECOMMENDATION: Verify the Laravel SalesController reads auth()->id() for customer
+  identification when no customer_id is posted.
+
+ISSUE 5 — GCash ref duplication check not in Shop.jsx:
+  The shared POS has a debounced check for duplicate GCash reference numbers
+  (/sales/check-reference). Shop.jsx does NOT have this check — a customer could
+  accidentally reuse a reference number.
+  RECOMMENDATION: Add the same gcashRefCheckTimeout debounce to Shop.jsx.
+
+ISSUE 6 — Auto-print receipt only fires in shared POS, not in Shop.jsx:
+  Customers completing an order via Shop.jsx do NOT get an auto-printed receipt.
+  The order confirmation modal shows order info but no print button.
+  RECOMMENDATION: Add a "Print Receipt" button to the Shop.jsx order confirmation
+  modal, reusing the autoPrintReceipt() helper.
+
+ISSUE 7 — Secretary has no dedicated dashboard widgets:
+  The secretary role lands on /secretary/pos and only has access to:
+  pos, dashboard, profile. The POS is feature-complete but there is no operational
+  summary (today's sales, pending payments, etc.) visible at-a-glance.
+  RECOMMENDATION: StaffDashboard.jsx could show today's POS summary (total sales,
+  transaction count, pending COD/Pay Later orders).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ SECTION E: SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The admin/secretary POS is very full-featured — all 5 payment methods,
+installments, void with authorization, auto-print, customer creation,
+geocoded delivery. The ONLY real difference between admin and secretary
+is the void authorization: admins self-authorize, secretaries require
+an admin password. Everything else is identical.
+
+The customer-facing Shop is intentionally stripped-down: GCash + Pay Later
+only, no receipt printing, no PDO or cash, simpler UI with images and sort.
+
+The main risk is the /customer/pos route giving customers access to the
+full-featured shared POS without any role gating on individual features.
+
+================================================================================

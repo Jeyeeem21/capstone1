@@ -3,7 +3,7 @@ import {
   LayoutDashboard, DollarSign, ShoppingCart, Users, Package,
   TrendingUp, AlertTriangle, RefreshCw, Activity,
   Truck, Settings2, Droplets, ArrowRight, Clock,
-  ShoppingBag, Layers, X, Filter
+  ShoppingBag, Layers, X, Filter, CalendarClock
 } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import {
@@ -22,7 +22,7 @@ const Dashboard = () => {
   const { basePath } = useAuth();
   const [period, setPeriod] = useState('monthly');
   const [activeChartPoint, setActiveChartPoint] = useState(null);
-  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [chartMonth, setChartMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; });
   const [chartYear, setChartYear] = useState(() => new Date().getFullYear());
   const [chartYearFrom, setChartYearFrom] = useState(() => new Date().getFullYear() - 4);
   const [chartYearTo, setChartYearTo] = useState(() => new Date().getFullYear());
@@ -115,6 +115,7 @@ const Dashboard = () => {
   const paymentBreakdown = stats?.payment_breakdown || [];
   const statusBreakdown = stats?.status_breakdown || [];
   const pipeline = stats?.pipeline || {};
+  const installmentDues = stats?.installment_dues || {};
   const pointLabel = stats?.point_label || activeChartPoint;
 
   // Clear all chart filters
@@ -122,7 +123,7 @@ const Dashboard = () => {
     setActiveChartPoint(null);
     setPeriod('monthly');
     const d = new Date();
-    setChartMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    setChartMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     setChartYear(d.getFullYear());
     setChartYearFrom(d.getFullYear() - 4);
     setChartYearTo(d.getFullYear());
@@ -178,11 +179,13 @@ const Dashboard = () => {
       )
     },
     { header: 'Variety', accessor: 'variety' },
-    { header: 'Stock', accessor: 'stocks', cell: (row) => (
-      <span className={`font-bold ${row.stocks <= 0 ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-        {row.stocks}
-      </span>
-    )},
+    {
+      header: 'Stock', accessor: 'stocks', cell: (row) => (
+        <span className={`font-bold ${row.stocks <= 0 ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+          {row.stocks}
+        </span>
+      )
+    },
     { header: 'Floor', accessor: 'stock_floor' },
     { header: 'Status', accessor: 'status', cell: (row) => <StatusBadge status={row.status} /> },
   ];
@@ -190,13 +193,13 @@ const Dashboard = () => {
   // Activity icon map
   const getActivityIcon = (action) => {
     switch (action) {
-      case 'CREATE': return <div className="w-7 h-7 rounded-full bg-green-100 dark:bg-green-900/30 dark:bg-green-500/20 flex items-center justify-center"><TrendingUp size={13} className="text-green-600 dark:text-green-400" /></div>;
-      case 'UPDATE': return <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 dark:bg-blue-500/20 flex items-center justify-center"><Activity size={13} className="text-blue-600 dark:text-blue-400" /></div>;
-      case 'DELETE': return <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/30 dark:bg-red-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-red-600 dark:text-red-400" /></div>;
-      case 'ARCHIVE': return <div className="w-7 h-7 rounded-full bg-yellow-100 dark:bg-yellow-900/30 dark:bg-yellow-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-yellow-600 dark:text-yellow-400" /></div>;
-      case 'RESTORE': return <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 dark:bg-emerald-500/20 flex items-center justify-center"><TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" /></div>;
-      case 'SOFT_DELETE': case 'SOFT_DELETE_ALL': return <div className="w-7 h-7 rounded-full bg-orange-100 dark:bg-orange-900/30 dark:bg-orange-500/20 flex items-center justify-center"><AlertTriangle size={13} className="text-orange-600 dark:text-orange-400" /></div>;
-      case 'RETURN': return <div className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/30 dark:bg-teal-500/20 flex items-center justify-center"><Activity size={13} className="text-teal-600 dark:text-teal-400" /></div>;
+      case 'CREATE': return <div className="w-7 h-7 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center"><TrendingUp size={13} className="text-green-600 dark:text-green-400" /></div>;
+      case 'UPDATE': return <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><Activity size={13} className="text-blue-600 dark:text-blue-400" /></div>;
+      case 'DELETE': return <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center"><AlertTriangle size={13} className="text-red-600 dark:text-red-400" /></div>;
+      case 'ARCHIVE': return <div className="w-7 h-7 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center"><AlertTriangle size={13} className="text-yellow-600 dark:text-yellow-400" /></div>;
+      case 'RESTORE': return <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><TrendingUp size={13} className="text-emerald-600 dark:text-emerald-400" /></div>;
+      case 'SOFT_DELETE': case 'SOFT_DELETE_ALL': return <div className="w-7 h-7 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><AlertTriangle size={13} className="text-orange-600 dark:text-orange-400" /></div>;
+      case 'RETURN': return <div className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center"><Activity size={13} className="text-teal-600 dark:text-teal-400" /></div>;
       default: return <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center"><Clock size={13} className="text-gray-600 dark:text-gray-400" /></div>;
     }
   };
@@ -214,7 +217,7 @@ const Dashboard = () => {
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 bg-white dark:bg-gray-700 border border-primary-200 dark:border-primary-700 rounded-lg hover:border-button-300 dark:border-button-700 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-button-400 hover:text-button-600 dark:hover:text-button-300 bg-white dark:bg-gray-700 border border-primary-200 dark:border-button-700 rounded-lg hover:border-button-300 transition-all disabled:opacity-50"
         >
           <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
           {refreshing ? 'Refreshing...' : 'Refresh'}
@@ -287,12 +290,42 @@ const Dashboard = () => {
         </div>
       )}
 
+      {/* ==================== INSTALLMENT DUES ==================== */}
+      {!loading && (installmentDues.overdue > 0 || installmentDues.due_today > 0 || installmentDues.upcoming > 0) && (
+        <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-primary-300 dark:border-primary-700 shadow-lg shadow-primary-100/50 dark:shadow-gray-900/30">
+          <h3 className="text-sm font-bold text-content mb-3 flex items-center gap-2">
+            <CalendarClock size={15} className="text-button-500" />
+            Installment Dues
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {installmentDues.overdue > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <AlertTriangle size={14} className="text-red-600 dark:text-red-400" />
+                <span className="text-sm font-semibold text-red-700 dark:text-red-400">{installmentDues.overdue} Overdue</span>
+              </div>
+            )}
+            {installmentDues.due_today > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <Clock size={14} className="text-amber-600 dark:text-amber-400" />
+                <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">{installmentDues.due_today} Due Today</span>
+              </div>
+            )}
+            {installmentDues.upcoming > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700">
+                <CalendarClock size={14} className="text-button-600 dark:text-button-400" />
+                <span className="text-sm font-semibold text-button-700 dark:text-button-400">{installmentDues.upcoming} Due in 3 Days</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ==================== PIPELINE FLOW ==================== */}
       {loading ? (
         <div className="mb-6 p-4 bg-white dark:bg-gray-700 rounded-xl border border-primary-100 dark:border-primary-700">
           <Skeleton variant="title" width="w-40" className="mb-4" />
           <div className="flex items-center gap-3">
-            {[1,2,3,4,5].map(i => <Skeleton key={i} variant="custom" className="h-16 flex-1 rounded-lg" />)}
+            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} variant="custom" className="h-16 flex-1 rounded-lg" />)}
           </div>
         </div>
       ) : (
@@ -343,9 +376,9 @@ const Dashboard = () => {
             <LineChart
               title="Revenue Trends"
               subtitle={(() => {
-                const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                 let scope = '';
-                if (period === 'daily' || period === 'weekly') { const [y,m] = chartMonth.split('-').map(Number); scope = `${months[m-1]} ${y}`; }
+                if (period === 'daily' || period === 'weekly') { const [y, m] = chartMonth.split('-').map(Number); scope = `${months[m - 1]} ${y}`; }
                 else if (period === 'monthly' || period === 'bi-annually') scope = String(chartYear);
                 else if (period === 'annually') scope = `${chartYearFrom}–${chartYearTo}`;
                 const mode = period.charAt(0).toUpperCase() + period.slice(1);
@@ -593,16 +626,15 @@ const Dashboard = () => {
                         <span className="text-[10px] text-secondary">{item.time}</span>
                       </div>
                     </div>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                      item.action === 'CREATE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:bg-green-500/20 dark:text-green-400' :
-                      item.action === 'UPDATE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
-                      item.action === 'DELETE' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:bg-red-500/20 dark:text-red-400' :
-                      item.action === 'ARCHIVE' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400' :
-                      item.action === 'RESTORE' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
-                      (item.action === 'SOFT_DELETE' || item.action === 'SOFT_DELETE_ALL') ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400' :
-                      item.action === 'RETURN' ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:bg-teal-500/20 dark:text-teal-400' :
-                      'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                    }`}>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${item.action === 'CREATE' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                        item.action === 'UPDATE' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                          item.action === 'DELETE' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                            item.action === 'ARCHIVE' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                              item.action === 'RESTORE' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' :
+                                (item.action === 'SOFT_DELETE' || item.action === 'SOFT_DELETE_ALL') ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                                  item.action === 'RETURN' ? 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400' :
+                                    'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}>
                       {item.action}
                     </span>
                   </div>
@@ -630,7 +662,7 @@ const Dashboard = () => {
                   Low Stock Alerts
                 </h3>
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 dark:bg-green-500/20 flex items-center justify-center mb-3">
+                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-3">
                     <Package size={20} className="text-green-600 dark:text-green-400" />
                   </div>
                   <p className="text-sm font-medium text-content">All products are well-stocked!</p>

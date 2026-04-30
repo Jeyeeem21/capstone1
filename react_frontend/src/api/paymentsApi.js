@@ -15,8 +15,8 @@ export const paymentsApi = {
    * @param {number} options.page - Page number
    * @param {number} options.limit - Items per page
    */
-  getAll: async ({ status = '', method = '', page = 1, limit = 20 } = {}) => {
-    const params = { page, limit };
+  getAll: async ({ status = '', method = '', page = 1, per_page = 20 } = {}) => {
+    const params = { page, per_page };
     if (status) params.status = status;
     if (method) params.method = method;
     
@@ -109,8 +109,8 @@ export const paymentPlansApi = {
    * @param {number} options.page - Page number
    * @param {number} options.limit - Items per page
    */
-  getAll: async ({ status = '', page = 1, limit = 20 } = {}) => {
-    const params = { page, limit };
+  getAll: async ({ status = '', page = 1, per_page = 100 } = {}) => {
+    const params = { page, per_page };
     if (status) params.status = status;
     
     return apiClient.get('/payment-plans', { params });
@@ -195,7 +195,7 @@ export const installmentsApi = {
    * @param {string} notes - Payment notes
    */
   markPDOAsPaid: async (installmentId, notes = '') => {
-    return apiClient.post(`/installments/${installmentId}/mark-pdo-paid`, { notes });
+    return apiClient.post(`/installments/${installmentId}/mark-paid`, { notes });
   },
 
   /**

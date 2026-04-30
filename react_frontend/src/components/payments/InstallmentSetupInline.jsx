@@ -28,11 +28,12 @@ const InstallmentSetupInline = forwardRef(({ totalAmount, onChange, initialInsta
 
   const remainingBalance = totalAmount - totalAllocated;
   
-  // Check if all installments have both amount and due date
+  // Check if all installments have both amount and a valid (non-past) due date
   const allFieldsFilled = useMemo(() => {
+    const today = getTodayDate();
     return installments.every(inst => {
       const hasAmount = inst.amount && parseFloat(inst.amount) > 0;
-      const hasDueDate = inst.due_date && inst.due_date.trim() !== '';
+      const hasDueDate = inst.due_date && inst.due_date.trim() !== '' && inst.due_date >= today;
       return hasAmount && hasDueDate;
     });
   }, [installments]);
@@ -74,25 +75,54 @@ const InstallmentSetupInline = forwardRef(({ totalAmount, onChange, initialInsta
     const updated = [...installments];
     updated[index] = { ...updated[index], [field]: value };
     setInstallments(updated);
-    
-    // Clear error for this field when user types
-    if (fieldErrors[`${index}-${field}`]) {
+
+    if (field === 'amount') {
+      const newAmount = parseFloat(value) || 0;
+      const otherTotal = updated.reduce((sum, inst, i) =>
+        i === index ? sum : sum + (parseFloat(inst.amount) || 0), 0);
       setFieldErrors(prev => {
         const newErrors = { ...prev };
-        delete newErrors[`${index}-${field}`];
+        delete newErrors[`${index}-amount`];
+        if (newAmount <= 0 && value !== '') {
+          newErrors[`${index}-amount`] = 'Amount must be greater than 0';
+        } else if (otherTotal + newAmount > totalAmount + 0.001) {
+          const maxAllowed = totalAmount - otherTotal;
+          newErrors[`${index}-amount`] = `Cannot exceed ₱${maxAllowed.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        }
         return newErrors;
       });
+    } else {
+      // Clear error for this field when user types
+      if (fieldErrors[`${index}-${field}`]) {
+        setFieldErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[`${index}-${field}`];
+          return newErrors;
+        });
+      }
     }
   };
 
   const validateFields = () => {
     const errors = {};
+    let runningTotal = 0;
     installments.forEach((inst, index) => {
-      if (!inst.amount || parseFloat(inst.amount) <= 0) {
+      const amount = parseFloat(inst.amount) || 0;
+      if (!inst.amount || amount <= 0) {
         errors[`${index}-amount`] = 'Amount is required';
+      } else {
+        const otherTotal = installments.reduce((sum, other, i) =>
+          i === index ? sum : sum + (parseFloat(other.amount) || 0), 0);
+        if (otherTotal + amount > totalAmount + 0.001) {
+          const maxAllowed = totalAmount - otherTotal;
+          errors[`${index}-amount`] = `Cannot exceed ₱${maxAllowed.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        }
       }
+      runningTotal += amount;
       if (!inst.due_date || inst.due_date.trim() === '') {
         errors[`${index}-due_date`] = 'Due date is required';
+      } else if (inst.due_date < getTodayDate()) {
+        errors[`${index}-due_date`] = 'Due date cannot be in the past';
       }
     });
     setFieldErrors(errors);
@@ -161,6 +191,8 @@ const InstallmentSetupInline = forwardRef(({ totalAmount, onChange, initialInsta
                   <input
                     type="number"
                     step="0.01"
+                    min="0.01"
+                    max={totalAmount - installments.reduce((sum, other, i) => i === index ? sum : sum + (parseFloat(other.amount) || 0), 0)}
                     value={inst.amount}
                     onChange={(e) => updateInstallment(index, 'amount', e.target.value)}
                     placeholder="0.00"
@@ -179,13 +211,14 @@ const InstallmentSetupInline = forwardRef(({ totalAmount, onChange, initialInsta
 
                 {/* Due Date */}
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 flex items-center gap-1">
+                  <label className="flex text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 items-center gap-1">
                     <Calendar size={10} />
                     Due Date <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
                     value={inst.due_date}
+                    min={getTodayDate()}
                     onChange={(e) => updateInstallment(index, 'due_date', e.target.value)}
                     className={`w-full px-2 py-1.5 text-xs border rounded focus:ring-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-white ${
                       dueDateError 

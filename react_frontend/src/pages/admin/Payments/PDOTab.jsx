@@ -84,13 +84,26 @@ const PDOTab = ({ onStatsUpdate, onLoadingChange }) => {
       
       setPendingPDOs(pendingData);
       setAwaitingPayment(awaitingData);
-      
+
+      // Calculate clearedToday from standalone PDOs verified today
+      const todayStr = new Date().toDateString();
+      let clearedToday = 0;
+      if (standalonePDOsResponse.success) {
+        const allStandalonePDOs = Array.isArray(standalonePDOsResponse.data?.data || standalonePDOsResponse.data)
+          ? (standalonePDOsResponse.data?.data || standalonePDOsResponse.data)
+          : [];
+        clearedToday = allStandalonePDOs.filter(p =>
+          p.status === 'verified' &&
+          new Date(p.verified_at || p.updated_at).toDateString() === todayStr
+        ).length;
+      }
+
       // Update stats
       onStatsUpdate(prev => ({
         ...prev,
         pendingPDOs: pendingData.length,
         awaitingPayment: awaitingData.length,
-        clearedToday: 0, // TODO: Calculate from payment history
+        clearedToday,
         totalPDOs: pendingData.length + awaitingData.length
       }));
     } catch (error) {

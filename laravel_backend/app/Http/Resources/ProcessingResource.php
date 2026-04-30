@@ -111,6 +111,7 @@ class ProcessingResource extends JsonResource
             }),
             'input_kg' => (float) $this->input_kg,
             'output_kg' => $this->output_kg ? (float) $this->output_kg : null,
+            'milling_cost_per_kg' => $this->milling_cost_per_kg !== null ? (float) $this->milling_cost_per_kg : null,
             'stock_out' => (float) ($this->stock_out ?? 0),
             'remaining_stock' => $this->remaining_stock,
             'husk_kg' => $this->husk_kg ? (float) $this->husk_kg : null,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Eye, DollarSign, Hash, Building2, Calendar, FileText } from 'lucide-react';
-import { Button, StatusBadge } from '../ui';
+import { Button, StatusBadge, Modal } from '../ui';
 
 const PDOApprovalModal = ({ installment, onClose }) => {
   const [showImageModal, setShowImageModal] = useState(false);
@@ -25,24 +25,18 @@ const PDOApprovalModal = ({ installment, onClose }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-6 rounded-t-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-white">PDO Check Details</h3>
-                <p className="text-amber-100 text-sm">Post-dated check information</p>
-              </div>
-              <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
-                <X size={20} />
-              </button>
-            </div>
+      <Modal
+        isOpen={true}
+        onClose={onClose}
+        title="PDO Check Details"
+        size="xl"
+        footer={
+          <div className="flex justify-end">
+            <Button onClick={onClose} variant="outline">Close</Button>
           </div>
-
-          {/* Content */}
-          <div className="p-6">
-            <div className="grid grid-cols-2 gap-4">
+        }
+      >
+        <div className="grid grid-cols-2 gap-4">
               {/* Left Column */}
               <div className="space-y-3">
                 {/* Sale ID & Status */}
@@ -176,21 +170,12 @@ const PDOApprovalModal = ({ installment, onClose }) => {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl flex justify-end">
-            <Button onClick={onClose} variant="outline">
-              Close
-            </Button>
-          </div>
         </div>
-      </div>
+      </Modal>
 
       {/* Image Modal */}
       {showImageModal && checkImageUrl && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4" onClick={() => setShowImageModal(false)}>
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[9999] p-4" onClick={() => setShowImageModal(false)}>
           <div className="relative max-w-4xl w-full">
             <button
               onClick={() => setShowImageModal(false)}

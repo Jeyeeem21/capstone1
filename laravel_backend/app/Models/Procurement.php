@@ -19,6 +19,9 @@ class Procurement extends Model
         'quantity_kg',
         'sacks',
         'price_per_kg',
+        'hauling_price_per_sack',
+        'hauling_sacks',
+        'twines_price',
         'description',
         'total_cost',
         'status',
@@ -30,6 +33,9 @@ class Procurement extends Model
         'quantity_kg' => 'decimal:2',
         'sacks' => 'integer',
         'price_per_kg' => 'decimal:2',
+        'hauling_price_per_sack' => 'decimal:2',
+        'hauling_sacks' => 'integer',
+        'twines_price'            => 'decimal:2',
         'total_cost' => 'decimal:2',
     ];
 
@@ -91,7 +97,12 @@ class Procurement extends Model
         parent::boot();
 
         static::saving(function ($procurement) {
-            $procurement->total_cost = $procurement->quantity_kg * $procurement->price_per_kg;
+            // hauling_sacks defaults to sacks when not explicitly set
+            $haulingCount = $procurement->hauling_sacks ?? $procurement->sacks ?? 0;
+            $haulingCost  = $haulingCount * ($procurement->hauling_price_per_sack ?? 0);
+            // twines always uses the procurement sacks count
+            $twinesCost   = (float) ($procurement->twines_price ?? 0);
+            $procurement->total_cost = ($procurement->quantity_kg * $procurement->price_per_kg) + $haulingCost + $twinesCost;
         });
     }
 

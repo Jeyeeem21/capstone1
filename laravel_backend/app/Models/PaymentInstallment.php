@@ -5,6 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
 
+/**
+ * @property int $id
+ * @property int $sale_id
+ * @property int $installment_number
+ * @property string|null $amount_expected
+ * @property string|null $amount_paid
+ * @property string|null $payment_method
+ * @property \Illuminate\Support\Carbon|null $due_date
+ * @property \Illuminate\Support\Carbon|null $paid_date
+ * @property string $status
+ * @property string|null $pdo_check_number
+ * @property string|null $pdo_check_bank
+ * @property array|null $pdo_check_image
+ * @property string|null $pdo_approval_status
+ * @property int|null $pdo_approved_by
+ * @property int|null $payment_id
+ * @property string|null $notes
+ * @property \Illuminate\Support\Carbon $created_at
+ * @property \Illuminate\Support\Carbon $updated_at
+ */
 class PaymentInstallment extends Model
 {
     protected $fillable = [
@@ -43,7 +63,7 @@ class PaymentInstallment extends Model
 
     public function payment()
     {
-        return $this->hasOne(Payment::class, 'id', 'payment_id');
+        return $this->belongsTo(Payment::class, 'payment_id');
     }
 
     public function pdoApprovedBy()

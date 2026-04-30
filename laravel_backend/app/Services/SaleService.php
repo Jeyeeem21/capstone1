@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Customer;
 use App\Models\StockLog;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -177,8 +178,8 @@ class SaleService
                     'amount' => $amountPaid,
                     'payment_method' => 'cash',
                     'status' => 'verified',
-                    'received_by' => auth()->id(),
-                    'verified_by' => auth()->id(),
+                    'received_by' => Auth::id(),
+                    'verified_by' => Auth::id(),
                     'verified_at' => now(),
                     'paid_at' => now(),
                     'notes' => 'Initial payment at POS',
@@ -195,7 +196,7 @@ class SaleService
                     'pdo_check_date' => $data['pdo_check_date'] ?? null,
                     'pdo_check_image' => $data['pdo_check_image'] ?? null,
                     'pdo_approval_status' => 'pending',
-                    'received_by' => auth()->id(),
+                    'received_by' => Auth::id(),
                     'paid_at' => now(),
                     'notes' => 'PDO payment from POS - awaiting admin approval',
                 ]);
@@ -222,6 +223,8 @@ class SaleService
             $updateData = [
                 'payment_status' => 'paid',
                 'paid_at' => now(),
+                'amount_paid' => $sale->total,
+                'balance_remaining' => 0,
             ];
 
             // Allow changing payment method when paying (e.g., pay_later → cash)
@@ -243,6 +246,23 @@ class SaleService
             }
 
             $sale->update($updateData);
+
+            // Create a Payment record so it appears in the payment management system
+            $paymentMethod = $data['payment_method'] ?? $sale->payment_method ?? 'cash';
+            $isGCash = $paymentMethod === 'gcash';
+            Payment::create([
+                'sale_id'          => $sale->id,
+                'amount'           => $sale->total,
+                'payment_method'   => $paymentMethod,
+                'reference_number' => $data['reference_number'] ?? null,
+                'payment_proof'    => $data['payment_proof'] ?? null,
+                'status'           => $isGCash ? 'needs_verification' : 'verified',
+                'notes'            => 'Recorded via order mark-as-paid',
+                'received_by'      => Auth::id(),
+                'verified_by'      => $isGCash ? null : Auth::id(),
+                'verified_at'      => $isGCash ? null : now(),
+                'paid_at'          => now(),
+            ]);
 
             $this->clearCache();
 

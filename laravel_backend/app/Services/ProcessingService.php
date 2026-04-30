@@ -268,10 +268,11 @@ class ProcessingService
     /**
      * Complete processing - set output, calculate husk & yield, change status
      */
-    public function completeProcessing(Processing $processing, float $outputKg): Processing
+    public function completeProcessing(Processing $processing, float $outputKg, float $millingCostPerKg = 0): Processing
     {
-        return DB::transaction(function () use ($processing, $outputKg) {
+        return DB::transaction(function () use ($processing, $outputKg, $millingCostPerKg) {
             $processing->calculateResults($outputKg);
+            $processing->milling_cost_per_kg = $millingCostPerKg > 0 ? $millingCostPerKg : null;
             $processing->status = Processing::STATUS_COMPLETED;
             $processing->completed_date = now()->toDateString();
             $processing->stock_out = 0; // Reset stock_out when completing

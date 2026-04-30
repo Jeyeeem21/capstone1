@@ -238,6 +238,7 @@ const Shop = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [gcashReference, setGcashReference] = useState('');
+  const [gcashRefError, setGcashRefError] = useState('');
   const [lastOrder, setLastOrder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [paymentProofFiles, setPaymentProofFiles] = useState([]);
@@ -245,8 +246,44 @@ const Shop = () => {
   const [paymentProofError, setPaymentProofError] = useState('');
   const proofFileRef = useRef(null);
   const proofCameraRef = useRef(null);
+  const gcashRefCheckTimeout = useRef(null);
 
   const clearOrder = () => setCurrentOrder([]);
+
+  // Check GCash reference for 13-digit format and duplicate
+  const checkGcashReference = useCallback((ref) => {
+    const digits = ref.replace(/\s/g, '');
+    
+    // Clear any previous errors initially
+    setGcashRefError('');
+    
+    // Validate 13-digit format
+    if (digits.length > 0 && digits.length !== 13) {
+      setGcashRefError('GCash reference must be exactly 13 digits.');
+      return;
+    }
+    
+    // Only check for duplicates if we have exactly 13 digits
+    if (digits.length !== 13) return;
+    
+    // Debounce the API call
+    if (gcashRefCheckTimeout.current) {
+      clearTimeout(gcashRefCheckTimeout.current);
+    }
+    
+    gcashRefCheckTimeout.current = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/sales/check-reference', { reference_number: digits });
+        if (response.data && !response.data.available) {
+          setGcashRefError('This reference number has already been used.');
+        } else {
+          setGcashRefError('');
+        }
+      } catch (error) {
+        // Silently ignore API errors for this check
+      }
+    }, 500);
+  }, []);
 
   const handleProofFileChange = (e) => {
     const files = Array.from(e.target.files || []);
@@ -287,7 +324,12 @@ const Shop = () => {
 
   const confirmPayment = async () => {
     if (paymentMethod === 'gcash') {
-      if (!gcashReference.trim()) return;
+      const digits = gcashReference.replace(/\s/g, '');
+      if (!gcashReference.trim() || digits.length !== 13) {
+        setGcashRefError('Please enter a valid 13-digit GCash reference number.');
+        return;
+      }
+      if (gcashRefError) return; // Block if there's a duplicate error
       if (paymentProofFiles.length === 0) {
         setPaymentProofError('Payment proof is required.');
         return;
@@ -763,10 +805,17 @@ const Shop = () => {
                   <>
                     <div className="mb-3">
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">GCash Reference Number <span className="text-red-500">*</span></label>
-                      <input type="text" value={gcashReference} onChange={(e) => setGcashReference(e.target.value)}
+                      <input type="text" value={gcashReference} onChange={(e) => {
+                        const val = e.target.value;
+                        setGcashReference(val);
+                        checkGcashReference(val);
+                      }}
                         placeholder="Enter 13-digit reference number"
                         className="w-full px-4 py-3 text-lg font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wider border-2 border-primary-200 dark:border-primary-700 bg-white dark:bg-gray-700 dark:text-gray-100"
                         autoFocus />
+                      {gcashRefError && (
+                        <p className="mt-1.5 text-xs font-semibold text-red-600 dark:text-red-400">{gcashRefError}</p>
+                      )}
                     </div>
                     <div className="mb-4">
                       <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Proof <span className="text-red-500">*</span></label>
@@ -858,7 +907,7 @@ const Shop = () => {
                 </button>
                 <button
                   onClick={confirmPayment}
-                  disabled={submitting || (paymentMethod === 'gcash' ? (!gcashReference.trim() || paymentProofFiles.length === 0) : false)}
+                  disabled={submitting || (paymentMethod === 'gcash' ? (!gcashReference.trim() || gcashReference.replace(/\s/g, '').length !== 13 || gcashRefError || paymentProofFiles.length === 0) : false)}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${paymentMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-purple-500 hover:bg-purple-600'}`}
                 >
                   <Receipt size={14} /> {submitting ? 'Processing...' : 'Place Order'}

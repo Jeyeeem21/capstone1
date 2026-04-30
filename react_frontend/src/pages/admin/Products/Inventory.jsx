@@ -54,6 +54,9 @@ const Inventory = () => {
   const [isFloorModalOpen, setIsFloorModalOpen] = useState(false);
   const [isCostDetailOpen, setIsCostDetailOpen] = useState(false);
   const [selectedCostRecord, setSelectedCostRecord] = useState(null);
+  const [isQuickPriceOpen, setIsQuickPriceOpen] = useState(false);
+  const [quickPriceRecord, setQuickPriceRecord] = useState(null);
+  const [quickPriceValue, setQuickPriceValue] = useState('');
   const [isMovementDetailOpen, setIsMovementDetailOpen] = useState(false);
   const [selectedMovementGroup, setSelectedMovementGroup] = useState([]);
   const [isGrowthDetailOpen, setIsGrowthDetailOpen] = useState(false);
@@ -70,6 +73,8 @@ const Inventory = () => {
     status: 'active'
   });
   const [addStockKg, setAddStockKg] = useState('');
+  const [sackPricePerUnit, setSackPricePerUnit] = useState('');
+  const [packagingTwinesPrice, setPackagingTwinesPrice] = useState('');
   const [floorValue, setFloorValue] = useState('');
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -207,6 +212,8 @@ const Inventory = () => {
   const handleOpenAddStock = useCallback(async (item) => {
     setSelectedItem(item);
     setAddStockKg('');
+    setSackPricePerUnit('');
+    setPackagingTwinesPrice('');
     setSelectedProcessings([]);
     setAvailableProcessings([]);
     setIsAddStockModalOpen(true);
@@ -339,7 +346,10 @@ const Inventory = () => {
     if (!selectedItem || selectedProcessings.length === 0) return null;
 
     let totalProcurementCost = 0;
+    let totalHaulingCost = 0;
+    let totalTwinesCost = 0;
     let totalDryingCost = 0;
+    let totalMillingCost = 0;
 
     selectedProcessings.forEach(sel => {
       const proc = availableProcessings.find(p => p.id === sel.processing_id);
@@ -347,28 +357,39 @@ const Inventory = () => {
       const outputKg = proc.output_kg || 1;
       const fraction = sel.kg_to_take / outputKg;
       totalProcurementCost += (proc.cost_breakdown.procurement_cost || 0) * fraction;
-      totalDryingCost += (proc.cost_breakdown.drying_cost || 0) * fraction;
+      totalHaulingCost     += (proc.cost_breakdown.hauling_cost     || 0) * fraction;
+      totalTwinesCost      += (proc.cost_breakdown.twines_cost      || 0) * fraction;
+      totalDryingCost      += (proc.cost_breakdown.drying_cost      || 0) * fraction;
+      totalMillingCost     += (proc.cost_breakdown.milling_cost     || 0) * fraction;
     });
 
-    const totalCost = totalProcurementCost + totalDryingCost;
+    const totalCost = totalProcurementCost + totalHaulingCost + totalTwinesCost + totalDryingCost + totalMillingCost;
     const weight = parseFloat(selectedItem.weight) || 0;
     const totalKg = parseFloat(addStockKg) || 0;
     const units = weight > 0 ? Math.floor(totalKg / weight) : 0;
-    const costPerUnit = units > 0 ? totalCost / units : 0;
+    const sackCost = (parseFloat(sackPricePerUnit) || 0) * units;
+    const packagingTwinesCost = parseFloat(packagingTwinesPrice) || 0;
+    const totalCostWithPackaging = totalCost + sackCost + packagingTwinesCost;
+    const costPerUnit = units > 0 ? totalCostWithPackaging / units : 0;
     const sellingPrice = parseFloat(selectedItem.price) || 0;
     const profitPerUnit = sellingPrice - costPerUnit;
     const profitMargin = sellingPrice > 0 ? (profitPerUnit / sellingPrice) * 100 : 0;
 
     return {
       totalProcurementCost,
+      totalHaulingCost,
+      totalTwinesCost,
       totalDryingCost,
-      totalCost,
+      totalMillingCost,
+      sackCost,
+      packagingTwinesCost,
+      totalCost: totalCostWithPackaging,
       costPerUnit,
       sellingPrice,
       profitPerUnit,
       profitMargin,
     };
-  }, [selectedItem, selectedProcessings, availableProcessings, addStockKg]);
+  }, [selectedItem, selectedProcessings, availableProcessings, addStockKg, sackPricePerUnit, packagingTwinesPrice]);
 
   // ─── Submit handlers ─────────────────────────────────────────
 
@@ -495,6 +516,8 @@ const Inventory = () => {
           processing_id: s.processing_id,
           kg_to_take: s.kg_to_take,
         })),
+        sack_price_per_unit: parseFloat(sackPricePerUnit) || null,
+        packaging_twines_price: parseFloat(packagingTwinesPrice) || null,
       });
       if (response.success) {
         const productName = selectedItem.product_name;
@@ -540,6 +563,30 @@ const Inventory = () => {
     } catch (error) {
       console.error('Error updating floor:', error);
       toast.error('Error', error.message || 'Failed to update floor');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleQuickPriceSubmit = async () => {
+    if (saving || !quickPriceRecord) return;
+    const price = parseFloat(quickPriceValue);
+    if (!price || price <= 0) return;
+    setSaving(true);
+    try {
+      const response = await apiClient.put(`/products/${quickPriceRecord.product_id}`, { price });
+      if (response.success) {
+        setIsQuickPriceOpen(false);
+        toast.success('Price Set', `Selling price updated to ₱${price.toLocaleString()} for ${quickPriceRecord.product_name}.`);
+        invalidateCache(CACHE_KEY);
+        invalidateCache('/stock-logs');
+        refetch();
+        refetchStockLogs();
+      } else {
+        throw new Error(response.message || 'Failed to update price');
+      }
+    } catch (error) {
+      toast.error('Error', error.message || 'Failed to update price');
     } finally {
       setSaving(false);
     }
@@ -2095,61 +2142,98 @@ const Inventory = () => {
                 )
               },
               {
-                header: 'Procurement',
+                header: 'Procurement Cost',
                 accessor: 'procurement_cost',
                 cell: (row) => row.procurement_cost ? (
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">₱{parseFloat(row.procurement_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">₱{parseFloat(row.procurement_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    {parseFloat(row.hauling_cost) > 0 && (
+                      <span className="text-[11px] text-orange-500">+₱{parseFloat(row.hauling_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} hauling</span>
+                    )}
+                    {parseFloat(row.twines_cost) > 0 && (
+                      <span className="text-[11px] text-teal-500">+₱{parseFloat(row.twines_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} twines</span>
+                    )}
+                  </div>
                 ) : <span className="text-gray-300 text-xs">—</span>
               },
               {
-                header: 'Drying',
+                header: 'Processing Cost',
                 accessor: 'drying_cost',
                 cell: (row) => row.drying_cost ? (
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">₱{parseFloat(row.drying_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">₱{parseFloat(row.drying_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} drying</span>
+                    {parseFloat(row.milling_cost) > 0 && (
+                      <span className="text-[11px] text-purple-500">+₱{parseFloat(row.milling_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} milling</span>
+                    )}
+                  </div>
+                ) : <span className="text-gray-300 text-xs">—</span>
+              },
+              {
+                header: 'Packaging Cost',
+                accessor: 'sack_cost',
+                cell: (row) => parseFloat(row.sack_cost) > 0 || parseFloat(row.packaging_twines_cost) > 0 ? (
+                  <div className="flex flex-col gap-0.5">
+                    {parseFloat(row.sack_cost) > 0 && (
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">₱{parseFloat(row.sack_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} sacks</span>
+                    )}
+                    {parseFloat(row.packaging_twines_cost) > 0 && (
+                      <span className="text-[11px] text-teal-500">+₱{parseFloat(row.packaging_twines_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} twines</span>
+                    )}
+                  </div>
                 ) : <span className="text-gray-300 text-xs">—</span>
               },
               {
                 header: 'Total Cost',
                 accessor: 'total_cost',
                 cell: (row) => (
-                  <span className="font-bold text-gray-800 dark:text-gray-100">₱{parseFloat(row.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold text-gray-800 dark:text-gray-100">₱{parseFloat(row.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    {row.cost_per_unit && (
+                      <span className="text-[11px] text-blue-500">₱{parseFloat(row.cost_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/unit</span>
+                    )}
+                  </div>
                 )
-              },
-              {
-                header: 'Cost / Unit',
-                accessor: 'cost_per_unit',
-                cell: (row) => (
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">₱{parseFloat(row.cost_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                )
-              },
-              {
-                header: 'Sell Price',
-                accessor: 'selling_price',
-                cell: (row) => row.selling_price > 0 ? (
-                  <span className="font-semibold text-gray-700 dark:text-gray-200">₱{parseFloat(row.selling_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                ) : <span className="text-gray-300 text-xs">—</span>
               },
               {
                 header: 'Profit / Unit',
                 accessor: 'profit_per_unit',
                 cell: (row) => row.profit_per_unit !== null && row.profit_per_unit !== undefined ? (
-                  <span className={`font-bold ${parseFloat(row.profit_per_unit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {parseFloat(row.profit_per_unit) >= 0 ? '+' : ''}₱{parseFloat(row.profit_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                ) : <span className="text-gray-300 text-xs">—</span>
-              },
-              {
-                header: 'Margin',
-                accessor: 'profit_margin',
-                cell: (row) => row.profit_margin !== null && row.profit_margin !== undefined ? (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
-                    parseFloat(row.profit_margin) >= 20 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
-                    parseFloat(row.profit_margin) >= 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
-                    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                  }`}>
-                    {parseFloat(row.profit_margin).toFixed(1)}%
-                  </span>
-                ) : <span className="text-gray-300 text-xs">—</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className={`font-bold ${parseFloat(row.profit_per_unit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {parseFloat(row.profit_per_unit) >= 0 ? '+' : ''}₱{parseFloat(row.profit_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {row.selling_price > 0 && (
+                      <span className="text-[11px] text-gray-400">sell ₱{parseFloat(row.selling_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    )}
+                    {row.profit_margin !== null && row.profit_margin !== undefined && (
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold w-fit ${
+                        parseFloat(row.profit_margin) >= 20 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                        parseFloat(row.profit_margin) >= 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                        'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                      }`}>{parseFloat(row.profit_margin).toFixed(1)}%</span>
+                    )}
+                    {!(row.selling_price > 0) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setQuickPriceRecord({ product_id: row.product_id, product_name: row.product_name, cost_per_unit: row.cost_per_unit }); setQuickPriceValue(''); setIsQuickPriceOpen(true); }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400 hover:bg-button-200 dark:hover:bg-button-800/40 font-medium w-fit transition-colors mt-0.5"
+                      >
+                        Set Price
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] text-gray-400 italic">No sell price</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setQuickPriceRecord({ product_id: row.product_id, product_name: row.product_name, cost_per_unit: row.cost_per_unit }); setQuickPriceValue(''); setIsQuickPriceOpen(true); }}
+                      className="text-[10px] px-2 py-0.5 rounded bg-button-100 dark:bg-button-900/30 text-button-600 dark:text-button-400 hover:bg-button-200 dark:hover:bg-button-800/40 font-medium w-fit transition-colors"
+                    >
+                      Set Price
+                    </button>
+                  </div>
+                )
               },
               {
                 header: 'Date',
@@ -2681,6 +2765,24 @@ const Inventory = () => {
                         </div>
                         <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.procurement_cost)}</span>
                       </div>
+                      {parseFloat(r.hauling_cost) > 0 && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Hauling</p>
+                            <p className="text-[10px] text-gray-400">Transport expense</p>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.hauling_cost)}</span>
+                        </div>
+                      )}
+                      {parseFloat(r.twines_cost) > 0 && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Twines</p>
+                            <p className="text-[10px] text-gray-400">Binding material</p>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.twines_cost)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center px-3 py-2">
                         <div>
                           <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Drying</p>
@@ -2688,6 +2790,33 @@ const Inventory = () => {
                         </div>
                         <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.drying_cost)}</span>
                       </div>
+                      {parseFloat(r.milling_cost) > 0 && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Milling</p>
+                            <p className="text-[10px] text-gray-400">Processing expense</p>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.milling_cost)}</span>
+                        </div>
+                      )}
+                      {parseFloat(r.sack_cost) > 0 && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Sacks</p>
+                            <p className="text-[10px] text-gray-400">Packaging material</p>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.sack_cost)}</span>
+                        </div>
+                      )}
+                      {parseFloat(r.packaging_twines_cost) > 0 && (
+                        <div className="flex justify-between items-center px-3 py-2">
+                          <div>
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Packaging Twines</p>
+                            <p className="text-[10px] text-gray-400">Binding for sacks</p>
+                          </div>
+                          <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{fmt(r.packaging_twines_cost)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center px-3 py-2 bg-gray-50 dark:bg-gray-600/50 rounded-b-lg">
                         <p className="text-xs font-bold text-gray-800 dark:text-gray-100">Total Production</p>
                         <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{fmt(r.total_cost)}</span>
@@ -3209,6 +3338,42 @@ const Inventory = () => {
               </div>
             )}
 
+            {/* ─── Packaging Costs ─── */}
+            {selectedProcessings.length > 0 && (
+              <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 p-4 space-y-3">
+                <p className="text-[10px] uppercase tracking-widest text-gray-500 dark:text-gray-400 font-bold">Packaging Costs (optional)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sack Price (₱ / unit)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={sackPricePerUnit}
+                      onChange={e => setSackPricePerUnit(e.target.value)}
+                      placeholder="e.g. 12.00"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-button-400"
+                    />
+                    {sackPricePerUnit && computedCostBreakdown?.sackCost > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-1">Total: ₱{computedCostBreakdown.sackCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Twines Price (₱ total)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={packagingTwinesPrice}
+                      onChange={e => setPackagingTwinesPrice(e.target.value)}
+                      placeholder="e.g. 50.00"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-button-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ─── Cost & Profit Analysis ─── */}
             {selectedProcessings.length > 0 && computedCostBreakdown && computedCostBreakdown.totalCost > 0 && (
               <div className="rounded-xl overflow-hidden border-2 border-blue-300 dark:border-blue-600 bg-gradient-to-br from-blue-50 dark:from-gray-700 to-indigo-50 dark:to-gray-700">
@@ -3216,16 +3381,46 @@ const Inventory = () => {
                   <p className="text-[10px] uppercase tracking-widest text-blue-500 font-bold mb-3 text-center">Cost & Profit Analysis</p>
 
                   {/* Cost breakdown */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
                       <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Procurement</p>
                       <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalProcurementCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                    {computedCostBreakdown.totalHaulingCost > 0 && (
+                      <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Hauling</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalHaulingCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    {computedCostBreakdown.totalTwinesCost > 0 && (
+                      <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Twines</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalTwinesCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
                       <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Drying</p>
                       <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalDryingCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                    {computedCostBreakdown.totalMillingCost > 0 && (
+                      <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Milling</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.totalMillingCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    {computedCostBreakdown.sackCost > 0 && (
+                      <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Sacks</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.sackCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    {computedCostBreakdown.packagingTwinesCost > 0 && (
+                      <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Pkg. Twines</p>
+                        <p className="text-sm font-bold text-gray-700 dark:text-gray-200">₱{computedCostBreakdown.packagingTwinesCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-[90px] text-center p-2 bg-white/60 dark:bg-gray-700/60 rounded-lg">
                       <p className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">Total Cost</p>
                       <p className="text-sm font-bold text-blue-700 dark:text-blue-300">₱{computedCostBreakdown.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
@@ -3285,6 +3480,49 @@ const Inventory = () => {
                 disabled={saving || selectedProcessings.length === 0 || !computedStockUnits || computedStockUnits.units <= 0}
               >
                 {saving ? 'Distributing...' : `Distribute ${computedStockUnits?.units?.toLocaleString() || 0} Units`}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ─── Quick Set Price Modal ──────────────────────────── */}
+      <Modal
+        isOpen={isQuickPriceOpen}
+        onClose={() => setIsQuickPriceOpen(false)}
+        title="Set Selling Price"
+        size="sm"
+      >
+        {quickPriceRecord && (
+          <div className="space-y-4">
+            <div className="p-4 bg-button-50 dark:bg-button-900/20 rounded-xl border border-button-200 dark:border-button-700">
+              <p className="text-sm font-semibold text-button-800 dark:text-button-300">{quickPriceRecord.product_name}</p>
+              <p className="text-xs text-button-600 dark:text-button-400 mt-1">Enter the selling price per unit (per sack)</p>
+              {quickPriceRecord.cost_per_unit > 0 && (
+                <div className="mt-2 pt-2 border-t border-button-200 dark:border-button-700 flex items-center justify-between">
+                  <span className="text-xs text-button-600 dark:text-button-400">Cost per unit</span>
+                  <span className="text-sm font-bold text-red-600 dark:text-red-400">₱{parseFloat(quickPriceRecord.cost_per_unit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Selling Price (₱ / unit)</label>
+              <input
+                type="number"
+                value={quickPriceValue}
+                onChange={(e) => setQuickPriceValue(e.target.value)}
+                placeholder="e.g. 1200.00"
+                min="0"
+                step="0.01"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') handleQuickPriceSubmit(); }}
+                className="w-full px-3 py-2 border border-primary-300 dark:border-primary-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-button-500 focus:border-button-500"
+              />
+            </div>
+            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
+              <Button variant="outline" onClick={() => setIsQuickPriceOpen(false)} className="flex-1" disabled={saving}>Cancel</Button>
+              <Button onClick={handleQuickPriceSubmit} className="flex-1" disabled={saving || !quickPriceValue || parseFloat(quickPriceValue) <= 0}>
+                {saving ? 'Saving...' : 'Save Price'}
               </Button>
             </div>
           </div>
@@ -3426,17 +3664,36 @@ const Inventory = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg text-center">
+                  {/* Cost breakdown rows */}
+                  <div className="bg-white/70 dark:bg-gray-700/70 rounded-lg divide-y divide-gray-100 dark:divide-gray-600">
+                    <div className="flex justify-between items-center px-2.5 py-1.5">
                       <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Procurement</p>
                       <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_procurement_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg text-center">
+                    {costAnalysis.total_hauling_cost > 0 && (
+                      <div className="flex justify-between items-center px-2.5 py-1.5">
+                        <p className="text-[10px] text-orange-500 font-medium">Hauling</p>
+                        <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_hauling_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    {costAnalysis.total_twines_cost > 0 && (
+                      <div className="flex justify-between items-center px-2.5 py-1.5">
+                        <p className="text-[10px] text-teal-500 font-medium">Twines</p>
+                        <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_twines_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center px-2.5 py-1.5">
                       <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Drying</p>
                       <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_drying_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
-                    <div className="p-2 bg-white/70 dark:bg-gray-700/70 rounded-lg text-center">
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Total Cost</p>
+                    {costAnalysis.total_milling_cost > 0 && (
+                      <div className="flex justify-between items-center px-2.5 py-1.5">
+                        <p className="text-[10px] text-purple-500 font-medium">Milling</p>
+                        <p className="text-xs font-bold text-gray-700 dark:text-gray-200">₱{costAnalysis.total_milling_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center px-2.5 py-1.5 bg-blue-50/60 dark:bg-blue-900/10 rounded-b-lg">
+                      <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">Total Cost</p>
                       <p className="text-xs font-bold text-blue-700 dark:text-blue-300">₱{costAnalysis.total_production_cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                   </div>

@@ -231,14 +231,16 @@ class ProductService
     public function computeProcessingCost(Processing $processing): array
     {
         $totalProcurementCost = 0;
+        $totalHaulingCost = 0;
+        $totalTwinesCost = 0;
         $totalDryingCost = 0;
 
         // Ensure dryingSources is loaded with cost-related data
         if (!$processing->relationLoaded('dryingSources')) {
             $processing->load([
                 'dryingSources',
-                'dryingSources.procurement:id,quantity_kg,price_per_kg',
-                'dryingSources.batchProcurements.procurement:id,quantity_kg,price_per_kg',
+                'dryingSources.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
+                'dryingSources.batchProcurements.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
             ]);
         }
 
@@ -254,30 +256,57 @@ class ProductService
             $dryingCostShare = $fraction * (float) $dryingSource->total_price;
             $totalDryingCost += $dryingCostShare;
 
-            // Procurement cost share
+            // Procurement + hauling + twines cost share
             if ($dryingSource->batch_id && $dryingSource->relationLoaded('batchProcurements') && $dryingSource->batchProcurements->count() > 0) {
-                // Batch drying: sum procurement costs from batch allocations
+                // Batch drying: sum procurement + hauling + twines costs from batch allocations
                 $procurementCostForDrying = 0;
+                $haulingCostForDrying = 0;
+                $twinesCostForDrying = 0;
                 foreach ($dryingSource->batchProcurements as $bp) {
                     $procurementCostForDrying += (float) $bp->quantity_kg * (float) ($bp->procurement->price_per_kg ?? 0);
+                    // Hauling: proportional to how much of this procurement went into the batch
+                    $bpProc = $bp->procurement;
+                    $bpHaulingSacks = (int) ($bpProc->hauling_sacks ?? $bpProc->sacks ?? 0);
+                    $bpHaulingRate  = (float) ($bpProc->hauling_price_per_sack ?? 0);
+                    $bpProcFraction = $bpProc->quantity_kg > 0 ? (float) $bp->quantity_kg / (float) $bpProc->quantity_kg : 1;
+                    $haulingCostForDrying += $bpProcFraction * ($bpHaulingSacks * $bpHaulingRate);
+                    // Twines: proportional to how much of this procurement went into the batch
+                    $bpTwinesTotal  = (float) ($bpProc->twines_price ?? 0);
+                    $twinesCostForDrying += $bpProcFraction * $bpTwinesTotal;
                 }
                 $totalProcurementCost += $fraction * $procurementCostForDrying;
+                $totalHaulingCost     += $fraction * $haulingCostForDrying;
+                $totalTwinesCost      += $fraction * $twinesCostForDrying;
             } elseif ($dryingSource->procurement) {
                 // Individual drying: cost of raw rice that went into drying
-                $procurementCostForDrying = $dryingTotalKg * (float) $dryingSource->procurement->price_per_kg;
+                $proc = $dryingSource->procurement;
+                $procurementCostForDrying = $dryingTotalKg * (float) $proc->price_per_kg;
                 $totalProcurementCost += $fraction * $procurementCostForDrying;
+                // Hauling: proportional to drying kg vs total procurement kg
+                $haulingSacks   = (int) ($proc->hauling_sacks ?? $proc->sacks ?? 0);
+                $haulingRate    = (float) ($proc->hauling_price_per_sack ?? 0);
+                $procKgFraction = $proc->quantity_kg > 0 ? $dryingTotalKg / (float) $proc->quantity_kg : 1;
+                $totalHaulingCost += $fraction * $procKgFraction * ($haulingSacks * $haulingRate);
+                // Twines: flat price, proportional to drying kg vs total procurement kg
+                $twinesTotal    = (float) ($proc->twines_price ?? 0);
+                $totalTwinesCost += $fraction * $procKgFraction * $twinesTotal;
             }
         }
 
-        $totalCost = $totalProcurementCost + $totalDryingCost;
+        $totalCost = $totalProcurementCost + $totalHaulingCost + $totalTwinesCost + $totalDryingCost;
         $outputKg = (float) ($processing->output_kg ?? 0);
+        $millingCost = (float) ($processing->milling_cost_per_kg ?? 0) * $outputKg;
+        $totalCost += $millingCost;
         $costPerOutputKg = $outputKg > 0 ? $totalCost / $outputKg : 0;
 
         return [
             'procurement_cost' => round($totalProcurementCost, 2),
-            'drying_cost' => round($totalDryingCost, 2),
-            'total_cost' => round($totalCost, 2),
-            'cost_per_kg' => round($costPerOutputKg, 2),
+            'hauling_cost'     => round($totalHaulingCost, 2),
+            'twines_cost'      => round($totalTwinesCost, 2),
+            'drying_cost'      => round($totalDryingCost, 2),
+            'milling_cost'     => round($millingCost, 2),
+            'total_cost'       => round($totalCost, 2),
+            'cost_per_kg'      => round($costPerOutputKg, 2),
         ];
     }
 
@@ -313,8 +342,11 @@ class ProductService
                 'profit_per_unit' => round($profitPerUnit, 2),
                 'profit_margin' => round($profitMargin, 2),
                 'total_procurement_cost' => round((float) $stockLogs->sum('procurement_cost'), 2),
-                'total_drying_cost' => round((float) $stockLogs->sum('drying_cost'), 2),
-                'total_production_cost' => round($totalCost, 2),
+                'total_hauling_cost'     => round((float) $stockLogs->sum('hauling_cost'), 2),
+                'total_twines_cost'      => round((float) $stockLogs->sum('twines_cost'), 2),
+                'total_drying_cost'      => round((float) $stockLogs->sum('drying_cost'), 2),
+                'total_milling_cost'     => round((float) $stockLogs->sum('milling_cost'), 2),
+                'total_production_cost'  => round($totalCost, 2),
                 'total_distributed_kg' => round((float) $stockLogs->sum('kg_amount'), 2),
                 'processings_count' => $stockLogs->count(),
             ];
@@ -324,9 +356,9 @@ class ProductService
         $varietyId = $product->variety_id;
         $processings = Processing::with([
                 'dryingSources:id,procurement_id,batch_id,quantity_kg,price,total_price',
-                'dryingSources.procurement:id,quantity_kg,price_per_kg',
+                'dryingSources.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
                 'dryingSources.batchProcurements',
-                'dryingSources.batchProcurements.procurement:id,quantity_kg,price_per_kg',
+                'dryingSources.batchProcurements.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
             ])
             ->completed()
             ->where('stock_out', '>', 0)
@@ -345,26 +377,35 @@ class ProductService
                 'profit_per_unit' => 0,
                 'profit_margin' => 0,
                 'total_procurement_cost' => 0,
-                'total_drying_cost' => 0,
-                'total_production_cost' => 0,
-                'total_distributed_kg' => 0,
-                'processings_count' => 0,
+                'total_hauling_cost'     => 0,
+                'total_twines_cost'      => 0,
+                'total_drying_cost'      => 0,
+                'total_milling_cost'     => 0,
+                'total_production_cost'  => 0,
+                'total_distributed_kg'   => 0,
+                'processings_count'      => 0,
             ];
         }
 
         $totalProcurementCost = 0;
+        $totalHaulingCost = 0;
+        $totalTwinesCost = 0;
         $totalDryingCost = 0;
+        $totalMillingCost = 0;
         $totalDistributedKg = 0;
 
         foreach ($processings as $processing) {
             $cost = $this->computeProcessingCost($processing);
             $distributedFraction = (float) $processing->stock_out / max(0.01, (float) $processing->output_kg);
             $totalProcurementCost += $cost['procurement_cost'] * $distributedFraction;
-            $totalDryingCost += $cost['drying_cost'] * $distributedFraction;
-            $totalDistributedKg += (float) $processing->stock_out;
+            $totalHaulingCost     += $cost['hauling_cost'] * $distributedFraction;
+            $totalTwinesCost      += $cost['twines_cost'] * $distributedFraction;
+            $totalDryingCost      += $cost['drying_cost'] * $distributedFraction;
+            $totalMillingCost     += $cost['milling_cost'] * $distributedFraction;
+            $totalDistributedKg   += (float) $processing->stock_out;
         }
 
-        $totalCost = $totalProcurementCost + $totalDryingCost;
+        $totalCost = $totalProcurementCost + $totalHaulingCost + $totalTwinesCost + $totalDryingCost + $totalMillingCost;
         $avgCostPerKg = $totalDistributedKg > 0 ? $totalCost / $totalDistributedKg : 0;
         $avgCostPerUnit = $weight > 0 ? $avgCostPerKg * $weight : $avgCostPerKg;
         $profitPerUnit = $sellingPrice - $avgCostPerUnit;
@@ -378,10 +419,13 @@ class ProductService
             'profit_per_unit' => round($profitPerUnit, 2),
             'profit_margin' => round($profitMargin, 2),
             'total_procurement_cost' => round($totalProcurementCost, 2),
-            'total_drying_cost' => round($totalDryingCost, 2),
-            'total_production_cost' => round($totalCost, 2),
-            'total_distributed_kg' => round($totalDistributedKg, 2),
-            'processings_count' => $processings->count(),
+            'total_hauling_cost'     => round($totalHaulingCost, 2),
+            'total_twines_cost'      => round($totalTwinesCost, 2),
+            'total_drying_cost'      => round($totalDryingCost, 2),
+            'total_milling_cost'     => round($totalMillingCost, 2),
+            'total_production_cost'  => round($totalCost, 2),
+            'total_distributed_kg'   => round($totalDistributedKg, 2),
+            'processings_count'      => $processings->count(),
         ];
     }
 
@@ -398,13 +442,13 @@ class ProductService
                 'dryingProcess.procurement.supplier:id,name',
                 'dryingProcess.batch:id,batch_number',
                 'dryingSources:id,procurement_id,batch_id,quantity_kg,sacks,quantity_out,days,status,price,total_price',
-                'dryingSources.procurement:id,supplier_id,variety_id,quantity_kg,price_per_kg',
+                'dryingSources.procurement:id,supplier_id,variety_id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
                 'dryingSources.procurement.supplier:id,name',
                 'dryingSources.batch:id,batch_number,variety_id',
                 'dryingSources.batch.variety:id,name,color',
                 'dryingSources.procurement.variety:id,name,color',
                 'dryingSources.batchProcurements',
-                'dryingSources.batchProcurements.procurement:id,quantity_kg,price_per_kg',
+                'dryingSources.batchProcurements.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
             ])
             ->select(['id', 'procurement_id', 'drying_process_id', 'input_kg', 'output_kg', 'stock_out', 'husk_kg', 'yield_percent', 'operator_name', 'status', 'processing_date', 'completed_date', 'created_at'])
             ->completed()
@@ -434,9 +478,9 @@ class ProductService
      * Distribute stock from completed processings to a product.
      * Deducts from processing remaining stock, adds units to product.
      */
-    public function distributeStockFromProcessing(int $productId, array $sources): array
+    public function distributeStockFromProcessing(int $productId, array $sources, float $sackPricePerUnit = 0, float $packagingTwinesPrice = 0): array
     {
-        return DB::transaction(function () use ($productId, $sources) {
+        return DB::transaction(function () use ($productId, $sources, $sackPricePerUnit, $packagingTwinesPrice) {
             $product = Product::with('variety')->findOrFail($productId);
             $weight = (float) ($product->weight ?? 0);
 
@@ -519,24 +563,33 @@ class ProductService
 
             // Compute cost breakdown for each processing source
             $totalProcurementCost = 0;
+            $totalHaulingCost = 0;
+            $totalTwinesCost = 0;
             $totalDryingCost = 0;
+            $totalMillingCost = 0;
             foreach ($adjustedSources as $update) {
                 $proc = $update['processing'];
                 // Load cost-related relationships
                 $proc->load([
                     'dryingSources:id,procurement_id,batch_id,quantity_kg,price,total_price',
-                    'dryingSources.procurement:id,quantity_kg,price_per_kg',
+                    'dryingSources.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
                     'dryingSources.batchProcurements',
-                    'dryingSources.batchProcurements.procurement:id,quantity_kg,price_per_kg',
+                    'dryingSources.batchProcurements.procurement:id,quantity_kg,sacks,price_per_kg,hauling_price_per_sack,hauling_sacks,twines_price',
                 ]);
                 $cost = $this->computeProcessingCost($proc);
                 // Scale cost proportionally to the kg taken from this processing
                 $outputKg = (float) ($proc->output_kg ?? 1);
                 $fraction = $update['kg_to_take'] / max(0.01, $outputKg);
                 $totalProcurementCost += $cost['procurement_cost'] * $fraction;
-                $totalDryingCost += $cost['drying_cost'] * $fraction;
+                $totalHaulingCost     += $cost['hauling_cost'] * $fraction;
+                $totalTwinesCost      += $cost['twines_cost'] * $fraction;
+                $totalDryingCost      += $cost['drying_cost'] * $fraction;
+                $totalMillingCost     += $cost['milling_cost'] * $fraction;
             }
-            $totalCost = round($totalProcurementCost + $totalDryingCost, 2);
+            $totalCost = round($totalProcurementCost + $totalHaulingCost + $totalTwinesCost + $totalDryingCost + $totalMillingCost, 2);
+            $sackCost = round($sackPricePerUnit * $totalUnits, 2);
+            $packagingTwinesCost = round($packagingTwinesPrice, 2);
+            $totalCost = round($totalCost + $sackCost + $packagingTwinesCost, 2);
             $costPerUnit = $totalUnits > 0 ? round($totalCost / $totalUnits, 2) : 0;
             $sellingPrice = (float) $product->price;
             $profitPerUnit = round($sellingPrice - $costPerUnit, 2);
@@ -555,8 +608,13 @@ class ProductService
                 'source_processing_ids' => array_map(fn($u) => ['processing_id' => $u['processing']->id, 'kg_taken' => $u['kg_to_take']], $adjustedSources),
                 'notes' => "Distributed from " . count($processingUpdates) . " processing source(s)",
                 'procurement_cost' => round($totalProcurementCost, 2),
-                'drying_cost' => round($totalDryingCost, 2),
-                'total_cost' => $totalCost,
+                'hauling_cost'     => round($totalHaulingCost, 2),
+                'twines_cost'      => round($totalTwinesCost, 2),
+                'drying_cost'      => round($totalDryingCost, 2),
+                'milling_cost'     => round($totalMillingCost, 2),
+                'sack_cost'        => $sackCost > 0 ? $sackCost : null,
+                'packaging_twines_cost' => $packagingTwinesCost > 0 ? $packagingTwinesCost : null,
+                'total_cost'       => $totalCost,
                 'cost_per_unit' => $costPerUnit,
                 'selling_price' => $sellingPrice,
                 'profit_per_unit' => $profitPerUnit,

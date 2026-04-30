@@ -28,21 +28,31 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
         const paymentsData = Array.isArray(response.data) ? response.data : [];
         setPayments(paymentsData);
 
-        // Update stats — backend uses 'needs_verification' for GCash awaiting review
-        const pendingVerification = paymentsData.filter(p => p.status === 'needs_verification').length;
+        // Update stats — 'needs_verification' for GCash, 'pending' for PDO
+        const pendingVerifications = paymentsData.filter(p =>
+          p.status === 'needs_verification' || p.status === 'pending'
+        ).length;
         const onHold = paymentsData.filter(p => p.status === 'on_hold').length;
-        const today = new Date().toDateString();
-        const verifiedToday = paymentsData.filter(p => p.status === 'verified' && new Date(p.verified_at || p.updated_at).toDateString() === today).length;
-        const totalAmount = paymentsData
-          .filter(p => p.status === 'verified')
-          .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+        const today = new Date();
+        const todayStr = today.toDateString();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        const verifiedToday = paymentsData.filter(p =>
+          p.status === 'verified' &&
+          new Date(p.verified_at || p.updated_at).toDateString() === todayStr
+        ).length;
+        const totalMonth = paymentsData.filter(p => {
+          if (p.status !== 'verified') return false;
+          const d = new Date(p.verified_at || p.updated_at);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        }).length;
 
         onStatsUpdate(prev => ({
           ...prev,
-          pendingVerification,
+          pendingVerifications,
           onHold,
-          verifiedToday,
-          totalAmount
+          totalToday: verifiedToday,
+          totalMonth
         }));
       }
     } catch (error) {

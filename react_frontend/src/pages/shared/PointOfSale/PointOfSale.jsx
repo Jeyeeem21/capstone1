@@ -102,6 +102,14 @@ const posPaymentMethods = [
   { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#6b7280' },
 ];
 
+// Filter payment methods by role inside component using user from context
+const getAvailablePaymentMethods = (userRole) => {
+  if (userRole === 'customer') {
+    return posPaymentMethods.filter(m => ['gcash', 'pay_later'].includes(m.value));
+  }
+  return posPaymentMethods;
+};
+
 // customer combobox component - select existing or add new (requires name + contact or email)
 const CustomerCombobox = memo(({ value, newName, newContact, newEmail, newAddress, newLandmark, onChange, onInputChange, onContactChange, onEmailChange, onAddressChange, onLandmarkChange, customerOptions, selectedEmail, error, emailError }) => {
   return (
@@ -258,7 +266,7 @@ CustomerCombobox.displayName = 'CustomerCombobox';
 
 const PointOfSale = () => {
   const toast = useToast();
-  const { isSuperAdmin, isAdmin, isAdminOrAbove } = useAuth();
+  const { user, isSuperAdmin, isAdmin, isAdminOrAbove } = useAuth();
   const { settings: businessSettings } = useBusinessSettings();
   const [cart, setCart] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1080,6 +1088,72 @@ const PointOfSale = () => {
     }
   };
 
+  // Auto-submit for installments where first payment is NOT today
+  const confirmFutureInstallment = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = {
+        items: cart.map(item => ({ product_id: item.id, quantity: item.quantity, unit_price: item.price })),
+        customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+        new_customer_name: newCustomerName || null,
+        new_customer_contact: newCustomerContact || null,
+        new_customer_email: newCustomerEmail || null,
+        new_customer_address: newCustomerAddress || null,
+        new_customer_landmark: newCustomerLandmark || null,
+        payment_method: 'pay_later',
+        amount_tendered: 0,
+        reference_number: null,
+        delivery_fee: forDelivery ? deliveryFee : 0,
+        distance_km: forDelivery && distanceKm ? parseFloat(distanceKm) : null,
+        delivery_address: forDelivery ? deliveryAddress : null,
+        is_staggered: true,
+        installments: installmentPlan,
+      };
+      const response = await apiClient.post('/sales/order', payload);
+      if (response.success && response.data) {
+        suppressNotifToasts();
+        toast.success('Order Placed Successfully', `Order ${response.data.transaction_id} has been created.`);
+        const saleId = response.sale_id || response.data?.id;
+        if (saleId) apiClient.post(`/sales/${saleId}/notify`).catch(() => {});
+        const customerName = newCustomerName || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.label : null);
+        const customerEmail = newCustomerEmail || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.email : null);
+        const saleData = {
+          items: [...cart], total, totalItems, customerName, customerEmail,
+          paymentMethod: 'PAY LATER',
+          transactionId: response.data.transaction_id,
+          time: response.data.date_formatted || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' }),
+          cashTendered: null, change: null, gcashReference: null,
+          deliveryFee: forDelivery ? deliveryFee : 0, subtotal, forDelivery,
+        };
+        setLastSale(saleData);
+        setShowPaymentModal(false);
+        setShowSaleCompleteModal(true);
+        const receiptCopies = parseInt(businessSettings.receipt_copies) || 1;
+        setTimeout(() => autoPrintReceipt(saleData, businessSettings.business_name || 'KJP Ricemill', receiptCopies), 500);
+        setCart([]);
+        setSelectedCustomerId(''); setNewCustomerName(''); setNewCustomerContact('');
+        setNewCustomerEmail(''); setNewCustomerAddress(''); setNewCustomerLandmark('');
+        setCustomerError(''); setEmailError('');
+        setForDelivery(false); setDeliveryAddress(''); setDistanceKm('');
+        setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]);
+        setIsStaggered(false); setInstallmentPlan([]);
+        invalidateCache('/sales'); invalidateCache('/products');
+        refetchSales(); refetchProducts();
+        if (newCustomerName) { invalidateCache('/customers'); refetchCustomers(); }
+      } else { throw response; }
+    } catch (error) {
+      if (error.response?.data?.errors || error.errors) {
+        const backendErrors = error.response?.data?.errors || error.errors;
+        toast.error('Order Failed', `Please fix: ${Object.values(backendErrors).flat().join(', ')}`);
+      } else {
+        toast.error('Order Failed', error.message || 'Failed to create order');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const totalSacks = totalItems; // Each item quantity represents sacks
@@ -1326,28 +1400,6 @@ const PointOfSale = () => {
                 )}
               </div>
 
-              {/* Payment Method - always visible */}
-              <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 mb-4 shrink-0">
-                <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {posPaymentMethods.map(method => {
-                    const Icon = method.icon;
-                    const isSelected = paymentMethod === method.value;
-                    return (
-                      <button key={method.value} onClick={() => setPaymentMethod(method.value)}
-                        className="flex items-center justify-center gap-2 p-2.5 rounded-lg transition-all font-semibold text-xs"
-                        style={isSelected
-                          ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
-                          : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
-                        }>
-                        <Icon size={16} />
-                        {method.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Total Section - always visible */}
               <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-4 shrink-0">
                 <div className="flex justify-between items-center mb-1">
@@ -1372,9 +1424,11 @@ const PointOfSale = () => {
                   <Button onClick={completeSale} className="w-full" icon={Receipt} disabled={cart.length === 0}>
                     Place Order
                   </Button>
-                  <Button onClick={voidTransaction} className="w-full" variant="outline" icon={RotateCcw}>
-                    Void Transaction
-                  </Button>
+                  {user?.role !== 'customer' && (
+                    <Button onClick={voidTransaction} className="w-full" variant="outline" icon={RotateCcw}>
+                      Void Transaction
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1464,28 +1518,6 @@ const PointOfSale = () => {
                       )}
                     </div>
 
-                    {/* Payment Method */}
-                    <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
-                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {posPaymentMethods.map(method => {
-                          const Icon = method.icon;
-                          const isSelected = paymentMethod === method.value;
-                          return (
-                            <button key={method.value} onClick={() => setPaymentMethod(method.value)}
-                              className="flex items-center justify-center gap-1.5 p-2 rounded-lg transition-all font-semibold text-xs"
-                              style={isSelected
-                                ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
-                                : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
-                              }>
-                              <Icon size={14} />
-                              {method.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
                     {/* Total */}
                     <div className="border-t-2 border-primary-200 dark:border-primary-700 pt-3 mb-3">
                       <div className="flex justify-between items-center mb-1">
@@ -1509,9 +1541,11 @@ const PointOfSale = () => {
                       <Button onClick={() => { setMobileCartOpen(false); completeSale(); }} className="w-full" icon={Receipt} disabled={cart.length === 0}>
                         Place Order
                       </Button>
-                      <Button onClick={() => { setMobileCartOpen(false); voidTransaction(); }} className="w-full" variant="outline" icon={RotateCcw}>
-                        Void Transaction
-                      </Button>
+                      {user?.role !== 'customer' && (
+                        <Button onClick={() => { setMobileCartOpen(false); voidTransaction(); }} className="w-full" variant="outline" icon={RotateCcw}>
+                          Void Transaction
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1794,39 +1828,45 @@ const PointOfSale = () => {
               paymentMethod === 'pdo' ? 'max-w-5xl' : (paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number)) ? 'max-w-3xl' : 'max-w-md'
             }`}>
               {/* Header */}
-              <div className={`p-5 text-white shrink-0 ${
-                paymentMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 
-                paymentMethod === 'gcash' ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 
-                paymentMethod === 'pdo' ? 'bg-gradient-to-r from-purple-500 to-purple-600' :
-                paymentMethod === 'pay_later' ? 'bg-gradient-to-r from-indigo-500 to-indigo-600' : 
-                paymentMethod === 'cod' ? 'bg-gradient-to-r from-amber-500 to-amber-600' :
-                'bg-gradient-to-r from-gray-500 to-gray-600'
-              }`}>
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  {paymentMethod === 'cash' ? <DollarSign size={20} /> : 
-                   paymentMethod === 'gcash' ? <Smartphone size={20} /> : 
-                   paymentMethod === 'pdo' ? <FileText size={20} /> :
-                   paymentMethod === 'pay_later' ? <Clock size={20} /> : 
-                   paymentMethod === 'cod' ? <Banknote size={20} /> :
-                   <DollarSign size={20} />}
-                  {paymentMethod === 'cash' ? 'Cash Payment' : 
-                   paymentMethod === 'gcash' ? 'GCash Payment' : 
-                   paymentMethod === 'pdo' ? 'PDO Payment' :
-                   paymentMethod === 'pay_later' ? 'Pay Later' : 
-                   paymentMethod === 'cod' ? 'Cash on Delivery' :
-                   'Payment'}
-                </h3>
-                <p className="text-sm text-white/80 mt-1">
-                  {paymentMethod === 'cash' ? 'Enter amount tendered by customer' : 
-                   paymentMethod === 'gcash' ? 'Enter GCash reference number' : 
-                   paymentMethod === 'pdo' ? 'Upload check image and enter details' :
-                   paymentMethod === 'pay_later' ? 'Order will be placed with payment pending' : 
-                   paymentMethod === 'cod' ? 'Order will be paid upon delivery' :
-                   'Complete payment details'}
-                </p>
+              <div className="p-4 shrink-0 border-b-2 border-primary-200 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    onClick={() => {
+                      setShowPaymentModal(false);
+                      if (isStaggered) {
+                        setShowInstallmentModal(true);
+                      } else {
+                        setShowCustomerModal(true);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    title="Back"
+                  >
+                    &#8592;
+                  </button>
+                  <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 flex-1">Payment</h3>
+                </div>
+                {/* Payment Method Selector */}
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                  {getAvailablePaymentMethods(user?.role).map(method => {
+                    const Icon = method.icon;
+                    const isSelected = paymentMethod === method.value;
+                    return (
+                      <button key={method.value} onClick={() => setPaymentMethod(method.value)}
+                        className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all text-xs font-semibold"
+                        style={isSelected
+                          ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
+                          : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                        }>
+                        <Icon size={14} />
+                        {method.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className={`${(paymentMethod === 'gcash' && (businessSettings.gcash_qr || businessSettings.gcash_name || businessSettings.gcash_number)) || paymentMethod === 'pdo' ? 'flex' : ''}`}>
+              <div className="flex-1 min-h-0 overflow-hidden flex">
               {/* Left side: Order Summary (for PDO) or form content */}
               {paymentMethod === 'pdo' ? (
                 <>
@@ -2391,7 +2431,7 @@ const PointOfSale = () => {
                   onClick={() => { 
                     setShowPaymentModal(false); 
                     if (isStaggered) {
-                      setShowInstallmentSetup(true);
+                      setShowInstallmentModal(true);
                     } else {
                       setShowCustomerModal(true);
                     }
@@ -2746,8 +2786,13 @@ const PointOfSale = () => {
                     }
                     
                     setShowInstallmentModal(false);
-                    // Open payment modal after saving installment schedule
-                    setShowPaymentModal(true);
+                    // If first installment is today, collect payment now; otherwise auto-submit
+                    const today = new Date().toISOString().split('T')[0];
+                    if (installmentPlan[0]?.due_date === today) {
+                      setShowPaymentModal(true);
+                    } else {
+                      confirmFutureInstallment();
+                    }
                   }}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 transition-all"
                 >
@@ -2766,8 +2811,15 @@ const PointOfSale = () => {
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md border-2 border-blue-500 dark:border-blue-600">
               {/* Header */}
-              <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-t-2xl">
-                <h3 className="text-lg font-bold flex items-center gap-2">
+              <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-t-2xl relative">
+                <button
+                  onClick={() => setShowCustomerModal(true)}
+                  className="absolute top-3 left-3 p-1.5 rounded-lg text-white/80 hover:bg-white/20 transition-colors text-base font-bold leading-none"
+                  title="Back"
+                >
+                  &#8592;
+                </button>
+                <h3 className="text-lg font-bold flex items-center gap-2 pl-7">
                   <FileText size={20} />
                   Installment Payment
                 </h3>

@@ -4,6 +4,43 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string|null $transaction_id
+ * @property int|null $customer_id
+ * @property string|null $subtotal
+ * @property string|null $discount
+ * @property string|null $delivery_fee
+ * @property string|null $total
+ * @property string|null $amount_tendered
+ * @property string|null $change_amount
+ * @property string $payment_method
+ * @property string $payment_status
+ * @property string|null $reference_number
+ * @property array|null $payment_proof
+ * @property \Illuminate\Support\Carbon|null $paid_at
+ * @property string $status
+ * @property string|null $notes
+ * @property string|null $delivery_address
+ * @property string|null $distance_km
+ * @property string|null $driver_name
+ * @property string|null $driver_plate_number
+ * @property array|null $delivery_proof
+ * @property string|null $return_reason
+ * @property string|null $return_notes
+ * @property array|null $return_proof
+ * @property string|null $return_pickup_driver
+ * @property string|null $return_pickup_plate
+ * @property \Illuminate\Support\Carbon|null $return_pickup_date
+ * @property int|null $voided_by
+ * @property int|null $authorized_by
+ * @property bool $is_staggered
+ * @property string|null $primary_method
+ * @property string|null $amount_paid
+ * @property string|null $balance_remaining
+ * @property \Illuminate\Support\Carbon $created_at
+ * @property \Illuminate\Support\Carbon $updated_at
+ */
 class Sale extends Model
 {
     protected $fillable = [

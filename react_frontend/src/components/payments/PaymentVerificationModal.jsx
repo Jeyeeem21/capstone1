@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DollarSign, CreditCard, FileText, Calendar, Image as ImageIcon, X, Eye } from 'lucide-react';
-import { StatusBadge } from '../ui';
+import { StatusBadge, Button, Modal } from '../ui';
 
 const PaymentVerificationModal = ({ payment, onClose }) => {
   const [showImageModal, setShowImageModal] = useState(false);
@@ -20,24 +20,19 @@ const PaymentVerificationModal = ({ payment, onClose }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-t-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-white">Payment Details</h3>
-                <p className="text-blue-100 text-sm">View payment information</p>
-              </div>
-              <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
-                <X size={20} />
-              </button>
-            </div>
+      <Modal
+        isOpen={true}
+        onClose={onClose}
+        title="Payment Details"
+        size="lg"
+        footer={
+          <div className="flex justify-end">
+            <Button onClick={onClose} variant="outline">Close</Button>
           </div>
-
-          {/* Content */}
-          <div className="p-6 space-y-4">
-            {/* Payment ID & Status */}
+        }
+      >
+        <div className="space-y-4">
+          {/* Payment ID & Status */}
             <div className="bg-gradient-to-r from-primary-50 to-button-50 dark:from-gray-700 dark:to-gray-700 p-4 rounded-lg border-2 border-primary-200 dark:border-primary-700">
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-button-500 dark:bg-button-600 text-white rounded-lg">
@@ -169,23 +164,12 @@ const PaymentVerificationModal = ({ payment, onClose }) => {
                 <p className="text-sm text-gray-700 dark:text-gray-300">{payment.notes}</p>
               </div>
             )}
-          </div>
-
-          {/* Footer */}
-          <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 rounded-lg transition-colors"
-            >
-              Close
-            </button>
-          </div>
         </div>
-      </div>
+      </Modal>
 
       {/* Image Modal */}
       {showImageModal && selectedImage && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4" onClick={() => {
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[9999] p-4" onClick={() => {
           setShowImageModal(false);
           setSelectedImage(null);
         }}>

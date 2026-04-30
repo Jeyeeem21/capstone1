@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, memo, useEffect } from 'react';
-import { ShoppingCart, Package, Truck, DollarSign, FileText, Archive, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Check, Layers, Sun, Calendar, List, Phone, Mail, MapPin, X } from 'lucide-react';
+import { ShoppingCart, Package, Truck, Scissors, DollarSign, FileText, Archive, Scale, Boxes, Building2, User, Clock, CheckCircle, XCircle, AlertCircle, PlusCircle, Eye, Edit, Check, Layers, Sun, Calendar, List, Phone, Mail, MapPin, X } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -186,7 +186,9 @@ const Procurement = () => {
     quantity_kg: '', 
     sacks: '', 
     price_per_kg: '', 
-    description: '', 
+    hauling_price_per_sack: '',
+    hauling_sacks: '',
+    twines_price: '',
     status: 'Pending',
     batch_id: '',
   });
@@ -458,8 +460,13 @@ const Procurement = () => {
   const calculatedTotal = useMemo(() => {
     const qty = parseFloat(formData.quantity_kg) || 0;
     const price = parseFloat(formData.price_per_kg) || 0;
-    return qty * price;
-  }, [formData.quantity_kg, formData.price_per_kg]);
+    // hauling_sacks defaults to sacks when blank
+    const haulingSacks = parseInt(formData.hauling_sacks) || parseInt(formData.sacks) || 0;
+    const haulingPrice = parseFloat(formData.hauling_price_per_sack) || 0;
+    const twinesPrice  = parseFloat(formData.twines_price) || 0;
+    const sacks        = parseInt(formData.sacks) || 0;
+    return (qty * price) + (haulingSacks * haulingPrice) + twinesPrice;
+  }, [formData.quantity_kg, formData.price_per_kg, formData.sacks, formData.hauling_sacks, formData.hauling_price_per_sack, formData.twines_price]);
 
   // Sync accumulator totals into formData whenever entries change
   useEffect(() => {
@@ -534,6 +541,9 @@ const Procurement = () => {
       quantity_kg: '', 
       sacks: '', 
       price_per_kg: '', 
+      hauling_price_per_sack: '',
+      hauling_sacks: '',
+      twines_price: '',
       description: '', 
       status: 'Pending',
       batch_id: '',
@@ -570,6 +580,9 @@ const Procurement = () => {
       quantity_kg: String(item.quantity_kg), 
       sacks: String(item.sacks || 0), 
       price_per_kg: String(item.price_per_kg), 
+      hauling_price_per_sack: item.hauling_price_per_sack != null ? String(item.hauling_price_per_sack) : '',
+      hauling_sacks: item.hauling_sacks != null ? String(item.hauling_sacks) : '',
+      twines_price: item.twines_price != null ? String(item.twines_price) : '',
       description: item.description || '',
       status: item.status || 'Pending',
       batch_id: String(item.batch_id || ''),
@@ -738,6 +751,9 @@ const Procurement = () => {
         quantity_kg: parseFloat(formData.quantity_kg),
         sacks: parseInt(formData.sacks) || 0,
         price_per_kg: parseFloat(formData.price_per_kg),
+        hauling_price_per_sack: formData.hauling_price_per_sack ? parseFloat(formData.hauling_price_per_sack) : null,
+        hauling_sacks: formData.hauling_sacks ? parseInt(formData.hauling_sacks) : null,
+        twines_price: formData.twines_price ? parseFloat(formData.twines_price) : null,
         description: formData.description,
         status: formData.status,
         // Preserve temp IDs (offline-created batches) as strings so the sync
@@ -1372,12 +1388,32 @@ const Procurement = () => {
     { 
       header: 'Price/kg', 
       accessor: 'price_per_kg',
-      cell: (row) => <span className="text-gray-700 dark:text-gray-200">₱{parseFloat(row.price_per_kg).toLocaleString()}</span>
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-gray-700 dark:text-gray-200">₱{parseFloat(row.price_per_kg).toLocaleString()}/kg</span>
+          {row.hauling_price_per_sack > 0 && (
+            <span className="text-xs text-orange-500">+₱{parseFloat(row.hauling_price_per_sack).toLocaleString()}/sack hauling</span>
+          )}
+          {row.twines_price > 0 && (
+            <span className="text-xs text-teal-500">+₱{parseFloat(row.twines_price).toLocaleString()} twines</span>
+          )}
+        </div>
+      )
     },
     { 
       header: 'Total Cost', 
       accessor: 'total_cost',
-      cell: (row) => <span className="font-semibold text-button-600 dark:text-button-400">₱{parseFloat(row.total_cost).toLocaleString()}</span>
+      cell: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-button-600 dark:text-button-400">₱{parseFloat(row.total_cost).toLocaleString()}</span>
+          {row.hauling_cost > 0 && (
+            <span className="text-[11px] text-orange-500">incl. ₱{parseFloat(row.hauling_cost).toLocaleString()} hauling</span>
+          )}
+          {row.twines_cost > 0 && (
+            <span className="text-[11px] text-teal-500">incl. ₱{parseFloat(row.twines_cost).toLocaleString()} twines</span>
+          )}
+        </div>
+      )
     },
     { header: 'Status', accessor: 'status', cell: (row) => (
       <div>
@@ -1959,6 +1995,42 @@ const Procurement = () => {
                 </div>
               </div>
 
+              {/* Hauling */}
+              {selectedItem.hauling_price_per_sack > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
+                  <div className="p-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg">
+                    <Truck size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Hauling</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">₱{parseFloat(selectedItem.hauling_price_per_sack).toLocaleString()}/sack</p>
+                    {(() => {
+                      const hSacks = selectedItem.hauling_sacks ?? parseInt(selectedItem.sacks || 0);
+                      return (
+                        <p className="text-xs text-orange-600 dark:text-orange-400">{hSacks} sacks × ₱{parseFloat(selectedItem.hauling_price_per_sack).toLocaleString()} = ₱{parseFloat(selectedItem.hauling_cost || 0).toLocaleString()}</p>
+                      );
+                    })()}
+                    {selectedItem.hauling_sacks != null && selectedItem.hauling_sacks !== parseInt(selectedItem.sacks) && (
+                      <p className="text-[11px] text-gray-400 mt-0.5">Custom hauling sacks ({selectedItem.hauling_sacks} vs {selectedItem.sacks} procurement sacks)</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Twines */}
+              {selectedItem.twines_price > 0 && (
+                <div className="flex items-start gap-2 p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg border border-teal-200 dark:border-teal-700">
+                  <div className="p-2 bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-lg">
+                    <Scissors size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mb-0.5">Twines / Tali</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">₱{parseFloat(selectedItem.twines_price).toLocaleString()}</p>
+                    <p className="text-xs text-teal-600 dark:text-teal-400">Total twines cost</p>
+                  </div>
+                </div>
+              )}
+
               {/* Remarks */}
               {selectedItem.description && (
                 <div className="flex items-start gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -2280,15 +2352,79 @@ const Procurement = () => {
               />
             </div>
 
-            {/* Calculated Total */}
-            {(formData.quantity_kg && formData.price_per_kg) && (
-              <div className="p-3 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Calculated Total:</span>
-                  <span className="text-lg font-bold text-button-600 dark:text-button-400">₱{calculatedTotal.toLocaleString()}</span>
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <FormInput 
+                  label="Hauling Sacks" 
+                  name="hauling_sacks" 
+                  type="number" 
+                  value={formData.hauling_sacks} 
+                  onChange={handleFormChange} 
+                  placeholder={formData.sacks || '0'}
+                  submitted={submitted} 
+                  error={errors.hauling_sacks?.[0]}
+                  min="0"
+                />
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1 mb-1">Defaults to procurement sacks if blank</p>
               </div>
-            )}
+              <div>
+                <FormInput 
+                  label="Hauling Price per Sack (₱)" 
+                  name="hauling_price_per_sack" 
+                  type="number" 
+                  value={formData.hauling_price_per_sack} 
+                  onChange={handleFormChange} 
+                  placeholder="0.00 — leave blank if no hauling" 
+                  submitted={submitted} 
+                  error={errors.hauling_price_per_sack?.[0]}
+                  step="0.01"
+                />
+              </div>
+            </div>
+
+            <FormInput 
+              label="Twines / Tali Price (₱)" 
+              name="twines_price" 
+              type="number" 
+              value={formData.twines_price} 
+              onChange={handleFormChange} 
+              placeholder="0.00 — leave blank if no twines cost" 
+              submitted={submitted} 
+              error={errors.twines_price?.[0]}
+              step="0.01"
+            />
+
+            {/* Calculated Total */}
+            {(formData.quantity_kg && formData.price_per_kg) && (() => {
+              const procCost = (parseFloat(formData.quantity_kg) || 0) * (parseFloat(formData.price_per_kg) || 0);
+              const haulingSacks = parseInt(formData.hauling_sacks) || parseInt(formData.sacks) || 0;
+              const haulCost = haulingSacks * (parseFloat(formData.hauling_price_per_sack) || 0);
+              const twinesCost = parseFloat(formData.twines_price) || 0;
+              return (
+                <div className="p-3 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg space-y-1">
+                  <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-300">
+                    <span>Procurement Cost:</span>
+                    <span>₱{procCost.toLocaleString()}</span>
+                  </div>
+                  {haulCost > 0 && (
+                    <div className="flex justify-between items-center text-sm text-orange-600 dark:text-orange-400">
+                      <span>Hauling ({haulingSacks} sacks × ₱{formData.hauling_price_per_sack}):</span>
+                      <span>₱{haulCost.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {twinesCost > 0 && (
+                    <div className="flex justify-between items-center text-sm text-teal-600 dark:text-teal-400">
+                      <span>Twines:</span>
+                      <span>₱{twinesCost.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center border-t border-button-200 dark:border-button-700 pt-1">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Total Cost:</span>
+                    <span className="text-lg font-bold text-button-600 dark:text-button-400">₱{calculatedTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <FormInput 
               label="Remarks" 
@@ -2404,7 +2540,49 @@ const Procurement = () => {
                   />
                 </div>
 
-                {/* Drying info banner */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <FormInput 
+                      label="Hauling Sacks" 
+                      name="hauling_sacks" 
+                      type="number" 
+                      value={formData.hauling_sacks} 
+                      onChange={handleFormChange} 
+                      placeholder={formData.sacks || '0'}
+                      submitted={submitted} 
+                      error={errors.hauling_sacks?.[0]}
+                      min="0"
+                    />
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1 mb-1">Defaults to procurement sacks if blank</p>
+                  </div>
+                  <div>
+                    <FormInput 
+                      label="Hauling Price per Sack (₱)" 
+                      name="hauling_price_per_sack" 
+                      type="number" 
+                      value={formData.hauling_price_per_sack} 
+                      onChange={handleFormChange} 
+                      placeholder="0.00 — leave blank if no hauling" 
+                      submitted={submitted} 
+                      error={errors.hauling_price_per_sack?.[0]}
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <FormInput 
+                  label="Twines / Tali Price (₱)" 
+                  name="twines_price" 
+                  type="number" 
+                  value={formData.twines_price} 
+                  onChange={handleFormChange} 
+                  placeholder="0.00 — leave blank if no twines cost" 
+                  submitted={submitted} 
+                  error={errors.twines_price?.[0]}
+                  step="0.01"
+                />
+
+                {/* Drying info banner */}}
                 {selectedItem?.drying_sacks > 0 && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
                     <p className="text-xs text-blue-700 dark:text-blue-300">
@@ -2414,14 +2592,36 @@ const Procurement = () => {
                 )}
 
                 {/* Calculated Total */}
-                {(formData.quantity_kg && formData.price_per_kg) && (
-                  <div className="p-3 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600 dark:text-gray-300">Calculated Total:</span>
-                      <span className="text-lg font-bold text-button-600 dark:text-button-400">₱{calculatedTotal.toLocaleString()}</span>
+                {(formData.quantity_kg && formData.price_per_kg) && (() => {
+                  const procCost = (parseFloat(formData.quantity_kg) || 0) * (parseFloat(formData.price_per_kg) || 0);
+                  const haulingSacks = parseInt(formData.hauling_sacks) || parseInt(formData.sacks) || 0;
+                  const haulCost = haulingSacks * (parseFloat(formData.hauling_price_per_sack) || 0);
+                  const twinesCost = parseFloat(formData.twines_price) || 0;
+                  return (
+                    <div className="p-3 bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-700 rounded-lg space-y-1">
+                      <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-300">
+                        <span>Procurement Cost:</span>
+                        <span>₱{procCost.toLocaleString()}</span>
+                      </div>
+                      {haulCost > 0 && (
+                        <div className="flex justify-between items-center text-sm text-orange-600 dark:text-orange-400">
+                          <span>Hauling ({parseInt(formData.hauling_sacks) || parseInt(formData.sacks) || 0} sacks × ₱{formData.hauling_price_per_sack}):</span>
+                          <span>₱{haulCost.toLocaleString()}</span>
+                        </div>
+                      )}
+                      {twinesCost > 0 && (
+                        <div className="flex justify-between items-center text-sm text-teal-600 dark:text-teal-400">
+                          <span>Twines:</span>
+                          <span>₱{twinesCost.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center border-t border-button-200 dark:border-button-700 pt-1">
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Total Cost:</span>
+                        <span className="text-lg font-bold text-button-600 dark:text-button-400">₱{calculatedTotal.toLocaleString()}</span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 <FormInput 
                   label="Remarks" 

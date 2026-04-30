@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Smartphone, Upload, X, AlertCircle, CheckCircle } from 'lucide-react';
-import { Button } from '../ui';
+import { Smartphone, Upload, X, AlertCircle } from 'lucide-react';
+import { Button, Modal } from '../ui';
 
 const GCashPaymentModal = ({ amount, onSubmit, onCancel }) => {
   const [referenceNumber, setReferenceNumber] = useState('');
@@ -68,38 +68,28 @@ const GCashPaymentModal = ({ amount, onSubmit, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <>
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
           20%, 40%, 60%, 80% { transform: translateX(10px); }
         }
-        .shake-modal {
-          animation: shake 0.5s;
-        }
+        .shake-modal { animation: shake 0.5s; }
       `}</style>
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto ${shake ? 'shake-modal' : ''}`}>
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-t-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-lg">
-                <Smartphone size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">GCash Payment</h3>
-                <p className="text-blue-100 text-sm">Upload proof of payment</p>
-              </div>
-            </div>
-            <button onClick={onCancel} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
-              <X size={20} />
-            </button>
+      <Modal
+        isOpen={true}
+        onClose={onCancel}
+        title="GCash Payment"
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <Button onClick={onCancel} variant="outline" className="flex-1">Cancel</Button>
+            <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700">Submit Payment</Button>
           </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-4">
+        }
+      >
+        <div className={`space-y-4 ${shake ? 'shake-modal' : ''}`}>
           {/* Amount Display */}
           <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">Amount to Pay</p>
@@ -191,18 +181,8 @@ const GCashPaymentModal = ({ amount, onSubmit, onCancel }) => {
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl flex gap-3">
-          <Button onClick={onCancel} variant="outline" className="flex-1">
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} className="flex-1 bg-blue-600 hover:bg-blue-700">
-            Submit Payment
-          </Button>
-        </div>
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 };
 

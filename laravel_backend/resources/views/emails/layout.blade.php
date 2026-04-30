@@ -13,6 +13,11 @@
     $borderColor = $appearance['border_color'] ?? '#da2b2b';
     $footerBg = $appearance['bg_footer'] ?? '#111827';
     $footerText = '#ffffff';
+
+    // Pre-compute alpha variants to avoid Blade interpolation inside CSS blocks
+    $borderColorAlpha = $borderColor . '33';
+    $headerColorTint  = $headerColor . '0d';
+    $headerColorTint2 = $headerColor . '1a';
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -20,24 +25,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', $businessName)</title>
+    {!! '<style>:root{' .
+        '--ec-hdr:'    . e($headerColor)      . ';' .
+        '--ec-hdrlt:'  . e($headerColorLight) . ';' .
+        '--ec-bg:'     . e($bodyBg)           . ';' .
+        '--ec-cbg:'    . e($contentBg)        . ';' .
+        '--ec-txt:'    . e($textColor)        . ';' .
+        '--ec-bdr33:'  . e($borderColorAlpha) . ';' .
+        '--ec-hdr0d:'  . e($headerColorTint)  . ';' .
+        '--ec-hdr1a:'  . e($headerColorTint2) . ';' .
+        '--ec-fbg:'    . e($footerBg)         . ';' .
+        '--ec-ftxt:'   . e($footerText)       . ';' .
+    '}</style>' !!}
     <style>
         body {
             margin: 0;
             padding: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: {{ $bodyBg }};
-            color: {{ $textColor }};
+            background-color: var(--ec-bg);
+            color: var(--ec-txt);
         }
         .email-wrapper {
             max-width: 600px;
             margin: 0 auto;
-            background-color: {{ $contentBg }};
+            background-color: var(--ec-cbg);
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
         .email-header {
-            background: linear-gradient(135deg, {{ $headerColor }}, {{ $headerColorLight }});
+            background: linear-gradient(135deg, var(--ec-hdr), var(--ec-hdrlt));
             color: #ffffff;
             padding: 24px 32px;
             text-align: center;
@@ -59,7 +76,7 @@
         .email-body h2 {
             margin: 0 0 16px;
             font-size: 20px;
-            color: {{ $headerColor }};
+            color: var(--ec-hdr);
         }
         .email-body p {
             margin: 0 0 12px;
@@ -75,12 +92,12 @@
         .info-table td {
             padding: 10px 14px;
             text-align: left;
-            border-bottom: 1px solid {{ $borderColor }}33;
+            border-bottom: 1px solid var(--ec-bdr33);
             font-size: 14px;
         }
         .info-table th {
-            background-color: {{ $headerColor }}0d;
-            color: {{ $headerColor }};
+            background-color: var(--ec-hdr0d);
+            color: var(--ec-hdr);
             font-weight: 600;
             width: 40%;
         }
@@ -94,19 +111,19 @@
         }
         .badge-success { background: #d4edda; color: #155724; }
         .badge-warning { background: #fff3cd; color: #856404; }
-        .badge-info { background: #d1ecf1; color: #0c5460; }
-        .badge-danger { background: #f8d7da; color: #721c24; }
-        .badge-primary { background: {{ $headerColor }}1a; color: {{ $headerColor }}; }
+        .badge-info    { background: #d1ecf1; color: #0c5460; }
+        .badge-danger  { background: #f8d7da; color: #721c24; }
+        .badge-primary { background: var(--ec-hdr1a); color: var(--ec-hdr); }
         .email-footer {
-            background-color: {{ $footerBg }};
+            background-color: var(--ec-fbg);
             padding: 20px 32px;
             text-align: center;
-            border-top: 1px solid {{ $borderColor }}33;
+            border-top: 1px solid var(--ec-bdr33);
         }
         .email-footer p {
             margin: 0;
             font-size: 12px;
-            color: {{ $footerText }};
+            color: var(--ec-ftxt);
         }
     </style>
 </head>

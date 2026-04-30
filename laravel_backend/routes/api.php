@@ -179,32 +179,34 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/payment-schedule', [\App\Http\Controllers\StaggeredPaymentController::class, 'store']);
     });
 
-    // Payment Management Routes
-    Route::prefix('payments')->group(function () {
-        Route::get('/', [\App\Http\Controllers\PaymentController::class, 'index']);
-        Route::get('/{payment}', [\App\Http\Controllers\PaymentController::class, 'show']);
-        Route::post('/{payment}/verify', [\App\Http\Controllers\PaymentController::class, 'verify']);
-        Route::post('/{payment}/hold', [\App\Http\Controllers\PaymentController::class, 'hold']);
-        Route::post('/{payment}/cancel', [\App\Http\Controllers\PaymentController::class, 'cancel']);
-        Route::post('/{payment}/approve-pdo', [\App\Http\Controllers\PaymentController::class, 'approvePDO']);
-        Route::post('/{payment}/reject-pdo', [\App\Http\Controllers\PaymentController::class, 'rejectPDO']);
-    });
+    // Payment Management Routes (Admin/Super Admin only)
+    Route::middleware('role:super_admin,admin')->group(function () {
+        Route::prefix('payments')->group(function () {
+            Route::get('/', [\App\Http\Controllers\PaymentController::class, 'index']);
+            Route::get('/{payment}', [\App\Http\Controllers\PaymentController::class, 'show']);
+            Route::post('/{payment}/verify', [\App\Http\Controllers\PaymentController::class, 'verify']);
+            Route::post('/{payment}/hold', [\App\Http\Controllers\PaymentController::class, 'hold']);
+            Route::post('/{payment}/cancel', [\App\Http\Controllers\PaymentController::class, 'cancel']);
+            Route::post('/{payment}/approve-pdo', [\App\Http\Controllers\PaymentController::class, 'approvePDO']);
+            Route::post('/{payment}/reject-pdo', [\App\Http\Controllers\PaymentController::class, 'rejectPDO']);
+        });
 
-    // Payment Plans / Staggered Payments Routes
-    Route::prefix('payment-plans')->group(function () {
-        Route::get('/', [\App\Http\Controllers\StaggeredPaymentController::class, 'index']);
-        Route::get('/{sale}', [\App\Http\Controllers\StaggeredPaymentController::class, 'show']);
-        Route::post('/{sale}/approve', [\App\Http\Controllers\StaggeredPaymentController::class, 'approve']);
-    });
+        // Payment Plans / Staggered Payments Routes
+        Route::prefix('payment-plans')->group(function () {
+            Route::get('/', [\App\Http\Controllers\StaggeredPaymentController::class, 'index']);
+            Route::get('/{sale}', [\App\Http\Controllers\StaggeredPaymentController::class, 'show']);
+            Route::post('/{sale}/approve', [\App\Http\Controllers\StaggeredPaymentController::class, 'approve']);
+        });
 
-    // Installment Routes
-    Route::prefix('installments')->group(function () {
-        Route::get('/pending-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'getPendingPDOs']);
-        Route::get('/awaiting-payment', [\App\Http\Controllers\StaggeredPaymentController::class, 'getAwaitingPayment']);
-        Route::post('/{installment}/pay', [\App\Http\Controllers\StaggeredPaymentController::class, 'recordInstallmentPayment']);
-        Route::post('/{installment}/approve-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'approvePDO']);
-        Route::post('/{installment}/reject-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'rejectPDO']);
-        Route::post('/{installment}/mark-paid', [\App\Http\Controllers\StaggeredPaymentController::class, 'markPDOAsPaid']);
+        // Installment admin actions
+        Route::prefix('installments')->group(function () {
+            Route::get('/pending-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'getPendingPDOs']);
+            Route::get('/awaiting-payment', [\App\Http\Controllers\StaggeredPaymentController::class, 'getAwaitingPayment']);
+            Route::post('/{installment}/pay', [\App\Http\Controllers\StaggeredPaymentController::class, 'recordInstallmentPayment']);
+            Route::post('/{installment}/approve-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'approvePDO']);
+            Route::post('/{installment}/reject-pdo', [\App\Http\Controllers\StaggeredPaymentController::class, 'rejectPDO']);
+            Route::post('/{installment}/mark-paid', [\App\Http\Controllers\StaggeredPaymentController::class, 'markPDOAsPaid']);
+        });
     });
 
     // Sales Predictive Analysis Routes

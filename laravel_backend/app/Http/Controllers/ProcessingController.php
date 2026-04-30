@@ -221,6 +221,7 @@ class ProcessingController extends Controller
 
         $validator = Validator::make($request->all(), [
             'output_kg' => 'required|numeric|min:0.01|max:' . $processing->input_kg,
+            'milling_cost_per_kg' => 'nullable|numeric|min:0',
         ], [
             'output_kg.max' => 'Output quantity cannot exceed the input quantity of ' . number_format($processing->input_kg, 2) . ' kg.',
             'output_kg.min' => 'Output quantity must be greater than 0.',
@@ -233,7 +234,8 @@ class ProcessingController extends Controller
         try {
             $processing = $this->processingService->completeProcessing(
                 $processing, 
-                (float) $request->output_kg
+                (float) $request->output_kg,
+                (float) ($request->milling_cost_per_kg ?? 0)
             );
 
             $this->logAudit('UPDATE', 'Processing', "Completed processing #{$processing->id} — output {$processing->output_kg} kg", [

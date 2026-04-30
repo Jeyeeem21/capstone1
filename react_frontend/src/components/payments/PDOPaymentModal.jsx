@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Banknote, Upload, X, AlertCircle } from 'lucide-react';
-import { Button } from '../ui';
+import { Button, Modal } from '../ui';
 
 const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
   const [checkNumber, setCheckNumber] = useState('');
@@ -70,38 +70,28 @@ const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <>
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
           20%, 40%, 60%, 80% { transform: translateX(10px); }
         }
-        .shake-modal {
-          animation: shake 0.5s;
-        }
+        .shake-modal { animation: shake 0.5s; }
       `}</style>
-      <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto ${shake ? 'shake-modal' : ''}`}>
-        {/* Header */}
-        <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-6 rounded-t-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 p-2 rounded-lg">
-                <Banknote size={24} className="text-white" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">PDO Payment</h3>
-                <p className="text-amber-100 text-sm">Post-Dated Check</p>
-              </div>
-            </div>
-            <button onClick={onCancel} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
-              <X size={20} />
-            </button>
+      <Modal
+        isOpen={true}
+        onClose={onCancel}
+        title="PDO Payment"
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <Button onClick={onCancel} variant="outline" className="flex-1">Cancel</Button>
+            <Button onClick={handleSubmit} className="flex-1 bg-amber-600 hover:bg-amber-700">Submit Check</Button>
           </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-4">
+        }
+      >
+        <div className={`space-y-4 ${shake ? 'shake-modal' : ''}`}>
           {/* Amount Display */}
           <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">Check Amount</p>
@@ -215,18 +205,8 @@ const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
             </div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl flex gap-3">
-          <Button onClick={onCancel} variant="outline" className="flex-1">
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} className="flex-1 bg-amber-600 hover:bg-amber-700">
-            Submit Check
-          </Button>
-        </div>
-      </div>
-    </div>
+      </Modal>
+    </>
   );
 };
 

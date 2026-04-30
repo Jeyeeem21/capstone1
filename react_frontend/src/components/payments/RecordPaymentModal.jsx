@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { DollarSign, Smartphone, Banknote, Clock, X, AlertCircle } from 'lucide-react';
-import { Button } from '../ui';
+import { DollarSign, Smartphone, Banknote, Clock, AlertCircle } from 'lucide-react';
+import { Button, Modal } from '../ui';
 import GCashPaymentModal from './GCashPaymentModal';
 import PDOPaymentModal from './PDOPaymentModal';
 import CreditPaymentModal from './CreditPaymentModal';
@@ -99,23 +99,27 @@ const RecordPaymentModal = ({ saleId, balanceRemaining, customerName, onSubmit, 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-lg w-full">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-6 rounded-t-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-white">Record Payment</h3>
-              <p className="text-primary-100 text-sm">Add payment to this order</p>
-            </div>
-            <button onClick={onCancel} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
-              <X size={20} />
-            </button>
-          </div>
+    <Modal
+      isOpen={true}
+      onClose={onCancel}
+      title="Record Payment"
+      size="md"
+      footer={
+        <div className="flex gap-3">
+          <Button onClick={onCancel} variant="outline" className="flex-1">
+            Cancel
+          </Button>
+          <Button
+            onClick={selectedMethod === 'cash' ? handleCashSubmit : () => setShowMethodModal(true)}
+            disabled={!selectedMethod || !amount || parseFloat(amount) <= 0 || parseFloat(amount) > balanceRemaining}
+            className="flex-1"
+          >
+            {selectedMethod === 'cash' ? 'Record Payment' : 'Continue'}
+          </Button>
         </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-4">
+      }
+    >
+      <div className="space-y-4">
           {/* Balance Display */}
           <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-700">
             <p className="text-sm text-gray-600 dark:text-gray-400">Outstanding Balance</p>
@@ -193,22 +197,7 @@ const RecordPaymentModal = ({ saleId, balanceRemaining, customerName, onSubmit, 
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl flex gap-3">
-          <Button onClick={onCancel} variant="outline" className="flex-1">
-            Cancel
-          </Button>
-          <Button
-            onClick={selectedMethod === 'cash' ? handleCashSubmit : () => setShowMethodModal(true)}
-            disabled={!selectedMethod || !amount || parseFloat(amount) <= 0 || parseFloat(amount) > balanceRemaining}
-            className="flex-1"
-          >
-            {selectedMethod === 'cash' ? 'Record Payment' : 'Continue'}
-          </Button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

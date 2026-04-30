@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Sale;
 use App\Models\Payment;
 use App\Models\PaymentInstallment;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Carbon\Carbon;
@@ -24,8 +25,8 @@ class PaymentService
                 'payment_method' => 'cash',
                 'status' => 'verified', // Cash is auto-verified
                 'notes' => $data['notes'] ?? null,
-                'received_by' => auth()->id(),
-                'verified_by' => auth()->id(),
+                'received_by' => Auth::id(),
+                'verified_by' => Auth::id(),
                 'verified_at' => now(),
                 'paid_at' => now(),
             ]);
@@ -82,7 +83,7 @@ class PaymentService
                 'payment_proof' => $proofPaths,
                 'status' => 'needs_verification', // Needs admin verification
                 'notes' => $data['notes'] ?? null,
-                'received_by' => auth()->id(),
+                'received_by' => Auth::id(),
                 'paid_at' => now(),
             ]);
 
@@ -115,6 +116,24 @@ class PaymentService
                 'pdo_check_image' => $checkImagePaths,
                 'pdo_approval_status' => 'pending',
                 'status' => 'pending',
+                'due_date' => isset($data['check_date']) ? $data['check_date'] : $installment->due_date,
+            ]);
+
+            // Store check_date on installment for reference (reuse due_date)
+            // Also store on a Payment record stub so pdo_check_date is tracked
+            Payment::create([
+                'sale_id' => $installment->sale_id,
+                'installment_id' => $installment->id,
+                'amount' => $installment->amount_expected,
+                'payment_method' => 'pdo',
+                'status' => 'needs_verification',
+                'pdo_check_number' => $data['check_number'],
+                'pdo_check_bank' => $data['bank_name'],
+                'pdo_check_date' => $data['check_date'] ?? null,
+                'pdo_check_image' => $checkImagePaths,
+                'pdo_approval_status' => 'pending',
+                'received_by' => Auth::id(),
+                'paid_at' => now(),
             ]);
 
             return $installment;
@@ -133,7 +152,7 @@ class PaymentService
         return DB::transaction(function () use ($payment) {
             $payment->update([
                 'status' => 'verified',
-                'verified_by' => auth()->id(),
+                'verified_by' => Auth::id(),
                 'verified_at' => now(),
             ]);
 
@@ -189,7 +208,7 @@ class PaymentService
                 // If linked to installment, update it
                 if ($payment->installment_id) {
                     $installment = $payment->installment;
-                    $installment->amount_paid -= $payment->amount;
+                    $installment->amount_paid = max(0, $installment->amount_paid - $payment->amount);
                     $installment->status = 'pending';
                     $installment->paid_date = null;
                     $installment->payment_id = null;
@@ -217,7 +236,7 @@ class PaymentService
 
         $installment->update([
             'pdo_approval_status' => 'approved',
-            'pdo_approved_by' => auth()->id(),
+            'pdo_approved_by' => Auth::id(),
             'status' => 'awaiting_payment',
         ]);
 
@@ -235,7 +254,7 @@ class PaymentService
 
         $installment->update([
             'pdo_approval_status' => 'rejected',
-            'pdo_approved_by' => auth()->id(),
+            'pdo_approved_by' => Auth::id(),
             'status' => 'rejected',
             'notes' => $reason,
         ]);
@@ -260,8 +279,8 @@ class PaymentService
                 'amount' => $installment->amount_expected,
                 'payment_method' => 'pdo',
                 'status' => 'verified',
-                'received_by' => auth()->id(),
-                'verified_by' => auth()->id(),
+                'received_by' => Auth::id(),
+                'verified_by' => Auth::id(),
                 'verified_at' => now(),
                 'paid_at' => now(),
             ]);
@@ -284,14 +303,15 @@ class PaymentService
     /**
      * Update sale balances after payment
      */
-    protected function updateSaleBalances(Sale $sale, float $amount)
+    protected function updateSaleBalances(Sale $sale, float|string $amount)
     {
-        $sale->amount_paid += $amount;
-        $sale->balance_remaining -= $amount;
+        $amount = (float) $amount;
+        $sale->amount_paid = (float) $sale->amount_paid + $amount;
+        $sale->balance_remaining = (float) $sale->balance_remaining - $amount;
 
         // Ensure balance doesn't go negative
-        if ($sale->balance_remaining < 0) {
-            $sale->balance_remaining = 0;
+        if ((float) $sale->balance_remaining < 0) {
+            $sale->balance_remaining = 0.0;
         }
 
         // Update payment status
@@ -311,8 +331,10 @@ class PaymentService
     protected function storeBase64Image(string $base64, string $folder)
     {
         // Extract image data
-        preg_match('/^data:image\/(\w+);base64,/', $base64, $matches);
-        $extension = $matches[1] ?? 'png';
+        preg_match('/^data:image\/([a-zA-Z]+);base64,/', $base64, $matches);
+        $rawExtension = strtolower($matches[1] ?? '');
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+        $extension = in_array($rawExtension, $allowedExtensions) ? $rawExtension : 'png';
         $imageData = substr($base64, strpos($base64, ',') + 1);
         $imageData = base64_decode($imageData);
 

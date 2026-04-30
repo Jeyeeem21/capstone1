@@ -17,6 +17,7 @@ class Processing extends Model
         'drying_process_id',
         'input_kg',
         'output_kg',
+        'milling_cost_per_kg',
         'stock_out',
         'husk_kg',
         'yield_percent',
@@ -31,6 +32,7 @@ class Processing extends Model
     protected $casts = [
         'input_kg' => 'decimal:2',
         'output_kg' => 'decimal:2',
+        'milling_cost_per_kg' => 'decimal:2',
         'stock_out' => 'decimal:2',
         'husk_kg' => 'decimal:2',
         'yield_percent' => 'decimal:2',
