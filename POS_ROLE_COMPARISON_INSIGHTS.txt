@@ -1,5 +1,5 @@
-================================================================================
-  POS ROLE COMPARISON INSIGHTS
+========================================================= =======================
+  POS ROLE COMPARISON INSIGHTS TETSTTSTST
   Scanned: April 30, 2026
   File: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx (2732 lines)
          react_frontend/src/pages/customer/Shop/Shop.jsx (902 lines)
