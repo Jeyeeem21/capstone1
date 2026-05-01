@@ -190,12 +190,27 @@ class StaggeredPaymentService
                 ]);
 
             case 'gcash':
-                return $this->paymentService->recordGCashPayment($installment->sale, [
+                $payment = $this->paymentService->recordGCashPayment($installment->sale, [
                     'installment_id' => $installment->id,
                     'amount' => $amount,
                     'reference_number' => $data['reference_number'],
                     'payment_proof' => $data['payment_proof'] ?? [],
                     'notes' => $data['notes'] ?? null,
+                ]);
+                // Mark installment as needs_verification so Payment Plans reflects status
+                $installment->update([
+                    'status'     => 'needs_verification',
+                    'payment_id' => $payment->id,
+                    'payment_method' => 'gcash',
+                ]);
+                return $payment;
+
+            case 'pdo':
+                return $this->paymentService->recordPDOPayment($installment->sale, $installment, [
+                    'check_number' => $data['pdo_check_number'] ?? null,
+                    'bank_name' => $data['pdo_check_bank'] ?? null,
+                    'check_date' => $data['pdo_check_date'] ?? null,
+                    'check_image' => $data['pdo_check_image'] ?? [],
                 ]);
 
             default:

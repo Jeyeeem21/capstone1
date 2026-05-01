@@ -28,10 +28,17 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
         const paymentsData = Array.isArray(response.data) ? response.data : [];
         setPayments(paymentsData);
 
-        // Update stats — 'needs_verification' for GCash, 'pending' for PDO
-        const pendingVerifications = paymentsData.filter(p =>
-          p.status === 'needs_verification' || p.status === 'pending'
-        ).length;
+        // Update stats
+        // Pending Verifications: GCash needing verification OR PDO needing approval (not approved yet)
+        const pendingVerifications = paymentsData.filter(p => {
+          if (p.status === 'needs_verification') return true; // GCash
+          if (p.status === 'pending' && p.payment_method === 'pdo') {
+            // Only count if NOT yet approved (still needs approval)
+            return !p.pdo_approval_status || p.pdo_approval_status === 'pending';
+          }
+          return false;
+        }).length;
+        
         const onHold = paymentsData.filter(p => p.status === 'on_hold').length;
         const today = new Date();
         const todayStr = today.toDateString();
@@ -166,18 +173,6 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
       )
     },
     {
-      header: 'Date',
-      accessor: 'date_formatted',
-      cell: (row) => {
-        const date = new Date(row.created_at);
-        return (
-          <span className="text-sm text-gray-600 dark:text-gray-300">
-            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        );
-      }
-    },
-    {
       header: 'Customer',
       accessor: 'customer_name',
       cell: (row) => (
@@ -217,33 +212,103 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
       header: 'Status',
       accessor: 'status',
       cell: (row) => {
+        // For PDO payments, check approval status
+        let displayStatus = row.status;
+        
+        if (row.payment_method === 'pdo' && row.status === 'pending') {
+          // If PDO is approved but not yet paid, show "Awaiting Payment"
+          if (row.pdo_approval_status === 'approved') {
+            displayStatus = 'awaiting_payment';
+          } else if (row.pdo_approval_status === 'rejected') {
+            displayStatus = 'cancelled';
+          }
+          // Otherwise keep as "pending" (approval pending)
+        }
+        
         const statusMap = {
           pending: 'Pending',
           needs_verification: 'Pending Verification',
-          verified: 'Verified',
+          awaiting_payment: 'Awaiting Payment',
+          verified: 'Paid',
           on_hold: 'On Hold',
           cancelled: 'Cancelled'
         };
-        return <StatusBadge status={statusMap[row.status] || row.status} />;
+        return <StatusBadge status={statusMap[displayStatus] || displayStatus} />;
       }
     },
     {
-      header: 'Reference',
+      header: 'Reference / Check #',
       accessor: 'reference_number',
-      cell: (row) => (
-        <span className="text-sm text-gray-600 dark:text-gray-300">
-          {row.reference_number || '-'}
-        </span>
-      )
+      cell: (row) => {
+        if (row.payment_method === 'pdo' && row.pdo_check_number) {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                {row.pdo_check_number}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {row.pdo_check_bank || 'N/A'}
+              </span>
+            </div>
+          );
+        }
+        return (
+          <span className="text-sm text-gray-600 dark:text-gray-300">
+            {row.reference_number || '-'}
+          </span>
+        );
+      }
+    },
+    {
+      header: 'Date',
+      accessor: 'date_formatted',
+      cell: (row) => {
+        const txDate = new Date(row.created_at);
+        const txFormatted = txDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        // For PDO payments, show BOTH transaction date and check date
+        if (row.payment_method === 'pdo' && row.pdo_check_date) {
+          const checkDate = new Date(row.pdo_check_date);
+          const checkFormatted = checkDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm text-gray-600 dark:text-gray-300">{txFormatted}</span>
+              <span className="text-xs text-gray-400">Check: {checkFormatted}</span>
+            </div>
+          );
+        }
+        return (
+          <span className="text-sm text-gray-600 dark:text-gray-300">{txFormatted}</span>
+        );
+      }
     },
     {
       header: 'Actions',
       accessor: 'actions',
       sortable: false,
       cell: (row) => {
-        const canVerify = row.status === 'needs_verification' || row.status === 'on_hold' || row.status === 'pending';
+        // For PDO payments, only allow verify if already approved
+        let canVerify = false;
+        if (row.payment_method === 'pdo' && row.status === 'pending') {
+          // PDO must be approved first before it can be verified/marked as paid
+          canVerify = row.pdo_approval_status === 'approved';
+        } else {
+          // Non-PDO payments
+          canVerify = row.status === 'needs_verification' || row.status === 'on_hold' || row.status === 'pending';
+        }
+        
         const canReject = row.status === 'needs_verification' || row.status === 'on_hold' || row.status === 'pending';
         const canHold = row.status === 'needs_verification' || row.status === 'pending';
+        
+        // Determine button text and tooltip
+        const isPDOAwaitingPayment = row.payment_method === 'pdo' && row.pdo_approval_status === 'approved' && row.status === 'pending';
+        const verifyButtonText = isPDOAwaitingPayment ? 'Mark as Paid' : 'Verify';
+        const verifyTooltip = row.payment_method === 'pdo' && !canVerify && row.status === 'pending'
+          ? 'PDO must be approved first in PDO Management tab'
+          : isPDOAwaitingPayment
+            ? 'Mark PDO check as paid/cleared'
+            : canVerify 
+              ? 'Verify payment' 
+              : 'Cannot verify this payment';
         
         return (
           <div className="flex items-center gap-1">
@@ -251,18 +316,18 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
               onClick={(e) => {
                 if (canVerify) {
                   e.stopPropagation();
-                  handleVerify(row.id, 'Verified from transactions tab');
+                  handleVerify(row.id, isPDOAwaitingPayment ? 'PDO marked as paid' : 'Verified from transactions tab');
                 } else {
                   e.stopPropagation();
                 }
               }}
               disabled={!canVerify}
+              title={verifyTooltip}
               className={`p-1.5 rounded-md transition-colors ${
                 canVerify
                   ? 'hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 hover:text-green-700 dark:text-green-400'
                   : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
               }`}
-              title={canVerify ? 'Verify Payment' : 'Cannot verify'}
             >
               <CheckCircle size={15} />
             </button>
@@ -338,6 +403,7 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
         <PaymentVerificationModal
           payment={selectedPayment}
           onClose={() => setShowVerificationModal(false)}
+          onVerify={handleVerify}
         />
       )}
 

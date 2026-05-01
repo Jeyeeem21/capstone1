@@ -364,4 +364,66 @@ class EmailService
     {
         $this->sendSafely($toEmail, new \App\Mail\ContactMessageMail($contactMessage));
     }
+
+    /**
+     * ========================================================================
+     * PAYMENT NOTIFICATION METHODS
+     * ========================================================================
+     */
+
+    /**
+     * Notify super admin when a payment is verified.
+     */
+    public function notifyPaymentVerified(\App\Models\Payment $payment, string $verifiedBy): void
+    {
+        $adminEmail = $this->getAdminEmail();
+        if (!$adminEmail) return;
+
+        $payment->load(['sale.customer']);
+        $this->sendSafely($adminEmail, new \App\Mail\PaymentVerifiedNotification($payment, $verifiedBy));
+    }
+
+    /**
+     * Notify super admin and customer when a payment is rejected.
+     */
+    public function notifyPaymentRejected(\App\Models\Payment $payment, string $reason, string $rejectedBy): void
+    {
+        $payment->load(['sale.customer']);
+
+        // Notify super admin
+        $adminEmail = $this->getAdminEmail();
+        if ($adminEmail) {
+            $this->sendSafely($adminEmail, new \App\Mail\PaymentRejectedNotification($payment, $reason, $rejectedBy, false));
+        }
+
+        // Notify customer
+        $customerEmail = $payment->sale?->customer?->email;
+        if ($customerEmail) {
+            $this->sendSafely($customerEmail, new \App\Mail\PaymentRejectedNotification($payment, $reason, $rejectedBy, true));
+        }
+    }
+
+    /**
+     * Notify super admin when a PDO check is approved.
+     */
+    public function notifyPDOApproved(\App\Models\Payment $payment, string $approvedBy): void
+    {
+        $adminEmail = $this->getAdminEmail();
+        if (!$adminEmail) return;
+
+        $payment->load(['sale.customer']);
+        $this->sendSafely($adminEmail, new \App\Mail\PDOApprovedNotification($payment, $approvedBy));
+    }
+
+    /**
+     * Notify super admin when a payment is held for review.
+     */
+    public function notifyPaymentHeld(\App\Models\Payment $payment, string $reason, string $heldBy): void
+    {
+        $adminEmail = $this->getAdminEmail();
+        if (!$adminEmail) return;
+
+        $payment->load(['sale.customer']);
+        $this->sendSafely($adminEmail, new \App\Mail\PaymentHeldNotification($payment, $reason, $heldBy));
+    }
 }

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { DollarSign, CreditCard, FileText, Calendar, Image as ImageIcon, X, Eye } from 'lucide-react';
+import { DollarSign, CreditCard, FileText, Calendar, Image as ImageIcon, X, Eye, CheckCircle } from 'lucide-react';
 import { StatusBadge, Button, Modal } from '../ui';
 
-const PaymentVerificationModal = ({ payment, onClose }) => {
+const PaymentVerificationModal = ({ payment, onClose, onVerify }) => {
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
@@ -16,6 +16,12 @@ const PaymentVerificationModal = ({ payment, onClose }) => {
     return badges[method] || badges.cash;
   };
 
+  const canVerify = onVerify && (
+    payment.status === 'needs_verification' ||
+    payment.status === 'on_hold' ||
+    (payment.payment_method === 'pdo' && payment.status === 'pending' && payment.pdo_approval_status === 'approved')
+  );
+
   const methodBadge = getMethodBadge(payment.payment_method);
 
   return (
@@ -26,7 +32,19 @@ const PaymentVerificationModal = ({ payment, onClose }) => {
         title="Payment Details"
         size="lg"
         footer={
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            {canVerify && (
+              <Button
+                onClick={() => {
+                  onVerify(payment.id, 'Verified from payment details');
+                  onClose();
+                }}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+              >
+                <CheckCircle size={15} />
+                Verify Payment
+              </Button>
+            )}
             <Button onClick={onClose} variant="outline">Close</Button>
           </div>
         }
@@ -42,7 +60,19 @@ const PaymentVerificationModal = ({ payment, onClose }) => {
                   <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">Payment #{payment.id}</h3>
                   <p className="text-xs text-gray-600 dark:text-gray-300">Payment ID</p>
                 </div>
-                <StatusBadge status={payment.status === 'needs_verification' ? 'Pending' : payment.status === 'on_hold' ? 'On Hold' : payment.status === 'verified' ? 'Verified' : 'Cancelled'} />
+                <StatusBadge status={
+                  payment.payment_method === 'pdo' && payment.status === 'pending' && payment.pdo_approval_status === 'approved'
+                    ? 'Awaiting Payment'
+                    : payment.status === 'needs_verification' 
+                      ? 'Pending' 
+                      : payment.status === 'on_hold' 
+                        ? 'On Hold' 
+                        : payment.status === 'verified' 
+                          ? 'Verified' 
+                          : payment.status === 'pending'
+                            ? 'Pending'
+                            : 'Cancelled'
+                } />
               </div>
             </div>
 
@@ -121,6 +151,56 @@ const PaymentVerificationModal = ({ payment, onClose }) => {
                   <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
                     {payment.sale.customer.name}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* PDO Check Details (if PDO payment) */}
+            {payment.payment_method === 'pdo' && payment.pdo_check_number && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-700 rounded-lg space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 bg-amber-500 dark:bg-amber-600 text-white rounded-lg">
+                    <FileText size={16} />
+                  </div>
+                  <label className="text-sm font-bold text-amber-900 dark:text-amber-300">
+                    PDO Check Information
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-0.5">Check Number</p>
+                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
+                      {payment.pdo_check_number}
+                    </p>
+                  </div>
+                  {payment.pdo_check_bank && (
+                    <div>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mb-0.5">Bank</p>
+                      <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
+                        {payment.pdo_check_bank}
+                      </p>
+                    </div>
+                  )}
+                  {payment.pdo_check_date && (
+                    <div>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mb-0.5">Check Date</p>
+                      <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
+                        {new Date(payment.pdo_check_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    </div>
+                  )}
+                  {payment.pdo_approval_status && (
+                    <div>
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mb-0.5">Approval Status</p>
+                      <StatusBadge status={
+                        payment.pdo_approval_status === 'approved' 
+                          ? 'Approved' 
+                          : payment.pdo_approval_status === 'pending'
+                            ? 'Pending Approval'
+                            : 'Rejected'
+                      } />
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -5,17 +5,22 @@ namespace App\Http\Controllers;
 use App\Models\Payment;
 use App\Models\Sale;
 use App\Services\PaymentService;
+use App\Services\EmailService;
 use App\Http\Resources\PaymentResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
     protected $paymentService;
+    protected $emailService;
 
-    public function __construct(PaymentService $paymentService)
+    public function __construct(PaymentService $paymentService, EmailService $emailService)
     {
         $this->paymentService = $paymentService;
+        $this->emailService = $emailService;
     }
 
     /**
@@ -76,6 +81,15 @@ class PaymentController extends Controller
         try {
             $this->paymentService->verifyPayment($payment);
 
+            // Send email notification to super admin
+            try {
+                $verifiedBy = Auth::user()->name ?? 'System';
+                $this->emailService->notifyPaymentVerified($payment->fresh(), $verifiedBy);
+            } catch (\Exception $e) {
+                // Email failure should not block payment verification
+                Log::warning('Failed to send payment verified email: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Payment verified successfully',
@@ -110,6 +124,14 @@ class PaymentController extends Controller
             $reason = $request->reason ?? $request->notes;
             $this->paymentService->holdPayment($payment, $reason);
 
+            // Send email notification to super admin
+            try {
+                $heldBy = Auth::user()->name ?? 'System';
+                $this->emailService->notifyPaymentHeld($payment->fresh(), $reason, $heldBy);
+            } catch (\Exception $e) {
+                Log::warning('Failed to send payment held email: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Payment put on hold',
@@ -141,6 +163,14 @@ class PaymentController extends Controller
 
         try {
             $this->paymentService->cancelPayment($payment, $request->reason);
+
+            // Send email notification to super admin AND customer
+            try {
+                $rejectedBy = Auth::user()->name ?? 'System';
+                $this->emailService->notifyPaymentRejected($payment->fresh(), $request->reason, $rejectedBy);
+            } catch (\Exception $e) {
+                Log::warning('Failed to send payment rejected email: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -230,12 +260,20 @@ class PaymentController extends Controller
         }
 
         try {
+            $userName = Auth::user()->name ?? 'Admin';
             $payment->update([
                 'pdo_approval_status' => 'approved',
-                'verified_by' => auth()->id(),
+                'verified_by' => Auth::id(),
                 'verified_at' => now(),
-                'notes' => $request->notes ?? 'PDO approved by admin',
+                'notes' => $request->notes ?? "PDO approved by {$userName}",
             ]);
+
+            // Send email notification to super admin
+            try {
+                $this->emailService->notifyPDOApproved($payment->fresh(), $userName);
+            } catch (\Exception $e) {
+                Log::warning('Failed to send PDO approved email: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -274,13 +312,21 @@ class PaymentController extends Controller
         }
 
         try {
+            $userName = Auth::user()->name ?? 'Admin';
             $payment->update([
                 'pdo_approval_status' => 'rejected',
                 'status' => 'cancelled',
-                'cancel_reason' => $request->notes,
-                'verified_by' => auth()->id(),
+                'cancel_reason' => $request->notes . " (Rejected by {$userName})",
+                'verified_by' => Auth::id(),
                 'verified_at' => now(),
             ]);
+
+            // Send email notification to super admin AND customer
+            try {
+                $this->emailService->notifyPaymentRejected($payment->fresh(), $request->notes, $userName);
+            } catch (\Exception $e) {
+                Log::warning('Failed to send PDO rejected email: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,

@@ -1,0 +1,1783 @@
+====================================================================================================
+                    PAYMENT AND POS SYSTEM - DETAILED TECHNICAL GUIDE
+====================================================================================================
+
+                                    SYSTEM OVERVIEW
+====================================================================================================
+
+This document provides a comprehensive explanation of how the Point of Sale (POS) and Payment 
+systems work in the KJP Ricemill application. It covers the complete flow from adding items to 
+cart, processing orders, handling different payment methods, to payment verification and approval.
+
+The system supports two main interfaces:
+1. CUSTOMER INTERFACE (Shop.jsx) - Simplified shopping experience with GCash and Pay Later only
+2. ADMIN/STAFF INTERFACE (PointOfSale.jsx) - Full POS with all payment methods and features
+
+
+====================================================================================================
+                            PART 1: POS ORDER CREATION FLOW
+====================================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                          1. CUSTOMER SELECTS PRODUCTS                                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+FRONTEND (PointOfSale.jsx / Shop.jsx):
+-------------------------------------
+- User browses products filtered by variety (e.g., "Premium", "Regular", "Special")
+- Each product shows: name, weight, price, stock level, variety
+- User clicks product → addToCart() function executes
+
+addToCart() Logic:
+  1. Check if product has valid price (price > 0)
+  2. If product already in cart → increment quantity
+  3. If new product → add to cart array with quantity = 1
+  4. Cart updates in React state (cart state variable)
+
+Cart Data Structure:
+  [{
+    id: product_id,
+    name: "Product Name",
+    quantity: 2,
+    price: 1500,
+    weight_formatted: "50kg",
+    variety: "Premium"
+  }]
+
+VALIDATION:
+  - Products without price cannot be added to cart
+  - Stock levels displayed but NOT enforced at cart stage (enforcement happens at processing)
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                       2. ORDER TYPE SELECTION (PICKUP vs DELIVERY)                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+USER ACTION:
+  - Toggle between "Pick Up" and "Delivery" buttons
+  - Sets forDelivery state variable (true/false)
+
+IF DELIVERY IS SELECTED:
+  ├─ Frontend prompts for delivery address
+  ├─ Address autocomplete powered by OpenRouteService API
+  ├─ When address is entered:
+  │   ├─ System geocodes address → gets latitude/longitude
+  │   ├─ Calculates distance from warehouse to delivery location
+  │   ├─ Uses OpenRouteService routing API for accurate distance
+  │   └─ Displays distance in km + estimated travel time
+  └─ Delivery fee is auto-calculated based on business settings:
+      FORMULA: ceil(distance / base_km) × rate_per_sack × total_sacks + (rate_per_km × distance)
+      
+      EXAMPLE: 
+        - Distance: 5km
+        - Base km: 1km
+        - Rate per sack: ₱50
+        - Rate per km: ₱10
+        - Total sacks: 3
+        
+        Calculation:
+        - Sack-based fee: ⌈5/1⌉ × 50 × 3 = 5 × 50 × 3 = ₱750
+        - Distance-based fee: 10 × 5 = ₱50
+        - TOTAL DELIVERY FEE: ₱800
+
+ORDER TOTALS CALCULATION:
+  Subtotal = Sum of (item.price × item.quantity) for all cart items
+  Delivery Fee = Calculated as above (or 0 if pickup)
+  Total = Subtotal + Delivery Fee
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                          3. CUSTOMER INFORMATION                                             │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+USER CLICKS "PLACE ORDER":
+  ├─ If Pick Up: Shows walk-in confirmation modal first
+  └─ Opens Customer Selection Modal
+
+CUSTOMER MODAL OPTIONS:
+  1. SELECT EXISTING CUSTOMER
+     - Dropdown shows all active customers with: Name, Email, Phone
+     - Auto-fills customer details when selected
+     
+  2. ADD NEW CUSTOMER
+     - Required: Name, Email (with uniqueness check)
+     - Optional: Contact Number, Address, Landmark
+     - Email validation:
+       ├─ Format check (valid email)
+       ├─ Uniqueness check (debounced API call)
+       └─ If duplicate found → error message displayed
+     
+  3. WALK-IN CUSTOMER
+     - Leave customer selection empty
+     - System allows this for cash/COD orders
+     - Customer record not created
+
+FOR DELIVERY ORDERS:
+  - Delivery address is REQUIRED
+  - Address can be:
+    ├─ Loaded from selected customer's saved address
+    ├─ Entered manually
+    └─ Selected from autocomplete suggestions
+  - Distance calculation required before proceeding
+
+VALIDATION RULES:
+  ✓ For delivery: address + distance required
+  ✓ For new customer: name + email required
+  ✓ Email must pass uniqueness check
+  ✓ Selected customer must have contact info on file
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                    4. PAYMENT METHOD SELECTION & SETUP                                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+AFTER CUSTOMER CONFIRMATION → Payment Modal Opens
+
+AVAILABLE PAYMENT METHODS:
+╔════════════════════════════════════════════════════════════════════════════════════════════╗
+║  METHOD     │  INTERFACE      │  REQUIRES                  │  VERIFICATION NEEDED          ║
+╠════════════════════════════════════════════════════════════════════════════════════════════╣
+║  CASH       │  POS Only       │  Amount tendered           │  NO (auto-verified)           ║
+║  GCASH      │  Both           │  Reference # (13 digits)   │  YES (admin verifies proof)   ║
+║             │                 │  Payment proof image(s)    │                               ║
+║  PDO        │  POS Only       │  Check number              │  YES (two-stage approval)     ║
+║             │                 │  Bank name                 │                               ║
+║             │                 │  Check date                │                               ║
+║             │                 │  Check amount              │                               ║
+║             │                 │  Check image(s)            │                               ║
+║  COD        │  POS Only       │  None (pay on delivery)    │  NO                           ║
+║  PAY LATER  │  Both           │  None (deferred payment)   │  NO                           ║
+╚════════════════════════════════════════════════════════════════════════════════════════════╝
+
+
+── CASH PAYMENT (POS ONLY) ──────────────────────────────────────────────────────────────────
+
+User Input:
+  - Amount tendered (must be >= order total)
+  
+System Calculates:
+  - Change = Amount Tendered - Order Total
+  - Example: Tendered ₱2,000 for ₱1,500 order → Change = ₱500
+
+VALIDATION:
+  ✓ Amount must be numeric and positive
+  ✓ Amount must be >= order total
+  ✗ Cannot proceed if insufficient
+
+BACKEND HANDLING:
+  ➤ Payment status: "verified" (instant)
+  ➤ Payment record created with status: "verified"
+  ➤ Sale balance updated immediately
+  ➤ Receipt printed automatically
+
+
+── GCASH PAYMENT ─────────────────────────────────────────────────────────────────────────────
+
+User Input:
+  1. GCash reference number (13 digits, no spaces)
+     - Format: XXXXXXXXXXXX (13-digit numeric)
+     - Real-time duplicate check (debounced)
+     - Shows error if duplicate found
+  
+  2. Payment proof images (1 or more)
+     - Can upload from gallery
+     - Can capture using device camera
+     - Supported formats: JPG, PNG, GIF, WEBP
+     - Max size: 5MB per image
+     - Multiple images allowed
+
+VALIDATION:
+  ✓ Reference number exactly 13 digits
+  ✓ Reference number unique (not used in other orders)
+  ✓ At least one proof image required
+  ✗ Cannot proceed if validation fails
+
+BACKEND HANDLING:
+  ➤ Images stored in: storage/app/public/payment_proofs/
+  ➤ Payment status: "needs_verification"
+  ➤ Payment record created with:
+     - status: "needs_verification"
+     - reference_number: saved
+     - payment_proof: array of image paths
+  ➤ Sale balance NOT updated yet (awaiting verification)
+  ➤ Order status: "pending"
+
+ADMIN VERIFICATION FLOW:
+  1. Admin goes to Payments Management → Payment Transactions
+  2. Sees pending GCash payments (status: needs_verification)
+  3. Can view payment proof images
+  4. Can take action:
+     ✓ VERIFY → Payment approved, balance updated, order can proceed
+     ⏸️ HOLD → Flagged for review (suspicious/unclear)
+     ❌ REJECT → Payment cancelled, order remains unpaid
+
+
+── PDO (POST-DATED CHECK) PAYMENT ───────────────────────────────────────────────────────────
+
+User Input:
+  1. PDO Check Amount
+     - Must be within valid range
+     - Minimum: Order total
+     - Maximum: 10× order total (prevents typos)
+     - Real-time validation with colored border feedback
+     
+  2. Check Number (required)
+     - Unique identifier for the check
+     - Real-time duplicate check
+     
+  3. Bank Name (required)
+     - Issuing bank (e.g., "BDO", "BPI", "Metrobank")
+     
+  4. Check Date (required)
+     - Post-dated (future date)
+     - Cannot be in the past
+     
+  5. Check Image(s) (required)
+     - Photo of physical check
+     - Can upload or capture with camera
+     - Multiple images supported
+
+VALIDATION:
+  ✓ Check amount: total ≤ amount ≤ (total × 10)
+  ✓ Check number: required, unique
+  ✓ Bank name: required
+  ✓ Check date: required, future date
+  ✓ Check image: at least one image required
+  ✗ Submit button disabled if validation fails
+
+BACKEND HANDLING:
+  ➤ Images stored in: storage/app/public/pdo_checks/
+  ➤ Payment status: "pending"
+  ➤ PDO approval status: "pending"
+  ➤ Payment record created with:
+     - status: "pending"
+     - pdo_approval_status: "pending"
+     - pdo_check_number: saved
+     - pdo_check_bank: saved
+     - pdo_check_date: saved
+     - pdo_check_image: array of image paths
+  ➤ Sale balance NOT updated yet (awaiting approval + clearance)
+  ➤ Order status: "pending"
+
+TWO-STAGE PDO APPROVAL FLOW:
+  
+  STAGE 1: CHECK APPROVAL
+    1. PDO appears in: Payments Management → PDO Management → Pending Approval
+    2. Admin reviews:
+       - Check image(s) quality
+       - Bank details validity
+       - Check number legitimacy
+       - Amount correctness
+    3. Admin actions:
+       ✓ APPROVE → Moves to Stage 2 (Awaiting Payment)
+       ❌ REJECT → PDO cancelled, order remains unpaid
+  
+  STAGE 2: PAYMENT CLEARANCE
+    1. Approved PDO appears in: PDO Management → Awaiting Payment
+    2. Admin waits for check date to arrive
+    3. When check clears at bank:
+       - Admin clicks "Mark as Paid"
+       - Payment status → "verified"
+       - Sale balance updated
+       - Order can proceed to processing
+
+
+── COD (CASH ON DELIVERY) ───────────────────────────────────────────────────────────────────
+
+User Action:
+  - Select "COD" payment method
+  - No additional input required
+
+BACKEND HANDLING:
+  ➤ Payment status: "not_paid"
+  ➤ Amount tendered: 0
+  ➤ Balance remaining: Order total
+  ➤ No payment record created initially
+  ➤ Order status: "pending"
+  ➤ Payment collected during delivery
+
+FULFILLMENT FLOW:
+  1. Order ships to customer
+  2. Driver collects cash payment on delivery
+  3. Admin manually marks order as paid via:
+     - Orders Management → Actions → Mark as Paid
+     - Enter payment method (usually "cash")
+     - System updates balance and creates payment record
+
+
+── PAY LATER ─────────────────────────────────────────────────────────────────────────────────
+
+User Action:
+  - Select "Pay Later" payment method
+  - No additional input required
+  - Customer must be selected (cannot be walk-in)
+
+BACKEND HANDLING:
+  ➤ Payment status: "not_paid"
+  ➤ Amount tendered: 0
+  ➤ Balance remaining: Order total
+  ➤ No payment record created initially
+  ➤ Order status: "pending"
+  ➤ Order held until payment received
+
+PAYMENT FOLLOW-UP:
+  1. Customer contacts business to make payment
+  2. Can pay via:
+     - Cash (in person)
+     - GCash (submit reference + proof)
+     - PDO (submit check)
+  3. Admin records payment in Payment Transactions
+  4. Order can proceed after payment verified
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                    5. STAGGERED PAYMENT (INSTALLMENT) SETUP                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ENABLING INSTALLMENTS:
+  - In POS, blue toggle button: "Enable Installments"
+  - When enabled → Installment Setup Panel appears
+
+INSTALLMENT CONFIGURATION:
+  
+  User Inputs:
+    1. Number of Installments (2-12)
+       - Controls how many payments customer will make
+       
+    2. Payment Schedule
+       - EQUAL: Split total evenly across all installments
+       - CUSTOM: Manually set amount for each installment
+       
+    3. Start Date (default: today)
+       - When first payment is due
+       
+    4. Frequency (default: 1 month)
+       - Time between each installment payment
+       - Options: days, weeks, months
+
+  EXAMPLE SETUP:
+    Order Total: ₱10,000
+    Number of Installments: 4
+    Schedule: EQUAL
+    Start Date: May 1, 2026
+    Frequency: 1 month
+    
+    Generated Schedule:
+      Installment 1: ₱2,500 - Due: May 1, 2026 (Today)
+      Installment 2: ₱2,500 - Due: Jun 1, 2026
+      Installment 3: ₱2,500 - Due: Jul 1, 2026
+      Installment 4: ₱2,500 - Due: Aug 1, 2026
+
+  CUSTOM AMOUNTS:
+    User can manually adjust each installment amount
+    System validates: Sum of all installments = Order Total
+    Warning shown if amounts don't match total
+
+FIRST INSTALLMENT HANDLING:
+
+  IF FIRST INSTALLMENT DUE TODAY:
+    → Payment Modal shows amount for TODAY'S installment only
+    → User selects payment method for first installment (cash/gcash/pdo)
+    → After payment, remaining installments scheduled for future
+    
+  IF FIRST INSTALLMENT DUE IN FUTURE:
+    → No payment collected now
+    → Order created with payment_method: "pay_later"
+    → All installments scheduled, customer pays later per schedule
+
+BACKEND STORAGE:
+  ➤ Sale record:
+     - is_staggered: true
+     - primary_method: "installment"
+     - payment_status: "not_paid" or "partial"
+     
+  ➤ Payment Installments table (payment_installments):
+     - One record per installment
+     - Fields: installment_number, amount_expected, due_date, status
+     - Status: pending → paid → verified
+     
+  ➤ Payment record created for each installment payment when received
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                        6. ORDER SUBMISSION TO BACKEND                                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+FRONTEND SUBMISSION:
+
+  User clicks "Confirm Payment" button → confirmPayment() executes
+
+  DATA PREPARATION:
+    
+    IF payment method requires files (GCash proof OR PDO check):
+      → Use FormData (multipart/form-data)
+      → Append all fields individually
+      → Append files using FormData.append()
+      
+      FormData Contents:
+        items[0][product_id]: 5
+        items[0][quantity]: 2
+        items[0][unit_price]: 1500
+        items[1][product_id]: 3
+        items[1][quantity]: 1
+        items[1][unit_price]: 800
+        customer_id: 12
+        payment_method: "gcash"
+        reference_number: "1234567890123"
+        payment_proof[]: [File object]
+        payment_proof[]: [File object]
+        delivery_fee: 150
+        distance_km: 5
+        delivery_address: "123 Main St, City"
+        is_staggered: 0
+        
+    ELSE (Cash, COD, Pay Later without files):
+      → Use JSON payload (application/json)
+      
+      JSON Structure:
+        {
+          "items": [
+            {
+              "product_id": 5,
+              "quantity": 2,
+              "unit_price": 1500
+            }
+          ],
+          "customer_id": 12,
+          "payment_method": "cash",
+          "amount_tendered": 3500,
+          "delivery_fee": 0,
+          "distance_km": null,
+          "delivery_address": null,
+          "is_staggered": false,
+          "installments": null
+        }
+    
+    IF STAGGERED (Installments enabled):
+      → Include installments array
+      
+      installments[0][installment_number]: 1
+      installments[0][amount]: 2500
+      installments[0][due_date]: "2026-05-01"
+      installments[1][installment_number]: 2
+      installments[1][amount]: 2500
+      installments[1][due_date]: "2026-06-01"
+
+  API CALL:
+    POST http://127.0.0.1:8000/api/sales/order
+    Headers: 
+      Authorization: Bearer {token}
+      Content-Type: multipart/form-data (or application/json)
+    Body: FormData or JSON
+
+
+BACKEND PROCESSING (SaleController → SaleService):
+
+  STEP 1: VALIDATION
+    ✓ Items array not empty
+    ✓ Each item has valid product_id, quantity, unit_price
+    ✓ Customer exists (if customer_id provided)
+    ✓ Payment proof files valid (if GCash)
+    ✓ PDO check details complete (if PDO)
+    ✓ Delivery address present (if delivery)
+    ✓ Installments valid (if staggered)
+
+  STEP 2: HANDLE FILE UPLOADS
+    IF payment_proof files present:
+      → Store files in: storage/app/public/payment_proofs/
+      → Generate unique filenames: payment_proof_1714567890_abc123.jpg
+      → Return file paths: ["payment_proofs/file1.jpg", "payment_proofs/file2.jpg"]
+      
+    IF pdo_check_image files present:
+      → Store files in: storage/app/public/pdo_checks/
+      → Generate unique filenames
+      → Return file paths array
+
+  STEP 3: CREATE/RESOLVE CUSTOMER
+    IF new_customer_name provided AND no customer_id:
+      → Create new Customer record
+      → Fields: name, contact, phone, email, address, landmark
+      → Status: Active
+      → Get new customer_id
+      
+    ELSE IF user is authenticated customer:
+      → Lookup Customer by user's email
+      → Use that customer_id
+      
+    ELSE:
+      → Use provided customer_id (or null for walk-in)
+
+  STEP 4: GENERATE TRANSACTION ID
+    Format: ORD-YYYYMMDD-NNN
+    Example: ORD-20260501-003
+    
+    Logic:
+      - Get current date: YYYYMMDD
+      - Count sales in current year + 1
+      - Pad counter to minimum 3 digits
+      - Combine: ORD-{date}-{counter}
+
+  STEP 5: CALCULATE TOTALS
+    Subtotal = Sum of (item.unit_price × item.quantity)
+    Discount = 0 (if not provided)
+    Delivery Fee = From request or 0
+    Total = Subtotal - Discount + Delivery Fee
+    
+    Example:
+      Item 1: ₱1,500 × 2 = ₱3,000
+      Item 2: ₱800 × 1 = ₱800
+      Subtotal: ₱3,800
+      Delivery Fee: ₱150
+      Total: ₱3,950
+
+  STEP 6: DETERMINE PAYMENT STATUS
+    
+    IF is_staggered = true:
+      → payment_status: "not_paid"
+      → amount_paid: 0 (will be updated as installments are paid)
+      → balance_remaining: Total
+      
+    ELSE IF payment_method IN ['cod', 'pay_later', 'pdo']:
+      → payment_status: "not_paid"
+      → amount_paid: 0
+      → balance_remaining: Total
+      
+    ELSE IF payment_method = 'cash' AND amount_tendered >= Total:
+      → payment_status: "paid"
+      → amount_paid: Total
+      → balance_remaining: 0
+      → paid_at: now()
+      → change_amount: amount_tendered - Total
+      
+    ELSE IF payment_method = 'gcash':
+      → payment_status: "not_paid" (awaiting verification)
+      → amount_paid: 0
+      → balance_remaining: Total
+      
+    ELSE IF amount_tendered > 0 BUT < Total:
+      → payment_status: "partial"
+      → amount_paid: amount_tendered
+      → balance_remaining: Total - amount_tendered
+
+  STEP 7: CREATE SALE RECORD (Database: sales table)
+    
+    INSERT INTO sales:
+      transaction_id: "ORD-20260501-003"
+      customer_id: 12 (or NULL)
+      subtotal: 3800.00
+      discount: 0.00
+      delivery_fee: 150.00
+      total: 3950.00
+      amount_tendered: 4000.00 (or 0)
+      change_amount: 50.00 (or 0)
+      payment_method: "cash"
+      payment_status: "paid"
+      reference_number: NULL (or GCash ref)
+      payment_proof: NULL (or array of paths)
+      paid_at: "2026-05-01 14:30:00" (or NULL)
+      status: "pending"
+      notes: NULL
+      delivery_address: "123 Main St" (or NULL)
+      distance_km: 5.0 (or NULL)
+      is_staggered: false
+      primary_method: "cash"
+      amount_paid: 3950.00
+      balance_remaining: 0.00
+      created_at: "2026-05-01 14:30:00"
+      updated_at: "2026-05-01 14:30:00"
+
+  STEP 8: CREATE SALE ITEMS (Database: sale_items table)
+    
+    FOR EACH item in items array:
+      INSERT INTO sale_items:
+        sale_id: [newly created sale id]
+        product_id: item.product_id
+        quantity: item.quantity
+        unit_price: item.unit_price
+        subtotal: unit_price × quantity
+        created_at: now()
+        updated_at: now()
+    
+    Example Records:
+      sale_id: 45, product_id: 5, quantity: 2, unit_price: 1500.00, subtotal: 3000.00
+      sale_id: 45, product_id: 3, quantity: 1, unit_price: 800.00, subtotal: 800.00
+
+  STEP 9: CREATE PAYMENT RECORD (Database: payments table)
+    
+    IF payment_method = "cash" AND amount_paid > 0:
+      INSERT INTO payments:
+        sale_id: [sale id]
+        installment_id: NULL
+        amount: [amount_paid]
+        payment_method: "cash"
+        status: "verified" ✓ (cash is instant)
+        reference_number: NULL
+        payment_proof: NULL
+        received_by: [current user id]
+        verified_by: [current user id]
+        verified_at: now()
+        paid_at: now()
+        notes: "Initial payment at POS"
+    
+    IF payment_method = "gcash":
+      INSERT INTO payments:
+        sale_id: [sale id]
+        installment_id: NULL
+        amount: [order total]
+        payment_method: "gcash"
+        status: "needs_verification" ⏳
+        reference_number: "1234567890123"
+        payment_proof: ["payment_proofs/file1.jpg", "payment_proofs/file2.jpg"]
+        received_by: [current user id]
+        verified_by: NULL
+        verified_at: NULL
+        paid_at: now()
+        notes: NULL
+    
+    IF payment_method = "pdo":
+      INSERT INTO payments:
+        sale_id: [sale id]
+        installment_id: NULL
+        amount: [check amount]
+        payment_method: "pdo"
+        status: "pending" ⏳
+        pdo_check_number: "12345678"
+        pdo_check_bank: "BDO"
+        pdo_check_date: "2026-06-15"
+        pdo_check_image: ["pdo_checks/check1.jpg"]
+        pdo_approval_status: "pending"
+        received_by: [current user id]
+        paid_at: now()
+        notes: "PDO payment from POS - awaiting admin approval"
+    
+    IF payment_method IN ['cod', 'pay_later']:
+      → NO payment record created yet
+      → Payment will be recorded when received
+
+  STEP 10: CREATE INSTALLMENT SCHEDULE (if is_staggered = true)
+    
+    FOR EACH installment in installments array:
+      INSERT INTO payment_installments:
+        sale_id: [sale id]
+        installment_number: 1 (or 2, 3, 4...)
+        amount_expected: 2500.00
+        amount_paid: 0.00
+        due_date: "2026-05-01"
+        status: "pending"
+        payment_method: NULL
+        payment_id: NULL
+        paid_date: NULL
+        created_at: now()
+        updated_at: now()
+    
+    Example for 4 installments of ₱2,500:
+      installment_number: 1, amount_expected: 2500, due_date: "2026-05-01", status: "pending"
+      installment_number: 2, amount_expected: 2500, due_date: "2026-06-01", status: "pending"
+      installment_number: 3, amount_expected: 2500, due_date: "2026-07-01", status: "pending"
+      installment_number: 4, amount_expected: 2500, due_date: "2026-08-01", status: "pending"
+    
+    IF first installment paid today (cash/gcash payment received):
+      → Update installment_number 1:
+        amount_paid: 2500
+        status: "verified" (or "needs_verification" if GCash)
+        payment_id: [payment record id]
+        paid_date: now()
+
+  STEP 11: CLEAR CACHES
+    Cache::forget('sales_all')
+    Cache::forget('products_all')
+    Cache::forget('customers_all')
+
+  STEP 12: RETURN RESPONSE
+    HTTP 200 OK
+    {
+      "success": true,
+      "message": "Order created successfully",
+      "data": {
+        "id": 45,
+        "transaction_id": "ORD-20260501-003",
+        "total": 3950.00,
+        "payment_status": "paid",
+        "status": "pending",
+        "date_formatted": "May 1, 2026, 2:30 PM",
+        "customer": {
+          "id": 12,
+          "name": "Juan Dela Cruz"
+        },
+        "items": [...],
+        "payments": [...]
+      },
+      "sale_id": 45
+    }
+
+
+FRONTEND RESPONSE HANDLING:
+
+  ON SUCCESS:
+    1. Show success toast: "Order Placed Successfully"
+    2. Fire-and-forget email notification:
+       - POST /api/sales/{sale_id}/notify
+       - Sends order confirmation to admin email
+       - Sends order confirmation to customer email (if exists)
+    3. Update local state:
+       - Clear cart
+       - Reset customer fields
+       - Reset payment fields
+       - Close payment modal
+    4. Show order confirmation modal with order details
+    5. Auto-print receipt (1-3 copies based on business settings)
+    6. Invalidate caches and refetch data:
+       - Refetch sales list
+       - Refetch products (to update displayed stock levels)
+       - Refetch customers (if new customer created)
+  
+  ON ERROR:
+    - Display error toast with specific validation errors
+    - Console log full error details for debugging
+    - Keep payment modal open
+    - User can correct errors and retry
+
+
+====================================================================================================
+                          PART 2: ORDER STATUS LIFECYCLE
+====================================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              ORDER STATUS FLOW                                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Status: PENDING (Initial state after order creation)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Order received, payment pending or awaiting verification
+  Stock: NOT YET DEDUCTED
+  
+  Allowed Transitions:
+    → PROCESSING (when payment verified and admin confirms)
+    → CANCELLED (if payment fails or customer cancels)
+  
+  Payment States at this stage:
+    - Cash orders: payment_status = "paid" → ready to process
+    - GCash orders: payment_status = "not_paid" → awaiting verification
+    - PDO orders: payment_status = "not_paid" → awaiting approval + clearance
+    - COD orders: payment_status = "not_paid" → will pay on delivery
+    - Pay Later: payment_status = "not_paid" → will pay before processing
+
+
+Status: PROCESSING (Admin confirms order)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Order being prepared, items being packed
+  Stock: DEDUCTED FROM INVENTORY ✓
+  
+  When status changes to PROCESSING:
+    1. System checks stock availability for each item
+    2. If sufficient stock:
+       - Deduct quantity from products.stocks
+       - Create stock_logs entries (type: "out")
+       - Each log records: quantity_before, quantity_change, quantity_after
+    3. If insufficient stock:
+       - Transaction rolled back
+       - Error returned: "Insufficient stock for {product_name}"
+  
+  Example Stock Deduction:
+    Product: Premium Rice 50kg
+    Stock Before: 100
+    Order Quantity: 2
+    Stock After: 98
+    
+    Stock Log Entry:
+      product_id: 5
+      type: "out"
+      quantity_before: 100
+      quantity_change: 2
+      quantity_after: 98
+      source_type: "order"
+      source_id: 45
+      notes: "Order processing (ORD-20260501-003)"
+  
+  Allowed Transitions:
+    → SHIPPED (for delivery orders)
+    → COMPLETED (for pickup orders)
+    → CANCELLED (if problem occurs - stock will be restored)
+
+
+Status: SHIPPED (For delivery orders)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Order dispatched for delivery
+  Stock: Already deducted
+  
+  Allowed Transitions:
+    → DELIVERED (when customer receives order)
+    → CANCELLED (if delivery fails - stock will be restored)
+
+
+Status: DELIVERED (Delivery confirmed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Customer received the order
+  Stock: Already deducted
+  
+  For COD orders:
+    - Admin must manually "Mark as Paid"
+    - Updates payment_status to "paid"
+    - Creates payment record
+  
+  Allowed Transitions:
+    → RETURN_REQUESTED (if customer wants to return)
+
+
+Status: COMPLETED (Final success state)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Order fulfilled successfully
+  Stock: Already deducted
+  Payment: Must be fully paid
+  
+  No further transitions
+
+
+Status: CANCELLED (Order cancelled)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Order was cancelled (customer request or system issue)
+  Stock: RESTORED TO INVENTORY (if was deducted)
+  
+  Stock Restoration Logic:
+    - Only restores if stock was previously deducted
+    - Only restores from "processing" or "shipped" statuses
+    - Creates stock_logs entries (type: "in")
+  
+  Example Stock Restoration:
+    Product: Premium Rice 50kg
+    Stock Before Cancellation: 98
+    Order Quantity: 2
+    Stock After Restoration: 100
+    
+    Stock Log Entry:
+      product_id: 5
+      type: "in"
+      quantity_before: 98
+      quantity_change: 2
+      quantity_after: 100
+      source_type: "order_cancelled"
+      source_id: 45
+      notes: "Order cancelled - stock restored (ORD-20260501-003)"
+  
+  No further transitions
+
+
+Status: VOIDED (Admin voided transaction)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Description: Transaction was voided (mistake, duplicate, etc.)
+  Stock: RESTORED TO INVENTORY (if was deducted)
+  Payment: Refund may be processed
+  
+  Void Requirements:
+    - Admin password required
+    - Void reason required
+    - Can only void "completed" orders
+    - Creates audit log entry
+  
+  No further transitions
+
+
+====================================================================================================
+                        PART 3: PAYMENT VERIFICATION & APPROVAL
+====================================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                        GCASH PAYMENT VERIFICATION FLOW                                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+INITIAL STATE (After order submission):
+  Payment Record:
+    status: "needs_verification"
+    reference_number: "1234567890123"
+    payment_proof: ["payment_proofs/file1.jpg", "payment_proofs/file2.jpg"]
+    amount: 3950.00
+    received_by: [user who placed order]
+    verified_by: NULL
+    verified_at: NULL
+  
+  Sale Record:
+    payment_status: "not_paid"
+    amount_paid: 0.00
+    balance_remaining: 3950.00
+
+
+ADMIN VERIFICATION PROCESS:
+
+  Location: Admin Dashboard → Payments Management → Payment Transactions Tab
+  
+  Admin sees:
+    ┌────────────────────────────────────────────────────────────────────────┐
+    │ #12 │ ORD-20260501-003 │ May 1, 2026 │ Juan Cruz │ ₱3,950.00         │
+    │ GCash │ Needs Verification │ 1234567890123 │ [Actions: ✓ Hold ✗]    │
+    └────────────────────────────────────────────────────────────────────────┘
+  
+  Admin can:
+    1. View payment proof images (click to enlarge)
+    2. Check GCash reference number validity
+    3. Verify amount matches order total
+    4. Take action:
+
+  ACTION 1: VERIFY PAYMENT ✓
+  ─────────────────────────────
+    API Call: POST /api/payments/{payment_id}/verify
+    
+    Backend Processing:
+      1. Validate payment can be verified
+         - Current status must be: "needs_verification", "on_hold", or "pending"
+      
+      2. Update Payment Record:
+         status: "verified"
+         verified_by: [admin user id]
+         verified_at: now()
+      
+      3. Update Sale Balances (PaymentService→updateSaleBalances):
+         Old: amount_paid = 0, balance_remaining = 3950
+         New: amount_paid = 3950, balance_remaining = 0
+         New payment_status: "paid"
+         New paid_at: now()
+      
+      4. IF payment linked to installment:
+         Update installment:
+           amount_paid: amount_paid + payment.amount
+           status: "verified"
+           paid_date: now()
+           payment_id: [payment id]
+      
+      5. Return success response
+    
+    Result:
+      ✓ Payment verified
+      ✓ Order balance updated
+      ✓ Order can proceed to processing
+      ✓ Admin notified
+      ✓ Customer notified (if has account)
+
+
+  ACTION 2: HOLD PAYMENT ⏸️
+  ─────────────────────────────
+    API Call: POST /api/payments/{payment_id}/hold
+    Body: { "reason": "Suspicious reference number, needs further verification" }
+    
+    Backend Processing:
+      1. Validate payment status = "needs_verification"
+      2. Update Payment Record:
+         status: "on_hold"
+         hold_reason: "Suspicious reference number..."
+      3. Sale remains unpaid (no balance changes)
+    
+    Result:
+      ⏸️ Payment flagged for review
+      ⏸️ Order remains pending
+      ⏸️ Admin can verify or reject later
+
+
+  ACTION 3: REJECT/CANCEL PAYMENT ❌
+  ─────────────────────────────
+    API Call: POST /api/payments/{payment_id}/cancel
+    Body: { "reason": "Invalid reference number / Fraudulent" }
+    
+    Backend Processing:
+      1. Update Payment Record:
+         status: "cancelled"
+         cancel_reason: "Invalid reference number..."
+      2. IF payment was previously verified:
+         - Reverse sale balances
+         - amount_paid -= payment.amount
+         - balance_remaining += payment.amount
+         - Recalculate payment_status
+      3. IF linked to installment:
+         - Reverse installment payment
+         - amount_paid -= payment.amount
+         - status: "pending"
+    
+    Result:
+      ❌ Payment rejected
+      ❌ Order balance unchanged (or reversed if was verified)
+      ❌ Customer must submit new payment
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                    PDO (POST-DATED CHECK) APPROVAL FLOW                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+TWO-STAGE APPROVAL PROCESS:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAGE 1: CHECK APPROVAL (Verify check is legitimate)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+INITIAL STATE (After order submission):
+  Payment Record:
+    status: "pending"
+    pdo_approval_status: "pending"
+    pdo_check_number: "12345678"
+    pdo_check_bank: "BDO"
+    pdo_check_date: "2026-06-15"
+    pdo_check_image: ["pdo_checks/check1.jpg"]
+    amount: 3950.00
+  
+  Sale Record:
+    payment_status: "not_paid"
+    amount_paid: 0.00
+    balance_remaining: 3950.00
+
+
+ADMIN REVIEW:
+
+  Location: Admin Dashboard → Payments Management → PDO Management → Pending Approval Tab
+  
+  Admin sees:
+    ┌────────────────────────────────────────────────────────────────────────────────────┐
+    │ ORD-20260501-003 │ Juan Cruz │ Full Payment │ ₱3,950.00 │ 12345678 │ BDO          │
+    │ Jun 15, 2026 │ [Actions: ✓ Approve  ❌ Reject]                                     │
+    └────────────────────────────────────────────────────────────────────────────────────┘
+  
+  Admin Reviews:
+    1. View check image(s) - verify:
+       - Check is properly filled out
+       - Amount matches order total
+       - Check number matches entry
+       - Bank name correct
+       - Date is post-dated (future)
+       - Signature present
+       - Check looks genuine (not tampered/fake)
+    
+    2. Verify customer creditworthiness:
+       - Check customer's payment history
+       - Confirm customer details
+       - Assess risk
+    
+    3. Verify bank details:
+       - Bank name exists and is valid
+       - Check number format correct
+
+  ACTION: APPROVE CHECK ✓
+  ───────────────────────
+    API Call: POST /api/payments/{payment_id}/approve-pdo
+    Body: { "notes": "Check verified, details correct" }
+    
+    Backend Processing (PaymentService→approvePDO):
+      1. Validate:
+         - payment_method = "pdo"
+         - pdo_approval_status = "pending"
+      
+      2. Update Payment Record:
+         pdo_approval_status: "approved"
+         verified_by: [admin user id]
+         verified_at: now()
+         notes: "Check verified, details correct"
+         status: REMAINS "pending" (not "verified" yet!)
+      
+      3. Sale balances NOT updated yet (waiting for check to clear)
+      
+      4. IF linked to installment:
+         Update installment:
+           pdo_approval_status: "approved"
+           status: "awaiting_payment"
+      
+      5. Return success response
+    
+    Result:
+      ✓ Check approved as legitimate
+      ⏳ Moves to Stage 2 (Awaiting Payment)
+      ⏳ Waiting for check date to arrive
+      ⏳ Order remains unpaid
+
+  ACTION: REJECT CHECK ❌
+  ───────────────────────
+    API Call: POST /api/payments/{payment_id}/reject-pdo
+    Body: { "notes": "Check image unclear, bank details invalid" }
+    
+    Backend Processing (PaymentService→rejectPDO):
+      1. Update Payment Record:
+         status: "cancelled"
+         pdo_approval_status: "rejected"
+         notes: "Check image unclear..."
+      
+      2. IF linked to installment:
+         Update installment:
+           pdo_approval_status: "rejected"
+           status: "cancelled"
+      
+      3. Sale remains unpaid
+    
+    Result:
+      ❌ Check rejected
+      ❌ Customer must provide alternative payment
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAGE 2: PAYMENT CLEARANCE (Check clears at bank)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AFTER APPROVAL:
+  Payment Record:
+    status: "pending"
+    pdo_approval_status: "approved" ✓
+    pdo_check_date: "2026-06-15"
+  
+  Location: PDO Management → Awaiting Payment Tab
+  
+  Admin sees:
+    ┌────────────────────────────────────────────────────────────────────────────────────┐
+    │ ORD-20260501-003 │ Juan Cruz │ ₱3,950.00 │ 12345678 │ BDO │ Jun 15, 2026         │
+    │ Status: Approved - Awaiting Clearance │ [Action: 💵 Mark as Paid]                 │
+    └────────────────────────────────────────────────────────────────────────────────────┘
+
+WAITING PERIOD:
+  - PDO stays in "Awaiting Payment" section
+  - Admin waits for check date (Jun 15, 2026)
+  - On check date:
+    - Business deposits check at bank
+    - Wait for bank to clear the check (usually 1-3 banking days)
+    - Bank confirms check cleared successfully
+
+WHEN CHECK CLEARS:
+  
+  Admin Action: MARK AS PAID 💵
+  ─────────────────────────────
+    API Call: POST /api/payments/{payment_id}/verify
+                (or installmentsApi.markPDOAsPaid if installment-based)
+    
+    Backend Processing:
+      1. Update Payment Record:
+         status: "verified" ✓
+         verified_by: [admin user id]
+         verified_at: now()
+         pdo_approval_status: "approved" (already set)
+         paid_at: now()
+      
+      2. Update Sale Balances:
+         Old: amount_paid = 0, balance_remaining = 3950
+         New: amount_paid = 3950, balance_remaining = 0
+         New payment_status: "paid"
+         New paid_at: now()
+      
+      3. IF linked to installment:
+         Update installment:
+           amount_paid: amount_paid + payment.amount
+           status: "verified"
+           paid_date: now()
+           payment_id: [payment id]
+      
+      4. Return success response
+    
+    Result:
+      ✓ PDO payment complete
+      ✓ Order balance updated
+      ✓ Order can proceed to processing
+      ✓ PDO removed from Awaiting Payment
+
+
+COMPLETE PDO FLOW SUMMARY:
+  
+  1. Customer submits PDO at POS
+     ↓
+  2. PDO appears in "Pending Approval" (pdo_approval_status: "pending")
+     ↓
+  3. Admin reviews check image and approves (pdo_approval_status: "approved")
+     ↓
+  4. PDO moves to "Awaiting Payment" (status: "pending")
+     ↓
+  5. Check date arrives, check deposited at bank
+     ↓
+  6. Bank clears check, admin marks as paid (status: "verified")
+     ↓
+  7. Order balance updated, order proceeds ✓
+
+
+====================================================================================================
+                    PART 4: INSTALLMENT PAYMENT MANAGEMENT
+====================================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                        INSTALLMENT LIFECYCLE                                                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+EXAMPLE SCENARIO:
+  Order Total: ₱10,000
+  Payment Plan: 4 monthly installments of ₱2,500 each
+  Start Date: May 1, 2026
+  Customer: Maria Santos
+
+INITIAL STATE (After order creation):
+
+  Sale Record:
+    transaction_id: "ORD-20260501-007"
+    total: 10000.00
+    payment_status: "not_paid"
+    amount_paid: 0.00
+    balance_remaining: 10000.00
+    is_staggered: true
+    primary_method: "installment"
+
+  Installment Records (payment_installments table):
+    
+    Installment #1:
+      installment_number: 1
+      amount_expected: 2500.00
+      amount_paid: 0.00
+      due_date: "2026-05-01" (Today)
+      status: "pending"
+      payment_method: NULL
+      payment_id: NULL
+      paid_date: NULL
+    
+    Installment #2:
+      installment_number: 2
+      amount_expected: 2500.00
+      amount_paid: 0.00
+      due_date: "2026-06-01"
+      status: "pending"
+      ...
+    
+    Installment #3:
+      installment_number: 3
+      amount_expected: 2500.00
+      due_date: "2026-07-01"
+      status: "pending"
+      ...
+    
+    Installment #4:
+      installment_number: 4
+      amount_expected: 2500.00
+      due_date: "2026-08-01"
+      status: "pending"
+      ...
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                     VIEWING PAYMENT PLANS (Admin Interface)                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Location: Admin Dashboard → Payments Management → Payment Plans Tab
+
+Table View:
+  ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Order              │ Customer       │ Total      │ Paid    │ Balance   │ Progress      │
+  ├─────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ORD-20260501-007   │ Maria Santos   │ ₱10,000.00 │ ₱0.00   │ ₱10,000.00│ 0/4 paid      │
+  │ Status: Not Paid   │ Due Today: ₱2,500.00 (Installment #1)                             │
+  └─────────────────────────────────────────────────────────────────────────────────────────┘
+
+Double-click Order → Opens Payment Plan Details Modal:
+  
+  ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Payment Plan Details                                                                    │
+  │ Order: ORD-20260501-007 · Maria Santos                                                  │
+  ├─────────────────────────────────────────────────────────────────────────────────────────┤
+  │                                                                                         │
+  │ ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+  │ │ ORDER ID: ORD-20260501-007                                                        │  │
+  │ └───────────────────────────────────────────────────────────────────────────────────┘  │
+  │                                                                                         │
+  │ ┌──────────────────┬──────────────────┬──────────────────┐                             │
+  │ │ Total Amount     │ Amount Paid      │ Balance          │                             │
+  │ │ ₱10,000.00       │ ₱0.00            │ ₱10,000.00       │                             │
+  │ └──────────────────┴──────────────────┴──────────────────┘                             │
+  │                                                                                         │
+  │ Installments                                                                            │
+  │ ┌─────────────────────────────────────────────────────────────────────────────────┐    │
+  │ │ Installment #1                              🔴 Due Today                        │    │
+  │ │ Expected: ₱2,500.00                                                             │    │
+  │ │ Due: May 1, 2026                                                                │    │
+  │ │ Status: Pending                           [💳 Pay Button]                       │    │
+  │ └─────────────────────────────────────────────────────────────────────────────────┘    │
+  │                                                                                         │
+  │ │ Installment #2                              ⏰ Due Soon (31 days)               │    │
+  │ │ Expected: ₱2,500.00                                                             │    │
+  │ │ Due: Jun 1, 2026                                                                │    │
+  │ │ Status: Pending                           [💳 Pay Button]                       │    │
+  │ └─────────────────────────────────────────────────────────────────────────────────┘    │
+  │                                                                                         │
+  │ ... (Installments #3 and #4 listed similarly)                                          │
+  │                                                                                         │
+  │                                         [Close Button]                                  │
+  └─────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                        RECORDING INSTALLMENT PAYMENT                                         │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+SCENARIO: Customer comes to pay Installment #1 (₱2,500) via Cash
+
+ADMIN ACTION:
+  1. In Payment Plans modal, click "Pay" button on Installment #1
+  2. Record Payment Modal opens:
+     
+     ┌──────────────────────────────────────────────────────────────────────────────────┐
+     │ Record Payment — Installment #1                                                  │
+     │ Balance: ₱2,500.00                                                               │
+     ├──────────────────────────────────────────────────────────────────────────────────┤
+     │                                                                                  │
+     │ Amount: [₱2,500.00]                                                              │
+     │ Payment Method: [Cash ▼]                                                         │
+     │                                                                                  │
+     │                                 [Cancel] [Confirm Payment]                       │
+     └──────────────────────────────────────────────────────────────────────────────────┘
+  
+  3. Admin enters:
+     - Amount: ₱2,500.00 (pre-filled with installment balance)
+     - Payment Method: Cash
+  
+  4. Admin clicks "Confirm Payment"
+
+BACKEND PROCESSING:
+
+  API Call: POST /api/staggered-payments/installments/{installment_id}/pay
+  Body:
+    {
+      "amount": 2500.00,
+      "payment_method": "cash",
+      "reference_number": null,
+      "notes": null
+    }
+
+  StaggeredPaymentController → installmentsApi.recordPayment():
+  
+    1. Validate installment exists and is payable
+    2. Create Payment record:
+       
+       INSERT INTO payments:
+         sale_id: [sale id]
+         installment_id: [installment id]
+         amount: 2500.00
+         payment_method: "cash"
+         status: "verified" (cash auto-verified)
+         received_by: [admin user id]
+         verified_by: [admin user id]
+         verified_at: now()
+         paid_at: now()
+         notes: "Installment #1 payment"
+    
+    3. Update Installment record:
+       
+       UPDATE payment_installments:
+         amount_paid: amount_paid + 2500.00 (0 + 2500 = 2500)
+         status: "verified"
+         paid_date: now()
+         payment_id: [payment id]
+         payment_method: "cash"
+    
+    4. Update Sale balances (PaymentService→updateSaleBalances):
+       
+       UPDATE sales:
+         amount_paid: amount_paid + 2500.00 (0 + 2500 = 2500)
+         balance_remaining: balance_remaining - 2500.00 (10000 - 2500 = 7500)
+         payment_status: "partial" (was "not_paid", now has partial payment)
+    
+    5. Clear caches and return success
+
+RESULT AFTER PAYMENT #1:
+
+  Sale Record:
+    amount_paid: 2500.00 (was 0)
+    balance_remaining: 7500.00 (was 10000)
+    payment_status: "partial" (was "not_paid")
+
+  Installment #1:
+    amount_paid: 2500.00 ✓
+    status: "verified" ✓
+    paid_date: "2026-05-01 14:45:00" ✓
+    payment_id: 89 ✓
+
+  Payment Plans Tab now shows:
+    ┌─────────────────────────────────────────────────────────────────────────────────────┐
+    │ ORD-20260501-007   │ Maria Santos   │ ₱10,000.00 │ ₱2,500.00 │ ₱7,500.00│ 1/4 paid│
+    │ Status: Partial    │ Next Due: Jun 1 - ₱2,500.00 (Installment #2)                  │
+    └─────────────────────────────────────────────────────────────────────────────────────┘
+
+
+SCENARIO: Customer pays Installment #2 via GCash
+
+ADMIN ACTION:
+  1. Click "Pay" on Installment #2
+  2. Select payment method: GCash
+  3. Modal shows additional fields:
+     - Amount: ₱2,500.00
+     - Payment Method: GCash
+     - Reference Number: [          ] (13 digits required)
+     - Payment Proof: [Upload] (required)
+  4. Enter reference and upload proof
+  5. Confirm payment
+
+BACKEND PROCESSING:
+  
+  Same flow as above, BUT:
+    - Payment status: "needs_verification" (not "verified")
+    - Installment status: "needs_verification"
+    - Sale balances NOT updated yet (awaiting admin verification)
+  
+  THEN: Admin must verify GCash payment in Payment Transactions tab
+  AFTER VERIFICATION: Balances update, installment status → "verified"
+
+
+SCENARIO: Customer pays Installment #3 via PDO
+
+ADMIN ACTION:
+  1. Click "Pay" on Installment #3
+  2. Select payment method: PDO
+  3. Modal shows PDO fields:
+     - Amount: ₱2,500.00
+     - Check Number: [          ]
+     - Bank Name: [          ]
+     - Check Date: [          ]
+     - Check Image: [Upload]
+  4. Enter check details and upload image
+  5. Confirm payment
+
+BACKEND PROCESSING:
+  
+  1. Create Payment record with PDO details:
+     status: "pending"
+     pdo_approval_status: "pending"
+  
+  2. Update Installment with PDO details:
+     pdo_check_number: "87654321"
+     pdo_check_bank: "BPI"
+     pdo_approval_status: "pending"
+     status: "pending"
+  
+  3. Sale balances NOT updated yet
+  
+  4. PDO appears in PDO Management tab for approval
+
+TWO-STAGE PDO PROCESS:
+  Stage 1: Admin approves check (PDO Management → Pending Approval)
+    - pdo_approval_status: "approved"
+    - Moves to "Awaiting Payment"
+  
+  Stage 2: Check clears, admin marks as paid
+    - status: "verified"
+    - Balances updated
+    - Installment marked verified
+
+
+COMPLETE PAYMENT PLAN LIFECYCLE:
+
+  May 1: Installment #1 paid (Cash) → ₱2,500 paid, ₱7,500 remaining (1/4 paid)
+    ↓
+  Jun 1: Installment #2 paid (GCash) → ₱5,000 paid, ₱5,000 remaining (2/4 paid)
+    ↓
+  Jul 1: Installment #3 paid (PDO) → ₱7,500 paid, ₱2,500 remaining (3/4 paid)
+    ↓
+  Aug 1: Installment #4 paid (Cash) → ₱10,000 paid, ₱0 remaining (4/4 paid) ✓
+    ↓
+  Sale payment_status: "paid" ✓
+  Order can proceed to processing ✓
+
+
+====================================================================================================
+                          PART 5: DATABASE STRUCTURE
+====================================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              TABLE: sales                                                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Columns:
+  id                    INT PRIMARY KEY AUTO_INCREMENT
+  transaction_id        VARCHAR(255) UNIQUE (e.g., "ORD-20260501-003")
+  customer_id           INT NULL FOREIGN KEY → customers.id
+  subtotal              DECIMAL(10,2) (before discount and delivery)
+  discount              DECIMAL(10,2) DEFAULT 0
+  delivery_fee          DECIMAL(10,2) DEFAULT 0
+  total                 DECIMAL(10,2) (subtotal - discount + delivery_fee)
+  amount_tendered       DECIMAL(10,2) DEFAULT 0 (for cash payments)
+  change_amount         DECIMAL(10,2) DEFAULT 0
+  payment_method        VARCHAR(50) (cash, gcash, pdo, cod, pay_later, installment)
+  payment_status        VARCHAR(50) (not_paid, partial, paid)
+  reference_number      VARCHAR(255) NULL (for gcash)
+  payment_proof         JSON NULL (array of image paths)
+  paid_at               TIMESTAMP NULL
+  status                VARCHAR(50) (pending, processing, shipped, delivered, completed, cancelled, voided)
+  notes                 TEXT NULL
+  delivery_address      TEXT NULL
+  distance_km           DECIMAL(8,2) NULL
+  is_staggered          BOOLEAN DEFAULT false
+  primary_method        VARCHAR(50) NULL
+  amount_paid           DECIMAL(10,2) DEFAULT 0
+  balance_remaining     DECIMAL(10,2) DEFAULT 0
+  created_at            TIMESTAMP
+  updated_at            TIMESTAMP
+
+Relationships:
+  - One-to-Many with sale_items (one sale has many items)
+  - One-to-Many with payments (one sale has many payment records)
+  - One-to-Many with payment_installments (one sale has many installments)
+  - Many-to-One with customers (many sales belong to one customer)
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                            TABLE: sale_items                                                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Columns:
+  id                    INT PRIMARY KEY AUTO_INCREMENT
+  sale_id               INT FOREIGN KEY → sales.id
+  product_id            INT FOREIGN KEY → products.product_id
+  quantity              INT
+  unit_price            DECIMAL(10,2)
+  subtotal              DECIMAL(10,2) (unit_price × quantity)
+  created_at            TIMESTAMP
+  updated_at            TIMESTAMP
+
+Relationships:
+  - Many-to-One with sales (many items belong to one sale)
+  - Many-to-One with products (many sale items reference one product)
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                             TABLE: payments                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Columns:
+  id                    INT PRIMARY KEY AUTO_INCREMENT
+  sale_id               INT FOREIGN KEY → sales.id
+  installment_id        INT NULL FOREIGN KEY → payment_installments.id
+  amount                DECIMAL(10,2)
+  payment_method        VARCHAR(50) (cash, gcash, pdo)
+  reference_number      VARCHAR(255) NULL (for gcash)
+  payment_proof         JSON NULL (array of image paths)
+  status                VARCHAR(50) (pending, needs_verification, verified, on_hold, cancelled)
+  notes                 TEXT NULL
+  hold_reason           TEXT NULL
+  cancel_reason         TEXT NULL
+  received_by           INT NULL FOREIGN KEY → users.id
+  verified_by           INT NULL FOREIGN KEY → users.id
+  verified_at           TIMESTAMP NULL
+  paid_at               TIMESTAMP NULL
+  pdo_check_number      VARCHAR(255) NULL
+  pdo_check_bank        VARCHAR(255) NULL
+  pdo_check_date        DATE NULL
+  pdo_check_image       JSON NULL (array of image paths)
+  pdo_approval_status   VARCHAR(50) NULL (pending, approved, rejected)
+  pdo_approved_by       INT NULL FOREIGN KEY → users.id
+  pdo_approved_at       TIMESTAMP NULL
+  created_at            TIMESTAMP
+  updated_at            TIMESTAMP
+
+Relationships:
+  - Many-to-One with sales (many payments for one sale)
+  - Many-to-One with payment_installments (payment can be for an installment)
+  - Many-to-One with users (received_by, verified_by, pdo_approved_by)
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                       TABLE: payment_installments                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Columns:
+  id                    INT PRIMARY KEY AUTO_INCREMENT
+  sale_id               INT FOREIGN KEY → sales.id
+  installment_number    INT (1, 2, 3, 4...)
+  amount_expected       DECIMAL(10,2)
+  amount_paid           DECIMAL(10,2) DEFAULT 0
+  due_date              DATE
+  status                VARCHAR(50) (pending, paid, verified, overdue, cancelled)
+  payment_method        VARCHAR(50) NULL (set when payment received)
+  payment_id            INT NULL FOREIGN KEY → payments.id
+  paid_date             TIMESTAMP NULL
+  pdo_check_number      VARCHAR(255) NULL
+  pdo_check_bank        VARCHAR(255) NULL
+  pdo_check_image       JSON NULL
+  pdo_approval_status   VARCHAR(50) NULL (pending, approved, rejected)
+  pdo_approved_by       INT NULL FOREIGN KEY → users.id
+  pdo_approved_at       TIMESTAMP NULL
+  created_at            TIMESTAMP
+  updated_at            TIMESTAMP
+
+Relationships:
+  - Many-to-One with sales (many installments for one sale)
+  - One-to-One with payments (installment can have one payment when paid)
+  - Many-to-One with users (pdo_approved_by)
+
+
+====================================================================================================
+                      PART 6: SYSTEM INTEGRATION POINTS
+====================================================================================================
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                        FRONTEND-BACKEND COMMUNICATION                                        │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+API ENDPOINTS:
+
+ORDER MANAGEMENT:
+  POST   /api/sales/order                    Create new order
+  GET    /api/sales                           Get all sales
+  GET    /api/sales/{id}                      Get specific sale
+  PUT    /api/sales/{id}/status               Update order status
+  POST   /api/sales/{id}/mark-paid            Mark order as paid
+  POST   /api/sales/{id}/void                 Void transaction
+  POST   /api/sales/{id}/notify               Send order notification emails
+
+PAYMENT MANAGEMENT:
+  GET    /api/payments                         Get all payments
+  GET    /api/payments?method=gcash            Get GCash payments
+  GET    /api/payments?method=pdo              Get PDO payments
+  POST   /api/payments/{id}/verify             Verify GCash/PDO payment
+  POST   /api/payments/{id}/hold               Put payment on hold
+  POST   /api/payments/{id}/cancel             Cancel/reject payment
+  POST   /api/payments/{id}/approve-pdo        Approve PDO check (Stage 1)
+  POST   /api/payments/{id}/reject-pdo         Reject PDO check
+
+INSTALLMENT MANAGEMENT:
+  GET    /api/staggered-payments/plans                   Get all payment plans
+  GET    /api/staggered-payments/installments/pending    Get pending installments
+  GET    /api/staggered-payments/installments/overdue    Get overdue installments
+  POST   /api/staggered-payments/installments/{id}/pay   Record installment payment
+  GET    /api/staggered-payments/installments/pdo/pending  Get PDOs awaiting approval
+  GET    /api/staggered-payments/installments/pdo/awaiting Get approved PDOs awaiting payment
+  POST   /api/staggered-payments/installments/{id}/approve-pdo  Approve PDO (Stage 1)
+  POST   /api/staggered-payments/installments/{id}/reject-pdo   Reject PDO
+  POST   /api/staggered-payments/installments/{id}/mark-paid    Mark PDO as paid (Stage 2)
+
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│                           FILE STORAGE STRUCTURE                                             │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Storage Directory: laravel_backend/storage/app/public/
+
+Public Symlink: laravel_backend/public/storage → storage/app/public/
+
+Directory Structure:
+  storage/app/public/
+  ├── payment_proofs/              (GCash payment proof images)
+  │   ├── payment_proof_1714567890_abc123.jpg
+  │   ├── payment_proof_1714567891_def456.jpg
+  │   └── ...
+  ├── pdo_checks/                  (PDO check images)
+  │   ├── pdo_check_1714567892_ghi789.jpg
+  │   ├── pdo_check_1714567893_jkl012.jpg
+  │   └── ...
+  ├── gcash/                       (Legacy, may contain old GCash proofs)
+  └── logos/                       (Business logos)
+
+URL Access:
+  http://127.0.0.1:8000/storage/payment_proofs/payment_proof_1714567890_abc123.jpg
+  http://127.0.0.1:8000/storage/pdo_checks/pdo_check_1714567892_ghi789.jpg
+
+File Upload Process:
+  1. Frontend: File selected via <input type="file"> or camera capture
+  2. Frontend: File added to FormData or converted to Blob
+  3. Backend: File received in Request
+  4. Backend: File validated (size, type, dimensions)
+  5. Backend: File stored using Storage::putFile() or $file->store()
+  6. Backend: File path saved to database (e.g., "payment_proofs/file.jpg")
+  7. Frontend: File displayed using: `${API_URL}/storage/${filePath}`
+
+
+====================================================================================================
+                          PART 7: KEY BUSINESS RULES
+====================================================================================================
+
+ORDER CREATION:
+  ✓ Orders start with status "pending" and do NOT deduct stock
+  ✓ Stock is only deducted when order status changes to "processing"
+  ✓ Customers can be walk-in (no customer record) for cash/COD orders
+  ✓ New customers require email address for account creation
+  ✓ Delivery orders require address and distance calculation
+
+PAYMENT VERIFICATION:
+  ✓ Cash payments are auto-verified (instant)
+  ✓ GCash payments require admin verification with proof images
+  ✓ PDO payments require two-stage approval (check approval + clearance)
+  ✓ Sale balances only update after payment is verified
+  ✓ Payments can be held for review if suspicious
+
+INSTALLMENT PAYMENTS:
+  ✓ Minimum 2 installments, maximum 12 installments
+  ✓ Sum of installments must equal order total
+  ✓ Each installment tracked independently with its own status
+  ✓ Installments can be paid early (before due date)
+  ✓ Overdue installments flagged with badges
+  ✓ First installment due today must be paid before order processes
+
+PDO HANDLING:
+  ✓ PDO check amount must be between order total and 10× order total
+  ✓ Check image required for approval
+  ✓ Check must be approved before awaiting clearance
+  ✓ Payment only verified after check clears at bank
+  ✓ Both standalone PDO payments and installment PDO payments supported
+
+STOCK MANAGEMENT:
+  ✓ Stock deducted when order moves to "processing"
+  ✓ Stock restored when order cancelled from "processing" or "shipped"
+  ✓ Stock levels displayed but not enforced at cart stage
+  ✓ Insufficient stock prevents order from processing
+  ✓ All stock changes logged in stock_logs table
+
+ORDER STATUS TRANSITIONS:
+  ✓ Pending → Processing (requires payment verified)
+  ✓ Processing → Shipped (for delivery orders)
+  ✓ Processing → Completed (for pickup orders)
+  ✓ Shipped → Delivered
+  ✓ Delivered → Return Requested (if issues)
+  ✓ Any stage → Cancelled (stock restored if was deducted)
+
+
+====================================================================================================
+                          PART 8: ERROR HANDLING
+====================================================================================================
+
+COMMON ERRORS AND SOLUTIONS:
+
+ERROR: "Insufficient stock for {product_name}"
+  Cause: Product stock < order quantity when processing order
+  Solution: Restock product or reduce order quantity
+
+ERROR: "Payment cannot be verified. Current status: {status}"
+  Cause: Trying to verify payment that's already verified or cancelled
+  Solution: Check payment current status, only verify pending/on_hold payments
+
+ERROR: "GCash reference number already exists"
+  Cause: Duplicate reference number (already used in another order)
+  Solution: Customer must provide correct unique reference number
+
+ERROR: "Cannot change status from '{old}' to '{new}'"
+  Cause: Invalid order status transition
+  Solution: Follow allowed transition flow
+
+ERROR: "Payment proof is required"
+  Cause: GCash payment submitted without proof image
+  Solution: Upload at least one payment proof screenshot
+
+ERROR: "Check image is required"
+  Cause: PDO payment submitted without check image
+  Solution: Upload photo of physical check
+
+ERROR: "Address not found in the Philippines"
+  Cause: Geocoding failed for entered delivery address
+  Solution: Enter more specific address or select from suggestions
+
+ERROR: "Sum of installments must equal order total"
+  Cause: Custom installment amounts don't add up to total
+  Solution: Adjust installment amounts to match total exactly
+
+
+====================================================================================================
+                             END OF GUIDE
+====================================================================================================
+
+This guide covers the complete payment and POS system architecture. For specific code 
+implementations, refer to:
+
+- Frontend: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx
+- Frontend: react_frontend/src/pages/customer/Shop/Shop.jsx
+- Backend: laravel_backend/app/Http/Controllers/SaleController.php
+- Backend: laravel_backend/app/Services/SaleService.php
+- Backend: laravel_backend/app/Services/PaymentService.php
+- Backend: laravel_backend/app/Services/StaggeredPaymentService.php
+
+For payment management UI:
+- react_frontend/src/pages/admin/Payments/PaymentTransactionsTab.jsx
+- react_frontend/src/pages/admin/Payments/PaymentPlansTab.jsx
+- react_frontend/src/pages/admin/Payments/PDOTab.jsx
+
+For architectural explanation:
+- PAYMENT_SYSTEM_ARCHITECTURE.md
+
+====================================================================================================

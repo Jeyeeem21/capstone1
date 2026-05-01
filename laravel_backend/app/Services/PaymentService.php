@@ -116,6 +116,7 @@ class PaymentService
                 'pdo_check_image' => $checkImagePaths,
                 'pdo_approval_status' => 'pending',
                 'status' => 'pending',
+                'payment_method' => 'pdo', // Set payment_method so queries can find this installment
                 'due_date' => isset($data['check_date']) ? $data['check_date'] : $installment->due_date,
             ]);
 
@@ -141,20 +142,28 @@ class PaymentService
     }
 
     /**
-     * Verify a GCash payment
+     * Verify a GCash payment or approve a PDO payment
      */
     public function verifyPayment(Payment $payment)
     {
-        if ($payment->status !== 'needs_verification' && $payment->status !== 'on_hold') {
-            throw new \Exception('Payment cannot be verified');
+        // Allow verification for: needs_verification, on_hold, or pending (for PDO)
+        if (!in_array($payment->status, ['needs_verification', 'on_hold', 'pending'])) {
+            throw new \Exception('Payment cannot be verified. Current status: ' . $payment->status);
         }
 
         return DB::transaction(function () use ($payment) {
-            $payment->update([
+            $updateData = [
                 'status' => 'verified',
                 'verified_by' => Auth::id(),
                 'verified_at' => now(),
-            ]);
+            ];
+
+            // If it's a PDO payment, also approve it
+            if ($payment->payment_method === 'pdo') {
+                $updateData['pdo_approval_status'] = 'approved';
+            }
+
+            $payment->update($updateData);
 
             // Now update sale balances
             $this->updateSaleBalances($payment->sale, $payment->amount);
@@ -162,12 +171,15 @@ class PaymentService
             // If linked to installment, update it
             if ($payment->installment_id) {
                 $installment = $payment->installment;
-                $installment->update([
-                    'amount_paid' => $installment->amount_paid + $payment->amount,
-                    'status' => 'verified',
-                    'paid_date' => now(),
-                    'payment_id' => $payment->id,
-                ]);
+                if ($installment) {
+                    $installment->update([
+                        'amount_paid' => $installment->amount_paid + $payment->amount,
+                        'status' => 'verified',
+                        'paid_date' => now(),
+                        'payment_id' => $payment->id,
+                        'pdo_approval_status' => $payment->payment_method === 'pdo' ? 'approved' : $installment->pdo_approval_status,
+                    ]);
+                }
             }
 
             return $payment;
@@ -179,14 +191,23 @@ class PaymentService
      */
     public function holdPayment(Payment $payment, string $reason)
     {
-        if ($payment->status !== 'needs_verification') {
-            throw new \Exception('Only pending payments can be put on hold');
+        // Allow holding for: needs_verification, pending (for PDO), or verified payments
+        if (!in_array($payment->status, ['needs_verification', 'pending', 'verified'])) {
+            throw new \Exception('Payment cannot be put on hold. Current status: ' . $payment->status);
         }
 
         $payment->update([
             'status' => 'on_hold',
             'hold_reason' => $reason,
         ]);
+
+        // Sync installment status so Payment Plans reflects the hold
+        if ($payment->installment_id) {
+            $installment = $payment->installment;
+            if ($installment && !in_array($installment->status, ['verified', 'paid'])) {
+                $installment->update(['status' => 'on_hold']);
+            }
+        }
 
         return $payment;
     }
@@ -205,7 +226,7 @@ class PaymentService
                 $sale->payment_status = $sale->calculatePaymentStatus();
                 $sale->save();
 
-                // If linked to installment, update it
+                // If linked to installment, revert it
                 if ($payment->installment_id) {
                     $installment = $payment->installment;
                     $installment->amount_paid = max(0, $installment->amount_paid - $payment->amount);
@@ -213,6 +234,17 @@ class PaymentService
                     $installment->paid_date = null;
                     $installment->payment_id = null;
                     $installment->save();
+                }
+            } elseif (in_array($payment->status, ['needs_verification', 'on_hold'])) {
+                // Payment was submitted but not yet verified — revert installment so customer can pay again
+                if ($payment->installment_id) {
+                    $installment = $payment->installment;
+                    if ($installment) {
+                        $installment->update([
+                            'status'     => 'pending',
+                            'payment_id' => null,
+                        ]);
+                    }
                 }
             }
 

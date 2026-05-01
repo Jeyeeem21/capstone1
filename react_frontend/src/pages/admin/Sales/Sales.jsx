@@ -17,14 +17,26 @@ const Sales = () => {
 
   // URL-based tab state — persists on reload and is shareable as a link
   const activeView = searchParams.get('view') || 'overview'; // 'overview' | 'predictions'
-  const activeStatusTab = searchParams.get('tab') || 'All';  // 'All' | status values
+  const activeStatusTab = (() => {
+    const t = searchParams.get('tab') || 'All';
+    const valid = ['All', 'Delivered & Completed', 'Returns & Cancelled'];
+    if (valid.includes(t)) return t;
+    if (['Delivered', 'Completed'].includes(t)) return 'Delivered & Completed';
+    if (['Returned', 'Cancelled', 'Voided'].includes(t)) return 'Returns & Cancelled';
+    return 'All';
+  })();
 
   const setActiveView = useCallback((view) => {
     setSearchParams(prev => { prev.set('view', view); return prev; }, { replace: true });
   }, [setSearchParams]);
 
   const setActiveStatusTab = useCallback((tab) => {
-    setSearchParams(prev => { prev.set('tab', tab); return prev; }, { replace: true });
+    setSearchParams(prev => { prev.set('tab', tab); prev.delete('sub'); return prev; }, { replace: true });
+  }, [setSearchParams]);
+
+  const statusSubFilter = searchParams.get('sub') || '';
+  const setStatusSubFilter = useCallback((v) => {
+    setSearchParams(prev => { if (v) prev.set('sub', v); else prev.delete('sub'); return prev; }, { replace: true });
   }, [setSearchParams]);
 
   const [chartPeriod, setChartPeriod] = useState('daily');
@@ -104,12 +116,14 @@ const Sales = () => {
 
   const statusTabs = [
     { value: 'All', label: 'All', icon: FileText, color: 'text-gray-600 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-700', activeBg: 'bg-button-500', activeText: 'text-white' },
-    { value: 'Delivered', label: 'Delivered', icon: CheckCircle, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', activeBg: 'bg-green-500', activeText: 'text-white' },
-    { value: 'Completed', label: 'Completed', icon: Store, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20', activeBg: 'bg-emerald-500', activeText: 'text-white' },
-    { value: 'Returned', label: 'Returned', icon: RotateCcw, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-900/20', activeBg: 'bg-orange-500', activeText: 'text-white' },
-    { value: 'Cancelled', label: 'Cancelled', icon: XCircle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white' },
-    { value: 'Voided', label: 'Voided', icon: Ban, color: 'text-gray-600 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-700', activeBg: 'bg-gray-50 dark:bg-gray-700/500', activeText: 'text-white' },
+    { value: 'Delivered & Completed', label: 'Delivered & Completed', icon: CheckCircle, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20', activeBg: 'bg-green-500', activeText: 'text-white', statuses: ['Delivered', 'Completed'] },
+    { value: 'Returns & Cancelled', label: 'Returns & Cancelled', icon: RotateCcw, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20', activeBg: 'bg-red-500', activeText: 'text-white', statuses: ['Returned', 'Cancelled', 'Voided'] },
   ];
+
+  const getTabStatuses = (tabValue) => {
+    const tab = statusTabs.find(t => t.value === tabValue);
+    return tab?.statuses || [tabValue];
+  };
 
   const SALES_STATUS_SORT = { 'Completed': 0, 'Delivered': 1, 'Voided': 2, 'Cancelled': 3, 'Returned': 4 };
 
@@ -117,7 +131,8 @@ const Sales = () => {
     if (activeStatusTab === 'All') {
       return [...sales].sort((a, b) => (SALES_STATUS_SORT[a.status_display] ?? 99) - (SALES_STATUS_SORT[b.status_display] ?? 99));
     }
-    return sales.filter(s => s.status_display === activeStatusTab);
+    const statuses = getTabStatuses(activeStatusTab);
+    return sales.filter(s => statuses.includes(s.status_display));
   }, [sales, activeStatusTab]);
 
   // Record Payment handlers
@@ -321,13 +336,18 @@ const Sales = () => {
   }, [sales, isInChartScope, activeChartPoint, matchesChartPoint, chartScopeActive]);
 
   const chartFilteredSalesByTab = useMemo(() => {
-    let result = activeStatusTab === 'All'
-      ? [...chartFilteredSales].sort((a, b) => (SALES_STATUS_SORT[a.status_display] ?? 99) - (SALES_STATUS_SORT[b.status_display] ?? 99))
-      : chartFilteredSales.filter(s => s.status_display === activeStatusTab);
+    let result;
+    if (activeStatusTab === 'All') {
+      result = [...chartFilteredSales].sort((a, b) => (SALES_STATUS_SORT[a.status_display] ?? 99) - (SALES_STATUS_SORT[b.status_display] ?? 99));
+    } else {
+      const statuses = getTabStatuses(activeStatusTab);
+      result = chartFilteredSales.filter(s => statuses.includes(s.status_display));
+    }
+    if (statusSubFilter) result = result.filter(s => s.status_display === statusSubFilter);
     if (payStatusFilter) result = result.filter(s => (s.payment_status || 'paid') === payStatusFilter);
     if (payMethodFilter) result = result.filter(s => s.raw_payment_method === payMethodFilter);
     return result;
-  }, [chartFilteredSales, activeStatusTab, payStatusFilter, payMethodFilter]);
+  }, [chartFilteredSales, activeStatusTab, statusSubFilter, payStatusFilter, payMethodFilter]);
 
   const chartFilteredDelivered = useMemo(() => chartFilteredSales.filter(s => s.status === 'delivered' || s.status === 'completed'), [chartFilteredSales]);
 
@@ -683,12 +703,12 @@ const Sales = () => {
                 {statusTabs.map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeStatusTab === tab.value;
-                  const count = tab.value === 'All' ? sales.length : sales.filter(s => s.status_display === tab.value).length;
+                  const count = tab.value === 'All' ? sales.length : sales.filter(s => (tab.statuses || [tab.value]).includes(s.status_display)).length;
                   return (
                     <button
                       key={tab.value}
-                      onClick={() => setActiveStatusTab(tab.value)}
-                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-xs font-semibold transition-all whitespace-nowrap border-2 border-b-0 ${
+                      onClick={() => { setActiveStatusTab(tab.value); setStatusSubFilter(''); }}
+                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-xs font-semibold transition-all whitespace-nowrap border-2 border-b-0 ${`
                         isActive
                           ? `${tab.activeBg} ${tab.activeText} border-transparent shadow-md`
                           : `${tab.bg} ${tab.color} border-transparent hover:shadow-sm`
@@ -710,7 +730,7 @@ const Sales = () => {
 
           <DataTable
             title="Sales Records"
-            subtitle={activeStatusTab === 'All' ? 'All completed transactions' : `Showing ${activeStatusTab.toLowerCase()} transactions`}
+            subtitle={activeStatusTab === 'All' ? 'All completed transactions' : statusSubFilter ? `Showing ${statusSubFilter.toLowerCase()} transactions` : `Showing ${activeStatusTab.toLowerCase()} transactions`}
             columns={columns}
             data={chartFilteredSalesByTab}
             searchPlaceholder="Search sales..."
@@ -718,6 +738,29 @@ const Sales = () => {
             onRowDoubleClick={handleView}
             headerRight={
               <div className="flex items-center gap-2 flex-wrap">
+                {activeStatusTab === 'Delivered & Completed' && (
+                  <select
+                    value={statusSubFilter}
+                    onChange={e => setStatusSubFilter(e.target.value)}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-primary-200 dark:border-primary-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-button-500"
+                  >
+                    <option value="">All (Delivered & Completed)</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                )}
+                {activeStatusTab === 'Returns & Cancelled' && (
+                  <select
+                    value={statusSubFilter}
+                    onChange={e => setStatusSubFilter(e.target.value)}
+                    className="text-xs px-2 py-1.5 rounded-lg border border-primary-200 dark:border-primary-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-button-500"
+                  >
+                    <option value="">All (Returns & Cancelled)</option>
+                    <option value="Returned">Returned</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Voided">Voided</option>
+                  </select>
+                )}
                 <select
                   value={payStatusFilter}
                   onChange={e => setPayStatusFilter(e.target.value)}

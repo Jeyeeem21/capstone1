@@ -217,6 +217,14 @@ class SaleController extends Controller
                             if (!empty($validated['payment_proof'])) {
                                 $paymentData['payment_proof'] = $validated['payment_proof'];
                             }
+
+                            // Add PDO details when first installment is paid via check
+                            if (($validated['payment_method'] ?? null) === 'pdo') {
+                                $paymentData['pdo_check_number'] = $validated['pdo_check_number'] ?? null;
+                                $paymentData['pdo_check_bank'] = $validated['pdo_bank_name'] ?? null;
+                                $paymentData['pdo_check_date'] = $validated['pdo_check_date'] ?? null;
+                                $paymentData['pdo_check_image'] = $validated['pdo_check_image'] ?? [];
+                            }
                             
                             $this->staggeredPaymentService->recordInstallmentPayment($firstInstallment, $paymentData);
                         }
@@ -672,17 +680,26 @@ class SaleController extends Controller
     {
         try {
             $validated = $request->validate([
-                'payment_method' => 'required|string|in:cash,gcash',
-                'reference_number' => 'nullable|string|unique:sales,reference_number',
-                'amount_tendered' => 'nullable|numeric|min:0',
-                'payment_proof' => 'nullable|array',
-                'payment_proof.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+                'payment_method'    => 'required|string|in:cash,gcash,pdo',
+                'reference_number'  => 'nullable|string|unique:sales,reference_number',
+                'amount_tendered'   => 'nullable|numeric|min:0',
+                'payment_proof'     => 'nullable|array',
+                'payment_proof.*'   => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+                'pdo_check_number'  => 'nullable|string',
+                'pdo_check_date'    => 'nullable|date',
+                'pdo_bank_name'     => 'nullable|string',
+                'pdo_amount'        => 'nullable|numeric|min:0',
+                'pdo_check_image'   => 'nullable|array',
+                'pdo_check_image.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             ]);
 
             $data = [
-                'payment_method' => $validated['payment_method'],
+                'payment_method'   => $validated['payment_method'],
                 'reference_number' => $validated['reference_number'] ?? null,
-                'amount_tendered' => $validated['amount_tendered'] ?? null,
+                'amount_tendered'  => $validated['amount_tendered'] ?? null,
+                'pdo_check_number' => $validated['pdo_check_number'] ?? null,
+                'pdo_check_date'   => $validated['pdo_check_date'] ?? null,
+                'pdo_bank_name'    => $validated['pdo_bank_name'] ?? null,
             ];
 
             // Handle payment proof file uploads
@@ -692,6 +709,15 @@ class SaleController extends Controller
                     $proofPaths[] = $file->store('payment_proofs', 'public');
                 }
                 $data['payment_proof'] = $proofPaths;
+            }
+
+            // Handle PDO check image uploads
+            if ($request->hasFile('pdo_check_image')) {
+                $pdoPaths = [];
+                foreach ($request->file('pdo_check_image') as $file) {
+                    $pdoPaths[] = $file->store('pdo_checks', 'public');
+                }
+                $data['pdo_check_image'] = $pdoPaths;
             }
 
             $sale = $this->saleService->markPaid($id, $data);

@@ -26,6 +26,87 @@ const paymentMethods = [
   { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#8b5cf6' },
 ];
 
+const autoPrintReceipt = (orderData, bizName = 'KJP Ricemill', copies = 1) => {
+  const win = window.open('', '_blank', 'width=480,height=660');
+  if (!win) return;
+
+  const payStatus = orderData.paymentMethod === 'PAY LATER' || orderData.paymentMethod === 'Pay Later' ? 'UNPAID' : 'PAID';
+  const payColor = payStatus === 'UNPAID' ? '#dc2626' : '#16a34a';
+
+  const itemRows = (orderData.items || []).map(item => `
+    <tr>
+      <td>${item.name}${item.weight_formatted ? ` (${item.weight_formatted})` : ''}</td>
+      <td class="c">${item.quantity}</td>
+      <td class="r">&#8369;${(item.price || 0).toLocaleString()}</td>
+      <td class="r">&#8369;${((item.price || 0) * item.quantity).toLocaleString()}</td>
+    </tr>`).join('');
+
+  const receiptHTML = `
+  <div class="rcpt">
+    <div class="hdr">
+      <div class="biz">${bizName}</div>
+      <div class="sub">OFFICIAL RECEIPT</div>
+    </div>
+    <hr class="d"/>
+    <table class="meta">
+      <tr><td class="ml">TXN ID:</td><td class="mv">${orderData.transactionId}</td></tr>
+      <tr><td class="ml">Date:</td><td class="mv">${new Date().toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })} ${orderData.time || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })}</td></tr>
+      <tr><td class="ml">Customer:</td><td class="mv">${orderData.customerName || 'Walk-in'}</td></tr>
+      <tr><td class="ml">Type:</td><td class="mv">${orderData.forDelivery || orderData.isDelivery ? 'Delivery' : 'Pick Up'}</td></tr>
+      <tr><td class="ml">Payment:</td><td class="mv">${orderData.paymentMethod} &mdash; <span style="color:${payColor};font-weight:700">${payStatus}</span></td></tr>
+    </table>
+    <hr class="d"/>
+    <table class="items">
+      <thead><tr><th>Product</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Subtotal</th></tr></thead>
+      <tbody>${itemRows}</tbody>
+    </table>
+    <hr class="d"/>
+    <table class="totals">
+      ${(orderData.deliveryFee > 0) ? `<tr><td class="tl">Delivery Fee</td><td class="tr_">&#8369;${Number(orderData.deliveryFee).toLocaleString()}</td></tr>` : ''}
+      <tr class="grand"><td>TOTAL</td><td class="tr_">&#8369;${Number(orderData.total).toLocaleString()}</td></tr>
+    </table>
+    <hr class="d"/>
+    <div class="status">Status: <strong>Pending</strong></div>
+    <div class="ftr">Thank you! &mdash; System-generated</div>
+  </div>`;
+
+  const allCopies = Array.from({ length: copies }, (_, i) =>
+    i < copies - 1 ? `${receiptHTML}<div class="pb"></div>` : receiptHTML
+  ).join('');
+
+  win.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+    <title>Receipt &mdash; ${orderData.transactionId}</title>
+    <style>
+      @page{size:4.25in 5.5in;margin:7mm}
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:9px;color:#111;background:#fff}
+      .rcpt{width:100%}
+      .hdr{text-align:center;padding-bottom:5px}
+      .biz{font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+      .sub{font-size:8px;color:#555;font-weight:600;letter-spacing:1px;margin-top:1px}
+      hr.d{border:none;border-top:1px dashed #aaa;margin:4px 0}
+      table.meta{width:100%;border-collapse:collapse;font-size:8.5px;margin:3px 0}
+      table.meta td{padding:1.5px 2px}
+      .ml{color:#555;font-weight:600;white-space:nowrap;padding-right:6px;width:52px}
+      .mv{color:#111}
+      table.items{width:100%;border-collapse:collapse;font-size:8px;margin:3px 0}
+      table.items th{padding:2.5px 3px;text-align:left;font-weight:700;border-bottom:1px solid #ccc;font-size:8px}
+      table.items td{padding:2px 3px;border-bottom:1px solid #eee}
+      .c{text-align:center}.r{text-align:right}
+      table.totals{width:100%;border-collapse:collapse;font-size:8.5px;margin:2px 0}
+      table.totals td{padding:1.5px 3px}
+      .tl{color:#555;text-align:left}.tr_{text-align:right}
+      .grand td{font-size:10px;font-weight:700;padding:3px;border-top:1px solid #333;border-bottom:1px solid #333}
+      .status{font-size:8px;margin-top:4px;text-align:center}
+      .ftr{font-size:7.5px;color:#999;text-align:center;margin-top:3px;padding-top:3px;border-top:1px dashed #ccc}
+      .pb{page-break-after:always}
+      @media print{.pb{page-break-after:always}}
+    </style></head><body>${allCopies}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 350);
+};
+
 const Shop = () => {
   const { theme } = useTheme();
   const { user } = useAuth();
@@ -349,12 +430,20 @@ const Shop = () => {
       if (paymentMethod === 'gcash') {
         formData.append('reference_number', gcashReference);
         paymentProofFiles.forEach(file => formData.append('payment_proof[]', file));
+        console.log('GCash payment - Reference:', gcashReference, 'Proof files:', paymentProofFiles.length);
       }
       if (forDelivery) {
         formData.append('delivery_fee', deliveryFee);
         if (distanceKm) formData.append('distance_km', parseFloat(distanceKm));
         formData.append('delivery_address', deliveryAddress);
       }
+
+      // Debug: Log FormData contents
+      console.log('Submitting order with:');
+      console.log('- Payment method:', paymentMethod);
+      console.log('- Items:', currentOrder.length);
+      console.log('- Amount tendered:', paymentMethod === 'pay_later' ? 0 : orderTotal);
+      console.log('- For delivery:', forDelivery);
 
       const response = await apiClient.post('/sales/order', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -370,8 +459,13 @@ const Shop = () => {
       refetchProducts();
 
       const method = paymentMethods.find(m => m.value === paymentMethod);
-      setLastOrder({
-        items: [...currentOrder],
+      const orderData = {
+        items: currentOrder.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          weight_formatted: item.weight_formatted,
+        })),
         total: orderTotal,
         itemCount: currentOrder.length,
         paymentMethod: method?.label || 'N/A',
@@ -382,7 +476,22 @@ const Shop = () => {
         isDelivery: forDelivery,
         deliveryAddress: forDelivery ? deliveryAddress : null,
         deliveryFee: forDelivery ? deliveryFee : 0,
-      });
+        transactionId: response.data?.transaction_id ?? `ORD-${Date.now()}`,
+        customerName: user?.name || 'Customer',
+        time: new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' }),
+        forDelivery: forDelivery,
+      };
+      setLastOrder(orderData);
+      
+      // Auto-print receipt
+      setTimeout(() => {
+        autoPrintReceipt(
+          orderData,
+          bizSettings?.business_name || 'KJP Ricemill',
+          bizSettings?.receipt_copies || 1
+        );
+      }, 500);
+      
       setShowPaymentModal(false);
       setShowOrderModal(true);
       clearOrder();
@@ -395,8 +504,18 @@ const Shop = () => {
       setPaymentProofFiles([]);
       setPaymentProofPreviews([]);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to place order. Please try again.';
-      toast.error(msg);
+      console.error('Order submission error:', err);
+      console.error('Response data:', err?.response?.data);
+      
+      // Handle validation errors (422)
+      if (err?.response?.status === 422 && err?.response?.data?.errors) {
+        const errors = err.response.data.errors;
+        const errorMessages = Object.values(errors).flat();
+        errorMessages.forEach(msg => toast.error(msg));
+      } else {
+        const msg = err?.response?.data?.message || err?.message || 'Failed to place order. Please try again.';
+        toast.error(msg);
+      }
     } finally {
       setSubmitting(false);
     }

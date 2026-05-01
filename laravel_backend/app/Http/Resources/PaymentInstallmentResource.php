@@ -38,6 +38,16 @@ class PaymentInstallmentResource extends JsonResource
             ] : null,
             'payment_id' => $this->payment_id,
             'payment' => $this->payment ? new PaymentResource($this->payment) : null,
+            'sale' => $this->whenLoaded('sale', function () {
+                return [
+                    'id' => $this->sale->id,
+                    'transaction_id' => $this->sale->transaction_id,
+                    'customer' => $this->sale->customer ? [
+                        'id' => $this->sale->customer->id,
+                        'name' => $this->sale->customer->name,
+                    ] : null,
+                ];
+            }),
             'notes' => $this->notes,
             'created_at' => $this->created_at->toISOString(),
             'updated_at' => $this->updated_at->toISOString(),

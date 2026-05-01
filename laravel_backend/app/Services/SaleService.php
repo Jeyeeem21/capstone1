@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\Payment;
+use App\Models\PaymentInstallment;
 use App\Models\Product;
 use App\Models\Customer;
 use App\Models\StockLog;
@@ -184,7 +185,7 @@ class SaleService
                     'paid_at' => now(),
                     'notes' => 'Initial payment at POS',
                 ]);
-            } elseif ($paymentMethod === 'pdo' && !empty($data['pdo_check_number'])) {
+            } elseif (!$isStaggered && $paymentMethod === 'pdo' && !empty($data['pdo_check_number'])) {
                 // Create PDO payment record for admin approval
                 Payment::create([
                     'sale_id' => $sale->id,
@@ -220,49 +221,87 @@ class SaleService
                 throw new \Exception('This order is already marked as paid.');
             }
 
-            $updateData = [
-                'payment_status' => 'paid',
-                'paid_at' => now(),
-                'amount_paid' => $sale->total,
-                'balance_remaining' => 0,
-            ];
+            $paymentMethodForUpdate = $data['payment_method'] ?? $sale->payment_method ?? 'cash';
+            $isGCashOrPdo = in_array($paymentMethodForUpdate, ['gcash', 'pdo']);
 
-            // Allow changing payment method when paying (e.g., pay_later → cash)
-            if (!empty($data['payment_method'])) {
-                $updateData['payment_method'] = $data['payment_method'];
+            // For GCash/PDO: do NOT immediately mark sale as paid — wait for verification
+            if ($isGCashOrPdo) {
+                $updateData = [];
+                if (!empty($data['payment_method'])) {
+                    $updateData['payment_method'] = $data['payment_method'];
+                }
+                if (!empty($data['reference_number'])) {
+                    $updateData['reference_number'] = $data['reference_number'];
+                }
+                if (!empty($updateData)) {
+                    $sale->update($updateData);
+                }
+            } else {
+                // Cash: mark as paid immediately
+                $updateData = [
+                    'payment_status' => 'paid',
+                    'paid_at' => now(),
+                    'amount_paid' => $sale->total,
+                    'balance_remaining' => 0,
+                ];
+
+                if (!empty($data['payment_method'])) {
+                    $updateData['payment_method'] = $data['payment_method'];
+                }
+                if (!empty($data['reference_number'])) {
+                    $updateData['reference_number'] = $data['reference_number'];
+                }
+                if (!empty($data['amount_tendered'])) {
+                    $updateData['amount_tendered'] = (float) $data['amount_tendered'];
+                    $updateData['change_amount'] = max(0, (float) $data['amount_tendered'] - (float) $sale->total);
+                }
+                if (!empty($data['payment_proof'])) {
+                    $updateData['payment_proof'] = $data['payment_proof'];
+                }
+
+                $sale->update($updateData);
             }
-
-            if (!empty($data['reference_number'])) {
-                $updateData['reference_number'] = $data['reference_number'];
-            }
-
-            if (!empty($data['amount_tendered'])) {
-                $updateData['amount_tendered'] = (float) $data['amount_tendered'];
-                $updateData['change_amount'] = max(0, (float) $data['amount_tendered'] - (float) $sale->total);
-            }
-
-            if (!empty($data['payment_proof'])) {
-                $updateData['payment_proof'] = $data['payment_proof'];
-            }
-
-            $sale->update($updateData);
 
             // Create a Payment record so it appears in the payment management system
             $paymentMethod = $data['payment_method'] ?? $sale->payment_method ?? 'cash';
             $isGCash = $paymentMethod === 'gcash';
-            Payment::create([
-                'sale_id'          => $sale->id,
-                'amount'           => $sale->total,
-                'payment_method'   => $paymentMethod,
-                'reference_number' => $data['reference_number'] ?? null,
-                'payment_proof'    => $data['payment_proof'] ?? null,
-                'status'           => $isGCash ? 'needs_verification' : 'verified',
-                'notes'            => 'Recorded via order mark-as-paid',
-                'received_by'      => Auth::id(),
-                'verified_by'      => $isGCash ? null : Auth::id(),
-                'verified_at'      => $isGCash ? null : now(),
-                'paid_at'          => now(),
+            $isPdo = $paymentMethod === 'pdo';
+            $needsVerification = $isGCash || $isPdo;
+            $payment = Payment::create([
+                'sale_id'             => $sale->id,
+                'amount'              => $sale->total,
+                'payment_method'      => $paymentMethod,
+                'reference_number'    => $data['reference_number'] ?? null,
+                'payment_proof'       => $data['payment_proof'] ?? null,
+                'status'              => $needsVerification ? 'needs_verification' : 'verified',
+                'notes'               => 'Full payment recorded via order mark-as-paid',
+                'received_by'         => Auth::id(),
+                'verified_by'         => $needsVerification ? null : Auth::id(),
+                'verified_at'         => $needsVerification ? null : now(),
+                'paid_at'             => now(),
+                'pdo_check_number'    => $data['pdo_check_number'] ?? null,
+                'pdo_check_bank'      => $data['pdo_bank_name'] ?? null,
+                'pdo_check_date'      => $data['pdo_check_date'] ?? null,
+                'pdo_check_image'     => $data['pdo_check_image'] ?? null,
+                'pdo_approval_status' => $isPdo ? 'pending' : null,
             ]);
+
+            // If staggered, close all remaining installments so they show in payment plans
+            if ($sale->is_staggered) {
+                $pendingInstallments = PaymentInstallment::where('sale_id', $sale->id)
+                    ->whereIn('status', ['pending', 'partial', 'overdue'])
+                    ->get();
+
+                foreach ($pendingInstallments as $inst) {
+                    $inst->update([
+                        'amount_paid'    => $inst->amount_expected,
+                        'status'         => $needsVerification ? 'pending' : 'verified',
+                        'paid_date'      => $needsVerification ? null : now(),
+                        'payment_id'     => $payment->id,
+                        'payment_method' => $paymentMethod,
+                    ]);
+                }
+            }
 
             $this->clearCache();
 

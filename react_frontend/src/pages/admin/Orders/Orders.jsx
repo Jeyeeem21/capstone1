@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer } from 'lucide-react';
+import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer, Upload } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -9,6 +9,7 @@ import useDataFetch, { invalidateCache } from '../../../hooks/useDataFetch';
 import { useAuth } from '../../../context/AuthContext';
 import { useBusinessSettings } from '../../../context/BusinessSettingsContext';
 import { suppressNotifToasts } from '../../../utils/notifToastGuard';
+import InstallmentSetupInline from '../../../components/payments/InstallmentSetupInline';
 
 // ─── Print Receipt Helper ─────────────────────────────────────────────────────
 const printOrderReceipt = (order, bizName = 'KJP Ricemill', copies = 1) => {
@@ -129,6 +130,13 @@ const AdminOrders = () => {
   const [markReturnOrder, setMarkReturnOrder] = useState(null);
   const [rejectReturnOrder, setRejectReturnOrder] = useState(null);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [isPayInstallmentChoiceOpen, setIsPayInstallmentChoiceOpen] = useState(false);
+  const [isPayInstallmentSetupOpen, setIsPayInstallmentSetupOpen] = useState(false);
+  const [payIsStaggered, setPayIsStaggered] = useState(false);
+  const [payInstallmentPlan, setPayInstallmentPlan] = useState([]);
+  const [payCurrentInstallment, setPayCurrentInstallment] = useState(null);
+  const [shakePayInstallmentModal, setShakePayInstallmentModal] = useState(false);
+  const payInstallmentSetupRef = useRef(null);
   const [payOrder, setPayOrder] = useState(null);
   const [payMethod, setPayMethod] = useState('cash');
   const [payCashTendered, setPayCashTendered] = useState('');
@@ -141,6 +149,16 @@ const AdminOrders = () => {
   const payVideoRef = useRef(null);
   const payStreamRef = useRef(null);
   const payProofInputRef = useRef(null);
+  // PDO state for pay modal
+  const [payPdoCheckFiles, setPayPdoCheckFiles] = useState([]);
+  const [payPdoCheckNumber, setPayPdoCheckNumber] = useState('');
+  const [payPdoCheckNumberError, setPayPdoCheckNumberError] = useState('');
+  const [payPdoCheckDate, setPayPdoCheckDate] = useState('');
+  const [payPdoBankName, setPayPdoBankName] = useState('');
+  const [payPdoAmount, setPayPdoAmount] = useState('');
+  const [payPdoShowCamera, setPayPdoShowCamera] = useState(false);
+  const payPdoVideoRef = useRef(null);
+  const payPdoStreamRef = useRef(null);
   const [activeStatusTab, setActiveStatusTab] = useState(() => {
     const tabFromUrl = searchParams.get('tab');
     const validTabs = ['All', 'Pending', 'Processing', 'Shipped', 'Delivered & Completed', 'Returns & Cancelled'];
@@ -432,7 +450,8 @@ const AdminOrders = () => {
   }, [shipOrder, selectedDriverId, deliveryDate, deliveryNotes, saving, refetch, toast]);
 
   // Open payment modal for an order
-  const handleOpenPayModal = useCallback((order) => {
+  const handleOpenPayModal = useCallback(async (order) => {
+    // Reset all pay state
     setPayOrder(order);
     setPayMethod('cash');
     setPayCashTendered('');
@@ -441,7 +460,40 @@ const AdminOrders = () => {
     setPayProofFiles([]);
     setPayProofPreviews([]);
     setPayShowCamera(false);
-    setIsPayModalOpen(true);
+    setPayInstallmentPlan([]);
+    setPayCurrentInstallment(null);
+    setPayIsStaggered(false);
+    setPayPdoCheckFiles([]);
+    setPayPdoCheckNumber('');
+    setPayPdoCheckNumberError('');
+    setPayPdoCheckDate('');
+    setPayPdoBankName('');
+    setPayPdoAmount('');
+    setPayPdoShowCamera(false);
+    setIsPayModalOpen(false);
+    setIsPayInstallmentSetupOpen(false);
+
+    // For already-staggered orders, pre-fetch the next installment so the
+    // choice modal shows the correct amount immediately (no second fetch needed).
+    if (order.is_staggered) {
+      try {
+        const response = await apiClient.get(`/payment-plans/${order.id}`);
+        if (response.success) {
+          const installments = response.data?.payment_installments || response.data?.paymentInstallments || [];
+          const sorted = [...installments].sort((a, b) => (a.installment_number || 0) - (b.installment_number || 0));
+          const next = sorted.find(inst => {
+            const expected = parseFloat(inst.amount_expected ?? inst.amount ?? 0);
+            const paid = parseFloat(inst.amount_paid ?? 0);
+            const status = String(inst.status || '').toLowerCase();
+            return expected > 0 && (['pending', 'overdue', 'partial'].includes(status) || (expected - paid) > 0.01);
+          }) || null;
+          setPayCurrentInstallment(next);
+          setPayIsStaggered(true);
+        }
+      } catch { /* silent — choice modal still opens, amount will fall back */ }
+    }
+
+    setIsPayInstallmentChoiceOpen(true);
   }, []);
 
   // Confirm deliver with proof upload
@@ -758,6 +810,40 @@ const AdminOrders = () => {
     }
   }, [toast]);
 
+  const stopPayPdoCamera = useCallback(() => {
+    if (payPdoStreamRef.current) {
+      payPdoStreamRef.current.getTracks().forEach(t => t.stop());
+      payPdoStreamRef.current = null;
+    }
+    setPayPdoShowCamera(false);
+  }, []);
+
+  const startPayPdoCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      payPdoStreamRef.current = stream;
+      setPayPdoShowCamera(true);
+      setTimeout(() => { if (payPdoVideoRef.current) payPdoVideoRef.current.srcObject = stream; }, 100);
+    } catch {
+      toast.error('Camera Error', 'Could not access camera.');
+    }
+  }, [toast]);
+
+  const capturePayPdoPhoto = useCallback(() => {
+    if (!payPdoVideoRef.current) return;
+    const video = payPdoVideoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const file = new File([blob], `pdo_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setPayPdoCheckFiles(prev => [...prev, file]);
+      stopPayPdoCamera();
+    }, 'image/jpeg', 0.85);
+  }, [stopPayPdoCamera]);
+
   const capturePayPhoto = useCallback(() => {
     if (!payVideoRef.current) return;
     const video = payVideoRef.current;
@@ -806,45 +892,302 @@ const AdminOrders = () => {
     }, 500);
   }, []);
 
-  const handleConfirmPay = useCallback(async () => {
+  const payDueAmount = useMemo(() => {
+    if (payIsStaggered && payCurrentInstallment) {
+      const installmentAmount = parseFloat(payCurrentInstallment.amount_expected ?? payCurrentInstallment.amount ?? 0);
+      if (!Number.isNaN(installmentAmount) && installmentAmount > 0) {
+        return installmentAmount;
+      }
+    }
+
+    const remaining = parseFloat(payOrder?.balance_remaining ?? 0);
+    if (!Number.isNaN(remaining) && remaining > 0) {
+      return remaining;
+    }
+
+    const total = parseFloat(payOrder?.total ?? 0);
+    return Number.isNaN(total) ? 0 : total;
+  }, [payIsStaggered, payCurrentInstallment, payOrder]);
+
+  const payScheduleTotalAmount = useMemo(() => {
+    const total = parseFloat(payOrder?.total ?? 0);
+    return Number.isNaN(total) ? 0 : total;
+  }, [payOrder]);
+
+  const getPayErrorMessage = useCallback((error, fallbackMessage) => {
+    const apiMessage = error?.response?.data?.message;
+    const validationErrors = error?.response?.data?.errors;
+
+    if (validationErrors && typeof validationErrors === 'object') {
+      const firstValidationError = Object.values(validationErrors)
+        .flat()
+        .find(Boolean);
+
+      if (firstValidationError) {
+        return apiMessage ? `${apiMessage} ${firstValidationError}` : firstValidationError;
+      }
+    }
+
+    return apiMessage || error?.message || fallbackMessage;
+  }, []);
+
+  const handleProceedInstallmentFlow = useCallback(async () => {
+    if (!payOrder || saving) return;
+
+    // Non-staggered: open installment setup
+    if (!payOrder.is_staggered) {
+      setPayIsStaggered(true);
+      setIsPayInstallmentChoiceOpen(false);
+      setIsPayInstallmentSetupOpen(true);
+      return;
+    }
+
+    // Already-staggered: installment was pre-fetched in handleOpenPayModal.
+    // If it loaded successfully, open payment modal directly.
+    if (payCurrentInstallment) {
+      setIsPayInstallmentChoiceOpen(false);
+      setIsPayInstallmentSetupOpen(false);
+      setIsPayModalOpen(true);
+      return;
+    }
+
+    // Fallback: pre-fetch failed silently, try again now.
+    setSaving(true);
+    try {
+      const response = await apiClient.get(`/payment-plans/${payOrder.id}`);
+      if (!response.success) throw response;
+
+      const installments = response.data?.payment_installments || response.data?.paymentInstallments || [];
+      const sorted = [...installments].sort((a, b) => (a.installment_number || 0) - (b.installment_number || 0));
+      const next = sorted.find(inst => {
+        const expected = parseFloat(inst.amount_expected ?? inst.amount ?? 0);
+        const paid = parseFloat(inst.amount_paid ?? 0);
+        const status = String(inst.status || '').toLowerCase();
+        return expected > 0 && (['pending', 'overdue', 'partial'].includes(status) || (expected - paid) > 0.01);
+      }) || null;
+
+      if (!next) {
+        setIsPayInstallmentChoiceOpen(false);
+        setPayOrder(null);
+        setPayIsStaggered(false);
+        setPayCurrentInstallment(null);
+        toast.error('No Pending Installment', 'This order has no pending installment to collect.');
+        return;
+      }
+
+      setPayIsStaggered(true);
+      setPayCurrentInstallment(next);
+      setPayInstallmentPlan([]);
+      setIsPayInstallmentChoiceOpen(false);
+      setIsPayInstallmentSetupOpen(false);
+      setIsPayModalOpen(true);
+    } catch (error) {
+      toast.error('Installment Load Failed', getPayErrorMessage(error, 'Failed to load installment details'));
+    } finally {
+      setSaving(false);
+    }
+  }, [payOrder, saving, payCurrentInstallment, toast, getPayErrorMessage]);
+
+  const handleSavePayInstallmentSchedule = useCallback(async () => {
     if (saving || !payOrder) return;
-    if (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < payOrder.total)) return;
-    if (payMethod === 'gcash' && (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || payGcashRefError)) return;
+
+    if (payInstallmentSetupRef.current) {
+      const valid = payInstallmentSetupRef.current.validate();
+      if (!valid) {
+        setShakePayInstallmentModal(true);
+        setTimeout(() => setShakePayInstallmentModal(false), 500);
+        return;
+      }
+    }
+
+    if (!payInstallmentPlan || payInstallmentPlan.length === 0) {
+      setShakePayInstallmentModal(true);
+      setTimeout(() => setShakePayInstallmentModal(false), 500);
+      return;
+    }
 
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('payment_method', payMethod);
-      if (payMethod === 'cash') {
-        formData.append('amount_tendered', parseFloat(payCashTendered));
-      }
-      if (payMethod === 'gcash' && payGcashRef) {
-        formData.append('reference_number', payGcashRef);
-      }
-      payProofFiles.forEach(file => formData.append('payment_proof[]', file));
+      const installmentsPayload = payInstallmentPlan.map((inst, idx) => ({
+        installment_number: inst.installment_number ?? (idx + 1),
+        amount: parseFloat(inst.amount || 0),
+        due_date: inst.due_date || null,
+        // Required by current controller validator.
+        payment_method: 'cash',
+        pay_now: false,
+      }));
 
-      const response = await apiClient.post(`/sales/${payOrder.id}/pay`, formData);
-      if (response.success) {
-        // Optimistic: mark as paid instantly
-        optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, payment_status: 'paid', payment_method: payMethod } : o));
+      const response = await apiClient.post(`/sales/${payOrder.id}/payment-schedule`, {
+        installments: installmentsPayload,
+      });
+
+      if (!response.success) {
+        throw response;
+      }
+
+      const installments = response.data?.installments || response.data?.data?.installments || [];
+      const sortedInstallments = [...installments].sort((a, b) => (a.installment_number || 0) - (b.installment_number || 0));
+      const firstInstallment = sortedInstallments[0] || null;
+
+      // Use local date to avoid timezone mismatch
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+      // Parse due_date to LOCAL date string — backend may return "YYYY-MM-DDTHH:MM:SSZ" (UTC),
+      // so we must convert to local time before comparing (avoids UTC offset shifting the date by 1 day)
+      const parseLocalDate = (dateStr) => {
+        if (!dateStr) return '';
+        const d = new Date(String(dateStr));
+        if (isNaN(d.getTime())) return String(dateStr).slice(0, 10);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      };
+      const firstDueDate = parseLocalDate(firstInstallment?.due_date);
+
+      setIsPayInstallmentSetupOpen(false);
+      setIsPayInstallmentChoiceOpen(false);
+
+      if (firstInstallment && firstDueDate === today) {
+        setPayIsStaggered(true);
+        setPayCurrentInstallment(firstInstallment);
+        setIsPayModalOpen(true);
+        toast.success('Installment Schedule Saved', 'Proceeding to first payment due today.');
+      } else {
+        setPayOrder(null);
+        setPayInstallmentPlan([]);
+        setPayCurrentInstallment(null);
+        setPayIsStaggered(false);
         invalidateCache('/sales');
+        invalidateCache('/payment-plans');
         refetch();
         suppressNotifToasts();
-        toast.success('Payment Recorded', `Order ${payOrder.order_id} has been marked as paid.`);
-        // Fire-and-forget email
-        apiClient.post(`/sales/${payOrder.id}/payment-email`).catch(() => {});
-        setIsPayModalOpen(false);
-        setPayOrder(null);
-        stopPayCamera();
+        toast.success('Installment Schedule Saved', 'Schedule created successfully.');
+      }
+    } catch (error) {
+      toast.error('Schedule Failed', getPayErrorMessage(error, 'Failed to save installment schedule'));
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, payOrder, payInstallmentPlan, refetch, toast, getPayErrorMessage]);
+
+  const handleConfirmPay = useCallback(async () => {
+    if (saving || !payOrder) return;
+    if (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < payDueAmount)) return;
+    if (payMethod === 'gcash' && (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || payGcashRefError)) return;
+    if (payMethod === 'pdo' && (payPdoCheckFiles.length === 0 || !payPdoCheckNumber.trim() || payPdoCheckNumber.length < 6 || payPdoCheckNumber.length > 10 || !payPdoCheckDate || !payPdoBankName.trim() || !payPdoAmount || parseFloat(payPdoAmount) < payDueAmount)) return;
+
+    setSaving(true);
+    try {
+      if (payIsStaggered && payCurrentInstallment?.id) {
+        const payload = new FormData();
+        payload.append('amount', payDueAmount);
+        payload.append('payment_method', payMethod);
+        payload.append('notes', `Installment payment recorded from Orders for ${payOrder.order_id}`);
+
+        if (payMethod === 'gcash' && payGcashRef) {
+          payload.append('reference_number', payGcashRef);
+          payProofFiles.forEach(file => payload.append('payment_proof[]', file));
+        }
+        if (payMethod === 'pdo') {
+          payload.append('pdo_check_number', payPdoCheckNumber);
+          payload.append('pdo_check_date', payPdoCheckDate);
+          payload.append('pdo_bank_name', payPdoBankName);
+          payload.append('pdo_amount', payPdoAmount);
+          payPdoCheckFiles.forEach(file => payload.append('pdo_check_image[]', file));
+        }
+
+        const response = await apiClient.post(`/installments/${payCurrentInstallment.id}/pay`, payload);
+
+        if (response.success) {
+          invalidateCache('/sales');
+          invalidateCache('/payment-plans');
+          refetch();
+          suppressNotifToasts();
+          toast.success('Payment Recorded', `Installment payment recorded for order ${payOrder.order_id}.`);
+          setIsPayModalOpen(false);
+          setIsPayInstallmentChoiceOpen(false);
+          setIsPayInstallmentSetupOpen(false);
+          setPayOrder(null);
+          setPayInstallmentPlan([]);
+          setPayCurrentInstallment(null);
+          setPayIsStaggered(false);
+          stopPayCamera();
+          stopPayPdoCamera();
+        } else {
+          throw response;
+        }
       } else {
-        throw response;
+        const formData = new FormData();
+        formData.append('payment_method', payMethod);
+        if (payMethod === 'cash') {
+          formData.append('amount_tendered', parseFloat(payCashTendered));
+        }
+        if (payMethod === 'gcash' && payGcashRef) {
+          formData.append('reference_number', payGcashRef);
+        }
+        if (payMethod === 'pdo') {
+          formData.append('pdo_check_number', payPdoCheckNumber);
+          formData.append('pdo_check_date', payPdoCheckDate);
+          formData.append('pdo_bank_name', payPdoBankName);
+          formData.append('pdo_amount', payPdoAmount);
+          payPdoCheckFiles.forEach(file => formData.append('pdo_check_image[]', file));
+        }
+        payProofFiles.forEach(file => formData.append('payment_proof[]', file));
+
+        const response = await apiClient.post(`/sales/${payOrder.id}/pay`, formData);
+        if (response.success) {
+          // Optimistic: mark as paid instantly
+          optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, payment_status: 'paid', payment_method: payMethod } : o));
+          invalidateCache('/sales');
+          refetch();
+          suppressNotifToasts();
+          toast.success('Payment Recorded', `Order ${payOrder.order_id} has been marked as paid.`);
+          // Fire-and-forget email
+          apiClient.post(`/sales/${payOrder.id}/payment-email`).catch(() => {});
+          setIsPayModalOpen(false);
+          setIsPayInstallmentChoiceOpen(false);
+          setIsPayInstallmentSetupOpen(false);
+          setPayOrder(null);
+          setPayInstallmentPlan([]);
+          setPayCurrentInstallment(null);
+          setPayIsStaggered(false);
+          stopPayCamera();
+          stopPayPdoCamera();
+        } else {
+          throw response;
+        }
       }
     } catch (error) {
       toast.error('Payment Failed', error.message || 'Failed to record payment');
     } finally {
       setSaving(false);
     }
-  }, [saving, payOrder, payMethod, payCashTendered, payGcashRef, payProofFiles, refetch, toast, stopPayCamera]);
+  }, [saving, payOrder, payMethod, payCashTendered, payGcashRef, payGcashRefError, payProofFiles, payDueAmount, payIsStaggered, payCurrentInstallment, payPdoCheckFiles, payPdoCheckNumber, payPdoCheckDate, payPdoBankName, payPdoAmount, optimisticUpdate, refetch, toast, stopPayCamera, stopPayPdoCamera]);
+
+  const handleClosePayModal = useCallback(() => {
+    setIsPayModalOpen(false);
+    stopPayCamera();
+    stopPayPdoCamera();
+
+    if (!payOrder) {
+      setIsPayInstallmentChoiceOpen(false);
+      setIsPayInstallmentSetupOpen(false);
+      return;
+    }
+
+    const shouldReturnToSetup = payIsStaggered && !payOrder.is_staggered && payInstallmentPlan.length > 0;
+
+    if (shouldReturnToSetup) {
+      setIsPayInstallmentSetupOpen(true);
+      setIsPayInstallmentChoiceOpen(false);
+      return;
+    }
+
+    setIsPayInstallmentSetupOpen(false);
+    if (payOrder.is_staggered) {
+      setPayIsStaggered(true);
+    }
+    setIsPayInstallmentChoiceOpen(true);
+  }, [payOrder, payIsStaggered, payInstallmentPlan, stopPayCamera, stopPayPdoCamera]);
 
   // ─── Chart Helpers ────────────────────────────────────────
 
@@ -935,7 +1278,7 @@ const AdminOrders = () => {
       result = chartFilteredOrders.filter(o => statuses.includes(o.status));
     }
     if (statusSubFilter) result = result.filter(o => o.status === statusSubFilter);
-    if (payStatusFilter) result = result.filter(o => (o.payment_status || 'paid') === payStatusFilter);
+    if (payStatusFilter) result = result.filter(o => (o.payment_status || 'not_paid') === payStatusFilter);
     if (payMethodFilter) result = result.filter(o => o.raw_payment_method === payMethodFilter);
     return result;
   }, [chartFilteredOrders, activeStatusTab, statusSubFilter, payStatusFilter, payMethodFilter]);
@@ -1244,6 +1587,9 @@ const AdminOrders = () => {
         {row.payment_status === 'not_paid' && (
           <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 w-fit">Not Paid</span>
         )}
+        {row.payment_status === 'partial' && (
+          <span className="inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 w-fit">Partial</span>
+        )}
       </div>
     )},
     { header: 'Date', accessor: 'date', cell: (row) => row.date_formatted },
@@ -1269,7 +1615,8 @@ const AdminOrders = () => {
         row.raw_status === 'pending' || row.raw_status === 'processing' ||
         row.raw_status === 'delivered' || row.raw_status === 'return_requested' ||
         row.raw_status === 'picking_up' || row.raw_status === 'picked_up' || row.raw_status === 'returned' ||
-        row.payment_status === 'not_paid';
+        row.payment_status === 'not_paid' ||
+        row.payment_status === 'partial';
 
       if (!hasAnyAction) return null;
 
@@ -1343,12 +1690,12 @@ const AdminOrders = () => {
               <Package size={15} />
             </button>
           )}
-          {row.payment_status === 'not_paid' && row.raw_status !== 'cancelled' && row.raw_status !== 'returned' && (
+          {(row.payment_status === 'not_paid' || row.payment_status === 'partial') && row.raw_status !== 'cancelled' && row.raw_status !== 'returned' && (
             <button
               onClick={() => handleOpenPayModal(row)}
               disabled={saving}
               className="p-1.5 rounded-lg text-button-500 hover:bg-button-50 dark:hover:bg-button-900/20 hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 transition-colors disabled:opacity-50"
-              title="Mark as Paid"
+              title="Pay"
             >
               <Banknote size={15} />
             </button>
@@ -1568,6 +1915,7 @@ const AdminOrders = () => {
                 >
                   <option value="">All Payment Status</option>
                   <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
                   <option value="not_paid">Not Paid</option>
                 </select>
                 <select
@@ -2829,26 +3177,348 @@ const AdminOrders = () => {
         )}
       </Modal>
 
+      {/* Mark as Paid - Installment Choice Modal */}
+      {isPayInstallmentChoiceOpen && payOrder && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-[60]"
+            onClick={() => {
+              setIsPayInstallmentChoiceOpen(false);
+              setPayOrder(null);
+              setPayIsStaggered(false);
+              setPayInstallmentPlan([]);
+              setPayCurrentInstallment(null);
+            }}
+          />
+          <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md border-2 border-blue-500 dark:border-blue-600 overflow-hidden">
+              <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      <FileText size={20} />
+                      Installment Payment
+                    </h3>
+                    <p className="text-sm text-white/80 mt-1">
+                      {payOrder.is_staggered
+                        ? 'This order already has an installment schedule. Continue with installment payment?'
+                        : 'Would you like to enable installment payment for this order?'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsPayInstallmentChoiceOpen(false);
+                      setPayOrder(null);
+                      setPayIsStaggered(false);
+                      setPayInstallmentPlan([]);
+                      setPayCurrentInstallment(null);
+                    }}
+                    className="ml-3 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/20 transition-colors shrink-0"
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700 mb-4">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mb-3">
+                    {payOrder.is_staggered
+                      ? 'We will load the next pending installment from the existing payment plan.'
+                      : 'Installment payment allows this order to be paid in multiple scheduled payments.'}
+                  </p>
+                  {/* Installment details — only shown for staggered orders with loaded installment */}
+                  {payOrder.is_staggered && payCurrentInstallment && (() => {
+                    const dueDate = payCurrentInstallment.due_date ? new Date(payCurrentInstallment.due_date) : null;
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const dueDateOnly = dueDate ? new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()) : null;
+                    const diffDays = dueDateOnly ? Math.round((dueDateOnly - today) / (1000 * 60 * 60 * 24)) : null;
+                    const isOverdue = diffDays !== null && diffDays < 0;
+                    const isDueToday = diffDays === 0;
+                    const isAdvance = diffDays !== null && diffDays > 0;
+                    return (
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500 dark:text-gray-400">Installment #</span>
+                          <span className="font-semibold text-gray-800 dark:text-gray-100">
+                            {payCurrentInstallment.installment_number ?? '—'}
+                          </span>
+                        </div>
+                        {dueDateOnly && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-500 dark:text-gray-400">Due Date</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-800 dark:text-gray-100">
+                                {dueDateOnly.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              {isOverdue && (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 uppercase tracking-wide">
+                                  {Math.abs(diffDays)}d overdue
+                                </span>
+                              )}
+                              {isDueToday && (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                                  Due today
+                                </span>
+                              )}
+                              {isAdvance && (
+                                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 uppercase tracking-wide">
+                                  {diffDays}d advance
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="flex items-center justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-3">
+                    <span className="text-gray-600 dark:text-gray-400">Amount to Settle:</span>
+                    <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                      ₱{payDueAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 flex gap-3 border-t-2 border-gray-100 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    setPayIsStaggered(false);
+                    setPayInstallmentPlan([]);
+                    // Keep payCurrentInstallment so going back restores choice modal correctly
+                    setIsPayInstallmentChoiceOpen(false);
+                    setIsPayModalOpen(true);
+                  }}
+                  disabled={saving}
+                  className="flex-1 py-3 rounded-lg text-sm font-semibold border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >
+                  No, Full Payment
+                </button>
+                <button
+                  onClick={handleProceedInstallmentFlow}
+                  disabled={saving}
+                  className="flex-1 py-3 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {saving
+                    ? 'Loading...'
+                    : (payOrder.is_staggered ? 'Yes, Pay Installment' : 'Yes, Setup Installments')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Mark as Paid - Installment Setup Modal */}
+      {isPayInstallmentSetupOpen && payOrder && (
+        <>
+          <style>{`
+            @keyframes shakePayInstallment {
+              0%, 100% { transform: translateX(0); }
+              10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+              20%, 40%, 60%, 80% { transform: translateX(10px); }
+            }
+            .shake-pay-installment-modal {
+              animation: shakePayInstallment 0.5s;
+            }
+          `}</style>
+          <div
+            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            onClick={() => {
+              setIsPayInstallmentSetupOpen(false);
+              setIsPayInstallmentChoiceOpen(true);
+            }}
+          >
+            <div
+              className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl border-2 border-primary-200 dark:border-primary-700 max-h-[90vh] overflow-hidden flex flex-col ${shakePayInstallmentModal ? 'shake-pay-installment-modal' : ''}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 bg-gradient-to-r from-blue-500 to-blue-600 text-white shrink-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      <FileText size={20} />
+                      Setup Installment Payment
+                    </h3>
+                    <p className="text-sm text-white/80 mt-1">Configure payment schedule for this order</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsPayInstallmentSetupOpen(false);
+                      setIsPayInstallmentChoiceOpen(false);
+                      setPayOrder(null);
+                      setPayIsStaggered(false);
+                      setPayInstallmentPlan([]);
+                    }}
+                    className="ml-3 p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/20 transition-colors shrink-0"
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                <InstallmentSetupInline
+                  ref={payInstallmentSetupRef}
+                  totalAmount={payScheduleTotalAmount}
+                  initialInstallments={payInstallmentPlan}
+                  onChange={(installments) => setPayInstallmentPlan(installments)}
+                />
+              </div>
+
+              <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
+                <button
+                  onClick={() => {
+                    setIsPayInstallmentSetupOpen(false);
+                    setIsPayInstallmentChoiceOpen(true);
+                    setPayIsStaggered(false);
+                    setPayInstallmentPlan([]);
+                  }}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={handleSavePayInstallmentSchedule}
+                  disabled={saving}
+                  className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {saving ? 'Saving...' : 'Save Schedule'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Mark as Paid Modal */}
       {isPayModalOpen && (
         <>
-          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => { setIsPayModalOpen(false); setPayOrder(null); stopPayCamera(); }} />
+          <div className="fixed inset-0 bg-black/50 z-[60]" onClick={handleClosePayModal} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
-            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'max-w-3xl' : 'max-w-md'}`}>
+            <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border-2 border-primary-200 dark:border-primary-700 ${payMethod === 'pdo' ? 'max-w-4xl' : (payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number)) ? 'max-w-3xl' : 'max-w-md'}`}>
               {/* Header */}
-              <div className={`p-5 text-white shrink-0 ${payMethod === 'cash' ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-blue-500 to-blue-600'}`}>
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  {payMethod === 'cash' ? <DollarSign size={20} /> : <CreditCard size={20} />}
-                  {payMethod === 'cash' ? 'Cash Payment' : 'GCash Payment'}
-                </h3>
-                <p className="text-sm text-white/80 mt-1">
-                  {payMethod === 'cash' ? 'Enter amount tendered by customer' : 'Enter GCash reference number'}
-                </p>
+              <div className="p-4 shrink-0 border-b-2 border-primary-200 dark:border-primary-700 bg-gradient-to-r from-primary-50 to-white dark:from-gray-700 dark:to-gray-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <button onClick={handleClosePayModal} className="p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" title="Back">&#8592;</button>
+                  <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 flex-1">Payment</h3>
+                  <button onClick={handleClosePayModal} className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" title="Close"><X size={16} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { value: 'cash', label: 'Cash', icon: DollarSign, color: '#16a34a' },
+                    { value: 'gcash', label: 'GCash', icon: CreditCard, color: '#2563eb' },
+                    { value: 'pdo', label: 'PDO', icon: FileText, color: '#8b5cf6' },
+                  ].map(method => {
+                    const Icon = method.icon;
+                    const isSelected = payMethod === method.value;
+                    return (
+                      <button key={method.value} onClick={() => setPayMethod(method.value)}
+                        className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all text-xs font-semibold"
+                        style={isSelected
+                          ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
+                          : { border: '1px solid var(--color-primary-200)', color: 'var(--color-text-secondary)' }
+                        }>
+                        <Icon size={14} />
+                        {method.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className={`${payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) ? 'flex' : ''}`}>
+              {/* Body */}
+              <div className="flex-1 min-h-0 overflow-hidden flex">
+
+              {/* PDO Two-Column Layout */}
+              {payMethod === 'pdo' ? (
+                <>
+                  {/* PDO Left: Order Summary */}
+                  <div className="w-72 shrink-0 bg-gray-50 dark:bg-gray-700/50 p-5 border-r-2 border-primary-200 dark:border-primary-700 overflow-y-auto">
+                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 uppercase tracking-wide">Order Summary</h4>
+                    {payOrder && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm"><span className="text-gray-500 dark:text-gray-400">Order</span><span className="font-semibold text-gray-800 dark:text-gray-100">{payOrder.order_id}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-gray-500 dark:text-gray-400">Customer</span><span className="font-medium text-gray-800 dark:text-gray-100">{payOrder.customer}</span></div>
+                        <div className="flex justify-between border-t-2 border-gray-200 dark:border-gray-600 pt-2 mt-2">
+                          <span className="font-bold text-gray-800 dark:text-gray-100">{payIsStaggered ? 'Installment Due' : 'Total Due'}</span>
+                          <span className="text-xl font-bold text-purple-600 dark:text-purple-400">₱{payDueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* PDO Right: Form */}
+                  <div className="flex-1 min-w-0 overflow-y-auto">
+                    <div className="p-5 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">Check Image <span className="text-red-500">*</span></label>
+                        {payPdoShowCamera && (
+                          <div className="relative mb-3 rounded-lg overflow-hidden border-2 border-purple-300 dark:border-purple-700">
+                            <video ref={payPdoVideoRef} autoPlay playsInline className="w-full h-48 object-cover bg-black" />
+                            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-3">
+                              <button type="button" onClick={capturePayPdoPhoto} className="px-4 py-2 bg-purple-500 text-white text-xs font-bold rounded-full shadow-lg hover:bg-purple-600 flex items-center gap-1.5"><Camera size={14} /> Capture</button>
+                              <button type="button" onClick={stopPayPdoCamera} className="px-4 py-2 bg-gray-600 text-white text-xs font-bold rounded-full shadow-lg hover:bg-gray-700 flex items-center gap-1.5"><X size={14} /> Cancel</button>
+                            </div>
+                          </div>
+                        )}
+                        {payPdoCheckFiles.length > 0 && (
+                          <div className="mb-3 flex flex-wrap gap-2">
+                            {payPdoCheckFiles.map((file, idx) => (
+                              <div key={idx} className="relative group">
+                                <img src={URL.createObjectURL(file)} alt={`Check ${idx + 1}`} className="w-20 h-20 object-cover rounded-lg border-2 border-purple-300 dark:border-purple-600" />
+                                <button type="button" onClick={() => setPayPdoCheckFiles(payPdoCheckFiles.filter((_, i) => i !== idx))} className="absolute -top-1.5 -right-1.5 p-0.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={12} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {!payPdoShowCamera && (
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => document.getElementById('payPdoCheckInput').click()} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${payPdoCheckFiles.length === 0 ? 'border-red-300 dark:border-red-600 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-purple-300 dark:border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`}><Upload size={14} /> Upload Check Photo</button>
+                            <button type="button" onClick={startPayPdoCamera} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed text-xs font-semibold transition-all ${payPdoCheckFiles.length === 0 ? 'border-red-300 dark:border-red-600 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20' : 'border-purple-300 dark:border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`}><Camera size={14} /> Open Camera</button>
+                            <input id="payPdoCheckInput" type="file" accept="image/*" multiple onChange={(e) => { const files = Array.from(e.target.files || []); setPayPdoCheckFiles(prev => [...prev, ...files]); e.target.value = ''; }} className="hidden" />
+                          </div>
+                        )}
+                        {payPdoCheckFiles.length === 0 && <p className="mt-1 text-xs text-red-500">Check image is required.</p>}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">Check Number <span className="text-red-500">*</span></label>
+                        <input type="text" value={payPdoCheckNumber} onChange={(e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 10); setPayPdoCheckNumber(val); setPayPdoCheckNumberError(val.length > 0 && val.length < 6 ? 'Must be at least 6 digits' : ''); }} placeholder="Enter 6-10 digit check number" className={`w-full px-4 py-2.5 border-2 rounded-lg focus:outline-none focus:ring-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${payPdoCheckNumberError ? 'border-red-400 focus:ring-red-500' : payPdoCheckNumber.length >= 6 && payPdoCheckNumber.length <= 10 ? 'border-green-400 focus:ring-green-500' : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500'}`} />
+                        {payPdoCheckNumberError && <p className="mt-1 text-xs text-red-500">{payPdoCheckNumberError}</p>}
+                        {!payPdoCheckNumberError && payPdoCheckNumber.length >= 6 && payPdoCheckNumber.length <= 10 && <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Valid check number</p>}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">Check Date <span className="text-red-500">*</span></label>
+                        <input type="date" value={payPdoCheckDate} onChange={(e) => setPayPdoCheckDate(e.target.value)} className="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The date written on the check</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">Bank Name <span className="text-red-500">*</span></label>
+                        <input type="text" value={payPdoBankName} onChange={(e) => setPayPdoBankName(e.target.value)} placeholder="Enter bank name" className="w-full px-4 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-purple-700 dark:text-purple-300 mb-2 uppercase tracking-wide">Check Amount <span className="text-red-500">*</span></label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">₱</span>
+                          <input type="number" value={payPdoAmount} onChange={(e) => setPayPdoAmount(e.target.value)} placeholder="0.00" step="0.01" className={`w-full pl-8 pr-4 py-2.5 border-2 rounded-lg focus:outline-none focus:ring-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${payPdoAmount && parseFloat(payPdoAmount) < payDueAmount ? 'border-red-400 focus:ring-red-500' : payPdoAmount && parseFloat(payPdoAmount) >= payDueAmount ? 'border-green-400 focus:ring-green-500' : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500'}`} />
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Amount due: ₱{payDueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                        {payPdoAmount && parseFloat(payPdoAmount) < payDueAmount && <p className="mt-1 text-xs text-red-500">Amount must be at least ₱{payDueAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>}
+                        {payPdoAmount && parseFloat(payPdoAmount) >= payDueAmount && <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Valid amount</p>}
+                      </div>
+                      <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-3">
+                        <p className="text-xs font-bold text-purple-700 dark:text-purple-300 mb-1 uppercase tracking-wide">Post-Dated Check</p>
+                        <p className="text-xs text-purple-600 dark:text-purple-400">Upload a clear photo of the check. The check will be reviewed before approval. Payment will be processed on the check date.</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
               {/* Left side: form content */}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-y-auto">
               <div className="p-5 space-y-4">
         {payOrder && (
           <>
@@ -2861,31 +3531,10 @@ const AdminOrders = () => {
                 </div>
               </div>
               <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
-                <span className="font-bold text-gray-800 dark:text-gray-100">Total Due</span>
-                <span className="text-xl font-bold text-primary-600 dark:text-primary-400">₱{payOrder.total.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {/* Payment Method Selection */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 dark:text-gray-200 mb-2 uppercase tracking-wide">Payment Method <span className="text-red-500">*</span></label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { value: 'cash', label: 'Cash', icon: DollarSign, color: 'green' },
-                  { value: 'gcash', label: 'GCash', icon: CreditCard, color: 'blue' },
-                ].map(m => (
-                  <button
-                    key={m.value}
-                    onClick={() => setPayMethod(m.value)}
-                    className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold border-2 transition-all ${
-                      payMethod === m.value
-                        ? m.color === 'green' ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                        : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500'
-                    }`}
-                  >
-                    <m.icon size={16} /> {m.label}
-                  </button>
-                ))}
+                <span className="font-bold text-gray-800 dark:text-gray-100">{payIsStaggered ? 'Installment Due' : 'Total Due'}</span>
+                <span className="text-xl font-bold text-primary-600 dark:text-primary-400">
+                  ₱{payDueAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
             </div>
 
@@ -2909,19 +3558,19 @@ const AdminOrders = () => {
 
                 {/* Quick Amount Buttons */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[payOrder.total, Math.ceil(payOrder.total / 100) * 100, Math.ceil(payOrder.total / 500) * 500, Math.ceil(payOrder.total / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
+                  {[payDueAmount, Math.ceil(payDueAmount / 100) * 100, Math.ceil(payDueAmount / 500) * 500, Math.ceil(payDueAmount / 1000) * 1000].filter((v, i, a) => a.indexOf(v) === i).map(amount => (
                     <button key={amount} onClick={() => setPayCashTendered(String(amount))} className="py-2 rounded-lg text-xs font-semibold border-2 border-primary-200 dark:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:border-primary-400 transition-all dark:text-gray-200">₱{amount.toLocaleString()}</button>
                   ))}
                 </div>
 
                 {/* Change Display */}
                 {payCashTendered && (
-                  <div className={`rounded-lg p-3 text-center ${parseFloat(payCashTendered) >= payOrder.total ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
-                    <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(payCashTendered) >= payOrder.total ? '#16a34a' : '#dc2626' }}>
-                      {parseFloat(payCashTendered) >= payOrder.total ? 'Change' : 'Insufficient'}
+                  <div className={`rounded-lg p-3 text-center ${parseFloat(payCashTendered) >= payDueAmount ? 'bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700' : 'bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-700'}`}>
+                    <p className="text-xs font-bold uppercase tracking-wide mb-1" style={{ color: parseFloat(payCashTendered) >= payDueAmount ? '#16a34a' : '#dc2626' }}>
+                      {parseFloat(payCashTendered) >= payDueAmount ? 'Change' : 'Insufficient'}
                     </p>
-                    <p className={`text-2xl font-bold ${parseFloat(payCashTendered) >= payOrder.total ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      ₱{Math.abs((parseFloat(payCashTendered) || 0) - payOrder.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <p className={`text-2xl font-bold ${parseFloat(payCashTendered) >= payDueAmount ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      ₱{Math.abs((parseFloat(payCashTendered) || 0) - payDueAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 )}
@@ -3022,7 +3671,7 @@ const AdminOrders = () => {
 
               {/* Right side: GCash QR Code & Info Panel */}
               {payMethod === 'gcash' && (bizSettings.gcash_qr || bizSettings.gcash_name || bizSettings.gcash_number) && (
-                <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4">
+                <div className="w-64 shrink-0 bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-200 dark:border-blue-700 p-5 flex flex-col items-center justify-center gap-4 overflow-y-auto">
                   <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide text-center">Send Payment Here</h4>
                   {bizSettings.gcash_qr && (
                     <div className="w-48 h-48 bg-white dark:bg-gray-800 rounded-xl border-2 border-blue-200 dark:border-blue-700 overflow-hidden shadow-lg">
@@ -3041,25 +3690,29 @@ const AdminOrders = () => {
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tracking-wider">{bizSettings.gcash_number}</p>
                     </div>
                   )}
-                  <div className="mt-auto pt-2">
-                    <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center">Scan the QR code or send to the number above, then enter the reference number.</p>
-                  </div>
+                  <p className="text-[10px] text-blue-400 dark:text-blue-500 text-center mt-auto pt-2">Scan the QR code or send to the number above, then enter the reference number.</p>
                 </div>
               )}
-              </div>{/* end flex wrapper */}
+              </>
+              )}
+              </div>{/* end body flex */}
 
               {/* Footer */}
               <div className="p-4 flex gap-3 shrink-0 border-t-2 border-primary-100 dark:border-primary-800">
                 <button
-                  onClick={() => { setIsPayModalOpen(false); stopPayCamera(); }}
+                  onClick={handleClosePayModal}
                   className="flex-1 py-2.5 rounded-lg text-sm font-semibold border-2 border-primary-200 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1"
                 >
                   ← Back
                 </button>
                 <button
                   onClick={handleConfirmPay}
-                  disabled={saving || (payMethod === 'cash' ? (!payCashTendered || parseFloat(payCashTendered) < (payOrder?.total || 0)) : (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || !!payGcashRefError))}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${payMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : 'bg-blue-500 hover:bg-blue-600'}`}
+                  disabled={saving || (
+                    payMethod === 'cash' ? (!payCashTendered || parseFloat(payCashTendered) < payDueAmount)
+                    : payMethod === 'gcash' ? (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || !!payGcashRefError)
+                    : (payPdoCheckFiles.length === 0 || !payPdoCheckNumber.trim() || payPdoCheckNumber.length < 6 || payPdoCheckNumber.length > 10 || !!payPdoCheckNumberError || !payPdoCheckDate || !payPdoBankName.trim() || !payPdoAmount || parseFloat(payPdoAmount) < payDueAmount)
+                  )}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${payMethod === 'cash' ? 'bg-green-500 hover:bg-green-600' : payMethod === 'gcash' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-purple-500 hover:bg-purple-600'}`}
                 >
                   <CheckCircle size={14} /> {saving ? 'Processing...' : 'Confirm Payment'}
                 </button>
@@ -3154,7 +3807,7 @@ const AdminOrders = () => {
           <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setPreviewProofImage(null)}
-              className="absolute -top-3 -right-3 z-10 p-1.5 bg-white dark:bg-gray-700 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 dark:bg-gray-700 transition-colors"
+              className="absolute -top-3 -right-3 z-10 p-1.5 bg-white dark:bg-gray-700 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
             >
               <X size={18} className="text-gray-600 dark:text-gray-300" />
             </button>

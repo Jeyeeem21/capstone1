@@ -148,7 +148,12 @@ const PaymentsManagement = () => {
             </div>
           )}
 
-          <PaymentPlansTab onStatsUpdate={setStats} onLoadingChange={setLoading} />
+          <PaymentPlansTab 
+            key="plans-tab"
+            activeTab={activeTab}
+            onStatsUpdate={setStats} 
+            onLoadingChange={setLoading} 
+          />
         </>
       )}
 

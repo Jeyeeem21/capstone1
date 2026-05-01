@@ -176,7 +176,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Payment system routes
         Route::post('/{id}/payment', [\App\Http\Controllers\PaymentController::class, 'recordPayment']);
         Route::get('/{id}/payments', [\App\Http\Controllers\PaymentController::class, 'paymentHistory']);
-        Route::post('/{id}/payment-schedule', [\App\Http\Controllers\StaggeredPaymentController::class, 'store']);
+        Route::post('/{sale}/payment-schedule', [\App\Http\Controllers\StaggeredPaymentController::class, 'store']);
     });
 
     // Payment Management Routes (Admin/Super Admin only)

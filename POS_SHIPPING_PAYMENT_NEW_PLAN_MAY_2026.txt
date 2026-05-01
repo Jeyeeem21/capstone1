@@ -1,0 +1,474 @@
+POS + SHIPPING FEE + PAYMENT NEW PLAN
+Date: May 1, 2026
+Status: Decision-Locked Draft (ready for implementation checklist)
+
+============================================================
+1) GOAL
+============================================================
+Implement a dual shipping mode and role-based payment flow:
+
+- Add ON/OFF setting for OpenRoute shipping logic.
+- If OpenRoute is OFF, Admin and Super Admin can input manual price per sack
+  in Delivery Address flow, and that becomes shipping fee.
+- Customer Shop/POS becomes Pay Later only.
+- Customer delivery shipping fee starts as NULL/pending until Admin/Super Admin
+  sets it.
+- Secretary POS is order-only: no shipping fee setup and no payment handling.
+
+============================================================
+2) REQUESTED BUSINESS RULES (FROM DISCUSSION)
+============================================================
+A. OpenRoute ON mode (current style, keep this):
+- Delivery address autocomplete + distance km + estimated travel time.
+- Auto shipping formula remains based on settings:
+  ceil(distance_km / base_km) * rate_per_sack * total_sacks + (rate_per_km * distance_km)
+
+B. OpenRoute OFF mode (new behavior):
+- No auto distance dependency for shipping computation.
+- In Admin/Super Admin POS, under Delivery Address section, show manual input:
+  "Price per sack".
+- Shipping fee formula in OFF mode:
+  shipping_fee = price_per_sack * total_sacks
+- Distance km field and auto-distance display are hidden in OFF mode.
+
+C. Customer Shop/POS flow:
+- Payment method options should be Pay Later only.
+- Customer cannot set shipping fee.
+- For delivery, shipping fee is NULL/pending on initial order creation.
+- Customer payment starts only after Admin/Super Admin sets final shipping fee.
+- No installment/staggered setup while shipping fee is pending.
+
+D. Secretary POS flow:
+- Secretary can place orders only.
+- Secretary cannot set shipping fee.
+- Secretary does not handle payment collection.
+- Orders created by secretary should default to pay_later and unpaid status.
+- For delivery orders created by secretary, shipping fee is always pending until
+  Admin/Super Admin sets it.
+
+============================================================
+3) ROLE MATRIX (TARGET)
+============================================================
+Super Admin:
+- Can toggle OpenRoute ON/OFF in Settings
+- Can set manual shipping per sack when OpenRoute OFF
+- Can set/update shipping fee for customer orders
+- Can handle payment actions
+
+Admin:
+- Same as Super Admin for shipping and payment
+
+Secretary:
+- Can create order
+- Cannot set shipping fee
+- Cannot process payment
+
+Customer:
+- Can place order from Shop
+- Payment method is Pay Later only
+- Cannot set shipping fee
+
+============================================================
+4) SETTINGS CHANGES
+============================================================
+Add a new business setting key:
+- shipping_openroute_enabled (boolean, default true)
+
+Keep existing settings for ON mode:
+- shipping_base_km
+- shipping_rate_per_sack
+- shipping_rate_per_km
+- warehouse_address
+
+Settings UI behavior:
+- If shipping_openroute_enabled = true:
+  show current OpenRoute shipping fields and preview.
+- If shipping_openroute_enabled = false:
+  show note: "Manual per-sack shipping in POS by Admin/Super Admin".
+
+============================================================
+5) DATA MODEL CHANGES
+============================================================
+Sales table updates (proposed):
+- delivery_fee: allow NULL to represent "not set yet"
+- add shipping_fee_status enum/string:
+  pending | set
+- add shipping_price_per_sack_override decimal nullable
+- keep distance_km nullable (for optional logistics display)
+
+Reason:
+- Need explicit pending state for customer orders where shipping is not yet quoted.
+
+============================================================
+6) API/BACKEND PLAN
+============================================================
+A. Business settings API
+- Add validation/serialization for shipping_openroute_enabled.
+- Update seeder/resource/context mapping.
+
+B. Order creation API (/sales/order)
+- For customer role:
+  force payment_method = pay_later
+  force amount_tendered = 0
+  force payment_status = not_paid
+  if for_delivery: allow delivery_fee NULL and set shipping_fee_status = pending
+  reject payment/installment payload when shipping_fee_status = pending
+
+- For secretary role:
+  force payment_method = pay_later
+  no shipping fee write allowed from request
+  no payment payload allowed from request
+  if for_delivery: shipping_fee_status = pending
+
+- For admin/super admin:
+  if OpenRoute OFF and for_delivery:
+    accept shipping_price_per_sack_override
+    compute delivery_fee = shipping_price_per_sack_override * total_sacks
+  allow setting shipping either at POS checkout or later in Admin Orders page
+
+C. New endpoint for shipping quote update (recommended)
+- PATCH /sales/{id}/shipping-fee
+- Allowed roles: admin, super_admin
+- Input:
+  shipping_price_per_sack_override
+- Server computes and stores:
+  delivery_fee, total, balance_remaining, shipping_fee_status=set
+
+D. Payment guard while shipping pending
+- If shipping_fee_status = pending, block all payment recording endpoints.
+- Return validation message:
+  "Cannot accept payment yet. Shipping fee is still pending."
+- After shipping is set, payment endpoints become available again.
+
+============================================================
+7) FRONTEND PLAN
+============================================================
+A. Admin Settings page
+- Add OpenRoute toggle switch (ON/OFF).
+
+B. Shared POS (Admin/Super Admin)
+- Delivery Address card behavior:
+  if OpenRoute ON: keep current auto km and formula breakdown.
+  if OpenRoute OFF: hide distance UI and show "Price per sack" input only.
+  compute shipping from sacks only.
+
+C. Shared POS (Secretary)
+- Disable payment method selection.
+- Auto-set Pay Later.
+- Hide/disable shipping fee inputs.
+
+D. Customer Shop
+- Payment methods list: Pay Later only.
+- Show message:
+  "Shipping fee will be set by admin. Payment will be available after quote."
+- Submit with delivery_fee as null/pending when delivery order.
+
+E. Admin Orders page
+- Add action/button for pending-shipping orders:
+  "Set Shipping Fee"
+- Input per-sack rate, preview computed fee, save.
+
+F. Payment and installment UX guard
+- If shipping is pending, show badge: "Shipping Fee Pending".
+- Disable payment actions and installment setup actions until shipping is set.
+- Once shipping is set, enable payment and installment/staggered options based on
+  final total.
+
+============================================================
+8) ORDER LIFECYCLE (TARGET)
+============================================================
+1. Customer places delivery order (pay_later only, shipping pending).
+2. Order is created with delivery_fee = null, shipping_fee_status = pending.
+3. Admin/Super Admin sets shipping per sack (at POS checkout or Orders page).
+4. System computes delivery_fee and updates total.
+5. Payment and installment features become enabled only after shipping is set.
+6. Customer/admin can proceed with payment workflow on final total.
+
+============================================================
+9) ACCEPTANCE CRITERIA
+============================================================
+1. OpenRoute ON/OFF toggle is saved and affects POS behavior immediately.
+2. When OFF, Admin/Super Admin sees manual "Price per sack" in delivery flow.
+3. Customer Shop only allows Pay Later.
+4. Customer delivery orders start with shipping fee NULL/pending.
+5. Secretary cannot set shipping and cannot process payment.
+6. Admin/Super Admin can set shipping later and system recalculates total correctly.
+7. While shipping is pending, payment and installment actions are blocked.
+8. After shipping is set, payment/installment actions use the final recalculated total.
+
+============================================================
+10) DECISIONS LOCKED (CONFIRMED MAY 1, 2026)
+============================================================
+1. OpenRoute OFF mode hides distance km completely.
+2. Shipping fee can be set during Admin/Super Admin POS flow or later in Admin Orders page.
+3. For pending shipping orders, no payment and no installment first.
+4. After shipping is finalized, payment/installment can proceed on final total.
+5. Secretary-created delivery orders remain pending shipping until Admin/Super Admin sets fee.
+
+============================================================
+11) IMPLEMENTATION CHECKLIST (BY FILE AND ENDPOINT)
+============================================================
+
+Use this as the single execution checklist. Mark each item DONE before moving to next block.
+
+------------------------------------------------------------
+PHASE A - DATABASE
+------------------------------------------------------------
+
+[A1] File: laravel_backend/database/migrations/(new)_xxxx_xx_xx_xxxxxx_add_shipping_pending_fields_to_sales_table.php
+- Add nullable columns to sales table:
+  - shipping_fee_status (string, default: pending for delivery orders without final shipping)
+  - shipping_price_per_sack_override (decimal(10,2), nullable)
+- Make delivery_fee nullable (remove forced default 0 behavior if currently enforced by schema)
+- Keep distance_km nullable
+- Done when:
+  - migration runs without error
+  - rollback works
+
+[A2] File: laravel_backend/app/Models/Sale.php
+- Add new fields to fillable:
+  - shipping_fee_status
+  - shipping_price_per_sack_override
+- Add casts:
+  - shipping_price_per_sack_override => decimal:2
+- Done when model save/load includes new fields correctly
+
+------------------------------------------------------------
+PHASE B - BUSINESS SETTINGS (OPENROUTE TOGGLE)
+------------------------------------------------------------
+
+[B1] File: laravel_backend/database/seeders/BusinessSettingSeeder.php
+- Add key:
+  - shipping_openroute_enabled (type: boolean, value: true)
+- Done when seeder inserts/updates key
+
+[B2] File: laravel_backend/app/Http/Controllers/Api/BusinessSettingController.php
+- In update validation, add:
+  - shipping_openroute_enabled => nullable|boolean
+- Done when PUT /business-settings accepts and stores toggle
+
+[B3] File: laravel_backend/app/Http/Resources/BusinessSettingResource.php
+- Add output field:
+  - shipping_openroute_enabled
+- Done when GET /business-settings returns toggle
+
+[B4] File: laravel_backend/app/Services/BusinessSettingService.php
+- Ensure updateSettings preserves boolean value type (not forced as plain string only)
+- Done when reading setting returns boolean true/false reliably
+
+[B5] File: react_frontend/src/context/BusinessSettingsContext.jsx
+- Add default + buildSettings mapping:
+  - shipping_openroute_enabled (default true)
+- Done when context exposes toggle value to POS/Shop/Settings
+
+[B6] File: react_frontend/src/pages/admin/Settings/Settings.jsx
+- Add UI switch: OpenRoute Shipping Enabled
+- Behavior:
+  - ON: show current distance/rate fields
+  - OFF: show manual per-sack mode info
+- Save via existing businessSettingsApi.update
+- Done when toggle is editable and persists across refresh
+
+------------------------------------------------------------
+PHASE C - SALES ORDER CREATION RULES
+------------------------------------------------------------
+
+[C1] File: laravel_backend/app/Http/Controllers/SaleController.php
+- In storeOrder:
+  - Force customer role to pay_later + amount_tendered=0
+  - Force secretary role to pay_later + amount_tendered=0
+  - For secretary/customer delivery orders: ignore client delivery_fee input, set pending shipping
+  - Reject any payment/installment payload if shipping is pending
+- Done when role-based request hardening is server-side enforced
+
+[C2] File: laravel_backend/app/Services/SaleService.php
+- In createOrder:
+  - Support shipping pending state
+  - If for_delivery and shipping pending:
+    - delivery_fee = null
+    - shipping_fee_status = pending
+    - shipping_price_per_sack_override = null
+  - If OpenRoute OFF and admin/superadmin provided per-sack value:
+    - compute delivery_fee = per_sack * total_sacks
+    - set shipping_fee_status = set
+- Recompute total and balance using nullable delivery_fee rules
+- Done when created sale totals are correct in both pending and set states
+
+[C3] File: laravel_backend/app/Http/Resources/SaleResource.php
+- Expose fields:
+  - shipping_fee_status
+  - shipping_price_per_sack_override
+- Keep delivery_fee nullable in response (do not force 0 if null)
+- Done when frontend can detect pending shipping correctly
+
+[C4] File: laravel_backend/app/Http/Resources/CustomerOrderResource.php
+- Expose shipping-related fields:
+  - delivery_fee (nullable)
+  - shipping_fee_status
+  - shipping_price_per_sack_override
+- Done when customer portal can show shipping pending state
+
+------------------------------------------------------------
+PHASE D - NEW SHIPPING FEE UPDATE ENDPOINT
+------------------------------------------------------------
+
+[D1] File: laravel_backend/routes/api.php
+- Add endpoint under sales routes:
+  - PATCH /sales/{id}/shipping-fee
+- Restrict to roles: super_admin, admin
+- Done when route appears and is protected
+
+[D2] File: laravel_backend/app/Http/Controllers/SaleController.php
+- Add method: updateShippingFee(Request $request, $id)
+- Validate:
+  - shipping_price_per_sack_override >= 0
+- Compute:
+  - delivery_fee = shipping_price_per_sack_override * total_sacks
+  - total = subtotal - discount + delivery_fee
+  - balance_remaining updated from amount_paid
+  - shipping_fee_status = set
+- Done when endpoint updates order totals safely and idempotently
+
+[D3] File: react_frontend/src/pages/admin/Orders/Orders.jsx
+- Add UI action for pending shipping orders:
+  - button: Set Shipping Fee
+  - input: price per sack
+  - preview: shipping_fee and new total
+- Call endpoint PATCH /sales/{id}/shipping-fee
+- Refresh table/details after save
+- Done when admin can set shipping later from Orders page
+
+------------------------------------------------------------
+PHASE E - PAYMENT/INSTALLMENT GUARDS (CRITICAL)
+------------------------------------------------------------
+
+[E1] File: laravel_backend/app/Http/Controllers/SaleController.php
+- In markPaid, block if shipping_fee_status = pending
+- Error message:
+  - Cannot accept payment yet. Shipping fee is still pending.
+- Done when /sales/{id}/pay is blocked for pending shipping
+
+[E2] File: laravel_backend/app/Http/Controllers/PaymentController.php
+- In recordPayment, block if sale shipping_fee_status = pending
+- Done when /sales/{id}/payment is blocked for pending shipping
+
+[E3] File: laravel_backend/app/Http/Controllers/StaggeredPaymentController.php
+- In store (payment schedule creation), block if sale shipping_fee_status = pending
+- In recordInstallmentPayment, block if installment->sale shipping_fee_status = pending
+- Done when installment workflow starts only after shipping is finalized
+
+[E4] File: laravel_backend/app/Http/Controllers/CustomerPaymentController.php
+- In submitGCashPayment and submitPDOPayment, block if installment sale shipping pending
+- Done when customer cannot pay installment before shipping is finalized
+
+[E5] File: laravel_backend/app/Services/PaymentService.php
+- Defensive guard in payment record/verify paths to reject payment if shipping pending
+- Done when service-layer guard prevents bypass via other controllers
+
+[E6] File: laravel_backend/app/Services/StaggeredPaymentService.php
+- Defensive guard in createPaymentSchedule and recordInstallmentPayment
+- Done when service-layer staggered flow is also protected
+
+------------------------------------------------------------
+PHASE F - POS/SHOP ROLE UI CHANGES
+------------------------------------------------------------
+
+[F1] File: react_frontend/src/pages/shared/PointOfSale/PointOfSale.jsx
+- Admin/SuperAdmin:
+  - If OpenRoute ON: keep current distance/autocalc UI
+  - If OpenRoute OFF: hide distance block, show price-per-sack input
+  - Compute delivery fee from per-sack x total sacks
+- Secretary:
+  - Keep order flow, but force pay_later
+  - Hide/disable shipping fee inputs
+  - For delivery orders, mark shipping as pending
+- Done when UI follows role and setting correctly
+
+[F2] File: react_frontend/src/pages/customer/Shop/Shop.jsx
+- Payment methods: keep only pay_later
+- For delivery orders:
+  - submit with shipping pending (no final delivery fee)
+  - show message: shipping to be set by admin
+- Done when customer checkout has no payment/shipping setting controls
+
+[F3] File: react_frontend/src/pages/admin/Orders/Orders.jsx
+- Show badge in table/details:
+  - Shipping Fee Pending
+- Disable payment actions when pending
+- Enable actions once shipping is set
+- Done when operational flow is clear to admin users
+
+------------------------------------------------------------
+PHASE G - API CLIENT AND FRONTEND SERVICE WRAPPERS
+------------------------------------------------------------
+
+[G1] File: react_frontend/src/api/salesApi.js
+- Add function:
+  - updateShippingFee(orderId, shippingPricePerSack)
+    -> PATCH /sales/{id}/shipping-fee
+- Done when UI can call centralized API helper
+
+[G2] File: react_frontend/src/api/ordersApi.js (optional alignment)
+- Add wrapper if Orders page uses ordersApi instead of direct apiClient
+- Done when no duplicate endpoint logic exists
+
+------------------------------------------------------------
+PHASE H - ROUTE AND ENDPOINT CHECKLIST (FINAL)
+------------------------------------------------------------
+
+Existing endpoints to modify behavior:
+- POST /sales/order
+- POST /sales/{id}/pay
+- POST /sales/{id}/payment
+- POST /sales/{id}/payment-schedule
+- POST /installments/{installment}/pay
+- POST /customer/installments/{id}/pay-gcash
+- POST /customer/installments/{id}/pay-pdo
+
+New endpoint to add:
+- PATCH /sales/{id}/shipping-fee
+
+Business settings endpoint updates:
+- GET /business-settings (include shipping_openroute_enabled)
+- PUT /business-settings (accept shipping_openroute_enabled)
+
+------------------------------------------------------------
+PHASE I - TEST CHECKLIST
+------------------------------------------------------------
+
+[I1] OpenRoute OFF + Admin POS delivery:
+- Set price per sack
+- Verify shipping fee and total compute correctly
+
+[I2] OpenRoute OFF + Customer delivery order:
+- Verify order creates with shipping pending
+- Verify no payment/installment allowed yet
+
+[I3] Admin Orders page set shipping:
+- Set per-sack rate
+- Verify totals and balance update correctly
+
+[I4] After shipping set:
+- Verify payment endpoints accept
+- Verify staggered/installment setup allowed
+
+[I5] Secretary delivery order:
+- Verify pay_later only and shipping pending always
+
+[I6] Regression checks:
+- OpenRoute ON existing flow still works
+- GCash/PDO validation unchanged after shipping is set
+
+============================================================
+12) IMPLEMENTATION ORDER (RECOMMENDED)
+============================================================
+1. Phase A (DB)
+2. Phase B (Settings toggle)
+3. Phase C (Order creation rules)
+4. Phase D (Set shipping endpoint)
+5. Phase E (Payment/installment guards)
+6. Phase F (POS/Shop/Orders UI)
+7. Phase G (API wrappers cleanup)
+8. Phase I (test pass + bugfix pass)
+
+END OF PLAN

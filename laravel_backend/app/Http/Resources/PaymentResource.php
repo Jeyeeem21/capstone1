@@ -17,10 +17,10 @@ class PaymentResource extends JsonResource
         return [
             'id' => $this->id,
             'sale_id' => $this->sale_id,
-            'transaction_id' => $this->sale->transaction_id ?? null,
-            'customer_name' => $this->sale->customer->name ?? 'Walk-in Customer',
+            'transaction_id' => $this->sale?->transaction_id,
+            'customer_name' => $this->sale?->customer?->name ?? 'Walk-in Customer',
             'installment_id' => $this->installment_id,
-            'installment_number' => $this->installment->installment_number ?? null,
+            'installment_number' => $this->installment?->installment_number,
             'amount' => (float) $this->amount,
             'payment_method' => $this->payment_method,
             'reference_number' => $this->reference_number,
@@ -44,10 +44,13 @@ class PaymentResource extends JsonResource
                 'name' => $this->verifiedBy->name,
             ] : null,
             'verified_at' => $this->verified_at?->toISOString(),
-            'paid_at' => $this->paid_at->toISOString(),
+            'paid_at' => $this->paid_at?->toISOString(),
             'created_at' => $this->created_at->toISOString(),
             'updated_at' => $this->updated_at->toISOString(),
             'sale' => $this->whenLoaded('sale', function () {
+                if (!$this->sale) {
+                    return null;
+                }
                 return [
                     'id' => $this->sale->id,
                     'transaction_id' => $this->sale->transaction_id,

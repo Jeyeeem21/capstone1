@@ -6,21 +6,27 @@ use App\Models\Sale;
 use App\Models\PaymentInstallment;
 use App\Services\StaggeredPaymentService;
 use App\Services\PaymentService;
+use App\Services\EmailService;
 use App\Http\Resources\PaymentInstallmentResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class StaggeredPaymentController extends Controller
 {
     protected $staggeredPaymentService;
     protected $paymentService;
+    protected $emailService;
 
     public function __construct(
         StaggeredPaymentService $staggeredPaymentService,
-        PaymentService $paymentService
+        PaymentService $paymentService,
+        EmailService $emailService
     ) {
         $this->staggeredPaymentService = $staggeredPaymentService;
         $this->paymentService = $paymentService;
+        $this->emailService = $emailService;
     }
 
     /**
@@ -58,7 +64,7 @@ class StaggeredPaymentController extends Controller
                 'amount_paid' => $sale->amount_paid,
                 'balance_remaining' => $sale->balance_remaining,
                 'payment_status' => $sale->payment_status,
-                'payment_installments' => $sale->paymentInstallments,
+                'payment_installments' => PaymentInstallmentResource::collection($sale->paymentInstallments),
                 'created_at' => $sale->created_at,
                 'updated_at' => $sale->updated_at,
             ];
@@ -207,6 +213,17 @@ class StaggeredPaymentController extends Controller
         try {
             $this->paymentService->approvePDO($installment);
 
+            // Send email notification for installment-based PDO approval
+            try {
+                $userName = Auth::user()->name ?? 'Admin';
+                // Create a temporary payment object with installment data for email
+                if ($installment->payment) {
+                    $this->emailService->notifyPDOApproved($installment->payment->fresh(), $userName);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to send installment PDO approved email: ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'PDO approved',
@@ -238,6 +255,17 @@ class StaggeredPaymentController extends Controller
 
         try {
             $this->paymentService->rejectPDO($installment, $request->reason);
+
+            // Send email notification for installment-based PDO rejection
+            try {
+                $userName = Auth::user()->name ?? 'Admin';
+                // Create a temporary payment object with installment data for email
+                if ($installment->payment) {
+                    $this->emailService->notifyPaymentRejected($installment->payment->fresh(), $request->reason, $userName);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to send installment PDO rejected email: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -282,7 +310,8 @@ class StaggeredPaymentController extends Controller
     public function getPendingPDOs()
     {
         $installments = PaymentInstallment::where('payment_method', 'pdo')
-            ->where('status', 'pending')
+            ->where('pdo_approval_status', 'pending')
+            ->whereNotIn('status', ['paid', 'verified', 'rejected'])
             ->with(['sale.customer'])
             ->orderBy('due_date', 'asc')
             ->get();
@@ -299,7 +328,8 @@ class StaggeredPaymentController extends Controller
     public function getAwaitingPayment()
     {
         $installments = PaymentInstallment::where('payment_method', 'pdo')
-            ->where('status', 'approved')
+            ->where('pdo_approval_status', 'approved')
+            ->whereIn('status', ['awaiting_payment', 'pending'])
             ->with(['sale.customer'])
             ->orderBy('due_date', 'asc')
             ->get();

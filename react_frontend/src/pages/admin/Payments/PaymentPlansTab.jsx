@@ -31,7 +31,7 @@ const InstallmentDueBadge = ({ status }) => {
   );
 };
 
-const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
+const PaymentPlansTab = ({ activeTab, onStatsUpdate, onLoadingChange }) => {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -42,8 +42,11 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
   const toast = useToast();
 
   useEffect(() => {
-    loadPlans();
-  }, []);
+    // Reload data when tab becomes active
+    if (activeTab === 'plans') {
+      loadPlans();
+    }
+  }, [activeTab]);
 
   const loadPlans = async () => {
     try {
@@ -53,6 +56,7 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
 
       if (response.success) {
         const plansData = Array.isArray(response.data) ? response.data : [];
+
         setPlans(plansData);
 
         const activePlans = plansData.filter(p => p.payment_status === 'partial' || p.payment_status === 'not_paid').length;
@@ -129,7 +133,7 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
 
   const columns = useMemo(() => [
     {
-      header: 'Order',
+      header: 'Order ID',
       accessor: 'transaction_id',
       cell: (row) => {
         const installments = row.payment_installments || [];
@@ -185,7 +189,12 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
       accessor: 'installments_count',
       cell: (row) => {
         const installments = row.payment_installments || [];
-        const paid = installments.filter(i => i.status === 'paid' || i.status === 'verified').length;
+        const paid = installments.filter(i => {
+          // Count if status is paid/verified OR if amount_paid >= amount_expected (robust fallback)
+          const isStatusPaid = i.status === 'paid' || i.status === 'verified';
+          const isAmountPaid = parseFloat(i.amount_paid || 0) >= parseFloat(i.amount_expected || 0) && parseFloat(i.amount_expected || 0) > 0;
+          return isStatusPaid || isAmountPaid;
+        }).length;
         return (
           <span className="text-sm text-gray-600 dark:text-gray-300">
             {paid}/{installments.length} paid
@@ -197,6 +206,12 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
       header: 'Status',
       accessor: 'payment_status',
       cell: (row) => {
+        const installments = row.payment_installments || [];
+        // Derive a more specific status from installment states
+        const hasOnHold = installments.some(i => i.status === 'on_hold');
+        const hasPendingVerification = installments.some(i => i.status === 'needs_verification');
+        if (hasOnHold) return <StatusBadge status="On Hold" />;
+        if (hasPendingVerification) return <StatusBadge status="Pending Verification" />;
         const statusMap = { not_paid: 'Not Paid', partial: 'Partial', paid: 'Paid' };
         return <StatusBadge status={statusMap[row.payment_status] || row.payment_status} />;
       }
@@ -232,6 +247,14 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
           size="lg"
         >
           <div className="space-y-4">
+            {/* Order ID Banner */}
+            <div className="bg-button-50 dark:bg-button-900/20 border border-button-200 dark:border-button-800 p-3 rounded-lg">
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-0.5">Order ID</p>
+              <p className="text-lg font-bold text-button-700 dark:text-button-400">
+                {selectedPlan.transaction_id || `#${selectedPlan.id}`}
+              </p>
+            </div>
+            
             {/* Summary */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg">
@@ -261,6 +284,9 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
                 {(selectedPlan.payment_installments || []).map((inst) => {
                   const dueStatus = getInstallmentDueStatus(inst);
                   const isPaid = inst.status === 'paid' || inst.status === 'verified';
+                  const isPDO = inst.payment_method === 'pdo' || !!inst.pdo_approval_status || !!inst.pdo_check_number || !!inst.pdo_check_bank;
+                  const isPdoPending = isPDO && (inst.pdo_approval_status === 'pending' || (!inst.pdo_approval_status && inst.status === 'pending'));
+                  const isPdoAwaiting = isPDO && (inst.pdo_approval_status === 'approved' || inst.status === 'awaiting_payment');
                   const balance = parseFloat(inst.amount_expected || 0) - parseFloat(inst.amount_paid || 0);
                   return (
                     <div key={inst.id} className={`p-4 rounded-lg flex items-center justify-between gap-3 ${
@@ -289,8 +315,39 @@ const PaymentPlansTab = ({ onStatsUpdate, onLoadingChange }) => {
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <StatusBadge status={inst.status} />
-                        {!isPaid && balance > 0 && (
+                        {/* Show descriptive status */}
+                        {(() => {
+                          if (isPaid) {
+                            return <StatusBadge status="Paid" />;
+                          }
+                          if (inst.status === 'on_hold') {
+                            return <StatusBadge status="On Hold" />;
+                          }
+                          if (inst.status === 'needs_verification') {
+                            return <StatusBadge status="Pending Verification" />;
+                          }
+                          if (isPdoPending) {
+                            return <StatusBadge status="Pending Approval" />;
+                          }
+                          if (isPdoAwaiting) {
+                            return <StatusBadge status="Awaiting Payment" />;
+                          }
+                          if (inst.status === 'pending') {
+                            return <StatusBadge status="Not Paid" />;
+                          }
+                          return <StatusBadge status={inst.status} />;
+                        })()}
+                        {/* Show Pay button only when installment truly needs payment:
+                          - Not already paid/verified
+                          - Has remaining balance
+                          - Not pending/awaiting PDO approval
+                          - Not GCash already submitted (needs_verification) */}
+                        {!isPaid &&
+                         balance > 0 &&
+                         inst.status !== 'needs_verification' &&
+                         inst.status !== 'on_hold' &&
+                         !isPdoPending &&
+                         !isPdoAwaiting && (
                           <button
                             onClick={() => openPayModal(inst)}
                             className="flex items-center gap-1 px-2.5 py-1.5 bg-button-600 hover:bg-button-700 text-white text-xs font-semibold rounded-md transition-colors"

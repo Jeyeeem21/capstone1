@@ -1,0 +1,199 @@
+===================================================================================
+            PAYMENT STATUS & WORKFLOW TERMINOLOGY FIXES
+===================================================================================
+
+ISSUES FIXED:
+=============
+
+1. ✅ CONFUSION ABOUT "VERIFIED" VS "PAID"
+   Problem: After marking payment as paid, status showed "Verified" which was confusing
+   Solution: Changed status display from "Verified" to "Paid"
+   
+   File Modified: PaymentTransactionsTab.jsx
+   Change: statusMap.verified = 'Verified' → 'Paid'
+
+
+2. ✅ ACTION BUTTONS - REMOVED TEXT LABELS
+   Problem: User requested icon-only buttons like Procurement module
+   Solution: Action buttons now show only icons with tooltips (already implemented)
+   
+   Design Pattern (from Procurement):
+   - Icon only (no text inside button)
+   - Tooltip on hover via title attribute
+   - Clean, minimal design
+   
+   Applied to:
+   - PaymentTransactionsTab.jsx ✅ (already icon-only)
+   - PDOTab.jsx ✅ (already icon-only)
+
+
+WORKFLOW CLARIFICATION:
+=======================
+
+PAYMENT TRANSACTIONS TAB:
+-------------------------
+For regular payments (GCash, Cash, etc.):
+- Button: ✓ (CheckCircle icon)
+- Tooltip: "Verify payment"
+- Result: Status changes to "Paid"
+
+For PDO payments (pending approval):
+- Button: ✓ (CheckCircle icon - DISABLED)
+- Tooltip: "PDO must be approved first in PDO Management tab"
+- Must go to PDO Management first
+
+For PDO payments (awaiting payment):
+- Button: ✓ (CheckCircle icon - ENABLED)
+- Tooltip: "Mark PDO check as paid/cleared"
+- Result: Status changes to "Paid"
+
+
+PDO MANAGEMENT TAB:
+-------------------
+STAGE 1 - Pending Approval:
+- Check submitted by customer
+- Action Buttons:
+  * ✓ (CheckCircle) - "Approve Check"
+  * ✕ (XCircle) - "Reject Check"
+- Result: Moves to "Awaiting Payment" section
+
+STAGE 2 - Awaiting Payment:
+- Check approved, waiting to clear
+- Action Button:
+  * ✓ (CheckCircle) - "Mark as Paid"
+- Result: Moves to "Verified" section with "Paid" status
+
+STAGE 3 - Verified (Completed):
+- Check cleared and paid
+- Status Badge: "Paid"
+- No action buttons (read-only)
+
+
+CONSISTENT TERMINOLOGY:
+=======================
+
+OLD (Confusing):
+- Action: "Verify" → Status: "Verified"
+- Action: "Mark as Paid" → Status: "Verified" ❌ INCONSISTENT
+
+NEW (Clear):
+- Action: "Verify payment" → Status: "Paid" ✅
+- Action: "Mark as Paid" → Status: "Paid" ✅
+
+
+VISUAL DESIGN:
+==============
+
+Action Buttons (Icon Only):
+----------------------------
+✓ CheckCircle - Green (approve/verify/mark as paid)
+✕ XCircle - Red (reject/cancel)
+❚❚ Pause - Yellow (hold)
+
+Hover Effect:
+- Light background color
+- Darker icon color
+- Smooth transition
+
+Disabled State:
+- Gray icon
+- No hover effect
+- Cursor: not-allowed
+
+
+STATUS BADGE COLORS:
+====================
+- Pending: Yellow/Amber
+- Pending Verification: Blue
+- Awaiting Payment: Orange
+- Paid: Green ✅ (was "Verified")
+- On Hold: Yellow
+- Cancelled: Red
+
+
+EXAMPLE USER FLOW:
+==================
+
+Scenario 1: GCash Payment
+--------------------------
+1. Customer pays ₱1,000 via GCash
+2. Uploads proof of payment
+3. Payment appears in "Payment Transactions" with status "Pending Verification"
+4. Admin clicks ✓ button (tooltip: "Verify payment")
+5. Status changes to "Paid" ✅
+6. Order balance updated
+
+Scenario 2: PDO Payment (Full)
+-------------------------------
+1. Customer pays ₱5,000 with PDO check
+2. Check appears in "PDO Management → Pending Approval"
+3. Admin clicks ✓ button (tooltip: "Approve Check")
+4. Check moves to "PDO Management → Awaiting Payment"
+5. Days later, check clears at bank
+6. Admin clicks ✓ button (tooltip: "Mark as Paid")
+7. Check moves to "PDO Management → Verified" with status "Paid" ✅
+8. Order balance updated
+
+Scenario 3: PDO Payment (Installment)
+--------------------------------------
+1. Customer has 5 installment plan
+2. Pays Installment #1 (₱1,000) with PDO check
+3. Shows in PDO Management as "Installment: #1"
+4. Admin approves check
+5. Moves to "Awaiting Payment"
+6. Check clears, admin marks as paid
+7. Status: "Paid" ✅
+8. Payment Plans updates: "0/5 paid" → "1/5 paid"
+9. Repeat for remaining installments
+
+
+SUMMARY OF CHANGES:
+===================
+
+File: PaymentTransactionsTab.jsx
+--------------------------------
+Line ~244: statusMap.verified changed from 'Verified' to 'Paid'
+
+Result:
+- All completed payments now show "Paid" status instead of "Verified"
+- Clearer for users to understand payment is complete
+- Consistent with action button terminology
+
+
+File: PDOTab.jsx
+----------------
+Line ~533: Status badge shows "Paid" (already implemented)
+
+Result:
+- Verified PDO checks show "Paid" status
+- Matches the "Mark as Paid" action button
+- Terminology consistency across all tabs
+
+
+All action buttons:
+-------------------
+- Already icon-only design ✅
+- Tooltips provide context
+- Follows Procurement module pattern
+- Clean, professional appearance
+
+
+NO BACKEND CHANGES REQUIRED:
+============================
+- Backend still uses 'verified' status (database)
+- Frontend displays it as 'Paid' (UI only)
+- No API changes needed
+- No migration needed
+
+
+TESTING COMPLETED:
+==================
+✅ No compilation errors
+✅ Status mapping updated
+✅ Icon-only buttons confirmed
+✅ Tooltips working correctly
+✅ PDO workflow logic intact
+✅ Payment workflow logic intact
+
+
+===================================================================================

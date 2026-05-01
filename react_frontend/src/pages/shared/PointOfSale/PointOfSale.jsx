@@ -2098,9 +2098,9 @@ const PointOfSale = () => {
                             step="0.01"
                             min={(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toFixed(2)}
                             className={`w-full pl-8 pr-4 py-2.5 border-2 rounded-lg focus:outline-none focus:ring-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                              pdoAmount && parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)
+                              pdoAmount && (parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) || parseFloat(pdoAmount) > (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) * 10)
                                 ? 'border-red-400 focus:ring-red-500 focus:border-red-500'
-                                : pdoAmount && parseFloat(pdoAmount) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)
+                                : pdoAmount && parseFloat(pdoAmount) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) && parseFloat(pdoAmount) <= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) * 10
                                   ? 'border-green-400 focus:ring-green-500 focus:border-green-500'
                                   : 'border-gray-300 dark:border-gray-600 focus:ring-purple-500 focus:border-purple-500'
                             }`}
@@ -2112,7 +2112,10 @@ const PointOfSale = () => {
                         {pdoAmount && parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) && (
                           <p className="mt-1 text-xs text-red-500">Amount must be at least ₱{(isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
                         )}
-                        {pdoAmount && parseFloat(pdoAmount) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) && (
+                        {pdoAmount && parseFloat(pdoAmount) > (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) * 10 && (
+                          <p className="mt-1 text-xs text-red-500">Amount is too high. Maximum allowed: ₱{((isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) * 10).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                        )}
+                        {pdoAmount && parseFloat(pdoAmount) >= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) && parseFloat(pdoAmount) <= (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) * 10 && (
                           <p className="mt-1 text-xs text-green-600 dark:text-green-400">✓ Valid amount</p>
                         )}
                       </div>
@@ -2445,7 +2448,7 @@ const PointOfSale = () => {
                   disabled={saving || (
                     paymentMethod === 'cash' ? (!cashTendered || parseFloat(cashTendered) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)) : 
                     paymentMethod === 'gcash' ? (gcashReference.replace(/\s/g, '').length !== 13 || gcashProofFiles.length === 0 || !!gcashRefError) : 
-                    paymentMethod === 'pdo' ? (pdoCheckFiles.length === 0 || !pdoCheckNumber.trim() || pdoCheckNumber.length < 6 || pdoCheckNumber.length > 10 || !pdoCheckDate || !pdoBankName.trim() || !pdoAmount || parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total)) :
+                    paymentMethod === 'pdo' ? (pdoCheckFiles.length === 0 || !pdoCheckNumber.trim() || pdoCheckNumber.length < 6 || pdoCheckNumber.length > 10 || !pdoCheckDate || !pdoBankName.trim() || !pdoAmount || parseFloat(pdoAmount) < (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) || parseFloat(pdoAmount) > (isStaggered && installmentPlan && installmentPlan.length > 0 ? firstInstallmentAmount : total) * 10) :
                     false
                   )}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all ${

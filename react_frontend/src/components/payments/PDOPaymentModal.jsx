@@ -5,6 +5,7 @@ import { Button, Modal } from '../ui';
 const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
   const [checkNumber, setCheckNumber] = useState('');
   const [bankName, setBankName] = useState('');
+  const [checkDate, setCheckDate] = useState('');
   const [checkImage, setCheckImage] = useState(null);
   const [checkPreview, setCheckPreview] = useState(null);
   const [errors, setErrors] = useState({});
@@ -46,6 +47,9 @@ const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
     if (!bankName.trim()) {
       newErrors.bankName = 'Bank name is required';
     }
+    if (!checkDate) {
+      newErrors.checkDate = 'Check date is required';
+    }
     if (!checkImage) {
       newErrors.check = 'Check image is required';
     }
@@ -65,6 +69,7 @@ const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
       amount,
       pdo_check_number: checkNumber,
       pdo_check_bank: bankName,
+      pdo_check_date: checkDate,
       pdo_check_image: checkImage
     });
   };
@@ -140,6 +145,27 @@ const PDOPaymentModal = ({ amount, onSubmit, onCancel }) => {
               <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
                 <AlertCircle size={12} />
                 {errors.bankName}
+              </p>
+            )}
+          </div>
+
+          {/* Check Date */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              Check Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={checkDate}
+              onChange={(e) => setCheckDate(e.target.value)}
+              className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-amber-500/20 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                errors.checkDate ? 'border-red-500' : 'border-gray-300 dark:border-gray-600 focus:border-amber-500'
+              }`}
+            />
+            {errors.checkDate && (
+              <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                <AlertCircle size={12} />
+                {errors.checkDate}
               </p>
             )}
           </div>
