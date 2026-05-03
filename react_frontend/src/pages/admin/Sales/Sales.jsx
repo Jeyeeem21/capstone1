@@ -460,16 +460,6 @@ const Sales = () => {
       );
     }},
     { header: 'Amount', accessor: 'total', cell: (row) => `₱${row.total.toLocaleString()}` },
-    { header: 'Profit', accessor: 'total_profit', cell: (row) => {
-      const profit = row.total_profit || 0;
-      const hasCostData = (row.total_cost || 0) > 0;
-      if (!hasCostData) return <span className="text-xs text-gray-400">N/A</span>;
-      return (
-        <span className={`text-xs font-semibold ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-          {profit >= 0 ? '+' : ''}₱{profit.toLocaleString()}
-        </span>
-      );
-    }},
     { header: 'Payment', accessor: 'payment', cell: (row) => (
       <div className="flex flex-col gap-0.5">
         <span className="text-xs">{row.payment}</span>
@@ -539,9 +529,8 @@ const Sales = () => {
       {loading ? (
         <SkeletonStats count={4} className="mb-6" />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatsCard label="Total Revenue" value={`₱${chartFilteredDelivered.reduce((sum, s) => sum + s.total, 0).toLocaleString()}`} unit="from delivered orders" icon={DollarSign} iconBgColor="bg-gradient-to-br from-button-400 to-button-600" />
-          <StatsCard label="Total Cost" value={`₱${chartFilteredDelivered.reduce((sum, s) => sum + (s.total_cost || 0), 0).toLocaleString()}`} unit="production cost" icon={Package} iconBgColor="bg-gradient-to-br from-orange-400 to-orange-600" />
           {(() => {
             const totalProfit = chartFilteredDelivered.reduce((sum, s) => sum + (s.total_profit || 0), 0);
             const totalRevenue = chartFilteredDelivered.reduce((sum, s) => sum + s.total, 0);

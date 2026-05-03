@@ -280,6 +280,10 @@ const PointOfSale = () => {
   const [selectedVoidTxn, setSelectedVoidTxn] = useState(null);
   const [voidReason, setVoidReason] = useState('');
   const [voidPassword, setVoidPassword] = useState('');
+  const [voidRestockQtys, setVoidRestockQtys] = useState({}); // { [saleItemId]: quantity }
+  const [voidRestockNotes, setVoidRestockNotes] = useState('');
+  const [showVoidRestockModal, setShowVoidRestockModal] = useState(false);
+  const [voidedTxnForRestock, setVoidedTxnForRestock] = useState(null);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -572,9 +576,10 @@ const PointOfSale = () => {
     }
   }, [checkPosEmailAvailability]);
 
-  // Recent transactions from API (today only, completed)
+  // Recent transactions from API (today only) — use local date to match PH timezone
   const recentTransactions = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     return (salesRaw || [])
       .filter(s => s.date_short === today)
       .map(s => ({
@@ -633,12 +638,16 @@ const PointOfSale = () => {
     setVoidReason('');
     setVoidPassword('');
     setVoidSearch('');
+    setVoidRestockQtys({});
+    setVoidRestockNotes('');
+    setVoidedTxnForRestock(null);
   };
 
   const confirmVoid = async () => {
     if (!selectedVoidTxn || !voidReason.trim() || !voidPassword.trim() || saving) return;
     setSaving(true);
     try {
+      // Void only — user will restock manually in the next modal
       const payload = { reason: voidReason, admin_password: voidPassword };
       const response = await apiClient.post(`/sales/${selectedVoidTxn.saleId}/void`, payload);
       if (response.success) {
@@ -649,9 +658,19 @@ const PointOfSale = () => {
         refetchSales();
         refetchProducts();
         toast.success('Transaction Voided', `${selectedVoidTxn.id} voided × refund processed`);
+        // Pre-fill restock quantities at full qty, then open restock modal
+        const initialQtys = {};
+        (selectedVoidTxn.itemsList || []).forEach(item => {
+          if (item.id) initialQtys[item.id] = item.quantity;
+        });
+        setVoidRestockQtys(initialQtys);
+        setVoidRestockNotes('');
+        setVoidedTxnForRestock(selectedVoidTxn);
         setShowVoidModal(false);
         setSelectedVoidTxn(null);
         setVoidReason('');
+        setVoidPassword('');
+        setShowVoidRestockModal(true);
       } else {
         throw response;
       }
@@ -662,11 +681,44 @@ const PointOfSale = () => {
     }
   };
 
-  const filteredVoidTxns = recentTransactions.filter(t => 
-    (t.id.toLowerCase().includes(voidSearch.toLowerCase()) || 
-    t.time.toLowerCase().includes(voidSearch.toLowerCase())) &&
-    t.status === 'completed'
-  );
+  const handleConfirmVoidRestock = async () => {
+    if (!voidedTxnForRestock || saving) return;
+    const selectedEntries = Object.entries(voidRestockQtys).filter(([, qty]) => qty > 0);
+    if (selectedEntries.length === 0) return;
+    setSaving(true);
+    try {
+      const items = selectedEntries.map(([id, quantity]) => ({ id: parseInt(id), quantity }));
+      const payload = { items };
+      if (voidRestockNotes.trim()) payload.notes = voidRestockNotes.trim();
+      const response = await apiClient.post(`/sales/${voidedTxnForRestock.saleId}/restock`, payload);
+      if (response.success) {
+        invalidateCache('/sales');
+        invalidateCache('/products');
+        invalidateCache('/stock-logs');
+        refetchSales();
+        refetchProducts();
+        toast.success('Items Restocked', `${items.length} item(s) have been restocked.`);
+        setShowVoidRestockModal(false);
+        setVoidedTxnForRestock(null);
+        setVoidRestockQtys({});
+        setVoidRestockNotes('');
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      toast.error('Restock Failed', error.message || 'Failed to restock items');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Only completed transactions can be voided from POS
+  const filteredVoidTxns = recentTransactions.filter(t => {
+    const matchesSearch = !voidSearch ||
+      t.id.toLowerCase().includes(voidSearch.toLowerCase()) ||
+      t.time.toLowerCase().includes(voidSearch.toLowerCase());
+    return matchesSearch && t.status === 'completed';
+  });
 
   const completeSale = () => {
     if (cart.length === 0) return;
@@ -1990,6 +2042,17 @@ const PointOfSale = () => {
 
                 {/* Transactions List */}
                 <div className="space-y-2 mb-4">
+                  {filteredVoidTxns.length === 0 && (
+                    <div className="py-6 flex flex-col items-center gap-2 text-gray-400 border-2 border-dashed border-primary-200 dark:border-primary-700 rounded-lg">
+                      <XCircle size={24} className="opacity-40" />
+                      <p className="text-sm font-medium">
+                        {voidSearch ? `No transaction found for "${voidSearch}"` : 'No transactions today'}
+                      </p>
+                      <p className="text-xs text-center px-4">
+                        {voidSearch ? 'Try a different order ID or time.' : 'Place an order first before voiding.'}
+                      </p>
+                    </div>
+                  )}
                   {filteredVoidTxns.map(txn => {
                     const isVoided = txn.status === 'voided';
                     const isSelected = selectedVoidTxn?.id === txn.id;
@@ -2083,6 +2146,7 @@ const PointOfSale = () => {
                     </p>
                   </div>
                 )}
+
               </div>
 
               {/* Modal Footer */}
@@ -2099,6 +2163,141 @@ const PointOfSale = () => {
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <RotateCcw size={14} /> Confirm Void & Refund
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Post-Void Restock Items Modal */}
+      {showVoidRestockModal && voidedTxnForRestock && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-[60]" />
+          <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-primary-200 dark:border-primary-700">
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">
+                  Restock Items — {voidedTxnForRestock.id}
+                </h3>
+                <button
+                  onClick={() => { setShowVoidRestockModal(false); setVoidedTxnForRestock(null); setVoidRestockQtys({}); }}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                  <p className="text-xs text-blue-800 dark:text-blue-300">
+                    <span className="font-semibold">Note:</span> Select items in good condition and set the quantity to restock. Set quantity to 0 or uncheck to skip damaged/unsellable items.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border-2 border-primary-200 dark:border-primary-700 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-primary-50 dark:bg-primary-900/20">
+                      <tr>
+                        <th className="px-3 py-2 w-10">
+                          <input
+                            type="checkbox"
+                            checked={
+                              (voidedTxnForRestock.itemsList || []).filter(i => i.id).length > 0 &&
+                              (voidedTxnForRestock.itemsList || []).filter(i => i.id).every(i => (voidRestockQtys[i.id] ?? 0) > 0)
+                            }
+                            onChange={(e) => {
+                              const newQtys = { ...voidRestockQtys };
+                              (voidedTxnForRestock.itemsList || []).filter(i => i.id).forEach(i => {
+                                newQtys[i.id] = e.target.checked ? i.quantity : 0;
+                              });
+                              setVoidRestockQtys(newQtys);
+                            }}
+                            className="rounded border-gray-300 dark:border-gray-600 text-green-500 focus:ring-green-500"
+                          />
+                        </th>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Product</th>
+                        <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Returned</th>
+                        <th className="text-center px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300">Restock Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                      {(voidedTxnForRestock.itemsList || []).map((item, idx) => {
+                        const qty = voidRestockQtys[item.id] ?? 0;
+                        return (
+                          <tr key={item.id ?? idx} className="dark:bg-gray-700/50">
+                            <td className="px-3 py-2">
+                              <input
+                                type="checkbox"
+                                checked={qty > 0}
+                                onChange={(e) => {
+                                  setVoidRestockQtys(prev => ({
+                                    ...prev,
+                                    [item.id]: e.target.checked ? item.quantity : 0,
+                                  }));
+                                }}
+                                className="rounded border-gray-300 dark:border-gray-600 text-green-500 focus:ring-green-500"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.variety_color || '#6B7280' }} />
+                                <span className="text-gray-800 dark:text-gray-100 text-xs font-medium">
+                                  {item.product_name || item.name}{item.weight_formatted ? ` (${item.weight_formatted})` : ''}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center text-gray-600 dark:text-gray-300 text-xs">{item.quantity}</td>
+                            <td className="px-3 py-2 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                max={item.quantity}
+                                value={qty}
+                                onChange={(e) => {
+                                  const val = Math.max(0, Math.min(item.quantity, parseInt(e.target.value) || 0));
+                                  setVoidRestockQtys(prev => ({ ...prev, [item.id]: val }));
+                                }}
+                                className="w-16 text-center px-2 py-1 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-green-500"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="px-5 pb-3">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                    Reason / Notes <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={voidRestockNotes}
+                    onChange={(e) => setVoidRestockNotes(e.target.value)}
+                    placeholder="e.g. Items in good condition, bag torn..."
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 px-5 py-4 border-t border-gray-100 dark:border-gray-700">
+                <button
+                  onClick={() => { setShowVoidRestockModal(false); setVoidedTxnForRestock(null); setVoidRestockQtys({}); setVoidRestockNotes(''); }}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50"
+                >
+                  Skip
+                </button>
+                <button
+                  onClick={handleConfirmVoidRestock}
+                  disabled={saving || Object.values(voidRestockQtys).filter(q => q > 0).length === 0}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Package size={14} /> {saving ? 'Restocking...' : `Restock ${Object.values(voidRestockQtys).filter(q => q > 0).length} Item(s)`}
                 </button>
               </div>
             </div>

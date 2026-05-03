@@ -53,7 +53,13 @@ class SaleService
             // Generate transaction ID: ORD-YYYYMMDD-NNN (counter resets yearly, min 3 digits)
             $today = now()->format('Ymd');
             $year = now()->format('Y');
-            $count = Sale::whereYear('created_at', $year)->count() + 1;
+            // Extract the highest sequence number used this year to avoid duplicates
+            $lastTxn = Sale::whereYear('created_at', $year)
+                ->where('transaction_id', 'like', 'ORD-' . $year . '%')
+                ->orderByRaw('CAST(SUBSTRING_INDEX(transaction_id, "-", -1) AS UNSIGNED) DESC')
+                ->value('transaction_id');
+            $lastSeq = $lastTxn ? (int) substr($lastTxn, strrpos($lastTxn, '-') + 1) : 0;
+            $count = $lastSeq + 1;
             $padLength = max(3, strlen((string) $count));
             $transactionId = 'ORD-' . $today . '-' . str_pad($count, $padLength, '0', STR_PAD_LEFT);
 
@@ -349,14 +355,19 @@ class SaleService
      * Restock selected items from a returned order.
      * Only items that haven't been restocked yet can be restocked.
      */
-    public function restockItems(int $saleId, array $items): Sale
+    public function restockItems(int $saleId, array $items, ?string $notes = null): Sale
     {
-        return DB::transaction(function () use ($saleId, $items) {
+        return DB::transaction(function () use ($saleId, $items, $notes) {
             $sale = Sale::with('items.product')->findOrFail($saleId);
 
-            if ($sale->status !== 'returned') {
-                throw new \Exception('Only returned orders can have items restocked.');
+            if (!in_array($sale->status, ['returned', 'voided'])) {
+                throw new \Exception('Only returned or voided orders can have items restocked.');
             }
+
+            $isVoid = $sale->status === 'voided';
+
+            // Build note suffix from admin-provided notes
+            $noteSuffix = $notes ? " — {$notes}" : '';
 
             // Build lookup: itemId => quantity
             $quantityMap = collect($items)->keyBy('id')->map(fn($i) => (int) $i['quantity']);
@@ -376,6 +387,10 @@ class SaleService
                 $product->stocks += $quantity;
                 $product->save();
 
+                $restockNote = $isVoid
+                    ? "Restocked from void ({$sale->transaction_id})"
+                    : "Restocked from return ({$sale->transaction_id})";
+
                 StockLog::create([
                     'product_id' => $product->product_id,
                     'type' => 'in',
@@ -385,13 +400,18 @@ class SaleService
                     'kg_amount' => $product->weight ? $quantity * (float) $product->weight : null,
                     'source_type' => 'order_return',
                     'source_id' => $sale->id,
-                    'notes' => "Restocked from return ({$sale->transaction_id}) — {$sale->return_reason}",
+                    'notes' => $restockNote . $noteSuffix,
                 ]);
 
                 $item->update(['restocked' => true]);
             }
 
-            // Log return losses — items returned but not restocked (damaged/unsellable)
+            // Build base note for items NOT restocked (loss tracking — stock already deducted at order processing)
+            $lossBaseNote = $isVoid
+                ? "Not restocked from void ({$sale->transaction_id})"
+                : "Not restocked from return ({$sale->transaction_id})";
+
+            // Log partial losses — items restocked at less than full quantity
             foreach ($sale->items as $item) {
                 if ($item->restocked) {
                     $restockedQty = $quantityMap->has($item->id) ? min($quantityMap[$item->id], $item->quantity) : 0;
@@ -404,17 +424,17 @@ class SaleService
                             'type' => 'out',
                             'quantity_before' => $currentStock,
                             'quantity_change' => $lossQty,
-                            'quantity_after' => $currentStock,
+                            'quantity_after' => $currentStock, // No actual deduction — stock was already reduced at order processing
                             'kg_amount' => $product && $product->weight ? $lossQty * (float) $product->weight : null,
                             'source_type' => 'return_loss',
                             'source_id' => $sale->id,
-                            'notes' => "Damaged/unsellable from return ({$sale->transaction_id}) — {$sale->return_reason}",
+                            'notes' => $lossBaseNote . $noteSuffix,
                         ]);
                     }
                 }
             }
 
-            // Also log items that were skipped entirely (qty set to 0 / unchecked)
+            // Log fully-skipped items (qty=0 or unchecked — not sent in quantityMap)
             foreach ($sale->items as $item) {
                 if (!$item->restocked && !$quantityMap->has($item->id)) {
                     $product = Product::find($item->product_id);
@@ -424,13 +444,13 @@ class SaleService
                         'type' => 'out',
                         'quantity_before' => $currentStock,
                         'quantity_change' => $item->quantity,
-                        'quantity_after' => $currentStock,
+                        'quantity_after' => $currentStock, // No actual deduction — stock was already reduced at order processing
                         'kg_amount' => $product && $product->weight ? $item->quantity * (float) $product->weight : null,
                         'source_type' => 'return_loss',
                         'source_id' => $sale->id,
-                        'notes' => "Damaged/unsellable from return ({$sale->transaction_id}) — {$sale->return_reason}",
+                        'notes' => $lossBaseNote . $noteSuffix,
                     ]);
-                    $item->update(['restocked' => true]); // Mark as handled
+                    $item->update(['restocked' => true]); // Mark as handled so it doesn't appear again
                 }
             }
 
@@ -469,9 +489,10 @@ class SaleService
     }
 
     /**
-     * Void a sale — restore stock.
+     * Void a sale — stock is NOT automatically restored.
+     * Restocking is always done manually via /sales/{id}/restock.
      */
-    public function voidSale(int $saleId, ?string $reason = null, ?string $voidedBy = null, ?string $authorizedBy = null): Sale
+    public function voidSale(int $saleId, ?string $reason = null, ?string $voidedBy = null, ?string $authorizedBy = null, ?array $items = null): Sale
     {
         return DB::transaction(function () use ($saleId, $reason, $voidedBy, $authorizedBy) {
             $sale = Sale::with('items.product')->findOrFail($saleId);
@@ -480,34 +501,24 @@ class SaleService
                 throw new \Exception('This sale is already voided.');
             }
 
-            // Restore stock for each item
-            foreach ($sale->items as $item) {
-                $product = Product::lockForUpdate()->findOrFail($item->product_id);
-                $stockBefore = (int) $product->stocks;
-                $product->stocks += $item->quantity;
-                $product->save();
-
-                // Log stock return
-                StockLog::create([
-                    'product_id' => $product->product_id,
-                    'type' => 'in',
-                    'quantity_before' => $stockBefore,
-                    'quantity_change' => $item->quantity,
-                    'quantity_after' => (int) $product->stocks,
-                    'kg_amount' => $product->weight ? $item->quantity * (float) $product->weight : null,
-                    'source_type' => 'sale_void',
-                    'source_id' => $sale->id,
-                    'notes' => "Voided sale ({$sale->transaction_id})",
-                ]);
-            }
-
-            // Mark voided
+            // Mark voided — no auto-restock; user handles it via the Restock Items button
             $sale->update([
                 'status' => 'voided',
                 'notes' => $reason,
                 'voided_by' => $voidedBy,
                 'authorized_by' => $authorizedBy,
             ]);
+
+            // Update related OUT stock log notes to indicate the order was voided
+            StockLog::where('source_id', $sale->id)
+                ->where('type', 'out')
+                ->where('source_type', 'order')
+                ->get()
+                ->each(function ($log) use ($sale) {
+                    if (!str_contains($log->notes ?? '', '[Voided]')) {
+                        $log->update(['notes' => ($log->notes ?? '') . ' [Voided]']);
+                    }
+                });
 
             // Decrement customer orders
             if ($sale->customer_id) {

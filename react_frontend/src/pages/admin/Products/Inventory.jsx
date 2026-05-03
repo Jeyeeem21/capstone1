@@ -2359,7 +2359,7 @@ const Inventory = () => {
                           {log.kg_amount ? parseFloat(log.kg_amount).toLocaleString() : '—'}
                         </td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-center text-xs text-gray-600 dark:text-gray-300">
-                          {(log.stock_before ?? '—')} → {(log.stock_after ?? '—')}
+                          {(log.quantity_before ?? '—')} → {(log.quantity_after ?? '—')}
                         </td>
                         <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
                           {log.created_at ? new Date(log.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '—'}

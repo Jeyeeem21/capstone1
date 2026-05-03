@@ -359,11 +359,6 @@ const Products = () => {
                     )}
                   </div>
                   <div className="p-5">
-                    <div className="flex items-center gap-1 mb-2">
-                      <Star size={14} className="fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{product.rating}</span>
-                      <span className="text-sm text-gray-400">({product.reviewsCount})</span>
-                    </div>
                     <h3 className="font-semibold text-gray-800 dark:text-gray-100 mb-2 group-hover:text-button-600 dark:hover:text-button-400 dark:text-button-400 transition-colors">
                       {product.name}
                     </h3>
@@ -422,13 +417,7 @@ const Products = () => {
                         {product.name}
                       </h3>
                       <p className="text-gray-500 dark:text-gray-400 mb-4">{product.description}</p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
-                          <Star size={16} className="fill-yellow-400 text-yellow-400" />
-                          <span className="font-medium text-gray-700 dark:text-gray-200">{product.rating}</span>
-                          <span className="text-gray-400">({product.reviewsCount} reviews)</span>
-                        </div>
-                      </div>
+
                     </div>
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                       <div>

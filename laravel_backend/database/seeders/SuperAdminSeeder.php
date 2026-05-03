@@ -12,12 +12,12 @@ class SuperAdminSeeder extends Seeder
     {
         // Create Super Admin account (only one)
         User::updateOrCreate(
-            ['email' => 'superadmin@kjpricemill.com'],
+            ['email' => 'jmpagaran24@gmail.com'],
             [
-                'name' => 'Super Admin',
-                'first_name' => 'Super',
-                'last_name' => 'Admin',
-                'email' => 'superadmin@kjpricemill.com',
+                'name' => 'JM Pagaran',
+                'first_name' => 'JM',
+                'last_name' => 'Pagaran',
+                'email' => 'jmpagaran24@gmail.com',
                 'password' => Hash::make('superadmin123'),
                 'role' => User::ROLE_SUPER_ADMIN,
                 'status' => 'active',
@@ -27,12 +27,26 @@ class SuperAdminSeeder extends Seeder
 
         // Create default Admin account
         User::updateOrCreate(
-            ['email' => 'admin@kjpricemill.com'],
+            ['email' => 'angelicabejer07@gmail.com'],
             [
-                'name' => 'Admin User',
-                'first_name' => 'Admin',
-                'last_name' => 'User',
-                'email' => 'admin@kjpricemill.com',
+                'name' => 'Angelica Bejer',
+                'first_name' => 'Angelica',
+                'last_name' => 'Bejer',
+                'email' => 'angelicabejer07@gmail.com',
+                'password' => Hash::make('admin123'),
+                'role' => User::ROLE_ADMIN,
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+         User::updateOrCreate(
+            ['email' => 'jholandgalicia123@gmail.com'],
+            [
+                'name' => 'Jholand Galicia',
+                'first_name' => 'Jholand',
+                'last_name' => 'Galicia',
+                'email' => 'jholandgalicia123@gmail.com',
                 'password' => Hash::make('admin123'),
                 'role' => User::ROLE_ADMIN,
                 'status' => 'active',

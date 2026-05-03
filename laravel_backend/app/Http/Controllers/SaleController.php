@@ -558,9 +558,10 @@ class SaleController extends Controller
                 'items' => 'required|array|min:1',
                 'items.*.id' => 'required|integer|exists:sale_items,id',
                 'items.*.quantity' => 'required|integer|min:1',
+                'notes' => 'nullable|string|max:500',
             ]);
 
-            $sale = $this->saleService->restockItems($id, $validated['items']);
+            $sale = $this->saleService->restockItems($id, $validated['items'], $request->input('notes'));
 
             $this->logAudit('UPDATE', 'Orders', "Restocked " . count($validated['items']) . " item(s) from returned order #{$sale->transaction_id}.", [
                 'sale_id' => $sale->id,

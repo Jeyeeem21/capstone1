@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer } from 'lucide-react';
+import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer, PackageCheck } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -291,6 +291,7 @@ const AdminOrders = () => {
   const [restockOrder, setRestockOrder] = useState(null);
   // { [itemId]: quantity } — only contains items to be restocked
   const [restockQuantities, setRestockQuantities] = useState({});
+  const [restockNotes, setRestockNotes] = useState('');
   // Multi-select for batch printing
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
 
@@ -430,6 +431,7 @@ const AdminOrders = () => {
       'pending': 'processing',
       'processing': isDelivery ? 'shipped' : 'completed',
       'shipped': 'delivered',
+      'picking_up': 'picked_up',
     };
     const nextStatus = nextStatusMap[order.raw_status];
     if (!nextStatus) return;
@@ -492,7 +494,7 @@ const AdminOrders = () => {
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
-        const labels = { processing: 'Processing', shipped: 'Shipped', delivered: 'Delivered', completed: 'Completed' };
+        const labels = { processing: 'Processing', shipped: 'Shipped', delivered: 'Delivered', completed: 'Completed', picked_up: 'Picked Up' };
         suppressNotifToasts();
         toast.success('Status Updated', `Order ${order.order_id} moved to ${labels[nextStatus]}.`);
         // Fire-and-forget email
@@ -816,6 +818,7 @@ const AdminOrders = () => {
       initialQtys[i.id] = i.quantity;
     });
     setRestockQuantities(initialQtys);
+    setRestockNotes('');
     setIsRestockModalOpen(true);
   }, []);
 
@@ -825,18 +828,22 @@ const AdminOrders = () => {
     setSaving(true);
     try {
       const items = selectedEntries.map(([id, quantity]) => ({ id: parseInt(id), quantity }));
-      const response = await apiClient.post(`/sales/${restockOrder.id}/restock`, { items });
+      const payload = { items };
+      if (restockNotes.trim()) payload.notes = restockNotes.trim();
+      const response = await apiClient.post(`/sales/${restockOrder.id}/restock`, payload);
       if (response.success) {
         // Optimistic: mark restocked items
         optimisticUpdate(prev => prev.map(o => o.id === restockOrder.id ? { ...o, restocked: true } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
+        invalidateCache('/stock-logs');
         refetch();
         suppressNotifToasts();
         toast.success('Items Restocked', `${items.length} item(s) have been restocked.`);
         setIsRestockModalOpen(false);
         setRestockOrder(null);
         setRestockQuantities({});
+        setRestockNotes('');
       } else {
         throw response;
       }
@@ -845,7 +852,7 @@ const AdminOrders = () => {
     } finally {
       setSaving(false);
     }
-  }, [saving, restockOrder, restockQuantities, refetch, toast]);
+  }, [saving, restockOrder, restockQuantities, restockNotes, refetch, toast]);
 
   // ─── Batch Print Selected Orders ─────────────────────────
 
@@ -1199,11 +1206,12 @@ const AdminOrders = () => {
       return { label: 'Complete', icon: CheckCircle, color: 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-600 dark:text-emerald-400' };
     }
     if (rawSt === 'shipped') return { label: 'Deliver', icon: CheckCircle, color: 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 hover:text-green-600 dark:text-green-400' };
+    if (rawSt === 'picking_up') return { label: 'Confirm Picked Up', icon: PackageCheck, color: 'text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-orange-600 dark:text-orange-400' };
     return null;
   };
 
   // Hide Actions column for tabs that have no actions
-  const tabsWithNoActions = ['Cancelled', 'Voided'];
+  const tabsWithNoActions = ['Cancelled'];
   const showActions = !tabsWithNoActions.includes(activeStatusTab);
 
   const baseColumns = [
@@ -1261,6 +1269,7 @@ const AdminOrders = () => {
         row.raw_status === 'pending' || row.raw_status === 'processing' ||
         row.raw_status === 'delivered' || row.raw_status === 'return_requested' ||
         row.raw_status === 'picking_up' || row.raw_status === 'picked_up' || row.raw_status === 'returned' ||
+        (row.raw_status === 'voided' && (row.items || []).some(i => !i.restocked)) ||
         row.payment_status === 'not_paid';
 
       if (!hasAnyAction) return null;
@@ -1325,7 +1334,7 @@ const AdminOrders = () => {
               <RotateCcw size={15} />
             </button>
           )}
-          {row.raw_status === 'returned' && (row.items || []).some(i => !i.restocked) && (
+          {(row.raw_status === 'returned' || row.raw_status === 'voided') && (row.items || []).some(i => !i.restocked) && (
             <button
               onClick={() => handleOpenRestock(row)}
               disabled={saving}
@@ -1593,7 +1602,7 @@ const AdminOrders = () => {
         size="full"
         footer={
           <div className="flex gap-3 justify-end">
-            {selectedOrder?.raw_status === 'returned' && (selectedOrder.items || []).some(i => !i.restocked) && (
+            {(selectedOrder?.raw_status === 'returned' || selectedOrder?.raw_status === 'voided') && (selectedOrder.items || []).some(i => !i.restocked) && (
               <button
                 onClick={() => { setIsViewModalOpen(false); handleOpenRestock(selectedOrder); }}
                 className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
@@ -2605,12 +2614,12 @@ const AdminOrders = () => {
       {/* Restock Items Modal */}
       <Modal
         isOpen={isRestockModalOpen}
-        onClose={() => { setIsRestockModalOpen(false); setRestockOrder(null); setRestockQuantities({}); }}
+        onClose={() => { setIsRestockModalOpen(false); setRestockOrder(null); setRestockQuantities({}); setRestockNotes(''); }}
         title={`Restock Items — ${restockOrder?.order_id || ''}`}
         maxWidth="md"
         footer={
           <div className="flex gap-3">
-            <button onClick={() => { setIsRestockModalOpen(false); setRestockOrder(null); setRestockQuantities({}); }} className="flex-1 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">Cancel</button>
+            <button onClick={() => { setIsRestockModalOpen(false); setRestockOrder(null); setRestockQuantities({}); setRestockNotes(''); }} className="flex-1 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50">Cancel</button>
             <button
               onClick={handleConfirmRestock}
               disabled={saving || Object.values(restockQuantities).filter(q => q > 0).length === 0}
@@ -2708,11 +2717,22 @@ const AdminOrders = () => {
                 </tbody>
               </table>
             </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                Reason / Notes <span className="font-normal text-gray-400">(optional — appears in stock log)</span>
+              </label>
+              <input
+                type="text"
+                value={restockNotes}
+                onChange={(e) => setRestockNotes(e.target.value)}
+                placeholder="e.g. Bag torn, items still good condition..."
+                className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
           </div>
         )}
       </Modal>
-
-      {/* Mark as Paid Modal */}
       {isPayModalOpen && (
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => { setIsPayModalOpen(false); setPayOrder(null); stopPayCamera(); }} />

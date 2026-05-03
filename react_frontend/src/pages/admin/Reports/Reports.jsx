@@ -19,8 +19,11 @@ const peso    = (n) => `\u20B1${fmt(n)}`;
 const fmtDate = (d) => d ? new Date(d + (d.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : '\u2014';
 const pctClass = (v) => v >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
 
-const today        = () => new Date().toISOString().slice(0, 10);
-const firstOfMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; };
+// Use local date methods so PH timezone (UTC+8) is respected instead of UTC
+const localDate    = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today        = () => localDate();
+const firstOfMonth = () => { const d = new Date(); d.setDate(1); return localDate(d); };
 
 const PAY_LABELS = { cash: 'Cash', gcash: 'GCash', cod: 'COD', pay_later: 'Pay Later' };
 
@@ -297,17 +300,22 @@ const ProfitLossStatement = ({ data }) => {
 // Date range picker
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PRESETS = [
+// Re-computed each call so the dates are always fresh (important for long-lived sessions)
+const getPresets = () => [
   { label: 'This Month', from: firstOfMonth(), to: today() },
   {
     label: 'Last Month',
-    from: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,10); })(),
-    to:   (() => { const d = new Date(); d.setDate(0); return d.toISOString().slice(0,10); })(),
+    // first day of last month (local)
+    from: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return localDate(d); })(),
+    // last day of last month (local) — setDate(0) rolls back to the last day of the previous month
+    to:   (() => { const d = new Date(); d.setDate(0); return localDate(d); })(),
   },
   { label: 'This Year', from: `${new Date().getFullYear()}-01-01`, to: today() },
 ];
 
-const DateBar = ({ dateFrom, dateTo, onChange, onRefresh, loading }) => (
+const DateBar = ({ dateFrom, dateTo, onChange, onRefresh, loading, activePreset, onPreset }) => {
+  const presets = getPresets();
+  return (
   <div className="flex flex-wrap items-end gap-3 mb-6 p-4 rounded-xl border-2 border-primary-200 dark:border-primary-700"
     style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
     <div>
@@ -325,11 +333,15 @@ const DateBar = ({ dateFrom, dateTo, onChange, onRefresh, loading }) => (
         style={{ color: 'var(--color-text-content)' }} />
     </div>
     <div className="flex gap-2 flex-wrap">
-      {PRESETS.map((p) => (
+      {presets.map((p) => (
         <button key={p.label}
-          onClick={() => { onChange('from', p.from); onChange('to', p.to); }}
-          className="px-3 py-2 text-xs font-medium border-2 border-primary-200 dark:border-primary-700 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
-          style={{ color: 'var(--color-text-content)' }}>
+          onClick={() => onPreset(p)}
+          className={`px-3 py-2 text-xs font-medium border-2 rounded-lg transition-colors ${
+            activePreset === p.label
+              ? 'bg-button-500 border-button-500 text-white'
+              : 'border-primary-200 dark:border-primary-700 hover:bg-primary-100 dark:hover:bg-primary-900/30'
+          }`}
+          style={activePreset !== p.label ? { color: 'var(--color-text-content)' } : {}}>
           {p.label}
         </button>
       ))}
@@ -342,7 +354,8 @@ const DateBar = ({ dateFrom, dateTo, onChange, onRefresh, loading }) => (
       {loading ? 'Loading\u2026' : 'Refresh'}
     </button>
   </div>
-);
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tabs definition
@@ -367,6 +380,7 @@ const Reports = () => {
 
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo,   setDateTo]   = useState(today);
+  const [activePreset, setActivePreset] = useState('This Month');
   const [activeTab, setActiveTab] = useState('pl');
 
   // Use the persistent reports data hook
@@ -402,9 +416,20 @@ const Reports = () => {
     return () => clearTimeout(t);
   }, [dateFrom, dateTo, fetchReports]);
 
+  // Manual date input — clears preset highlight
   const handleDateChange = useCallback((field, val) => {
     if (field === 'from') setDateFrom(val);
     else setDateTo(val);
+    setActivePreset(null);
+  }, []);
+
+  // Preset button — sets all three states atomically so handleDateChange never fires
+  const handlePreset = useCallback((preset) => {
+    const p = getPresets().find(x => x.label === preset.label);
+    if (!p) return;
+    setActivePreset(p.label);
+    setDateFrom(p.from);
+    setDateTo(p.to);
   }, []);
 
   const handleRefresh = useCallback(() => fetchReports(datesRef.current.dateFrom, datesRef.current.dateTo, true), [fetchReports]);
@@ -766,6 +791,8 @@ const Reports = () => {
         onChange={handleDateChange}
         onRefresh={handleRefresh}
         loading={isRefreshing}
+        activePreset={activePreset}
+        onPreset={handlePreset}
       />
 
       {/* Tab navigation */}

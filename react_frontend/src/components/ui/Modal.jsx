@@ -136,19 +136,21 @@ const ConfirmModal = ({
   variant = 'danger',
   icon: Icon = null,
   isLoading = false,
+  loading = false, // alias for isLoading
 }) => {
+  const isDisabled = isLoading || loading;
   // Enter or Ctrl+Enter to confirm
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e) => {
       if ((e.key === 'Enter' && (e.ctrlKey || e.metaKey)) || (e.key === 'Enter' && !e.target.closest('input, textarea, select'))) {
         e.preventDefault();
-        if (!isLoading && onConfirm) onConfirm();
+        if (!isDisabled && onConfirm) onConfirm();
       }
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [isOpen, isLoading, onConfirm]);
+  }, [isOpen, isDisabled, onConfirm]);
   const variants = {
     danger: { iconBg: 'bg-red-100 dark:bg-red-900/30', iconColor: 'text-red-600 dark:text-red-400', buttonVariant: 'danger' },
     warning: { iconBg: 'bg-yellow-100 dark:bg-yellow-900/30', iconColor: 'text-yellow-600 dark:text-yellow-400', buttonVariant: 'warning' },
@@ -169,11 +171,11 @@ const ConfirmModal = ({
         )}
         <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
         <div className="flex gap-3 justify-center">
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
+          <Button variant="outline" onClick={onClose} disabled={isDisabled}>
             {cancelText}
           </Button>
-          <Button variant={variantStyle.buttonVariant} onClick={onConfirm} disabled={isLoading}>
-            {isLoading ? 'Processing...' : confirmText}
+          <Button variant={variantStyle.buttonVariant} onClick={onConfirm} disabled={isDisabled}>
+            {isDisabled ? 'Processing...' : confirmText}
           </Button>
         </div>
       </div>

@@ -542,6 +542,20 @@ class ProductService
             $profitPerUnit = round($sellingPrice - $costPerUnit, 2);
             $profitMargin = $sellingPrice > 0 ? round(($profitPerUnit / $sellingPrice) * 100, 2) : 0;
 
+            // Compute Perpetual Weighted Average Cost (PWAC):
+            // new_avg = ((units_on_hand_before * prev_running_avg) + total_cost_of_new_batch)
+            //           / (units_on_hand_before + new_units)
+            $prevLog = StockLog::where('product_id', $product->product_id)
+                ->where('type', 'in')
+                ->whereNotNull('running_avg_cost')
+                ->orderByDesc('created_at')
+                ->first();
+            $prevRunningAvg = $prevLog ? (float) $prevLog->running_avg_cost : 0;
+            $totalUnitsAfter = $stockBefore + $totalUnits;
+            $runningAvgCost = $totalUnitsAfter > 0
+                ? round(($stockBefore * $prevRunningAvg + $totalCost) / $totalUnitsAfter, 4)
+                : 0;
+
             // Log the stock movement with cost data
             StockLog::create([
                 'product_id' => $product->product_id,
@@ -558,6 +572,7 @@ class ProductService
                 'drying_cost' => round($totalDryingCost, 2),
                 'total_cost' => $totalCost,
                 'cost_per_unit' => $costPerUnit,
+                'running_avg_cost' => $runningAvgCost,
                 'selling_price' => $sellingPrice,
                 'profit_per_unit' => $profitPerUnit,
                 'profit_margin' => $profitMargin,

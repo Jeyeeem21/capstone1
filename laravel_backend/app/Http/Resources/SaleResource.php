@@ -9,48 +9,70 @@ use App\Models\StockLog;
 class SaleResource extends JsonResource
 {
     /**
-     * Per-request cache of average costs per product (avoids N+1 StockLog queries).
+     * Per-request PWAC snapshot cache: product_id => [['created_at' => Carbon, 'running_avg_cost' => float], ...]
+     * Ordered chronologically so we can find the last snapshot before any given sale date.
      */
-    private static ?array $avgCosts = null;
+    private static ?array $pwacLogs = null;
 
     /**
-     * Pre-load average costs for all products in a single query.
+     * Pre-load PWAC running_avg_cost snapshots for all products in a single query.
      */
     public static function preloadAvgCosts(): void
     {
         $rows = StockLog::where('type', 'in')
-            ->whereNotNull('total_cost')
-            ->where('total_cost', '>', 0)
-            ->groupBy('product_id')
-            ->selectRaw('product_id, SUM(total_cost) as total_cost, SUM(quantity_change) as total_units')
+            ->whereNotNull('running_avg_cost')
+            ->where('running_avg_cost', '>', 0)
+            ->orderBy('created_at')
+            ->select('product_id', 'created_at', 'running_avg_cost')
             ->get();
 
-        self::$avgCosts = [];
+        self::$pwacLogs = [];
         foreach ($rows as $row) {
-            self::$avgCosts[$row->product_id] = $row->total_units > 0
-                ? round($row->total_cost / $row->total_units, 2)
-                : 0;
+            self::$pwacLogs[$row->product_id][] = [
+                'created_at'      => $row->created_at,
+                'running_avg_cost' => (float) $row->running_avg_cost,
+            ];
         }
+    }
+
+    /**
+     * Get the PWAC cost per unit for a product at the time of a given sale date.
+     * Returns the running_avg_cost from the most recent distribution on or before $saleDate.
+     */
+    private static function getPwacCostForSale(int $productId, $saleDate): float
+    {
+        $logs = self::$pwacLogs[$productId] ?? [];
+        $matched = null;
+        foreach ($logs as $log) {
+            if ($log['created_at'] <= $saleDate) {
+                $matched = $log;
+            } else {
+                break; // logs are ordered chronologically
+            }
+        }
+        return $matched ? $matched['running_avg_cost'] : 0;
     }
 
     public function toArray(Request $request): array
     {
         // Build cache on first use if not preloaded
-        if (self::$avgCosts === null) {
+        if (self::$pwacLogs === null) {
             self::preloadAvgCosts();
         }
 
-        $items = $this->items->map(function ($item) {
+        $saleDate = $this->created_at;
+
+        $items = $this->items->map(function ($item) use ($saleDate) {
             $product = $item->product;
             $weight = $product?->weight;
             $weightFormatted = $weight
                 ? (intval($weight) == $weight ? intval($weight) . ' kg' : number_format($weight, 2) . ' kg')
                 : null;
 
-            // Use pre-computed average cost per unit
+            // Use PWAC: cost per unit at the time this sale was created
             $avgCostPerUnit = 0;
             if ($product) {
-                $avgCostPerUnit = self::$avgCosts[$product->id] ?? 0;
+                $avgCostPerUnit = self::getPwacCostForSale($product->getKey(), $saleDate);
             }
             $totalCost = round($avgCostPerUnit * $item->quantity, 2);
             $profit = round($item->subtotal - $totalCost, 2);
