@@ -57,6 +57,7 @@ class BusinessSettingResource extends JsonResource
             'social_twitter' => $settings['social_twitter'] ?? '',
             'social_instagram' => $settings['social_instagram'] ?? '',
             'social_linkedin' => $settings['social_linkedin'] ?? '',
+            'shipping_openroute_enabled' => $settings['shipping_openroute_enabled'] ?? true,
             'shipping_rate_per_sack' => $settings['shipping_rate_per_sack'] ?? '',
             'shipping_rate_per_km' => $settings['shipping_rate_per_km'] ?? '',
             'shipping_base_km' => $settings['shipping_base_km'] ?? '',

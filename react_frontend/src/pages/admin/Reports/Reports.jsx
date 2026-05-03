@@ -260,6 +260,7 @@ const ProfitLossStatement = ({ data }) => {
           <PLRow label="OPERATING COSTS" bold />
           <PLRow label="Raw Material Purchases (Procurement)" value={peso(data.procurement_cost)} indent />
           <PLRow label="Drying Operations" value={peso(data.drying_cost)} indent />
+          {data.milling_cost > 0 && <PLRow label="Milling / Processing" value={peso(data.milling_cost)} indent />}
           <PLRow separator />
           <PLRow label="Total Operating Costs" value={peso(data.total_expenses)} bold highlight />
           <tr><td colSpan={2} className="py-1" /></tr>
@@ -425,6 +426,7 @@ const Reports = () => {
       <tr><td class="section" colspan="2">Operating Costs</td></tr>
       <tr><td class="label" style="padding-left:24px">Raw Material Purchases</td><td class="value">${peso(p.procurement_cost)}</td></tr>
       <tr><td class="label" style="padding-left:24px">Drying Operations</td><td class="value">${peso(p.drying_cost)}</td></tr>
+      ${p.milling_cost > 0 ? `<tr><td class="label" style="padding-left:24px">Milling / Processing</td><td class="value">${peso(p.milling_cost)}</td></tr>` : ''}
       <tr class="subtotal"><td class="label"><b>Total Operating Costs</b></td><td class="value"><b>${peso(p.total_expenses)}</b></td></tr>
       <tr><td colspan="2" style="padding:4px"></td></tr>
       <tr class="total"><td class="label ${isP ? 'profit' : 'loss'}"><b>${isP ? 'GROSS PROFIT' : 'GROSS LOSS'}</b></td><td class="value ${isP ? 'profit' : 'loss'}"><b>${isP ? peso(p.gross_profit) : `(${peso(Math.abs(p.gross_profit))})`}</b></td></tr>
@@ -434,7 +436,7 @@ const Reports = () => {
       `<tr><td>${fmtDate(s.date)}</td><td>${s.transaction_id}</td><td>${s.customer}</td><td>${peso(s.gross_sales)}</td><td>(${peso(s.discount)})</td><td>${peso(s.total)}</td><td>${PAY_LABELS[s.payment_method] || s.payment_method}</td></tr>`
     ).join('');
     const procRows = (p.procurement_list || []).map(r =>
-      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${peso(r.price_per_kg)}/kg</td><td>${peso(r.total_cost)}</td></tr>`
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${r.sacks > 0 ? r.sacks : '—'}</td><td>${peso(r.price_per_kg)}/kg</td><td>${r.hauling_price_per_sack > 0 ? peso(r.hauling_price_per_sack) : '—'}</td><td>${r.hauling_cost > 0 ? peso(r.hauling_cost) : '—'}</td><td>${r.twines_price > 0 ? peso(r.twines_price) : '—'}</td><td>${peso(r.total_cost)}</td></tr>`
     ).join('');
     const dryRows = (p.drying_list || []).map(r =>
       `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${r.sacks} sacks</td><td>${r.days}d</td><td>${peso(r.total_price)}</td></tr>`
@@ -446,8 +448,8 @@ const Reports = () => {
       <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Gross</th><th>Disc.</th><th>Total</th><th>Payment</th></tr></thead>
       <tbody>${salesRows || '<tr><td colspan="7" style="text-align:center;color:#999">None</td></tr>'}</tbody></table>
       <h2>Procurement Records (${(p.procurement_list || []).length})</h2>
-      <table><thead><tr><th>Date</th><th>Supplier</th><th>Variety</th><th>Qty</th><th>Rate</th><th>Total Cost</th></tr></thead>
-      <tbody>${procRows || '<tr><td colspan="6" style="text-align:center;color:#999">None</td></tr>'}</tbody></table>
+      <table><thead><tr><th>Date</th><th>Supplier</th><th>Variety</th><th>Qty</th><th>Sacks</th><th>Rate</th><th>Hauling/Sack</th><th>Hauling Cost</th><th>Twines</th><th>Total Cost</th></tr></thead>
+      <tbody>${procRows || '<tr><td colspan="10" style="text-align:center;color:#999">None</td></tr>'}</tbody></table>
       <h2>Drying Records (${(p.drying_list || []).length})</h2>
       <table><thead><tr><th>Date</th><th>Supplier</th><th>Variety</th><th>Sacks</th><th>Days</th><th>Cost</th></tr></thead>
       <tbody>${dryRows || '<tr><td colspan="6" style="text-align:center;color:#999">None</td></tr>'}</tbody></table>
@@ -478,16 +480,18 @@ const Reports = () => {
   const printProc = useCallback(() => {
     if (!procData) return;
     const rows = (procData.records || []).map(r =>
-      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${peso(r.price_per_kg)}/kg</td><td>${peso(r.total_cost)}</td></tr>`).join('');
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.supplier}</td><td>${r.variety}</td><td>${fmt(r.quantity_kg)} kg</td><td>${r.sacks > 0 ? r.sacks : '—'}</td><td>${peso(r.price_per_kg)}/kg</td><td>${r.hauling_price_per_sack > 0 ? peso(r.hauling_price_per_sack) : '—'}</td><td>${r.hauling_cost > 0 ? peso(r.hauling_cost) : '—'}</td><td>${r.twines_price > 0 ? peso(r.twines_price) : '—'}</td><td>${peso(r.total_cost)}</td></tr>`).join('');
     const html = `
       <p class="meta">Period: ${fmtDate(procData.period?.from)} to ${fmtDate(procData.period?.to)}</p>
       <div class="stats">
         <div class="stat"><div class="lbl">Total Cost</div><div class="val">${peso(procData.total_cost)}</div></div>
         <div class="stat"><div class="lbl">Total kg</div><div class="val">${fmt(procData.total_kg)} kg</div></div>
         <div class="stat"><div class="lbl">Records</div><div class="val">${procData.record_count}</div></div>
+        ${procData.total_hauling_cost > 0 ? `<div class="stat"><div class="lbl">Hauling</div><div class="val">${peso(procData.total_hauling_cost)}</div></div>` : ''}
+        ${procData.total_twines_cost > 0 ? `<div class="stat"><div class="lbl">Twines</div><div class="val">${peso(procData.total_twines_cost)}</div></div>` : ''}
       </div>
       <h2>Procurement Records</h2>
-      <table><thead><tr><th>Date</th><th>Supplier</th><th>Variety</th><th>Quantity</th><th>Rate</th><th>Total Cost</th></tr></thead><tbody>${rows}</tbody></table>`;
+      <table><thead><tr><th>Date</th><th>Supplier</th><th>Variety</th><th>Quantity</th><th>Sacks</th><th>Rate</th><th>Hauling/Sack</th><th>Hauling Cost</th><th>Twines</th><th>Total Cost</th></tr></thead><tbody>${rows}</tbody></table>`;
     printReport('Procurement Cost Report', html, bizName);
   }, [procData, bizName]);
 
@@ -510,16 +514,17 @@ const Reports = () => {
   const printProcessing = useCallback(() => {
     if (!procYieldData) return;
     const rows = (procYieldData.records || []).map(r =>
-      `<tr><td>${fmtDate(r.date)}</td><td>${r.variety}</td><td>${r.operator}</td><td>${fmt(r.input_kg)} kg</td><td>${fmt(r.output_kg)} kg</td><td>${fmt(r.husk_kg)} kg</td><td>${r.yield_percent}%</td></tr>`).join('');
+      `<tr><td>${fmtDate(r.date)}</td><td>${r.variety}</td><td>${r.operator}</td><td>${fmt(r.input_kg)} kg</td><td>${fmt(r.output_kg)} kg</td><td>${fmt(r.husk_kg)} kg</td><td>${r.yield_percent}%</td><td>${r.milling_cost_per_kg > 0 ? peso(r.milling_cost_per_kg)+'/kg' : '—'}</td><td>${r.milling_cost > 0 ? peso(r.milling_cost) : '—'}</td></tr>`).join('');
     const html = `
       <p class="meta">Period: ${fmtDate(procYieldData.period?.from)} to ${fmtDate(procYieldData.period?.to)}</p>
       <div class="stats">
         <div class="stat"><div class="lbl">Input</div><div class="val">${fmt(procYieldData.total_input_kg)} kg</div></div>
         <div class="stat"><div class="lbl">Output</div><div class="val">${fmt(procYieldData.total_output_kg)} kg</div></div>
         <div class="stat"><div class="lbl">Avg Yield</div><div class="val">${procYieldData.avg_yield_percent}%</div></div>
+        ${procYieldData.total_milling_cost > 0 ? `<div class="stat"><div class="lbl">Milling Cost</div><div class="val">${peso(procYieldData.total_milling_cost)}</div></div>` : ''}
       </div>
       <h2>Processing Records</h2>
-      <table><thead><tr><th>Date</th><th>Variety</th><th>Operator</th><th>Input</th><th>Output</th><th>Husk</th><th>Yield %</th></tr></thead><tbody>${rows}</tbody></table>`;
+      <table><thead><tr><th>Date</th><th>Variety</th><th>Operator</th><th>Input</th><th>Output</th><th>Husk</th><th>Yield %</th><th>Rate/kg</th><th>Milling Cost</th></tr></thead><tbody>${rows}</tbody></table>`;
     printReport('Processing Yield Report', html, bizName);
   }, [procYieldData, bizName]);
 
@@ -571,11 +576,20 @@ const Reports = () => {
         <DataTable
           headers={[
             { label: 'Date' }, { label: 'Supplier' }, { label: 'Variety' },
-            { label: 'Qty', right: true }, { label: '\u20B1/kg', right: true }, { label: 'Total Cost', right: true },
+            { label: 'Qty', right: true }, { label: 'Sacks', right: true },
+            { label: '₱/kg', right: true }, { label: 'Hauling/Sack', right: true },
+            { label: 'Hauling Cost', right: true }, { label: 'Twines', right: true },
+            { label: 'Total Cost', right: true },
           ]}
           rows={(plData.procurement_list || []).map(r => [
             fmtDate(r.date), r.supplier, r.variety,
-            `${fmt(r.quantity_kg)} kg`, peso(r.price_per_kg), peso(r.total_cost),
+            `${fmt(r.quantity_kg)} kg`,
+            r.sacks > 0 ? r.sacks : '—',
+            peso(r.price_per_kg),
+            r.hauling_price_per_sack > 0 ? peso(r.hauling_price_per_sack) : '—',
+            r.hauling_cost > 0 ? peso(r.hauling_cost) : '—',
+            r.twines_price > 0 ? peso(r.twines_price) : '—',
+            peso(r.total_cost),
           ])}
           emptyMessage="No procurement records in this period."
         />
@@ -629,6 +643,12 @@ const Reports = () => {
           <StatsCard label="Total Cost" value={peso(procData.total_cost)} icon={ShoppingCart} />
           <StatsCard label="Total Purchased" value={`${fmt(procData.total_kg)} kg`} icon={Package} iconBgColor="bg-yellow-500" />
           <StatsCard label="Records" value={procData.record_count} icon={FileText} iconBgColor="bg-blue-500" />
+          {procData.total_hauling_cost > 0 && (
+            <StatsCard label="Total Hauling" value={peso(procData.total_hauling_cost)} icon={ShoppingCart} iconBgColor="bg-orange-500" />
+          )}
+          {procData.total_twines_cost > 0 && (
+            <StatsCard label="Total Twines" value={peso(procData.total_twines_cost)} icon={Package} iconBgColor="bg-purple-500" />
+          )}
         </div>
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">By Supplier</h3>
         <DataTable
@@ -639,11 +659,20 @@ const Reports = () => {
         <DataTable
           headers={[
             { label: 'Date' }, { label: 'Supplier' }, { label: 'Variety' },
-            { label: 'Qty', right: true }, { label: '\u20B1/kg', right: true }, { label: 'Total', right: true },
+            { label: 'Qty', right: true }, { label: 'Sacks', right: true },
+            { label: '₱/kg', right: true }, { label: 'Hauling/Sack', right: true },
+            { label: 'Hauling Cost', right: true }, { label: 'Twines', right: true },
+            { label: 'Total', right: true },
           ]}
           rows={(procData.records || []).map(r => [
             fmtDate(r.date), r.supplier, r.variety,
-            `${fmt(r.quantity_kg)} kg`, peso(r.price_per_kg), peso(r.total_cost),
+            `${fmt(r.quantity_kg)} kg`,
+            r.sacks > 0 ? r.sacks : '—',
+            peso(r.price_per_kg),
+            r.hauling_price_per_sack > 0 ? peso(r.hauling_price_per_sack) : '—',
+            r.hauling_cost > 0 ? peso(r.hauling_cost) : '—',
+            r.twines_price > 0 ? peso(r.twines_price) : '—',
+            peso(r.total_cost),
           ])}
           emptyMessage="No procurement records." />
       </>
@@ -690,17 +719,23 @@ const Reports = () => {
           <StatsCard label="Husk / Waste" value={`${fmt(procYieldData.total_husk_kg)} kg`} icon={Package} iconBgColor="bg-gray-500" />
           <StatsCard label="Avg Waste %" value={`${procYieldData.avg_waste_percent}%`} icon={Percent} iconBgColor="bg-orange-500" />
           <StatsCard label="Batches" value={procYieldData.record_count} icon={FileText} iconBgColor="bg-purple-500" />
+          {procYieldData.total_milling_cost > 0 && (
+            <StatsCard label="Total Milling Cost" value={peso(procYieldData.total_milling_cost)} icon={DollarSign} iconBgColor="bg-amber-500" />
+          )}
         </div>
         <DataTable
           headers={[
             { label: 'Date' }, { label: 'Variety' }, { label: 'Operator' },
             { label: 'Input', right: true }, { label: 'Output', right: true },
             { label: 'Husk', right: true }, { label: 'Yield %', right: true },
+            { label: 'Rate/kg', right: true }, { label: 'Milling Cost', right: true },
           ]}
           rows={(procYieldData.records || []).map(r => [
             fmtDate(r.date), r.variety, r.operator,
             `${fmt(r.input_kg)} kg`, `${fmt(r.output_kg)} kg`,
             `${fmt(r.husk_kg)} kg`, `${r.yield_percent}%`,
+            r.milling_cost_per_kg > 0 ? peso(r.milling_cost_per_kg) : '—',
+            r.milling_cost > 0 ? peso(r.milling_cost) : '—',
           ])}
           emptyMessage="No processing records." />
       </>

@@ -19,15 +19,17 @@ class SaleService
     private const CACHE_TTL = 300;
 
     /**
-     * Get all sales with caching.
+     * Get all sales.
+     *
+     * IMPORTANT: Orders page needs true real-time behavior after updates
+     * (pay, set shipping fee, schedule installments), so avoid serving a
+     * stale server-side cache here.
      */
     public function getAllSales()
     {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return Sale::with(['customer:id,name', 'items.product.variety', 'payments'])
-                ->orderBy('created_at', 'desc')
-                ->get();
-        });
+        return Sale::with(['customer:id,name', 'items.product.variety', 'payments'])
+            ->orderBy('created_at', 'desc')
+            ->get();
     }
 
     /**
@@ -64,13 +66,25 @@ class SaleService
             $amountTendered = (float) ($data['amount_tendered'] ?? 0);
             $isStaggered = !empty($data['is_staggered']);
 
+            // Shipping pending state: delivery_fee is null and status = 'pending'
+            $shippingFeeStatus = $data['shipping_fee_status'] ?? null;
+            $shippingPricePerSackOverride = isset($data['shipping_price_per_sack_override'])
+                ? (float) $data['shipping_price_per_sack_override']
+                : null;
+            // If shipping_fee_status is not explicitly set but delivery_address is present
+            // and delivery_fee is null, mark it as pending
+            if (!$shippingFeeStatus && !empty($data['delivery_address']) && !isset($data['delivery_fee'])) {
+                $shippingFeeStatus = 'pending';
+            }
+            $deliveryFeePending = ($shippingFeeStatus === 'pending');
+
             // Create order header — status = pending, no stock deduction
             $sale = Sale::create([
                 'transaction_id' => $transactionId,
                 'customer_id' => $data['customer_id'] ?? null,
                 'subtotal' => 0,
                 'discount' => (float) ($data['discount'] ?? 0),
-                'delivery_fee' => (float) ($data['delivery_fee'] ?? 0),
+                'delivery_fee' => $deliveryFeePending ? null : (float) ($data['delivery_fee'] ?? 0),
                 'total' => 0,
                 'amount_tendered' => $amountTendered,
                 'change_amount' => 0,
@@ -89,6 +103,8 @@ class SaleService
                 'primary_method' => $paymentMethod,
                 'amount_paid' => 0,
                 'balance_remaining' => 0,
+                'shipping_fee_status' => $shippingFeeStatus,
+                'shipping_price_per_sack_override' => $shippingPricePerSackOverride,
             ]);
 
             $subtotal = 0;
@@ -118,8 +134,9 @@ class SaleService
 
             // Compute final totals
             $discount = (float) ($data['discount'] ?? 0);
-            $deliveryFee = (float) ($data['delivery_fee'] ?? 0);
-            $total = $subtotal - $discount + $deliveryFee;
+            // If shipping is pending, delivery fee is null — total = subtotal - discount only
+            $deliveryFee = $deliveryFeePending ? null : (float) ($data['delivery_fee'] ?? 0);
+            $total = $subtotal - $discount + ($deliveryFee ?? 0);
             
             // For staggered payments, change is calculated against first installment, not total
             // Change will be recalculated after installments are created
@@ -168,6 +185,7 @@ class SaleService
                 'amount_paid' => $amountPaid,
                 'balance_remaining' => $balanceRemaining,
                 'paid_at' => $paidAt,
+                'shipping_fee_status' => $shippingFeeStatus,
             ]);
 
             // Create initial Payment record (cash/partial cash only)

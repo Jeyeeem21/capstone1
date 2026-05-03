@@ -35,6 +35,7 @@ class BusinessSettingSeeder extends Seeder
             ['key' => 'gcash_number',          'value' => '09278067324',                           'type' => 'string'],
 
             // Shipping
+            ['key' => 'shipping_openroute_enabled', 'value' => 'true',                                'type' => 'boolean'],
             ['key' => 'shipping_rate_per_sack','value' => '0',                                     'type' => 'number'],
             ['key' => 'shipping_rate_per_km',  'value' => '0',                                     'type' => 'number'],
             ['key' => 'shipping_base_km',      'value' => '0',                                     'type' => 'number'],

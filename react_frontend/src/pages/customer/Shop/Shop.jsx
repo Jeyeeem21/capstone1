@@ -22,7 +22,6 @@ const sortOptions = [
 ];
 
 const paymentMethods = [
-  { value: 'gcash', label: 'GCash', icon: Smartphone, color: '#3b82f6' },
   { value: 'pay_later', label: 'Pay Later', icon: Clock, color: '#8b5cf6' },
 ];
 
@@ -119,7 +118,7 @@ const Shop = () => {
   const [viewMode, setViewMode] = useState('grid');
   const [currentOrder, setCurrentOrder] = useState([]);
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('gcash');
+  const [paymentMethod] = useState('pay_later');
 
   // Delivery states
   const [forDelivery, setForDelivery] = useState(false);
@@ -404,18 +403,7 @@ const Shop = () => {
   };
 
   const confirmPayment = async () => {
-    if (paymentMethod === 'gcash') {
-      const digits = gcashReference.replace(/\s/g, '');
-      if (!gcashReference.trim() || digits.length !== 13) {
-        setGcashRefError('Please enter a valid 13-digit GCash reference number.');
-        return;
-      }
-      if (gcashRefError) return; // Block if there's a duplicate error
-      if (paymentProofFiles.length === 0) {
-        setPaymentProofError('Payment proof is required.');
-        return;
-      }
-    }
+    const forcedPaymentMethod = 'pay_later';
     setPaymentProofError('');
     setSubmitting(true);
     try {
@@ -425,13 +413,8 @@ const Shop = () => {
         formData.append(`items[${idx}][quantity]`, parseInt(item.quantity) || 1);
         formData.append(`items[${idx}][unit_price]`, item.price);
       });
-      formData.append('payment_method', paymentMethod);
-      formData.append('amount_tendered', paymentMethod === 'pay_later' ? 0 : orderTotal);
-      if (paymentMethod === 'gcash') {
-        formData.append('reference_number', gcashReference);
-        paymentProofFiles.forEach(file => formData.append('payment_proof[]', file));
-        console.log('GCash payment - Reference:', gcashReference, 'Proof files:', paymentProofFiles.length);
-      }
+      formData.append('payment_method', forcedPaymentMethod);
+      formData.append('amount_tendered', 0);
       if (forDelivery) {
         formData.append('delivery_fee', deliveryFee);
         if (distanceKm) formData.append('distance_km', parseFloat(distanceKm));
@@ -458,7 +441,7 @@ const Shop = () => {
       invalidateCache('/products');
       refetchProducts();
 
-      const method = paymentMethods.find(m => m.value === paymentMethod);
+      const method = paymentMethods.find(m => m.value === forcedPaymentMethod);
       const orderData = {
         items: currentOrder.map(item => ({
           name: item.name,
@@ -471,8 +454,8 @@ const Shop = () => {
         paymentMethod: method?.label || 'N/A',
         saleId: response.data?.sale_id,
         orderId: response.data?.transaction_id ?? `ORD-${Date.now()}`,
-        gcashReference: paymentMethod === 'gcash' ? gcashReference : null,
-        isPayLater: paymentMethod === 'pay_later',
+        gcashReference: null,
+        isPayLater: true,
         isDelivery: forDelivery,
         deliveryAddress: forDelivery ? deliveryAddress : null,
         deliveryFee: forDelivery ? deliveryFee : 0,
@@ -483,13 +466,16 @@ const Shop = () => {
       };
       setLastOrder(orderData);
       
-      // Auto-print receipt
+      // Auto-print receipt — skip when shipping fee is still pending
+      const shippingIsPending = response.data?.shipping_fee_status === 'pending';
       setTimeout(() => {
-        autoPrintReceipt(
-          orderData,
-          bizSettings?.business_name || 'KJP Ricemill',
-          bizSettings?.receipt_copies || 1
-        );
+        if (!shippingIsPending) {
+          autoPrintReceipt(
+            orderData,
+            bizSettings?.business_name || 'KJP Ricemill',
+            bizSettings?.receipt_copies || 1
+          );
+        }
       }, 500);
       
       setShowPaymentModal(false);
@@ -709,25 +695,17 @@ const Shop = () => {
           )}
         </div>
 
-        {/* Payment Method - always visible */}
+        {/* Payment Method - fixed for customer portal */}
         <div className="mb-4 shrink-0 border-t-2 border-gray-200 dark:border-gray-700 pt-4">
           <p className="text-xs font-bold mb-2 uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>Payment Method</p>
-          <div className="grid grid-cols-2 gap-2">
-            {paymentMethods.map(method => {
-              const Icon = method.icon;
-              const isSelected = paymentMethod === method.value;
-              return (
-                <button key={method.value} onClick={() => setPaymentMethod(method.value)}
-                  className={`flex items-center justify-center gap-2 p-2.5 rounded-lg transition-all font-semibold text-xs ${!isSelected ? 'border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400' : ''}`}
-                  style={isSelected
-                    ? { backgroundColor: `${method.color}15`, border: `2px solid ${method.color}`, color: method.color }
-                    : undefined
-                  }>
-                  <Icon size={16} />
-                  {method.label}
-                </button>
-              );
-            })}
+          <div className="rounded-lg border-2 border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 px-3 py-2.5">
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-purple-700 dark:text-purple-300">
+              <Clock size={16} />
+              Pay Later
+            </div>
+            <p className="mt-1 text-[10px] text-center text-purple-600 dark:text-purple-400">
+              Pay Later is required because shipping may still increase the final amount. Admin will contact you via email once it is finalized.
+            </p>
           </div>
         </div>
 
@@ -743,6 +721,14 @@ const Shop = () => {
                 <Truck size={10} /> Shipping Fee
               </span>
               <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          {forDelivery && deliveryFee === 0 && (
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                <Truck size={10} /> Shipping Fee
+              </span>
+              <span className="text-xs font-semibold text-amber-600">To be set by admin</span>
             </div>
           )}
           <div className="flex justify-between items-center mb-4 pb-4 border-b-2 border-gray-200 dark:border-gray-700">
@@ -895,7 +881,7 @@ const Shop = () => {
                 </h3>
                 <p className="text-sm text-white/80 mt-1">
                   {paymentMethod === 'gcash' ? 'Enter GCash reference number'
-                    : 'You can pay later via GCash'}
+                    : 'Shipping fee may still change. Admin will email you once final total is ready.'}
                 </p>
               </div>
 
@@ -912,6 +898,12 @@ const Shop = () => {
                     <div className="flex justify-between text-sm mb-1">
                       <span className="text-orange-500 flex items-center gap-1"><Truck size={12} /> Shipping Fee</span>
                       <span className="font-medium text-orange-600 dark:text-orange-400">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {forDelivery && deliveryFee === 0 && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-amber-600 flex items-center gap-1"><Truck size={12} /> Shipping Fee</span>
+                      <span className="font-medium text-amber-600 dark:text-amber-400">To be set by admin</span>
                     </div>
                   )}
                   <div className="flex justify-between pt-2 mt-2 border-t border-gray-200 dark:border-gray-600">
@@ -982,8 +974,8 @@ const Shop = () => {
                   <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg p-4 text-center">
                     <Clock size={32} className="mx-auto mb-2 text-purple-500" />
                     <p className="text-sm font-bold text-purple-700 dark:text-purple-300">Pay Later</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Your order will be placed now. When you're ready to pay, only <span className="font-bold">GCash</span> is accepted for online payment.</p>
-                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">For cash payments, please visit the store directly.</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Your order will be placed now as Pay Later because shipping may still add to the final amount.</p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Admin will contact you through email once shipping is finalized and payment can proceed.</p>
                   </div>
                 )}
                 </div>{/* end left-side flex-1 */}
@@ -1101,6 +1093,15 @@ const Shop = () => {
                     </div>
                   ))}
                 </div>
+
+                {lastOrder.isPayLater && (
+                  <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3 mb-4">
+                    <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">Pay Later Notice</p>
+                    <p className="text-[11px] mt-1 text-amber-700 dark:text-amber-300">
+                      Shipping fee may still be adjusted. Admin will contact you through email once your final total is confirmed.
+                    </p>
+                  </div>
+                )}
 
                 <button
                   onClick={() => {

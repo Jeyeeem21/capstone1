@@ -18,10 +18,9 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
     loadPayments();
   }, []);
 
-  const loadPayments = async () => {
+  const loadPayments = async (silent = false) => {
     try {
-      setLoading(true);
-      onLoadingChange?.(true);
+      if (!silent) { setLoading(true); onLoadingChange?.(true); }
       const response = await paymentsApi.getAll({ per_page: 100 });
 
       if (response.success) {
@@ -67,8 +66,7 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
       toast.error('Failed to load payments');
       setPayments([]);
     } finally {
-      setLoading(false);
-      onLoadingChange?.(false);
+      if (!silent) { setLoading(false); onLoadingChange?.(false); }
     }
   };
 
@@ -84,12 +82,12 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
         toast.success('Payment verified successfully');
         setShowVerificationModal(false);
         // Refetch in background to sync
-        loadPayments();
+        loadPayments(true);
       }
     } catch (error) {
       toast.error('Failed to verify payment');
       // Revert on error
-      loadPayments();
+      loadPayments(true);
     }
   };
 
@@ -125,7 +123,7 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
           toast.success('Payment placed on hold');
           setShowNotesModal(false);
           // Refetch in background to sync
-          loadPayments();
+          loadPayments(true);
         }
       } else if (notesAction === 'reject') {
         // Optimistic update: immediately remove from list
@@ -136,13 +134,13 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
           toast.success('Payment rejected');
           setShowNotesModal(false);
           // Refetch in background to sync
-          loadPayments();
+          loadPayments(true);
         }
       }
     } catch (error) {
       toast.error(`Failed to ${notesAction} payment`);
       // Revert on error
-      loadPayments();
+      loadPayments(true);
     }
   };
 
@@ -305,7 +303,7 @@ const PaymentTransactionsTab = ({ onStatsUpdate, onLoadingChange }) => {
         const verifyTooltip = row.payment_method === 'pdo' && !canVerify && row.status === 'pending'
           ? 'PDO must be approved first in PDO Management tab'
           : isPDOAwaitingPayment
-            ? 'Mark PDO check as paid/cleared'
+            ? 'Mark as PDO Paid'
             : canVerify 
               ? 'Verify payment' 
               : 'Cannot verify this payment';

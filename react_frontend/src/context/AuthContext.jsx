@@ -23,7 +23,7 @@ async function prefetchCriticalData() {
     apiClient.get('/procurements'),
     apiClient.get('/suppliers'),
     apiClient.get('/varieties'),
-    apiClient.get('/inventory'),
+    apiClient.get('/products'),
   ];
 
   await Promise.allSettled(tasks); // allSettled so one failure doesn't stop others

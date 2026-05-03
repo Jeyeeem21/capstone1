@@ -107,6 +107,10 @@ const getAvailablePaymentMethods = (userRole) => {
   if (userRole === 'customer') {
     return posPaymentMethods.filter(m => ['gcash', 'pay_later'].includes(m.value));
   }
+  if (userRole === 'secretary') {
+    // Secretary can only create orders with Pay Later - no payment handling
+    return posPaymentMethods.filter(m => m.value === 'pay_later');
+  }
   return posPaymentMethods;
 };
 
@@ -284,6 +288,14 @@ const PointOfSale = () => {
   const [cashTendered, setCashTendered] = useState('');
   const [gcashReference, setGcashReference] = useState('');
   const [gcashRefError, setGcashRefError] = useState('');
+
+  // Force secretary to use Pay Later only
+  useEffect(() => {
+    if (user?.role === 'secretary') {
+      setPaymentMethod('pay_later');
+      setIsStaggered(false); // Secretary cannot setup installments
+    }
+  }, [user?.role]);
   const gcashRefCheckTimeout = useRef(null);
   const [gcashProofFiles, setGcashProofFiles] = useState([]);
   const [gcashProofPreviews, setGcashProofPreviews] = useState([]);
@@ -333,6 +345,8 @@ const PointOfSale = () => {
   const [warehouseCoords, setWarehouseCoords] = useState(null);
   const addressInputRef = useRef(null);
   const suggestionsRef = useRef(null);
+  // Manual shipping mode (OpenRoute OFF — admin/super_admin sets price per sack at checkout)
+  const [manualPricePerSack, setManualPricePerSack] = useState('');
 
   // Geocode warehouse address on mount
   useEffect(() => {
@@ -752,7 +766,7 @@ const PointOfSale = () => {
     }
 
     // Auto-calculate distance if for delivery and address is set but no distance yet
-    if (forDelivery && deliveryAddress.trim() && !distanceKm) {
+    if (forDelivery && deliveryAddress.trim() && !distanceKm && openrouteEnabled) {
       setCalculatingDistance(true);
       try {
         // Ensure warehouse coords are available
@@ -784,14 +798,79 @@ const PointOfSale = () => {
       }
     }
 
-    // Require distance for delivery orders
-    if (forDelivery && (!distanceKm || parseFloat(distanceKm) <= 0)) {
+    // Require distance for delivery orders (only when OpenRoute is enabled)
+    if (forDelivery && openrouteEnabled && (!distanceKm || parseFloat(distanceKm) <= 0)) {
       setCustomerError('Please enter the delivery distance in km.');
       return;
     }
 
     setCustomerError('');
     setShowCustomerModal(false);
+
+    // If OpenRoute is OFF, delivery, and no price per sack set → skip payment modal,
+    // directly place order as pay_later with shipping_fee_status = 'pending'
+    if (!openrouteEnabled && forDelivery && isAdminOrAbove() && parseFloat(manualPricePerSack || 0) === 0) {
+      setSaving(true);
+      try {
+        const payload = {
+          items: cart.map(item => ({ product_id: item.id, quantity: item.quantity, unit_price: item.price })),
+          customer_id: selectedCustomerId ? parseInt(selectedCustomerId) : null,
+          new_customer_name: newCustomerName || null,
+          new_customer_contact: newCustomerContact || null,
+          new_customer_email: newCustomerEmail || null,
+          new_customer_address: newCustomerAddress || null,
+          new_customer_landmark: newCustomerLandmark || null,
+          payment_method: 'pay_later',
+          amount_tendered: 0,
+          delivery_address: deliveryAddress,
+          delivery_fee: 0,
+          shipping_fee_pending: true,
+        };
+        const response = await apiClient.post('/sales/order', payload);
+        if (response.success && response.data) {
+          suppressNotifToasts();
+          toast.success('Order Placed', `Order ${response.data.transaction_id} placed. Set shipping fee from Orders page.`);
+          const saleId = response.sale_id || response.data?.id;
+          if (saleId) apiClient.post(`/sales/${saleId}/notify`).catch(() => {});
+          const customerName = newCustomerName || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.label : null);
+          const customerEmail = newCustomerEmail || (selectedCustomerId ? customerOptions.find(o => o.value === selectedCustomerId)?.email : null);
+          const saleData = {
+            items: [...cart], total, totalItems, customerName, customerEmail,
+            paymentMethod: 'PAY LATER',
+            transactionId: response.data.transaction_id,
+            time: response.data.date_formatted || new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit' }),
+            cashTendered: null, change: null, gcashReference: null,
+            deliveryFee: 0, subtotal, forDelivery,
+          };
+          setLastSale(saleData);
+          setShowSaleCompleteModal(true);
+          // No auto-print — shipping total is incomplete
+          setCart([]);
+          setSelectedCustomerId(''); setNewCustomerName(''); setNewCustomerContact('');
+          setNewCustomerEmail(''); setNewCustomerAddress(''); setNewCustomerLandmark('');
+          setCustomerError(''); setEmailError('');
+          setForDelivery(false); setDeliveryAddress(''); setDistanceKm('');
+          setManualPricePerSack('');
+          setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]);
+          setIsStaggered(false); setInstallmentPlan([]);
+          invalidateCache('/sales'); invalidateCache('/products');
+          refetchSales(); refetchProducts();
+          if (newCustomerName) { invalidateCache('/customers'); refetchCustomers(); }
+        } else { throw response; }
+      } catch (error) {
+        const backendErrors = error.response?.data?.errors || error.errors;
+        if (backendErrors) {
+          toast.error('Order Failed', `Please fix: ${Object.values(backendErrors).flat().join(', ')}`);
+        } else {
+          toast.error('Order Failed', error.message || 'Failed to create order');
+        }
+        setShowCustomerModal(true);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setCashTendered('');
     setGcashReference('');
     setGcashRefError('');
@@ -1041,10 +1120,14 @@ const PointOfSale = () => {
         setShowSaleCompleteModal(true);
         
         // Automatically print receipt (1 copy by default, can be configured)
-        const receiptCopies = parseInt(businessSettings.receipt_copies) || 1;
-        setTimeout(() => {
-          autoPrintReceipt(saleData, businessSettings.business_name || 'KJP Ricemill', receiptCopies);
-        }, 500);
+        // Skip auto-print when shipping fee is still pending (total is incomplete)
+        const shippingIsPending = response.data?.shipping_fee_status === 'pending';
+        if (!shippingIsPending) {
+          const receiptCopies = parseInt(businessSettings.receipt_copies) || 1;
+          setTimeout(() => {
+            autoPrintReceipt(saleData, businessSettings.business_name || 'KJP Ricemill', receiptCopies);
+          }, 500);
+        }
         
         setCart([]);
         setSelectedCustomerId('');
@@ -1058,6 +1141,7 @@ const PointOfSale = () => {
         setForDelivery(false);
         setDeliveryAddress('');
         setDistanceKm('');
+        setManualPricePerSack('');
         setSelectedCoords(null);
         setEstimatedDuration(null);
         setAddressSuggestions([]);
@@ -1129,13 +1213,18 @@ const PointOfSale = () => {
         setLastSale(saleData);
         setShowPaymentModal(false);
         setShowSaleCompleteModal(true);
-        const receiptCopies = parseInt(businessSettings.receipt_copies) || 1;
-        setTimeout(() => autoPrintReceipt(saleData, businessSettings.business_name || 'KJP Ricemill', receiptCopies), 500);
+        // Skip auto-print when shipping fee is still pending (total is incomplete)
+        const shippingIsPending2 = response.data?.shipping_fee_status === 'pending';
+        if (!shippingIsPending2) {
+          const receiptCopies = parseInt(businessSettings.receipt_copies) || 1;
+          setTimeout(() => autoPrintReceipt(saleData, businessSettings.business_name || 'KJP Ricemill', receiptCopies), 500);
+        }
         setCart([]);
         setSelectedCustomerId(''); setNewCustomerName(''); setNewCustomerContact('');
         setNewCustomerEmail(''); setNewCustomerAddress(''); setNewCustomerLandmark('');
         setCustomerError(''); setEmailError('');
         setForDelivery(false); setDeliveryAddress(''); setDistanceKm('');
+        setManualPricePerSack('');
         setSelectedCoords(null); setEstimatedDuration(null); setAddressSuggestions([]);
         setIsStaggered(false); setInstallmentPlan([]);
         invalidateCache('/sales'); invalidateCache('/products');
@@ -1159,8 +1248,15 @@ const PointOfSale = () => {
   const totalSacks = totalItems; // Each item quantity represents sacks
 
   // Calculate delivery fee based on business settings
+  const openrouteEnabled = businessSettings.shipping_openroute_enabled !== false;
   const deliveryFee = useMemo(() => {
-    if (!forDelivery || !distanceKm) return 0;
+    if (!forDelivery) return 0;
+    // Admin/SuperAdmin + OpenRoute OFF: use manual price per sack
+    if (!openrouteEnabled && isAdminOrAbove()) {
+      const pricePerSack = parseFloat(manualPricePerSack) || 0;
+      return pricePerSack * totalSacks;
+    }
+    if (!distanceKm) return 0;
     const distance = parseFloat(distanceKm) || 0;
     const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
     const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
@@ -1169,7 +1265,7 @@ const PointOfSale = () => {
     const sackBasedFee = Math.ceil(distance / baseKm) * ratePerSack * totalSacks;
     const kmBasedFee = ratePerKm * distance;
     return sackBasedFee + kmBasedFee;
-  }, [forDelivery, distanceKm, totalSacks, businessSettings.shipping_base_km, businessSettings.shipping_rate_per_sack, businessSettings.shipping_rate_per_km]);
+  }, [forDelivery, distanceKm, totalSacks, businessSettings.shipping_base_km, businessSettings.shipping_rate_per_sack, businessSettings.shipping_rate_per_km, openrouteEnabled, manualPricePerSack, isAdminOrAbove]);
 
   const total = subtotal + deliveryFee;
 
@@ -1729,69 +1825,107 @@ const PointOfSale = () => {
                         </div>
                       )}
                     </div>
-                    {/* Distance info */}
-                    {(deliveryAddress.trim() || distanceKm || calculatingDistance) && (
+                    {/* Distance / Manual fee section */}
+                    {openrouteEnabled ? (
+                      /* OpenRoute ON: show distance + auto fee breakdown */
+                      (deliveryAddress.trim() || distanceKm || calculatingDistance) && (
+                        <div className="mt-2 space-y-1.5">
+                          {calculatingDistance ? (
+                            <p className="text-[10px] text-orange-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Calculating distance...</p>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1.5">
+                                <Navigation size={10} className="text-orange-500 shrink-0" />
+                                <input
+                                  type="number"
+                                  value={distanceKm}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || parseFloat(val) >= 0) setDistanceKm(val);
+                                  }}
+                                  onWheel={(e) => e.target.blur()}
+                                  min="0"
+                                  step="0.1"
+                                  placeholder="0"
+                                  className="w-16 px-1.5 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-700 border border-orange-300 dark:border-orange-600 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400">km</span>
+                                {estimatedDuration && (
+                                  <span className="text-[10px] text-gray-400 font-normal ml-1">
+                                    (~{estimatedDuration >= 60 ? `${Math.floor(estimatedDuration / 60)}h ${estimatedDuration % 60}m` : `${estimatedDuration} min`} drive)
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[9px] text-gray-400 dark:text-gray-500 italic">{distanceKm ? 'Auto-calculated × adjust if inaccurate' : 'Enter distance in km from warehouse'}</p>
+                              {deliveryFee > 0 && (() => {
+                                const distance = parseFloat(distanceKm) || 0;
+                                const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
+                                const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
+                                const ratePerKm = parseFloat(businessSettings.shipping_rate_per_km) || 0;
+                                const trips = Math.ceil(distance / baseKm);
+                                const sackFee = trips * ratePerSack * totalSacks;
+                                const kmFee = ratePerKm * distance;
+                                return (
+                                  <div className="bg-orange-100/60 dark:bg-orange-900/20 rounded-lg p-2 space-y-1">
+                                    <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 uppercase tracking-wide">Shipping Fee Breakdown</p>
+                                    <div className="text-[10px] text-gray-600 dark:text-gray-300 space-y-0.5">
+                                      {ratePerSack > 0 && (
+                                        <div className="flex justify-between">
+                                          <span>Sack-based: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
+                                          <span className="font-semibold text-gray-800 dark:text-gray-100">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                      )}
+                                      {ratePerKm > 0 && (
+                                        <div className="flex justify-between">
+                                          <span>Distance-based: ₱{ratePerKm}/km × {distance} km</span>
+                                          <span className="font-semibold text-gray-800 dark:text-gray-100">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex justify-between border-t border-orange-300 dark:border-orange-700/50 pt-1">
+                                      <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300">Total Shipping</span>
+                                      <span className="text-xs font-bold text-orange-700 dark:text-orange-300">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          )}
+                        </div>
+                      )
+                    ) : (
+                      /* OpenRoute OFF: admin sets price per sack; secretary/customer defer to admin */
                       <div className="mt-2 space-y-1.5">
-                        {calculatingDistance ? (
-                          <p className="text-[10px] text-orange-500 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Calculating distance...</p>
-                        ) : (
+                        {isAdminOrAbove() ? (
                           <>
-                            <div className="flex items-center gap-1.5">
-                              <Navigation size={10} className="text-orange-500 shrink-0" />
+                            <div className="flex items-center gap-2">
+                              <Truck size={10} className="text-orange-500 shrink-0" />
+                              <label className="text-[10px] font-semibold text-orange-600 dark:text-orange-400">Price per Sack (₱)</label>
                               <input
                                 type="number"
-                                value={distanceKm}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val === '' || parseFloat(val) >= 0) setDistanceKm(val);
-                                }}
-                                onWheel={(e) => e.target.blur()}
                                 min="0"
-                                step="0.1"
-                                placeholder="0"
-                                className="w-16 px-1.5 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-700 border border-orange-300 dark:border-orange-600 rounded focus:outline-none focus:ring-1 focus:ring-orange-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                step="0.01"
+                                value={manualPricePerSack}
+                                onChange={(e) => setManualPricePerSack(e.target.value)}
+                                placeholder="0.00"
+                                className="flex-1 px-2 py-1 text-[10px] font-semibold text-orange-600 dark:text-orange-400 bg-white dark:bg-gray-700 border border-orange-300 dark:border-orange-600 rounded focus:outline-none focus:ring-1 focus:ring-orange-500"
                               />
-                              <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400">km</span>
-                              {estimatedDuration && (
-                                <span className="text-[10px] text-gray-400 font-normal ml-1">
-                                  (~{estimatedDuration >= 60 ? `${Math.floor(estimatedDuration / 60)}h ${estimatedDuration % 60}m` : `${estimatedDuration} min`} drive)
-                                </span>
-                              )}
                             </div>
-                            <p className="text-[9px] text-gray-400 dark:text-gray-500 italic">{distanceKm ? 'Auto-calculated × adjust if inaccurate' : 'Enter distance in km from warehouse'}</p>
-                            {deliveryFee > 0 && (() => {
-                              const distance = parseFloat(distanceKm) || 0;
-                              const baseKm = parseFloat(businessSettings.shipping_base_km) || 1;
-                              const ratePerSack = parseFloat(businessSettings.shipping_rate_per_sack) || 0;
-                              const ratePerKm = parseFloat(businessSettings.shipping_rate_per_km) || 0;
-                              const trips = Math.ceil(distance / baseKm);
-                              const sackFee = trips * ratePerSack * totalSacks;
-                              const kmFee = ratePerKm * distance;
-                              return (
-                                <div className="bg-orange-100/60 dark:bg-orange-900/20 rounded-lg p-2 space-y-1">
-                                  <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 uppercase tracking-wide">Shipping Fee Breakdown</p>
-                                  <div className="text-[10px] text-gray-600 dark:text-gray-300 space-y-0.5">
-                                    {ratePerSack > 0 && (
-                                      <div className="flex justify-between">
-                                        <span>Sack-based: ⌈{distance}/{baseKm}⌉ × ₱{ratePerSack} × {totalSacks} sacks</span>
-                                        <span className="font-semibold text-gray-800 dark:text-gray-100">₱{sackFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                      </div>
-                                    )}
-                                    {ratePerKm > 0 && (
-                                      <div className="flex justify-between">
-                                        <span>Distance-based: ₱{ratePerKm}/km × {distance} km</span>
-                                        <span className="font-semibold text-gray-800 dark:text-gray-100">₱{kmFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex justify-between border-t border-orange-300 dark:border-orange-700/50 pt-1">
-                                    <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300">Total Shipping</span>
-                                    <span className="text-xs font-bold text-orange-700 dark:text-orange-300">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                  </div>
+                            {deliveryFee > 0 && (
+                              <div className="bg-orange-100/60 dark:bg-orange-900/20 rounded-lg p-2">
+                                <div className="flex justify-between text-[10px]">
+                                  <span className="text-gray-600 dark:text-gray-300">{totalSacks} sacks × ₱{parseFloat(manualPricePerSack).toLocaleString()}</span>
+                                  <span className="font-bold text-orange-700 dark:text-orange-300">₱{deliveryFee.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                 </div>
-                              );
-                            })()}
+                              </div>
+                            )}
                           </>
+                        ) : (
+                          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-600 rounded-lg p-2">
+                            <p className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                              <Truck size={10} /> Shipping fee will be calculated and set by admin after order placement.
+                            </p>
+                          </div>
                         )}
                       </div>
                     )}
@@ -1811,7 +1945,7 @@ const PointOfSale = () => {
                   onClick={confirmCustomer}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white bg-button-500 hover:bg-button-600 transition-all"
                 >
-                  <Receipt size={14} /> Continue to Payment
+                  <Receipt size={14} /> Continue
                 </button>
               </div>
             </div>
@@ -2807,8 +2941,8 @@ const PointOfSale = () => {
         </>
       )}
 
-      {/* Installment Enable Modal - Shows after customer modal closes */}
-      {!showCustomerModal && !showInstallmentModal && !showPaymentModal && (selectedCustomerId || newCustomerName) && !isStaggered && (!installmentPlan || installmentPlan.length === 0) && (
+      {/* Installment Enable Modal - Shows after customer modal closes (NOT for secretary) */}
+      {!showCustomerModal && !showInstallmentModal && !showPaymentModal && !saving && (selectedCustomerId || newCustomerName) && !isStaggered && (!installmentPlan || installmentPlan.length === 0) && user?.role !== 'secretary' && (
         <>
           <div className="fixed inset-0 bg-black/50 z-[60]" onClick={() => {}} />
           <div className="fixed inset-0 flex items-center justify-center z-[60] p-4">

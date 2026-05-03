@@ -126,12 +126,25 @@ const InstallmentSetupInline = forwardRef(({ totalAmount, onChange, initialInsta
       }
     });
     setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
+    
+    const isValid = Object.keys(errors).length === 0;
+    const errorMessage = !isValid 
+      ? 'Please fill in all required fields.' 
+      : remainingBalance > 0.01 
+        ? `Remaining balance: ₱${remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Please allocate the full order amount.`
+        : '';
+    
+    return { valid: isValid && remainingBalance <= 0.01, error: errorMessage };
   };
 
-  // Expose validate function to parent
+  // Expose validate function and getInstallments to parent
   useImperativeHandle(ref, () => ({
-    validate: validateFields
+    validate: validateFields,
+    getInstallments: () => installments.map(inst => ({
+      amount: parseFloat(inst.amount) || 0,
+      dueDate: inst.due_date,
+      installmentNumber: inst.installment_number
+    }))
   }));
 
   return (

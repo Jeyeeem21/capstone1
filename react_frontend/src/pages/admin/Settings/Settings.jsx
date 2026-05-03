@@ -289,6 +289,7 @@ const Settings = () => {
     social_twitter: '',
     social_instagram: '',
     social_linkedin: '',
+    shipping_openroute_enabled: true,
     shipping_rate_per_sack: '',
     shipping_rate_per_km: '',
     shipping_base_km: '',
@@ -410,6 +411,7 @@ const Settings = () => {
           social_twitter: cachedData.social_twitter ?? '',
           social_instagram: cachedData.social_instagram ?? '',
           social_linkedin: cachedData.social_linkedin ?? '',
+          shipping_openroute_enabled: cachedData.shipping_openroute_enabled !== undefined ? !!cachedData.shipping_openroute_enabled : true,
           shipping_rate_per_sack: cachedData.shipping_rate_per_sack ?? '',
           shipping_rate_per_km: cachedData.shipping_rate_per_km ?? '',
           shipping_base_km: cachedData.shipping_base_km ?? '',
@@ -480,6 +482,7 @@ const Settings = () => {
             social_twitter: data.social_twitter ?? '',
             social_instagram: data.social_instagram ?? '',
             social_linkedin: data.social_linkedin ?? '',
+            shipping_openroute_enabled: data.shipping_openroute_enabled !== undefined ? !!data.shipping_openroute_enabled : true,
             shipping_rate_per_sack: data.shipping_rate_per_sack ?? '',
             shipping_rate_per_km: data.shipping_rate_per_km ?? '',
             shipping_base_km: data.shipping_base_km ?? '',
@@ -1882,6 +1885,24 @@ const Settings = () => {
             Configure shipping rates based on distance from your warehouse.
           </p>
           <div className="space-y-4">
+            {/* OpenRoute Toggle */}
+            <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-500/30">
+              <div>
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">OpenRoute Auto-Distance</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {businessInfo.shipping_openroute_enabled
+                    ? 'ON — Shipping is computed from address distance automatically.'
+                    : 'OFF — Admin/Super Admin sets price per sack manually at POS.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBusinessInfo(prev => ({ ...prev, shipping_openroute_enabled: !prev.shipping_openroute_enabled }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${businessInfo.shipping_openroute_enabled ? 'bg-orange-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${businessInfo.shipping_openroute_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
             <FormTextarea 
               label="Warehouse Address"
               name="warehouse_address"
@@ -1893,46 +1914,56 @@ const Settings = () => {
             <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
               Defaults to Business Address if left empty.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FormInput 
-                label="Base Distance (km)"
-                name="shipping_base_km"
-                type="number"
-                value={businessInfo.shipping_base_km}
-                onChange={handleBusinessChange}
-                placeholder="e.g. 50"
-              />
-              <FormInput 
-                label="Rate per Sack (₱)"
-                name="shipping_rate_per_sack"
-                type="number"
-                value={businessInfo.shipping_rate_per_sack}
-                onChange={handleBusinessChange}
-                placeholder="e.g. 10"
-              />
-              <FormInput 
-                label="Rate per KM (₱)"
-                name="shipping_rate_per_km"
-                type="number"
-                value={businessInfo.shipping_rate_per_km}
-                onChange={handleBusinessChange}
-                placeholder="e.g. 5"
-              />
-            </div>
-            {(businessInfo.shipping_base_km && businessInfo.shipping_rate_per_sack) ? (
-              <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-500/30">
-                <p className="text-sm text-gray-700 dark:text-gray-300">
-                  <strong>Preview:</strong> For every <span className="text-orange-600 dark:text-orange-400 font-semibold">{businessInfo.shipping_base_km} km</span>, 
-                  charge <span className="text-orange-600 dark:text-orange-400 font-semibold">₱{businessInfo.shipping_rate_per_sack}</span> per sack.
-                  {businessInfo.shipping_rate_per_km && (
-                    <> Additional rate: <span className="text-orange-600 dark:text-orange-400 font-semibold">₱{businessInfo.shipping_rate_per_km}</span> per km.</>
-                  )}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Example: 100 km × 20 sacks = ₱{((100 / Number(businessInfo.shipping_base_km || 1)) * Number(businessInfo.shipping_rate_per_sack || 0) * 20).toLocaleString()} shipping fee
+            {businessInfo.shipping_openroute_enabled ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormInput 
+                    label="Base Distance (km)"
+                    name="shipping_base_km"
+                    type="number"
+                    value={businessInfo.shipping_base_km}
+                    onChange={handleBusinessChange}
+                    placeholder="e.g. 50"
+                  />
+                  <FormInput 
+                    label="Rate per Sack (₱)"
+                    name="shipping_rate_per_sack"
+                    type="number"
+                    value={businessInfo.shipping_rate_per_sack}
+                    onChange={handleBusinessChange}
+                    placeholder="e.g. 10"
+                  />
+                  <FormInput 
+                    label="Rate per KM (₱)"
+                    name="shipping_rate_per_km"
+                    type="number"
+                    value={businessInfo.shipping_rate_per_km}
+                    onChange={handleBusinessChange}
+                    placeholder="e.g. 5"
+                  />
+                </div>
+                {(businessInfo.shipping_base_km && businessInfo.shipping_rate_per_sack) ? (
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-orange-200 dark:border-orange-500/30">
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      <strong>Preview:</strong> For every <span className="text-orange-600 dark:text-orange-400 font-semibold">{businessInfo.shipping_base_km} km</span>, 
+                      charge <span className="text-orange-600 dark:text-orange-400 font-semibold">₱{businessInfo.shipping_rate_per_sack}</span> per sack.
+                      {businessInfo.shipping_rate_per_km && (
+                        <> Additional rate: <span className="text-orange-600 dark:text-orange-400 font-semibold">₱{businessInfo.shipping_rate_per_km}</span> per km.</>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Example: 100 km × 20 sacks = ₱{((100 / Number(businessInfo.shipping_base_km || 1)) * Number(businessInfo.shipping_rate_per_sack || 0) * 20).toLocaleString()} shipping fee
+                    </p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-500/30">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  <strong>Manual mode:</strong> Admin and Super Admin will enter price per sack directly at POS checkout. Shipping fee = price per sack × total sacks.
                 </p>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
 

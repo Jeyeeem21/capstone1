@@ -121,13 +121,19 @@ class ReportController extends Controller
             $dryingCost = DryingProcess::whereBetween('created_at', [$from, $to])
                 ->sum('total_price');
 
+            // Milling/processing cost for the period
+            $millingCost = Processing::whereBetween('created_at', [$from, $to])
+                ->selectRaw('COALESCE(SUM(output_kg * milling_cost_per_kg), 0) as total')
+                ->value('total');
+
             $revenue       = (float) $salesData->revenue;
             $grossSales    = (float) $salesData->gross_sales;
             $deliveryFees  = (float) $salesData->total_delivery_fees;
             $discounts     = (float) $salesData->total_discounts;
             $procCost      = (float) $procurementCost;
             $dryCost       = (float) $dryingCost;
-            $totalExpenses = $procCost + $dryCost;
+            $millCost      = (float) $millingCost;
+            $totalExpenses = $procCost + $dryCost + $millCost;
             $grossProfit   = $revenue - $totalExpenses;
             $margin        = $revenue > 0 ? round(($grossProfit / $revenue) * 100, 2) : 0;
 
@@ -166,12 +172,17 @@ class ReportController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(fn($p) => [
-                    'date'         => $p->created_at?->toDateString(),
-                    'supplier'     => $p->supplier?->name ?? 'N/A',
-                    'variety'      => $p->variety?->name ?? 'N/A',
-                    'quantity_kg'  => (float) $p->quantity_kg,
-                    'price_per_kg' => (float) $p->price_per_kg,
-                    'total_cost'   => (float) $p->total_cost,
+                    'date'                   => $p->created_at?->toDateString(),
+                    'supplier'               => $p->supplier?->name ?? 'N/A',
+                    'variety'                => $p->variety?->name ?? 'N/A',
+                    'quantity_kg'            => (float) $p->quantity_kg,
+                    'sacks'                  => (int) ($p->sacks ?? 0),
+                    'price_per_kg'           => (float) $p->price_per_kg,
+                    'hauling_price_per_sack' => (float) ($p->hauling_price_per_sack ?? 0),
+                    'hauling_sacks'          => (int) ($p->hauling_sacks ?? $p->sacks ?? 0),
+                    'hauling_cost'           => (float) (($p->hauling_sacks ?? $p->sacks ?? 0) * ($p->hauling_price_per_sack ?? 0)),
+                    'twines_price'           => (float) ($p->twines_price ?? 0),
+                    'total_cost'             => (float) $p->total_cost,
                 ]);
 
             // Drying records in the period
@@ -211,6 +222,7 @@ class ReportController extends Controller
                 'discounts'          => $discounts,
                 'procurement_cost'   => $procCost,
                 'drying_cost'        => $dryCost,
+                'milling_cost'       => $millCost,
                 'total_expenses'     => $totalExpenses,
                 'gross_profit'       => $grossProfit,
                 'profit_margin'      => $margin,
@@ -315,15 +327,19 @@ class ReportController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(fn($p) => [
-                    'id'           => $p->id,
-                    'date'         => $p->created_at?->toDateString(),
-                    'supplier'     => $p->supplier?->name ?? 'N/A',
-                    'variety'      => $p->variety?->name ?? 'N/A',
-                    'quantity_kg'  => (float) $p->quantity_kg,
-                    'sacks'        => $p->sacks,
-                    'price_per_kg' => (float) $p->price_per_kg,
-                    'total_cost'   => (float) $p->total_cost,
-                    'status'       => $p->status,
+                    'id'                     => $p->id,
+                    'date'                   => $p->created_at?->toDateString(),
+                    'supplier'               => $p->supplier?->name ?? 'N/A',
+                    'variety'                => $p->variety?->name ?? 'N/A',
+                    'quantity_kg'            => (float) $p->quantity_kg,
+                    'sacks'                  => (int) ($p->sacks ?? 0),
+                    'price_per_kg'           => (float) $p->price_per_kg,
+                    'hauling_price_per_sack' => (float) ($p->hauling_price_per_sack ?? 0),
+                    'hauling_sacks'          => (int) ($p->hauling_sacks ?? $p->sacks ?? 0),
+                    'hauling_cost'           => (float) (($p->hauling_sacks ?? $p->sacks ?? 0) * ($p->hauling_price_per_sack ?? 0)),
+                    'twines_price'           => (float) ($p->twines_price ?? 0),
+                    'total_cost'             => (float) $p->total_cost,
+                    'status'                 => $p->status,
                 ]);
 
             // Supplier breakdown
@@ -343,12 +359,14 @@ class ReportController extends Controller
                 ]);
 
             return $this->successResponse([
-                'period'       => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
-                'total_cost'   => (float) $procurements->sum('total_cost'),
-                'total_kg'     => (float) $procurements->sum('quantity_kg'),
-                'record_count' => $procurements->count(),
-                'by_supplier'  => $bySupplier,
-                'records'      => $procurements->values(),
+                'period'              => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+                'total_cost'          => (float) $procurements->sum('total_cost'),
+                'total_kg'            => (float) $procurements->sum('quantity_kg'),
+                'total_hauling_cost'  => (float) $procurements->sum('hauling_cost'),
+                'total_twines_cost'   => (float) $procurements->sum('twines_price'),
+                'record_count'        => $procurements->count(),
+                'by_supplier'         => $bySupplier,
+                'records'             => $procurements->values(),
             ], 'Procurement cost report generated');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to generate procurement report: ' . $e->getMessage(), 500);
@@ -424,34 +442,38 @@ class ReportController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(fn($p) => [
-                    'id'             => $p->id,
-                    'date'           => $p->processing_date?->toDateString() ?? $p->created_at?->toDateString(),
-                    'completed_date' => $p->completed_date?->toDateString(),
-                    'variety'        => $p->procurement?->variety?->name ?? 'Mixed',
-                    'operator'       => $p->operator_name ?? 'N/A',
-                    'input_kg'       => (float) $p->input_kg,
-                    'output_kg'      => (float) $p->output_kg,
-                    'husk_kg'        => (float) $p->husk_kg,
-                    'stock_out'      => (float) $p->stock_out,
-                    'yield_percent'  => (float) $p->yield_percent,
-                    'status'         => $p->status,
+                    'id'                => $p->id,
+                    'date'              => $p->processing_date?->toDateString() ?? $p->created_at?->toDateString(),
+                    'completed_date'    => $p->completed_date?->toDateString(),
+                    'variety'           => $p->procurement?->variety?->name ?? 'Mixed',
+                    'operator'          => $p->operator_name ?? 'N/A',
+                    'input_kg'          => (float) $p->input_kg,
+                    'output_kg'         => (float) $p->output_kg,
+                    'husk_kg'           => (float) $p->husk_kg,
+                    'stock_out'         => (float) $p->stock_out,
+                    'yield_percent'     => (float) $p->yield_percent,
+                    'milling_cost_per_kg' => (float) ($p->milling_cost_per_kg ?? 0),
+                    'milling_cost'      => (float) ($p->output_kg * ($p->milling_cost_per_kg ?? 0)),
+                    'status'            => $p->status,
                 ]);
 
             $totalInput  = $records->sum('input_kg');
             $totalOutput = $records->sum('output_kg');
             $totalHusk   = $records->sum('husk_kg');
+            $totalMilling = $records->sum('milling_cost');
             $avgYield    = $totalInput > 0 ? round(($totalOutput / $totalInput) * 100, 2) : 0;
             $wastePercent = $totalInput > 0 ? round(($totalHusk / $totalInput) * 100, 2) : 0;
 
             return $this->successResponse([
-                'period'             => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
-                'total_input_kg'     => (float) $totalInput,
-                'total_output_kg'    => (float) $totalOutput,
-                'total_husk_kg'      => (float) $totalHusk,
-                'avg_yield_percent'  => $avgYield,
-                'avg_waste_percent'  => $wastePercent,
-                'record_count'       => $records->count(),
-                'records'            => $records->values(),
+                'period'               => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+                'total_input_kg'       => (float) $totalInput,
+                'total_output_kg'      => (float) $totalOutput,
+                'total_husk_kg'        => (float) $totalHusk,
+                'total_milling_cost'   => (float) $totalMilling,
+                'avg_yield_percent'    => $avgYield,
+                'avg_waste_percent'    => $wastePercent,
+                'record_count'         => $records->count(),
+                'records'              => $records->values(),
             ], 'Processing yield report generated');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to generate processing yield report: ' . $e->getMessage(), 500);

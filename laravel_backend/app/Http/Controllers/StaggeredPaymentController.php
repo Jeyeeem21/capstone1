@@ -9,6 +9,7 @@ use App\Services\PaymentService;
 use App\Services\EmailService;
 use App\Http\Resources\PaymentInstallmentResource;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -104,10 +105,18 @@ class StaggeredPaymentController extends Controller
         }
 
         try {
+            // Block if shipping fee is still pending
+            if ($sale->shipping_fee_status === 'pending') {
+                return response()->json(['success' => false, 'message' => 'Cannot set up installments yet. Shipping fee is still pending.'], 422);
+            }
+
             $result = $this->staggeredPaymentService->createPaymentSchedule(
                 $sale,
                 $request->installments
             );
+
+            // Invalidate the backend sales cache so the next GET /sales returns fresh data
+            Cache::forget('sales_all');
 
             return response()->json([
                 'success' => true,
@@ -188,6 +197,9 @@ class StaggeredPaymentController extends Controller
                 $installment,
                 $request->all()
             );
+
+            // Invalidate the backend sales cache so the next GET /sales returns fresh payment_status
+            Cache::forget('sales_all');
 
             return response()->json([
                 'success' => true,

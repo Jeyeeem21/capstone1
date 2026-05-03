@@ -213,6 +213,11 @@ class PaymentController extends Controller
             ], 400);
         }
 
+        // Block payment if shipping fee is still pending
+        if ($sale->shipping_fee_status === 'pending') {
+            return response()->json(['success' => false, 'message' => 'Cannot accept payment yet. Shipping fee is still pending.'], 422);
+        }
+
         try {
             $payment = $request->payment_method === 'cash'
                 ? $this->paymentService->recordCashPayment($sale, $request->all())

@@ -69,10 +69,20 @@ class BusinessSettingService
     public function updateSettings(array $data): array
     {
         foreach ($data as $key => $value) {
-            // Allow null values to clear settings (e.g., clearing SMTP password)
+            // Preserve the existing type from DB so booleans/numbers stay correctly typed
+            $existing = BusinessSetting::where('key', $key)->first();
+            $type = $existing?->type ?? 'string';
+
+            // Normalise boolean values to the string 'true'/'false' for storage
+            if ($type === 'boolean') {
+                $storedValue = filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 'true' : 'false';
+            } else {
+                $storedValue = $value !== null ? (string) $value : '';
+            }
+
             BusinessSetting::updateOrCreate(
                 ['key' => $key],
-                ['value' => $value !== null ? (string) $value : '', 'type' => 'string']
+                ['value' => $storedValue, 'type' => $type]
             );
         }
 

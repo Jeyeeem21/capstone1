@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Traits\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class SaleController extends Controller
 {
@@ -152,6 +153,7 @@ class SaleController extends Controller
                 'installments.*.installment_number' => 'required_with:installments|integer|min:1',
                 'installments.*.amount' => 'required_with:installments|numeric|min:0.01',
                 'installments.*.due_date' => 'nullable|date',
+                'shipping_fee_pending' => 'nullable|boolean',
             ]);
 
             // Handle payment proof file uploads (GCash screenshots)
@@ -190,6 +192,40 @@ class SaleController extends Controller
             $newCustomerLandmark = $validated['new_customer_landmark'] ?? null;
             $installments = $validated['installments'] ?? null;
             unset($validated['new_customer_name'], $validated['new_customer_contact'], $validated['new_customer_email'], $validated['new_customer_address'], $validated['new_customer_landmark'], $validated['installments']);
+
+            // ── Role-based hardening ──────────────────────────────────────
+            $authUser = $request->user();
+            $userRole = $authUser?->role;
+
+            if (in_array($userRole, ['customer', 'secretary'])) {
+                // Force pay_later and no payment for these roles
+                $validated['payment_method'] = 'pay_later';
+                $validated['amount_tendered'] = 0;
+                $validated['is_staggered'] = false;
+                $installments = null;
+                // Strip payment proof/reference — no payment yet
+                unset($validated['reference_number'], $validated['payment_proof'],
+                      $validated['pdo_check_number'], $validated['pdo_bank_name'],
+                      $validated['pdo_check_date'], $validated['pdo_amount'], $validated['pdo_check_image']);
+            }
+
+            // For customer/secretary delivery orders: force shipping pending
+            if (in_array($userRole, ['customer', 'secretary']) && !empty($validated['delivery_address'])) {
+                $validated['shipping_fee_status'] = 'pending';
+                $validated['delivery_fee'] = null;
+                $validated['shipping_price_per_sack_override'] = null;
+            }
+
+            // For any role: if admin explicitly marks shipping fee as pending (manual mode, no price set)
+            if (!empty($validated['shipping_fee_pending'])) {
+                $validated['shipping_fee_status'] = 'pending';
+                $validated['payment_method'] = 'pay_later';
+                $validated['amount_tendered'] = 0;
+                $validated['delivery_fee'] = null;
+                $validated['shipping_price_per_sack_override'] = null;
+            }
+            unset($validated['shipping_fee_pending']);
+            // ─────────────────────────────────────────────────────────────
 
             $sale = $this->saleService->createOrder($validated, $newCustomerName, $newCustomerContact, $newCustomerEmail, $newCustomerAddress, $newCustomerLandmark);
 
@@ -702,6 +738,12 @@ class SaleController extends Controller
                 'pdo_bank_name'    => $validated['pdo_bank_name'] ?? null,
             ];
 
+            // Block payment if shipping fee is still pending
+            $saleForCheck = \App\Models\Sale::findOrFail($id);
+            if ($saleForCheck->shipping_fee_status === 'pending') {
+                return response()->json(['success' => false, 'message' => 'Cannot accept payment yet. Shipping fee is still pending.'], 422);
+            }
+
             // Handle payment proof file uploads
             if ($request->hasFile('payment_proof')) {
                 $proofPaths = [];
@@ -877,6 +919,62 @@ class SaleController extends Controller
             'success' => true,
             'data' => ['available' => !$exists],
         ]);
+    }
+
+    /**
+     * Update shipping fee for a pending-shipping order.
+     * PATCH /sales/{id}/shipping-fee — Admin/Super Admin only.
+     */
+    public function updateShippingFee(Request $request, int $id): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'shipping_price_per_sack' => 'required|numeric|min:0',
+            ]);
+
+            $sale = \App\Models\Sale::with('items')->findOrFail($id);
+
+            if ($sale->shipping_fee_status !== 'pending') {
+                return response()->json(['success' => false, 'message' => 'Shipping fee is already set for this order.'], 422);
+            }
+
+            $pricePerSack = (float) $validated['shipping_price_per_sack'];
+
+            // Count total sacks from order items (quantity)
+            $totalSacks = $sale->items->sum('quantity');
+
+            $deliveryFee = round($pricePerSack * $totalSacks, 2);
+            $subtotal = (float) $sale->subtotal;
+            $discount = (float) ($sale->discount ?? 0);
+            $newTotal = $subtotal - $discount + $deliveryFee;
+            $amountPaid = (float) ($sale->amount_paid ?? 0);
+            $balanceRemaining = max(0, $newTotal - $amountPaid);
+
+            $sale->update([
+                'shipping_fee_status' => 'set',
+                'shipping_price_per_sack_override' => $pricePerSack,
+                'delivery_fee' => $deliveryFee,
+                'total' => $newTotal,
+                'balance_remaining' => $balanceRemaining,
+            ]);
+
+            // Invalidate the backend sales cache so the next GET /sales returns updated totals
+            Cache::forget('sales_all');
+
+            $this->logAudit('UPDATE', 'Orders', "Set shipping fee for order #{$sale->transaction_id} — ₱{$deliveryFee} ({$totalSacks} sacks × ₱{$pricePerSack})", [
+                'sale_id' => $sale->id,
+                'price_per_sack' => $pricePerSack,
+                'total_sacks' => $totalSacks,
+                'delivery_fee' => $deliveryFee,
+                'new_total' => $newTotal,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Shipping fee set successfully. Payment is now available.', 'data' => new SaleResource($sale->fresh())]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to update shipping fee: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

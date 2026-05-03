@@ -76,6 +76,8 @@ class Sale extends Model
         'primary_method',
         'amount_paid',
         'balance_remaining',
+        'shipping_fee_status',
+        'shipping_price_per_sack_override',
     ];
 
     protected $casts = [
@@ -94,6 +96,7 @@ class Sale extends Model
         'amount_paid' => 'decimal:2',
         'balance_remaining' => 'decimal:2',
         'is_staggered' => 'boolean',
+        'shipping_price_per_sack_override' => 'decimal:2',
     ];
 
     /**

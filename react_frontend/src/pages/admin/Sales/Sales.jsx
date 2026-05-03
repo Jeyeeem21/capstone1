@@ -708,7 +708,7 @@ const Sales = () => {
                     <button
                       key={tab.value}
                       onClick={() => { setActiveStatusTab(tab.value); setStatusSubFilter(''); }}
-                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-xs font-semibold transition-all whitespace-nowrap border-2 border-b-0 ${`
+                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-t-lg text-xs font-semibold transition-all whitespace-nowrap border-2 border-b-0 ${
                         isActive
                           ? `${tab.activeBg} ${tab.activeText} border-transparent shadow-md`
                           : `${tab.bg} ${tab.color} border-transparent hover:shadow-sm`

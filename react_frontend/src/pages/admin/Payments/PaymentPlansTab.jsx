@@ -48,10 +48,9 @@ const PaymentPlansTab = ({ activeTab, onStatsUpdate, onLoadingChange }) => {
     }
   }, [activeTab]);
 
-  const loadPlans = async () => {
+  const loadPlans = async (silent = false) => {
     try {
-      setLoading(true);
-      onLoadingChange?.(true);
+      if (!silent) { setLoading(true); onLoadingChange?.(true); }
       const response = await paymentPlansApi.getAll();
 
       if (response.success) {
@@ -78,8 +77,7 @@ const PaymentPlansTab = ({ activeTab, onStatsUpdate, onLoadingChange }) => {
       setPlans([]);
       return [];
     } finally {
-      setLoading(false);
-      onLoadingChange?.(false);
+      if (!silent) { setLoading(false); onLoadingChange?.(false); }
     }
   };
 
@@ -88,7 +86,7 @@ const PaymentPlansTab = ({ activeTab, onStatsUpdate, onLoadingChange }) => {
       const response = await paymentPlansApi.approvePlan(planId);
       if (response.success) {
         toast.success('Payment plan approved');
-        loadPlans();
+        loadPlans(true);
       }
     } catch (error) {
       toast.error('Failed to approve plan');
@@ -115,7 +113,7 @@ const PaymentPlansTab = ({ activeTab, onStatsUpdate, onLoadingChange }) => {
         toast.success('Payment recorded successfully');
         setPayingInstallment(null);
         // Refresh plan list and get the fresh data directly (avoids stale closure)
-        const freshPlans = await loadPlans();
+        const freshPlans = await loadPlans(true);
         // Re-open details with fresh data if modal was open
         if (showDetailsModal && selectedPlan && freshPlans?.length) {
           const fresh = freshPlans.find(p => p.id === selectedPlan.id);

@@ -19,10 +19,9 @@ const PDOTab = ({ onStatsUpdate, onLoadingChange }) => {
     loadPDOs();
   }, []);
 
-  const loadPDOs = async () => {
+  const loadPDOs = async (silent = false) => {
     try {
-      setLoading(true);
-      onLoadingChange?.(true);
+      if (!silent) { setLoading(true); onLoadingChange?.(true); }
       
       // Fetch both installment-based PDOs AND standalone PDO payments
       const [installmentPendingResponse, installmentAwaitingResponse, standalonePDOsResponse] = await Promise.all([
@@ -125,8 +124,7 @@ const PDOTab = ({ onStatsUpdate, onLoadingChange }) => {
       setAwaitingPayment([]);
       setVerifiedPDOs([]);
     } finally {
-      setLoading(false);
-      onLoadingChange?.(false);
+      if (!silent) { setLoading(false); onLoadingChange?.(false); }
     }
   };
 
@@ -154,12 +152,12 @@ const PDOTab = ({ onStatsUpdate, onLoadingChange }) => {
         toast.success('PDO approved successfully');
         setShowApprovalModal(false);
         // Refresh in background to confirm
-        loadPDOs();
+        loadPDOs(true);
       }
     } catch (error) {
       toast.error('Failed to approve PDO');
       // Revert optimistic update on error
-      loadPDOs();
+      loadPDOs(true);
     }
   };
 
@@ -184,12 +182,12 @@ const PDOTab = ({ onStatsUpdate, onLoadingChange }) => {
         toast.success('PDO rejected');
         setShowApprovalModal(false);
         // Refresh in background to confirm
-        loadPDOs();
+        loadPDOs(true);
       }
     } catch (error) {
       toast.error('Failed to reject PDO');
       // Revert optimistic update on error
-      loadPDOs();
+      loadPDOs(true);
     }
   };
 
@@ -217,12 +215,12 @@ const PDOTab = ({ onStatsUpdate, onLoadingChange }) => {
       if (response.success) {
         toast.success('PDO marked as paid');
         // Refresh in background to confirm
-        loadPDOs();
+        loadPDOs(true);
       }
     } catch (error) {
       toast.error('Failed to mark PDO as paid');
       // Revert optimistic update on error
-      loadPDOs();
+      loadPDOs(true);
     }
   };
 

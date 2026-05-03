@@ -16,7 +16,7 @@ class CustomerPaymentController extends Controller
     public function __construct(
         private PaymentService $paymentService
     ) {
-        $this->middleware(['auth:sanctum', 'role:customer']);
+        // Middleware is applied in routes/api.php
     }
 
     /**
@@ -152,6 +152,11 @@ class CustomerPaymentController extends Controller
                 ], 409);
             }
 
+            // Block payment if order shipping is still pending
+            if ($installment->sale?->shipping_fee_status === 'pending') {
+                return response()->json(['success' => false, 'message' => 'Cannot accept payment yet. Shipping fee is still pending.'], 422);
+            }
+
             // Record GCash payment
             $payment = $this->paymentService->recordGCashPayment(
                 $installment->sale,
@@ -226,6 +231,11 @@ class CustomerPaymentController extends Controller
                     'success' => false,
                     'message' => 'This installment already has a pending PDO submission'
                 ], 409);
+            }
+
+            // Block payment if order shipping is still pending
+            if ($installment->sale?->shipping_fee_status === 'pending') {
+                return response()->json(['success' => false, 'message' => 'Cannot accept payment yet. Shipping fee is still pending.'], 422);
             }
 
             // Record PDO payment

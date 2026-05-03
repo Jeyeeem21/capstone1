@@ -172,6 +172,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/return/complete', [SaleController::class, 'markReturned']);
         Route::post('/{id}/restock', [SaleController::class, 'restockItems']);
         Route::post('/{id}/pay', [SaleController::class, 'markPaid']);
+        Route::patch('/{id}/shipping-fee', [SaleController::class, 'updateShippingFee'])->middleware('role:super_admin,admin');
         
         // Payment system routes
         Route::post('/{id}/payment', [\App\Http\Controllers\PaymentController::class, 'recordPayment']);
@@ -195,6 +196,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('payment-plans')->group(function () {
             Route::get('/', [\App\Http\Controllers\StaggeredPaymentController::class, 'index']);
             Route::get('/{sale}', [\App\Http\Controllers\StaggeredPaymentController::class, 'show']);
+            Route::post('/{sale}', [\App\Http\Controllers\StaggeredPaymentController::class, 'store']);
             Route::post('/{sale}/approve', [\App\Http\Controllers\StaggeredPaymentController::class, 'approve']);
         });
 

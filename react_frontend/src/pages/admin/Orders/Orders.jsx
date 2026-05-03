@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer, Upload } from 'lucide-react';
+import { ClipboardList, Package, DollarSign, Clock, CheckCircle, Truck, XCircle, Ban, CircleSlash, FileText, ShoppingBag, RotateCcw, PlayCircle, Loader2, User, Calendar, CreditCard, MapPin, Hash, StickyNote, Receipt, ImageIcon, X, Camera, Banknote, Lock, Store, Printer, Upload, CircleDollarSign } from 'lucide-react';
 import { PageHeader } from '../../../components/common';
 import { DataTable, StatusBadge, ActionButtons, StatsCard, LineChart, DonutChart, FormModal, ConfirmModal, FormInput, FormSelect, Modal, useToast, SkeletonStats, SkeletonTable } from '../../../components/ui';
 import { apiClient } from '../../../api';
@@ -202,6 +202,11 @@ const AdminOrders = () => {
   // { [itemId]: quantity } — only contains items to be restocked
   const [restockQuantities, setRestockQuantities] = useState({});
 
+  // Set Shipping Fee state
+  const [isSetShippingFeeModalOpen, setIsSetShippingFeeModalOpen] = useState(false);
+  const [setShippingFeeOrder, setSetShippingFeeOrder] = useState(null);
+  const [shippingPricePerSack, setShippingPricePerSack] = useState('');
+
   // Sync active tab to URL
   useEffect(() => {
     setSearchParams(prev => { prev.set('tab', activeStatusTab); return prev; }, { replace: true });
@@ -391,12 +396,12 @@ const AdminOrders = () => {
       return;
     }
 
+    // Optimistic: update status instantly before API call
+    optimisticUpdate(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus } : o));
     setSaving(true);
     try {
       const response = await apiClient.put(`/sales/${order.id}/status`, { status: nextStatus });
       if (response.success) {
-        // Optimistic: update status instantly
-        optimisticUpdate(prev => prev.map(o => o.id === order.id ? { ...o, status: nextStatus } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -409,6 +414,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Update Failed', error.message || 'Failed to update order status');
     } finally {
       setSaving(false);
@@ -423,6 +429,9 @@ const AdminOrders = () => {
       // Get selected driver details
       const selectedDriver = drivers.find(d => String(d.id) === selectedDriverId);
 
+      // Optimistic: update status + driver info instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === shipOrder.id ? { ...o, status: 'shipped', driver_name: selectedDriver?.name || null } : o));
+
       // 1. Update order status to shipped (include driver info)
       const statusRes = await apiClient.put(`/sales/${shipOrder.id}/status`, {
         status: 'shipped',
@@ -431,8 +440,6 @@ const AdminOrders = () => {
       });
       if (!statusRes.success) throw statusRes;
 
-      // Optimistic: update status + driver info instantly
-      optimisticUpdate(prev => prev.map(o => o.id === shipOrder.id ? { ...o, status: 'shipped', driver_name: selectedDriver?.name || null } : o));
       invalidateCache('/sales');
       invalidateCache('/products');
       invalidateCache('/users');
@@ -443,6 +450,7 @@ const AdminOrders = () => {
       apiClient.post(`/sales/${shipOrder.id}/status-email`).catch(() => {});
       setIsShipModalOpen(false);
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Ship Failed', error.message || 'Failed to ship order');
     } finally {
       setSaving(false);
@@ -507,10 +515,11 @@ const AdminOrders = () => {
       deliverProofFiles.forEach((file) => {
         formData.append('delivery_proof[]', file);
       });
+      // Optimistic: mark as delivered instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === deliverOrder.id ? { ...o, status: 'delivered' } : o));
+
       const response = await apiClient.post(`/sales/${deliverOrder.id}/status`, formData);
       if (!response.success) throw response;
-      // Optimistic: mark as delivered instantly
-      optimisticUpdate(prev => prev.map(o => o.id === deliverOrder.id ? { ...o, status: 'delivered' } : o));
       invalidateCache('/sales');
       invalidateCache('/products');
       refetch();
@@ -533,6 +542,7 @@ const AdminOrders = () => {
         setTimeout(() => handleOpenPayModal(orderForPay), 300);
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Delivery Failed', error.message || 'Failed to mark order as delivered');
     } finally {
       setSaving(false);
@@ -547,10 +557,11 @@ const AdminOrders = () => {
     setSaving(true);
     try {
       const payload = { reason: voidReason, admin_password: voidPassword };
+      // Optimistic: mark as voided instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === voidOrder.id ? { ...o, status: 'voided' } : o));
+
       const response = await apiClient.post(`/sales/${voidOrder.id}/void`, payload);
       if (response.success) {
-        // Optimistic: mark as voided instantly
-        optimisticUpdate(prev => prev.map(o => o.id === voidOrder.id ? { ...o, status: 'voided' } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -564,6 +575,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Void Failed', error.message || 'Failed to void order');
     } finally {
       setSaving(false);
@@ -574,15 +586,17 @@ const AdminOrders = () => {
     if (!selectedOrder || saving) return;
     setSaving(true);
     try {
-      const response = await apiClient.put(`/sales/${selectedOrder.id}/status`, { status: 'cancelled' });
+      const cancelledId = selectedOrder.id;
+      const cancelledOrderId = selectedOrder.order_id;
+      // Immediately update status in local data for instant UI (before API call)
+      optimisticUpdate(prev => prev.map(o => o.id === cancelledId ? { ...o, status: 'cancelled' } : o));
+
+      const response = await apiClient.put(`/sales/${cancelledId}/status`, { status: 'cancelled' });
       if (response.success) {
-        const cancelledId = selectedOrder.id;
-        // Immediately update status in local data for instant UI
-        optimisticUpdate(prev => prev.map(o => o.id === cancelledId ? { ...o, status: 'cancelled' } : o));
         suppressNotifToasts();
-        toast.success('Order Cancelled', `Order ${selectedOrder.order_id} has been cancelled.`);
+        toast.success('Order Cancelled', `Order ${cancelledOrderId} has been cancelled.`);
         // Fire-and-forget email
-        apiClient.post(`/sales/${selectedOrder.id}/status-email`).catch(() => {});
+        apiClient.post(`/sales/${cancelledId}/status-email`).catch(() => {});
         setIsCancelModalOpen(false);
         // Refetch in background to confirm
         invalidateCache('/sales');
@@ -592,6 +606,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Cancel Failed', error.message || 'Failed to cancel order');
     } finally {
       setSaving(false);
@@ -607,15 +622,17 @@ const AdminOrders = () => {
       if (returnNotes) formData.append('return_notes', returnNotes);
       returnProofFiles.forEach(file => formData.append('return_proof[]', file));
 
-      const response = await apiClient.post(`/sales/${selectedOrder.id}/return`, formData);
+      const returnedId = selectedOrder.id;
+      const returnedOrderId = selectedOrder.order_id;
+      // Immediately update status in local data for instant UI (before API call)
+      optimisticUpdate(prev => prev.map(o => o.id === returnedId ? { ...o, status: 'return_requested' } : o));
+
+      const response = await apiClient.post(`/sales/${returnedId}/return`, formData);
       if (response.success) {
-        const returnedId = selectedOrder.id;
-        // Immediately update status in local data for instant UI
-        optimisticUpdate(prev => prev.map(o => o.id === returnedId ? { ...o, status: 'return_requested' } : o));
         suppressNotifToasts();
-        toast.success('Return Requested', `Return request submitted for order ${selectedOrder.order_id}. Awaiting review.`);
+        toast.success('Return Requested', `Return request submitted for order ${returnedOrderId}. Awaiting review.`);
         // Fire-and-forget email
-        apiClient.post(`/sales/${selectedOrder.id}/status-email`).catch(() => {});
+        apiClient.post(`/sales/${returnedId}/status-email`).catch(() => {});
         setIsReturnModalOpen(false);
         // Refetch in background to confirm
         invalidateCache('/sales');
@@ -624,6 +641,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Return Request Failed', error.message || 'Failed to submit return request');
     } finally {
       setSaving(false);
@@ -666,14 +684,15 @@ const AdminOrders = () => {
     setSaving(true);
     try {
       const selectedDriver = pickupDrivers.find(d => String(d.id) === pickupDriverId);
+      // Optimistic: mark as picking_up instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === acceptReturnOrder.id ? { ...o, status: 'picking_up' } : o));
+
       const response = await apiClient.post(`/sales/${acceptReturnOrder.id}/return/accept`, {
         pickup_driver: selectedDriver?.name || null,
         pickup_plate: selectedDriver?.truck_plate_number || null,
         pickup_date: pickupDate || null,
       });
       if (response.success) {
-        // Optimistic: mark as picking_up instantly
-        optimisticUpdate(prev => prev.map(o => o.id === acceptReturnOrder.id ? { ...o, status: 'picking_up' } : o));
         invalidateCache('/sales');
         refetch();
         suppressNotifToasts();
@@ -685,6 +704,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Accept Failed', error.message || 'Failed to accept return');
     } finally {
       setSaving(false);
@@ -696,10 +716,11 @@ const AdminOrders = () => {
     if (saving) return;
     setSaving(true);
     try {
+      // Optimistic: revert to delivered instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === order.id ? { ...o, status: 'delivered' } : o));
+
       const response = await apiClient.post(`/sales/${order.id}/return/reject`);
       if (response.success) {
-        // Optimistic: revert to delivered
-        optimisticUpdate(prev => prev.map(o => o.id === order.id ? { ...o, status: 'delivered' } : o));
         invalidateCache('/sales');
         refetch();
         suppressNotifToasts();
@@ -708,6 +729,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Reject Failed', error.message || 'Failed to reject return');
     } finally {
       setSaving(false);
@@ -725,10 +747,11 @@ const AdminOrders = () => {
     if (saving || !markReturnOrder) return;
     setSaving(true);
     try {
+      // Optimistic: mark as returned instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === markReturnOrder.id ? { ...o, status: 'returned' } : o));
+
       const response = await apiClient.post(`/sales/${markReturnOrder.id}/return/complete`);
       if (response.success) {
-        // Optimistic: mark as returned instantly
-        optimisticUpdate(prev => prev.map(o => o.id === markReturnOrder.id ? { ...o, status: 'returned' } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -742,6 +765,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Return Failed', error.message || 'Failed to mark as returned');
     } finally {
       setSaving(false);
@@ -761,16 +785,85 @@ const AdminOrders = () => {
     setIsRestockModalOpen(true);
   }, []);
 
+  const handleOpenSetShippingFee = useCallback((order) => {
+    setSetShippingFeeOrder(order);
+    setShippingPricePerSack('');
+    setIsSetShippingFeeModalOpen(true);
+  }, []);
+
+  const handleConfirmSetShippingFee = useCallback(async () => {
+    if (saving || !setShippingFeeOrder) return;
+    const targetOrderId = setShippingFeeOrder.id;
+    const pricePerSack = parseFloat(shippingPricePerSack);
+    if (isNaN(pricePerSack) || pricePerSack < 0) {
+      toast.error('Invalid Input', 'Please enter a valid price per sack (0 or more).');
+      return;
+    }
+    // Optimistic: instantly mark fee as set (exact amounts confirmed after API)
+    optimisticUpdate(prev => prev.map(o => o.id === targetOrderId ? {
+      ...o,
+      shipping_fee_status: 'set',
+    } : o));
+    setSaving(true);
+    try {
+      const response = await apiClient.patch(`/sales/${targetOrderId}/shipping-fee`, {
+        shipping_price_per_sack: pricePerSack,
+      });
+      if (response.success) {
+        // Update with accurate server-computed fee/total data
+        const updated = response.data;
+        optimisticUpdate(prev => prev.map(o => o.id === targetOrderId ? {
+          ...o,
+          shipping_fee_status: updated?.shipping_fee_status ?? 'set',
+          delivery_fee: updated?.delivery_fee ?? o.delivery_fee,
+          total: updated?.total ?? o.total,
+          balance_remaining: updated?.balance_remaining ?? o.balance_remaining,
+        } : o));
+        invalidateCache('/sales');
+        refetch();
+        suppressNotifToasts();
+        toast.success('Shipping Fee Set', response.message || 'Shipping fee set. Payment is now available.');
+        setIsSetShippingFeeModalOpen(false);
+        setSetShippingFeeOrder(null);
+        setShippingPricePerSack('');
+      } else {
+        throw response;
+      }
+    } catch (error) {
+      const errorMessage = String(error?.response?.data?.message || error?.message || '').toLowerCase();
+      if (errorMessage.includes('already set')) {
+        // Another user/tab may have already set it; sync UI immediately.
+        optimisticUpdate(prev => prev.map(o => o.id === targetOrderId ? {
+          ...o,
+          shipping_fee_status: 'set',
+        } : o));
+        invalidateCache('/sales');
+        refetch();
+        suppressNotifToasts();
+        toast.success('Shipping Fee Synced', 'Shipping fee was already set. Table updated.');
+        setIsSetShippingFeeModalOpen(false);
+        setSetShippingFeeOrder(null);
+        setShippingPricePerSack('');
+      } else {
+        refetch(); // revert optimistic update on failure
+        toast.error('Failed', error?.message || 'Could not set shipping fee.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, setShippingFeeOrder, shippingPricePerSack, toast, refetch, optimisticUpdate]);
+
   const handleConfirmRestock = useCallback(async () => {
     const selectedEntries = Object.entries(restockQuantities).filter(([, qty]) => qty > 0);
     if (saving || !restockOrder || selectedEntries.length === 0) return;
     setSaving(true);
     try {
       const items = selectedEntries.map(([id, quantity]) => ({ id: parseInt(id), quantity }));
+      // Optimistic: mark as restocked instantly before API call
+      optimisticUpdate(prev => prev.map(o => o.id === restockOrder.id ? { ...o, restocked: true } : o));
+
       const response = await apiClient.post(`/sales/${restockOrder.id}/restock`, { items });
       if (response.success) {
-        // Optimistic: mark restocked items
-        optimisticUpdate(prev => prev.map(o => o.id === restockOrder.id ? { ...o, restocked: true } : o));
         invalidateCache('/sales');
         invalidateCache('/products');
         refetch();
@@ -783,6 +876,7 @@ const AdminOrders = () => {
         throw response;
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Restock Failed', error.message || 'Failed to restock items');
     } finally {
       setSaving(false);
@@ -1046,18 +1140,22 @@ const AdminOrders = () => {
       setIsPayInstallmentSetupOpen(false);
       setIsPayInstallmentChoiceOpen(false);
 
+      // Optimistically mark the order as staggered so clicking Pay again goes straight to installment payment
+      optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, is_staggered: true } : o));
+      invalidateCache('/sales');
+      invalidateCache('/payment-plans');
+
       if (firstInstallment && firstDueDate === today) {
         setPayIsStaggered(true);
         setPayCurrentInstallment(firstInstallment);
         setIsPayModalOpen(true);
+        refetch();
         toast.success('Installment Schedule Saved', 'Proceeding to first payment due today.');
       } else {
         setPayOrder(null);
         setPayInstallmentPlan([]);
         setPayCurrentInstallment(null);
         setPayIsStaggered(false);
-        invalidateCache('/sales');
-        invalidateCache('/payment-plans');
         refetch();
         suppressNotifToasts();
         toast.success('Installment Schedule Saved', 'Schedule created successfully.');
@@ -1074,6 +1172,15 @@ const AdminOrders = () => {
     if (payMethod === 'cash' && (!payCashTendered || parseFloat(payCashTendered) < payDueAmount)) return;
     if (payMethod === 'gcash' && (!payGcashRef.trim() || payGcashRef.replace(/\s/g, '').length !== 13 || payGcashRefError)) return;
     if (payMethod === 'pdo' && (payPdoCheckFiles.length === 0 || !payPdoCheckNumber.trim() || payPdoCheckNumber.length < 6 || payPdoCheckNumber.length > 10 || !payPdoCheckDate || !payPdoBankName.trim() || !payPdoAmount || parseFloat(payPdoAmount) < payDueAmount)) return;
+
+    // Optimistic: update payment status instantly before API call
+    if (payIsStaggered && payCurrentInstallment?.id) {
+      // Installment payment — mark as partial until refetch confirms fully paid
+      optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, payment_status: 'partial' } : o));
+    } else {
+      // Full payment — mark as paid instantly
+      optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, payment_status: 'paid', payment_method: payMethod } : o));
+    }
 
     setSaving(true);
     try {
@@ -1098,6 +1205,7 @@ const AdminOrders = () => {
         const response = await apiClient.post(`/installments/${payCurrentInstallment.id}/pay`, payload);
 
         if (response.success) {
+          // Refetch to get accurate payment_status (may be 'partial' or 'paid' depending on remaining balance)
           invalidateCache('/sales');
           invalidateCache('/payment-plans');
           refetch();
@@ -1135,8 +1243,6 @@ const AdminOrders = () => {
 
         const response = await apiClient.post(`/sales/${payOrder.id}/pay`, formData);
         if (response.success) {
-          // Optimistic: mark as paid instantly
-          optimisticUpdate(prev => prev.map(o => o.id === payOrder.id ? { ...o, payment_status: 'paid', payment_method: payMethod } : o));
           invalidateCache('/sales');
           refetch();
           suppressNotifToasts();
@@ -1157,6 +1263,7 @@ const AdminOrders = () => {
         }
       }
     } catch (error) {
+      refetch(); // revert optimistic update on failure
       toast.error('Payment Failed', error.message || 'Failed to record payment');
     } finally {
       setSaving(false);
@@ -1580,7 +1687,16 @@ const AdminOrders = () => {
         </div>
       );
     }},
-    { header: 'Total', accessor: 'total', cell: (row) => `₱${row.total.toLocaleString()}` },
+    { header: 'Total', accessor: 'total', cell: (row) => (
+      <span className="flex flex-col gap-0.5">
+        <span>₱{row.total.toLocaleString()}</span>
+        {row.shipping_fee_status === 'pending' && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+            <CircleDollarSign size={10} /> Fee Pending
+          </span>
+        )}
+      </span>
+    ) },
     { header: 'Payment', accessor: 'payment_method', cell: (row) => (
       <div className="flex flex-col gap-0.5">
         <span className="text-xs">{row.payment_method}</span>
@@ -1690,7 +1806,17 @@ const AdminOrders = () => {
               <Package size={15} />
             </button>
           )}
-          {(row.payment_status === 'not_paid' || row.payment_status === 'partial') && row.raw_status !== 'cancelled' && row.raw_status !== 'returned' && (
+          {row.shipping_fee_status === 'pending' && isAdminOrAbove() && (
+            <button
+              onClick={() => handleOpenSetShippingFee(row)}
+              disabled={saving}
+              className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600 dark:text-amber-400 transition-colors disabled:opacity-50"
+              title="Set Shipping Fee"
+            >
+              <CircleDollarSign size={15} />
+            </button>
+          )}
+          {(row.payment_status === 'not_paid' || row.payment_status === 'partial') && row.raw_status !== 'cancelled' && row.raw_status !== 'returned' && row.shipping_fee_status !== 'pending' && (
             <button
               onClick={() => handleOpenPayModal(row)}
               disabled={saving}
@@ -1980,6 +2106,24 @@ const AdminOrders = () => {
           <div className="flex flex-col lg:flex-row gap-3">
             {/* Left Column — Order Info */}
             <div className="flex-1 min-w-0 space-y-2">
+              {/* Shipping Pending Banner */}
+              {selectedOrder.shipping_fee_status === 'pending' && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-600 rounded-xl">
+                  <CircleDollarSign size={16} className="text-amber-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Shipping Fee Pending</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">Payment is blocked until an admin sets the delivery fee for this order.</p>
+                  </div>
+                  {isAdminOrAbove() && (
+                    <button
+                      onClick={() => { setIsViewModalOpen(false); handleOpenSetShippingFee(selectedOrder); }}
+                      className="shrink-0 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                    >
+                      <CircleDollarSign size={12} /> Set Fee
+                    </button>
+                  )}
+                </div>
+              )}
               {/* Header with Order ID & Status */}
               <div className="flex items-center justify-between p-2 bg-gradient-to-r from-primary-50 dark:from-gray-700 to-button-50 dark:to-gray-700 rounded-xl border-2 border-primary-200 dark:border-primary-700">
                 <div className="flex items-center gap-2">
@@ -3066,6 +3210,92 @@ const AdminOrders = () => {
         cancelText="Cancel"
         variant="warning"
       />
+
+      {/* Set Shipping Fee Modal */}
+      {isSetShippingFeeModalOpen && setShippingFeeOrder && (() => {
+        const totalSacks = (setShippingFeeOrder.items || []).reduce((sum, i) => sum + (i.quantity || 0), 0);
+        const priceNum = parseFloat(shippingPricePerSack);
+        const previewFee = (!isNaN(priceNum) && priceNum >= 0) ? priceNum * totalSacks : null;
+        const subtotal = setShippingFeeOrder.subtotal ?? setShippingFeeOrder.total ?? 0;
+        const discount = setShippingFeeOrder.discount ?? 0;
+        const previewTotal = previewFee !== null ? (subtotal - discount + previewFee) : null;
+        return (
+          <Modal
+            isOpen={isSetShippingFeeModalOpen}
+            onClose={() => { setIsSetShippingFeeModalOpen(false); setSetShippingFeeOrder(null); setShippingPricePerSack(''); }}
+            title={`Set Shipping Fee — ${setShippingFeeOrder.order_id || ''}`}
+            maxWidth="sm"
+            footer={
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setIsSetShippingFeeModalOpen(false); setSetShippingFeeOrder(null); setShippingPricePerSack(''); }}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold border border-primary-300 dark:border-primary-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 dark:bg-gray-700/50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmSetShippingFee}
+                  disabled={saving || shippingPricePerSack === '' || isNaN(parseFloat(shippingPricePerSack)) || parseFloat(shippingPricePerSack) < 0}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <CircleDollarSign size={14} /> {saving ? 'Setting...' : 'Set Shipping Fee'}
+                </button>
+              </div>
+            }
+          >
+            <div className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-3">
+                <p className="text-xs text-amber-800 dark:text-amber-300">
+                  <span className="font-semibold">Shipping Pending:</span> Enter the price per sack to compute and set the delivery fee for this order. Payment will be unlocked once the fee is set.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-300">
+                <div>
+                  <span className="font-semibold">Customer:</span> {setShippingFeeOrder.customer}
+                </div>
+                <div>
+                  <span className="font-semibold">Total Sacks:</span> {totalSacks}
+                </div>
+                <div>
+                  <span className="font-semibold">Subtotal:</span> ₱{(subtotal - discount).toLocaleString()}
+                </div>
+                <div>
+                  <span className="font-semibold">Delivery Address:</span> {setShippingFeeOrder.delivery_address || '—'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Price per Sack (₱)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={shippingPricePerSack}
+                  onChange={(e) => setShippingPricePerSack(e.target.value)}
+                  placeholder="e.g. 50.00"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              {previewFee !== null && (
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1 text-sm">
+                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                    <span>{totalSacks} sacks × ₱{priceNum.toLocaleString()}</span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">+ ₱{previewFee.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-gray-800 dark:text-gray-100 border-t border-gray-200 dark:border-gray-600 pt-1">
+                    <span>New Total</span>
+                    <span>₱{previewTotal.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Restock Items Modal */}
       <Modal

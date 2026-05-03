@@ -86,6 +86,16 @@ export const salesApi = {
     }
     return response;
   },
+
+  /**
+   * Set shipping fee for a pending-shipping order.
+   * Admin/Super Admin only. PATCH /sales/{id}/shipping-fee
+   */
+  updateShippingFee: async (orderId, shippingPricePerSack) => {
+    return await apiClient.patch(`/sales/${orderId}/shipping-fee`, {
+      shipping_price_per_sack: shippingPricePerSack,
+    });
+  },
 };
 
 export default salesApi;
